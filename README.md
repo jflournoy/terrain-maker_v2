@@ -12,18 +12,32 @@
 
 This repository serves **dual purposes**:
 
-1. **Terrain-Maker**: A Python-based GeoTIFF terrain visualization and analysis tool with Blender 3D rendering and SNODAS snow data integration
+1. **Terrain-Maker Python Package**: A reusable library for creating custom terrain visualizations with arbitrary spatial data overlays
 2. **Claude Code Development Framework**: A working reference repository that demonstrates opinionated practices for Claude Code development using TDD workflows
 
-The terrain-maker Python code uses the Claude Code command templates for development, making this a real-world example of TDD-driven geospatial software development.
+### 🗺️ Terrain-Maker: Flexible Geospatial Visualization
 
-### 🗺️ Terrain-Maker Features
+**Package Goal**: Create a Python library that makes it easy to:
+- Load and visualize Digital Elevation Models (DEMs) from any source
+- Add arbitrary spatial data layers (snow depth, vegetation, temperature, etc.)
+- Apply custom transformations and analysis
+- Render 3D terrain visualizations with Blender
+- Cache results for efficient reprocessing
 
-- **DEM Processing**: Load and process Digital Elevation Models (SRTM .hgt, GeoTIFF)
-- **Terrain Visualization**: Generate 3D terrain meshes with Blender rendering
-- **Snow Analysis**: Process and analyze SNODAS snow depth data
-- **Geospatial Operations**: Reproject, transform, and analyze terrain data
-- **Caching System**: Efficient caching of processed data to avoid recomputation
+**Example Project**: Detroit Snow Depth Analysis
+- Load SRTM DEM data for the Detroit, Michigan region
+- Integrate SNODAS (Snow Data Assimilation System) snow depth measurements
+- Analyze spatial patterns and temporal trends in snow accumulation
+- Generate 3D visualizations showing terrain with snow depth overlays
+- Calculate terrain-based metrics (e.g., sledding suitability scores)
+
+**Key Features**:
+- **DEM Processing**: Load and merge Digital Elevation Models (SRTM .hgt, GeoTIFF)
+- **Flexible Data Layers**: Add any spatial dataset (raster or vector formats)
+- **Geospatial Operations**: Reproject, resample, smooth, and transform terrain data
+- **Blender Integration**: Generate high-quality 3D renderings with custom materials
+- **Smart Caching**: Avoid recomputation with hash-based caching system
+- **Extensible Design**: Easy to add new data sources and visualization methods
 
 👉 **[See Python Setup Guide](docs/PYTHON_SETUP.md)** for installation and usage instructions
 
