@@ -1,6 +1,17 @@
 import js from '@eslint/js';
 
 export default [
+  {
+    ignores: [
+      '.venv/**',
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      '.pytest_cache/**',
+      '__pycache__/**'
+    ]
+  },
   js.configs.recommended,
   {
     languageOptions: {
