@@ -23,6 +23,7 @@ dependencies = [
     "requests",
     "tqdm",
     "pyproj",
+    "zarr",
 ]
 
 [project.optional-dependencies]
