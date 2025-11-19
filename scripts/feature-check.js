@@ -59,7 +59,6 @@ function detectFeatures(changes) {
  */
 function findTestsForFeature(feature, testFiles) {
   const basename = path.basename(feature, path.extname(feature));
-  const dirname = path.dirname(feature);
   
   // Possible test file patterns
   const testPatterns = [
@@ -200,7 +199,7 @@ function getGitChanges() {
     const baseBranch = process.env.GITHUB_BASE_REF || 'main';
     const diffOutput = execSync(`git diff --name-status ${baseBranch}...HEAD`, { encoding: 'utf8' });
     return parseGitDiff(diffOutput);
-  } catch (error) {
+  } catch {
     // Fallback to last commit
     try {
       const diffOutput = execSync('git diff --name-status HEAD~1 HEAD', { encoding: 'utf8' });
@@ -250,7 +249,7 @@ function parseGitStats(output) {
   const lines = output.trim().split('\n');
   
   for (const line of lines) {
-    const match = line.match(/^\s*(.+?)\s*\|\s*(\d+)\s*([\+\-]+)/);
+    const match = line.match(/^\s*(.+?)\s*\|\s*(\d+)\s*([+-]+)/);
     if (match) {
       const [, file, , changes] = match;
       const plusCount = (changes.match(/\+/g) || []).length;

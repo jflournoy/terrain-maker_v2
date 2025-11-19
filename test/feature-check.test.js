@@ -5,8 +5,6 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const path = require('node:path');
-const fs = require('node:fs');
 
 // Import the feature check module (TDD RED - doesn't exist yet)
 const featureCheck = require('../scripts/feature-check');
@@ -277,7 +275,7 @@ D\tscripts/deleted.js`;
     });
     
     it('should get line additions for modified files', () => {
-      const statsOutput = `scripts/feature.js | 85 +++++++++++++++++++++++++++++++------`;
+      const statsOutput = 'scripts/feature.js | 85 +++++++++++++++++++++++++++++++------';
       
       const additions = featureCheck.parseGitStats(statsOutput);
       assert.ok(additions['scripts/feature.js'] >= 50);
