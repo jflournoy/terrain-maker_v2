@@ -79,6 +79,15 @@
     "search:code": "grep -r --exclude-dir=node_modules",
     "clean:artifacts": "rm -rf dist build *.log",
     "stats:project": "echo \"JS Files: $(npm run maintain:files --silent) | Commits: $(git rev-list --count HEAD 2>/dev/null || echo '0') | Branch: $(git branch --show-current)\"",
+    "// Python": "=== Python terrain-maker commands ===",
+    "py:test": "pytest tests/ -v",
+    "py:test:cov": "pytest tests/ --cov=src --cov-report=html --cov-report=term",
+    "py:lint": "pylint src/",
+    "py:format": "black src/ tests/ examples/",
+    "py:format:check": "black --check src/ tests/ examples/",
+    "py:type": "mypy src/",
+    "py:check": "npm run py:format:check && npm run py:lint && npm run py:type && npm run py:test",
+    "py:all": "npm run py:format && npm run py:lint && npm run py:type && npm run py:test",
     "prepare": "husky"
   },
   "keywords": [

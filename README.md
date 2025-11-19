@@ -10,7 +10,22 @@
 
 ## What This Is
 
-This is a **working reference repository** that demonstrates an opinionated set of practices for Claude Code development. The commands in `.claude/commands/` are actively used in this repository's development, making it a living example of the patterns it teaches.
+This repository serves **dual purposes**:
+
+1. **Terrain-Maker**: A Python-based GeoTIFF terrain visualization and analysis tool with Blender 3D rendering and SNODAS snow data integration
+2. **Claude Code Development Framework**: A working reference repository that demonstrates opinionated practices for Claude Code development using TDD workflows
+
+The terrain-maker Python code uses the Claude Code command templates for development, making this a real-world example of TDD-driven geospatial software development.
+
+### 🗺️ Terrain-Maker Features
+
+- **DEM Processing**: Load and process Digital Elevation Models (SRTM .hgt, GeoTIFF)
+- **Terrain Visualization**: Generate 3D terrain meshes with Blender rendering
+- **Snow Analysis**: Process and analyze SNODAS snow depth data
+- **Geospatial Operations**: Reproject, transform, and analyze terrain data
+- **Caching System**: Efficient caching of processed data to avoid recomputation
+
+👉 **[See Python Setup Guide](docs/PYTHON_SETUP.md)** for installation and usage instructions
 
 ## Quick Start (Choose Your Method)
 

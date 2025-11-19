@@ -80,13 +80,44 @@ backup/
 # Kiro directory
 .kiro
 
-# Python (if any Python scripts are added)
+# Terrain-maker data (large files, use symlinks)
+data/cache/**
+data/dem/**
+data/snodas/**
+data/snodas_data
+!data/samples/
+!data/samples/*.tif
+!data/samples/*.geojson
+
+# Blender files
+*.blend
+*.blend1
+
+# Large data files
+*.npz
+*.pkl
+*.hdf5
+*.h5
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 .Python
 venv/
 ENV/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.ipynb_checkpoints/
+*.ipynb
+
+# Python environments
+.venv/
+env/
+ENV/
+venv/
+
 
 # Note: We intentionally DO NOT ignore:
 # - .claude/commands/ (core product)
