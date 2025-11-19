@@ -1,6 +1,7 @@
 """Basic tests to verify project setup."""
 import sys
 from pathlib import Path
+import pytest
 
 
 def test_python_version():
