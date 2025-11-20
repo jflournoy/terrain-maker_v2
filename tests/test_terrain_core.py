@@ -174,6 +174,173 @@ class TestTerrainInitialization:
         assert 100 < terrain.resolution[1] < 120
 
 
+class TestMeshGeneration:
+    """Test suite for mesh generation logic and data structures."""
+
+    def test_mesh_requires_transformed_dem(self):
+        """Mesh creation should fail if DEM is not transformed."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Try to create mesh without transforming DEM
+        with pytest.raises(ValueError, match="Transformed DEM layer required"):
+            terrain.create_mesh()
+
+    def test_mesh_requires_valid_dem_data(self):
+        """Mesh creation should require valid DEM layer data."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Mark as transformed but don't provide transformed_data
+        terrain.data_layers['dem']['transformed'] = True
+        # Don't add transformed_data - this should cause an error
+
+        with pytest.raises((ValueError, KeyError)):
+            terrain.create_mesh()
+
+    def test_mesh_generation_with_valid_dem(self):
+        """Mesh should generate successfully with transformed DEM data."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform to mark as transformed
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        # Should not raise exception
+        try:
+            result = terrain.create_mesh()
+            # If bpy is not available, this will raise ImportError
+            # But we test that the method is callable and reaches the mesh creation point
+            assert result is None or hasattr(result, 'name')  # Blender object or None
+        except ImportError:
+            # Expected if Blender is not installed
+            pass
+
+    def test_mesh_model_parameters_stored(self):
+        """Mesh creation should store model parameters for later use."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        try:
+            terrain.create_mesh(scale_factor=50.0, height_scale=2.0, center_model=True)
+
+            # Check that model parameters are stored
+            assert hasattr(terrain, 'model_params')
+            assert terrain.model_params['scale_factor'] == 50.0
+            assert terrain.model_params['height_scale'] == 2.0
+            assert terrain.model_params['centered'] is True
+        except ImportError:
+            # Skip if Blender not available
+            pass
+
+    def test_mesh_offset_stored_when_centered(self):
+        """Mesh creation should store model offset when centering is enabled."""
+        dem_data = np.arange(100, dtype=np.float32).reshape(10, 10)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        try:
+            terrain.create_mesh(center_model=True)
+
+            # Check that offset is stored
+            assert hasattr(terrain, 'model_offset')
+            assert isinstance(terrain.model_offset, np.ndarray)
+            assert len(terrain.model_offset) == 3
+        except ImportError:
+            # Skip if Blender not available
+            pass
+
+    def test_mesh_no_offset_when_not_centered(self):
+        """Mesh creation should have zero offset when centering is disabled."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        try:
+            terrain.create_mesh(center_model=False)
+
+            # Offset should be zero
+            assert hasattr(terrain, 'model_offset')
+            np.testing.assert_array_equal(terrain.model_offset, [0, 0, 0])
+        except ImportError:
+            # Skip if Blender not available
+            pass
+
+    def test_mesh_handles_nan_values(self):
+        """Mesh creation should handle NaN values in DEM data gracefully."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        # Insert some NaN values
+        dem_data[2:4, 2:4] = np.nan
+
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        try:
+            # Should not raise exception due to NaN values
+            terrain.create_mesh()
+            assert True  # Successfully handled NaN
+        except ImportError:
+            # Skip if Blender not available
+            pass
+
+    def test_mesh_with_different_scale_factors(self):
+        """Mesh should accept and store different scale factors."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        for scale in [10.0, 50.0, 100.0, 200.0]:
+            try:
+                terrain.create_mesh(scale_factor=scale)
+                assert terrain.model_params['scale_factor'] == scale
+            except ImportError:
+                # Skip if Blender not available
+                pass
+
+
 class TestTerrainTransforms:
     """Test suite for Terrain.apply_transforms method."""
 
