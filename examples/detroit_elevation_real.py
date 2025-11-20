@@ -338,8 +338,8 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=100.0,
-            height_scale=0.01,  # Scale down elevation for proportions
+            scale_factor=120.0,
+            height_scale=0.007,  # Reduced height exaggeration
             center_model=True,
             boundary_extension=True
         )
