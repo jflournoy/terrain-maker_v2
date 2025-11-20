@@ -8,6 +8,7 @@ export default [
       'dist/**',
       'build/**',
       'coverage/**',
+      'htmlcov/**',
       '.pytest_cache/**',
       '__pycache__/**'
     ]

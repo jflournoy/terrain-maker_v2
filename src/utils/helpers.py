@@ -511,12 +511,6 @@ def preprocess_dem(dem_data, zoom_factor=1/10, fill_value = -999999.0, downsampl
     dem_clean = dem_data.copy()
     n_missing = np.sum(dem_clean == fill_value)
     logger.info(f"Number of fill values ({fill_value}): {n_missing}")
-        931 transformed_layers = {}
---> 932 for name, layer in data_layers.items():
-    933     transformed_data = layer['data'].copy()
-    934     orig_transform = layer['transform']
-
-AttributeError: 'list' object has no attribute 'items'
     if n_missing > 0:
         dem_clean[dem_clean == fill_value] = np.nan
         logger.info(f"After fill value replacement - NaN count: {np.sum(np.isnan(dem_clean))}")
