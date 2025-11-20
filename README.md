@@ -40,6 +40,8 @@ This repository serves **dual purposes**:
 
 👉 **[See Python Setup Guide](docs/PYTHON_SETUP.md)** for installation and usage instructions
 
+📚 **[API Reference](docs/API_REFERENCE.md)** - Complete documentation of all methods and classes
+
 ## Quick Start: Using This Repository
 
 ### Python Package Installation
