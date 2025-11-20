@@ -131,23 +131,22 @@ def render_to_png(output_path=None):
     print(f"\n[6/6] Setting up camera and rendering to PNG...")
 
     try:
-        # Setup camera and lighting for good view
-        # The mesh is centered at origin and scaled by 100, so we need to position camera
-        # to look at it from a nice isometric angle
-        camera_location = (80, 80, 80)  # Position camera away from origin
-        camera_angle = (radians(65), radians(45), radians(0))  # 65° down pitch, 45° yaw
-        camera_scale = 200  # Zoom level to see the whole mesh
+        # Simple top-down view: camera directly above mesh looking straight down
+        # This is easy to debug - if the mesh exists, we'll see it
+        camera_location = (0, 0, 150)  # Directly above origin at z=150
+        camera_angle = (radians(90), radians(0), radians(0))  # 90° pitch = looking straight down
+        camera_scale = 250  # Zoom level
 
         setup_camera_and_light(
             camera_angle=camera_angle,
             camera_location=camera_location,
             scale=camera_scale,
-            sun_angle=2,
+            sun_angle=45,  # Sun from above too
             sun_energy=2,
             focal_length=50
         )
 
-        # Set basic render output settings first
+        # Set basic render output settings
         bpy.context.scene.render.filepath = str(output_path)
         bpy.context.scene.render.image_settings.file_format = 'PNG'
         bpy.context.scene.render.image_settings.color_mode = 'RGBA'
@@ -158,11 +157,12 @@ def render_to_png(output_path=None):
         bpy.context.scene.render.resolution_y = 1440
         bpy.context.scene.render.resolution_percentage = 100
 
-        # Set render engine and samples (simpler approach than setup_render_settings)
+        # Set render engine and samples
         bpy.context.scene.render.engine = 'CYCLES'
         bpy.context.scene.cycles.samples = 32
 
-        print(f"      Camera: {camera_location}")
+        print(f"      Camera: TOP-DOWN VIEW at {camera_location}")
+        print(f"      Looking: straight down (90° pitch)")
         print(f"      Samples: 32")
         print(f"      Rendering...")
 
