@@ -132,39 +132,46 @@ def render_to_png(mesh_obj, output_path=None):
     print(f"\n[6/6] Setting up camera and rendering to PNG...")
 
     try:
-        # Calculate optimal camera position based on mesh bounds
-        bound_box = np.array(mesh_obj.bound_box)
-        mesh_min = np.min(bound_box, axis=0)
-        mesh_max = np.max(bound_box, axis=0)
-        mesh_center = (mesh_max + mesh_min) / 2
-        mesh_size = mesh_max - mesh_min
+        # Known working camera parameters (tuned empirically for terrain visualization)
+        # Position: (x, y, z) in Blender units
+        # Rotation: (x, y, z) in degrees, converted to radians
+        camera_location = (7.3589, -6.9257, 4.9583)
+        camera_rotation_deg = (63.559, 0, 46.692)
+        camera_angle = (radians(camera_rotation_deg[0]), radians(camera_rotation_deg[1]), radians(camera_rotation_deg[2]))
+        camera_scale = 20.0
 
-        # Calculate optimal camera distance
-        diagonal = np.linalg.norm(mesh_size)
-        optimal_distance = diagonal * 1.5
+        # Delete any existing cameras to avoid rendering from wrong camera
+        for obj in list(bpy.data.objects):
+            if obj.type == 'CAMERA':
+                bpy.data.objects.remove(obj, do_unlink=True)
 
-        # Isometric view: camera positioned at 45° from mesh center
-        iso_offset = optimal_distance / np.sqrt(3)
-        camera_location = tuple(mesh_center + np.array([iso_offset, iso_offset, iso_offset]))
-        camera_angle = (radians(45), radians(0), radians(45))
-        camera_scale = diagonal
+        # Delete any existing lights
+        for obj in list(bpy.data.objects):
+            if obj.type == 'LIGHT':
+                bpy.data.objects.remove(obj, do_unlink=True)
 
-        # Set up camera and lights
-        setup_camera_and_light(
-            camera_angle=camera_angle,
-            camera_location=camera_location,
-            scale=camera_scale,
-            sun_angle=2,  # Sun disk blur angle (small = sharp shadows)
-            sun_energy=3,  # Brightness of sun
-            focal_length=50
-        )
+        # Create camera
+        cam_data = bpy.data.cameras.new("Camera")
+        cam_data.lens = 50
+        cam_obj = bpy.data.objects.new("Camera", cam_data)
+        bpy.context.scene.collection.objects.link(cam_obj)
 
-        # Reposition sun light relative to mesh center
-        sun_obj = bpy.data.objects.get("Sun")
-        if sun_obj:
-            sun_location = mesh_center + np.array([optimal_distance/2, optimal_distance/2, optimal_distance])
-            sun_obj.location = tuple(sun_location)
-            sun_obj.rotation_euler = (radians(45), radians(45), radians(0))
+        cam_obj.location = camera_location
+        cam_obj.rotation_euler = camera_angle
+        cam_data.type = 'PERSP'
+        cam_data.ortho_scale = camera_scale
+
+        bpy.context.scene.camera = cam_obj
+
+        # Create sun light
+        sun = bpy.data.lights.new(name="Sun", type='SUN')
+        sun_obj = bpy.data.objects.new("Sun", sun)
+        bpy.context.scene.collection.objects.link(sun_obj)
+
+        sun_obj.location = (10, 10, 10)
+        sun_obj.rotation_euler = (radians(45), radians(45), radians(0))
+        sun.angle = 2
+        sun.energy = 3
 
         # Set basic render output settings
         bpy.context.scene.render.filepath = str(output_path)
@@ -181,9 +188,9 @@ def render_to_png(mesh_obj, output_path=None):
         bpy.context.scene.render.engine = 'CYCLES'
         bpy.context.scene.cycles.samples = 32
 
-        print(f"      Camera: ISOMETRIC VIEW")
-        print(f"      Location: ({camera_location[0]:.2f}, {camera_location[1]:.2f}, {camera_location[2]:.2f})")
-        print(f"      Mesh center: ({mesh_center[0]:.2f}, {mesh_center[1]:.2f}, {mesh_center[2]:.2f})")
+        print(f"      Camera: TUNED VIEW")
+        print(f"      Location: ({camera_location[0]:.4f}, {camera_location[1]:.4f}, {camera_location[2]:.4f})")
+        print(f"      Rotation (deg): ({camera_rotation_deg[0]:.3f}, {camera_rotation_deg[1]:.3f}, {camera_rotation_deg[2]:.3f})")
         print(f"      Samples: 32")
         print(f"      Rendering...")
 
