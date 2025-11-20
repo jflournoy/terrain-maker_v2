@@ -102,6 +102,62 @@ def create_color_function():
     return elevation_to_rgb
 
 
+def render_to_png(output_path="detroit_terrain.png"):
+    """Render the Blender scene to PNG.
+
+    Args:
+        output_path: Path to save the rendered PNG (default: detroit_terrain.png)
+
+    Returns:
+        Path to the rendered file, or None if rendering failed
+    """
+    try:
+        import bpy
+    except ImportError:
+        print("\n⚠️  Blender/bpy not available - skipping PNG render")
+        print("    (POC still successful - mesh was created)")
+        return None
+
+    output_path = Path(output_path).resolve()
+    print(f"\n[6/6] Rendering to PNG: {output_path}...")
+
+    try:
+        # Set render output
+        bpy.context.scene.render.filepath = str(output_path)
+        bpy.context.scene.render.image_settings.file_format = 'PNG'
+        bpy.context.scene.render.image_settings.color_mode = 'RGBA'
+        bpy.context.scene.render.image_settings.compression = 90
+
+        # Set render resolution
+        bpy.context.scene.render.resolution_x = 1920
+        bpy.context.scene.render.resolution_y = 1440
+
+        # Use Cycles for better quality (if available)
+        try:
+            bpy.context.scene.render.engine = 'CYCLES'
+            bpy.context.scene.cycles.samples = 32  # Quick render
+        except:
+            # Fall back to Eevee if Cycles not available
+            bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+
+        # Render and save
+        bpy.ops.render.render(write_still=True)
+
+        if output_path.exists():
+            file_size_mb = output_path.stat().st_size / (1024 * 1024)
+            print(f"      ✓ Rendered successfully!")
+            print(f"      File: {output_path.name}")
+            print(f"      Size: {file_size_mb:.1f} MB")
+            return output_path
+        else:
+            print(f"      ✗ Render file not created")
+            return None
+
+    except Exception as e:
+        print(f"      ✗ Render failed: {str(e)}")
+        return None
+
+
 def main():
     """Run the Detroit snow depth visualization proof of concept."""
     print("=" * 60)
@@ -109,20 +165,20 @@ def main():
     print("=" * 60)
 
     # Step 1: Create synthetic DEM
-    print("\n[1/5] Creating synthetic Detroit DEM...")
+    print("\n[1/6] Creating synthetic Detroit DEM...")
     dem_data = create_detroit_dem()
     print(f"      DEM shape: {dem_data.shape}")
     print(f"      Elevation range: {dem_data.min():.1f} - {dem_data.max():.1f} meters")
 
     # Step 2: Initialize Terrain object
-    print("\n[2/5] Initializing Terrain object...")
+    print("\n[2/6] Initializing Terrain object...")
     transform = Affine.identity()
     terrain = Terrain(dem_data, transform)
     print(f"      Terrain initialized with {len(terrain.data_layers)} layer(s)")
     print(f"      Available layers: {list(terrain.data_layers.keys())}")
 
     # Step 3: Apply transforms
-    print("\n[3/5] Applying coordinate transforms...")
+    print("\n[3/6] Applying coordinate transforms...")
 
     # Register an identity transform (no-op, just for demonstration)
     def identity_transform(data, trans):
@@ -135,14 +191,14 @@ def main():
     print(f"      Transformed layer status: {terrain.data_layers['dem']['transformed']}")
 
     # Step 4: Set up color mapping
-    print("\n[4/5] Setting up color mapping...")
+    print("\n[4/6] Setting up color mapping...")
     color_func = create_color_function()
     terrain.set_color_mapping(color_func, source_layers=['dem'])
     print(f"      Color mapping configured for layer 'dem'")
     print(f"      Color function: {color_func.__name__}")
 
     # Step 5: Create Blender mesh
-    print("\n[5/5] Creating Blender mesh...")
+    print("\n[5/6] Creating Blender mesh...")
     mesh_obj = terrain.create_mesh(
         scale_factor=100.0,
         center_model=True,
@@ -159,6 +215,9 @@ def main():
         print(f"      ERROR: Mesh creation failed!")
         return 1
 
+    # Step 6: Render to PNG
+    render_file = render_to_png()
+
     # Success summary
     print("\n" + "=" * 60)
     print("Proof of Concept Complete!")
@@ -169,9 +228,11 @@ def main():
     print(f"  ✓ Applied transforms to DEM data")
     print(f"  ✓ Configured elevation-based color mapping")
     print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
-    print(f"\nThe Blender scene now contains a terrain visualization!")
-    print(f"The mesh is ready for rendering, further customization,")
-    print(f"or export to 3D file formats (OBJ, FBX, etc.)")
+    if render_file:
+        print(f"  ✓ Rendered to PNG: {render_file}")
+    print(f"\nThe terrain visualization is ready!")
+    print(f"The mesh can be further customized or exported to 3D file formats")
+    print(f"(OBJ, FBX, GLTF, etc.)")
 
     return 0
 

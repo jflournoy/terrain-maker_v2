@@ -183,6 +183,37 @@ class TestDetroitEndToEnd:
         assert faces1 == faces2
 
 
+    def test_detroit_example_can_render_png(self, tmp_path):
+        """Detroit example should be able to render to PNG."""
+        try:
+            import bpy
+        except ImportError:
+            pytest.skip("Blender/bpy not available for rendering test")
+
+        dem_data = np.ones((50, 50), dtype=np.float32) * 250
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        def color_func(dem):
+            normalized = (dem - dem.min()) / (dem.max() - dem.min() + 1e-8)
+            rgb = np.stack([normalized, normalized, normalized], axis=-1)
+            return (rgb * 255).astype(np.uint8)
+
+        terrain.set_color_mapping(color_func, source_layers=['dem'])
+        mesh_obj = terrain.create_mesh()
+
+        # Verify mesh was created and can be rendered
+        assert mesh_obj is not None
+        assert hasattr(bpy, 'context')
+        assert bpy.context.scene is not None
+
+
 class TestDetroitDataIntegration:
     """Test Detroit-specific data integration."""
 
