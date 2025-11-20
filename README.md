@@ -24,12 +24,11 @@ This repository serves **dual purposes**:
 - Render 3D terrain visualizations with Blender
 - Cache results for efficient reprocessing
 
-**Example Project**: Detroit Snow Depth Analysis
-- Load SRTM DEM data for the Detroit, Michigan region
-- Integrate SNODAS (Snow Data Assimilation System) snow depth measurements
-- Analyze spatial patterns and temporal trends in snow accumulation
-- Generate 3D visualizations showing terrain with snow depth overlays
-- Calculate terrain-based metrics (e.g., sledding suitability scores)
+**Example Projects**: Detroit Terrain Analysis
+- **Real Elevation**: Load actual SRTM tiles covering Detroit metro (1.3M vertices mesh)
+- **Snow Depth**: Integrate SNODAS snow depth measurements with terrain
+- **Analysis**: Spatial patterns, temporal trends, sledding suitability scores
+- **Visualization**: 3D terrain with color-mapped overlays in Blender
 
 **Key Features**:
 - **DEM Processing**: Load and merge Digital Elevation Models (SRTM .hgt, GeoTIFF)
