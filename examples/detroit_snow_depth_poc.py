@@ -106,10 +106,11 @@ def create_color_function():
     return elevation_to_rgb
 
 
-def render_to_png(output_path=None):
+def render_to_png(mesh_obj, output_path=None):
     """Render the Blender scene to PNG.
 
     Args:
+        mesh_obj: The Blender mesh object to render
         output_path: Path to save the rendered PNG (default: examples/detroit_terrain.png)
 
     Returns:
@@ -131,11 +132,22 @@ def render_to_png(output_path=None):
     print(f"\n[6/6] Setting up camera and rendering to PNG...")
 
     try:
-        # Isometric view: camera at 45° angle showing all dimensions clearly
-        # This view shows elevation changes and terrain structure intuitively
-        camera_location = (100, 100, 100)  # Diagonal from origin
-        camera_angle = (radians(45), radians(0), radians(45))  # 45° isometric view
-        camera_scale = 250  # Zoom level
+        # Calculate optimal camera position based on mesh bounds
+        bound_box = np.array(mesh_obj.bound_box)
+        mesh_min = np.min(bound_box, axis=0)
+        mesh_max = np.max(bound_box, axis=0)
+        mesh_center = (mesh_max + mesh_min) / 2
+        mesh_size = mesh_max - mesh_min
+
+        # Calculate optimal camera distance
+        diagonal = np.linalg.norm(mesh_size)
+        optimal_distance = diagonal * 1.5
+
+        # Isometric view: camera positioned at 45° from mesh center
+        iso_offset = optimal_distance / np.sqrt(3)
+        camera_location = tuple(mesh_center + np.array([iso_offset, iso_offset, iso_offset]))
+        camera_angle = (radians(45), radians(0), radians(45))
+        camera_scale = diagonal
 
         # Set up camera and lights
         setup_camera_and_light(
@@ -147,11 +159,11 @@ def render_to_png(output_path=None):
             focal_length=50
         )
 
-        # Reposition sun light to be higher and further away from terrain
-        # (setup_camera_and_light places it too low by default)
+        # Reposition sun light relative to mesh center
         sun_obj = bpy.data.objects.get("Sun")
         if sun_obj:
-            sun_obj.location = (100, 100, 200)  # High and far corner, above camera
+            sun_location = mesh_center + np.array([optimal_distance/2, optimal_distance/2, optimal_distance])
+            sun_obj.location = tuple(sun_location)
             sun_obj.rotation_euler = (radians(45), radians(45), radians(0))
 
         # Set basic render output settings
@@ -169,8 +181,9 @@ def render_to_png(output_path=None):
         bpy.context.scene.render.engine = 'CYCLES'
         bpy.context.scene.cycles.samples = 32
 
-        print(f"      Camera: ISOMETRIC VIEW at {camera_location}")
-        print(f"      Looking: 45° isometric angle")
+        print(f"      Camera: ISOMETRIC VIEW")
+        print(f"      Location: ({camera_location[0]:.2f}, {camera_location[1]:.2f}, {camera_location[2]:.2f})")
+        print(f"      Mesh center: ({mesh_center[0]:.2f}, {mesh_center[1]:.2f}, {mesh_center[2]:.2f})")
         print(f"      Samples: 32")
         print(f"      Rendering...")
 
@@ -182,10 +195,19 @@ def render_to_png(output_path=None):
             print(f"      ✓ Rendered successfully!")
             print(f"      File: {output_path.name}")
             print(f"      Size: {file_size_mb:.1f} MB")
-            return output_path
         else:
             print(f"      ✗ Render file not created")
             return None
+
+        # Export Blender file for manual inspection
+        blend_path = output_path.parent / "detroit_terrain.blend"
+        try:
+            bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+            print(f"      ✓ Saved Blender file: {blend_path.name}")
+        except Exception as e:
+            print(f"      ⚠ Could not save Blender file: {e}")
+
+        return output_path
 
     except Exception as e:
         print(f"      ✗ Render failed: {str(e)}")
@@ -237,6 +259,7 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     mesh_obj = terrain.create_mesh(
         scale_factor=100.0,
+        height_scale=0.01,  # Scale down elevation values for better proportions
         center_model=True,
         boundary_extension=True
     )
@@ -252,7 +275,7 @@ def main():
         return 1
 
     # Step 6: Render to PNG
-    render_file = render_to_png()
+    render_file = render_to_png(mesh_obj)
 
     # Success summary
     print("\n" + "=" * 60)
