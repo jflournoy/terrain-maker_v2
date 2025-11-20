@@ -247,6 +247,83 @@ def setup_render_settings(
     
     logger.info("Render settings configured successfully")
 
+
+def render_scene_to_file(
+    output_path,
+    width=1920,
+    height=1440,
+    file_format='PNG',
+    color_mode='RGBA',
+    compression=90,
+    save_blend_file=True
+):
+    """
+    Render the current Blender scene to file.
+
+    Args:
+        output_path (str or Path): Path where output file will be saved
+        width (int): Render width in pixels (default: 1920)
+        height (int): Render height in pixels (default: 1440)
+        file_format (str): Output format 'PNG', 'JPEG', etc. (default: 'PNG')
+        color_mode (str): 'RGBA' or 'RGB' (default: 'RGBA')
+        compression (int): PNG compression level 0-100 (default: 90)
+        save_blend_file (bool): Also save .blend project file (default: True)
+
+    Returns:
+        Path: Path to rendered file if successful, None otherwise
+    """
+    try:
+        import bpy
+    except ImportError:
+        logger.warning("Blender/bpy not available - skipping render")
+        return None
+
+    output_path = Path(output_path).resolve()
+    logger.info(f"Rendering scene to {output_path}")
+
+    try:
+        # Configure render output
+        bpy.context.scene.render.filepath = str(output_path)
+        bpy.context.scene.render.image_settings.file_format = file_format
+        bpy.context.scene.render.image_settings.color_mode = color_mode
+
+        if file_format == 'PNG':
+            bpy.context.scene.render.image_settings.compression = compression
+
+        bpy.context.scene.render.resolution_x = width
+        bpy.context.scene.render.resolution_y = height
+        bpy.context.scene.render.resolution_percentage = 100
+
+        logger.info(f"Render: {width}×{height} {file_format} ({color_mode})")
+
+        # Execute render
+        bpy.ops.render.render(write_still=True)
+
+        # Verify output
+        if output_path.exists():
+            file_size_mb = output_path.stat().st_size / (1024 * 1024)
+            logger.info(f"Rendered successfully: {file_size_mb:.1f} MB")
+
+            # Save Blender file if requested
+            if save_blend_file:
+                blend_path = output_path.parent / output_path.stem
+                blend_path = blend_path.with_suffix('.blend')
+                try:
+                    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+                    logger.info(f"Saved Blender file: {blend_path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not save Blender file: {e}")
+
+            return output_path
+        else:
+            logger.error("Render file was not created")
+            return None
+
+    except Exception as e:
+        logger.error(f"Render failed: {str(e)}")
+        return None
+
+
 def apply_colormap_material(material: bpy.types.Material) -> None:
     """
     Create a simple material setup for terrain visualization using vertex colors.

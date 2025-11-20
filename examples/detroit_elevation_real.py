@@ -37,23 +37,14 @@ sys.path.insert(0, str(project_root))
 from src.terrain.core import (
     Terrain, load_dem_files, downsample_raster, scale_elevation,
     elevation_colormap, clear_scene, setup_camera_and_light,
-    setup_render_settings
+    setup_render_settings, render_scene_to_file
 )
 
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
 
-
-
-
 def render_to_png(mesh_obj, output_path=None):
     """Render the Blender scene to PNG."""
-    try:
-        import bpy
-    except ImportError:
-        print("\n⚠️  Blender/bpy not available - skipping PNG render")
-        return None
-
     if output_path is None:
         output_path = Path(__file__).parent / "detroit_elevation_real.png"
     else:
@@ -87,17 +78,8 @@ def render_to_png(mesh_obj, output_path=None):
         setup_render_settings(
             use_gpu=True,
             samples=32,
-            use_denoising=False  # No denoising for this render
+            use_denoising=False
         )
-
-        # Set output path and format
-        bpy.context.scene.render.filepath = str(output_path)
-        bpy.context.scene.render.image_settings.file_format = 'PNG'
-        bpy.context.scene.render.image_settings.color_mode = 'RGBA'
-        bpy.context.scene.render.image_settings.compression = 90
-        bpy.context.scene.render.resolution_x = 1920
-        bpy.context.scene.render.resolution_y = 1440
-        bpy.context.scene.render.resolution_percentage = 100
 
         print(f"      Camera: TUNED VIEW")
         print(f"      Location: {camera_location}")
@@ -105,30 +87,29 @@ def render_to_png(mesh_obj, output_path=None):
         print(f"      Samples: 32")
         print(f"      Rendering...")
 
-        # Render
-        bpy.ops.render.render(write_still=True)
+        # Use class method to render and save
+        result = render_scene_to_file(
+            output_path=output_path,
+            width=1920,
+            height=1440,
+            file_format='PNG',
+            color_mode='RGBA',
+            compression=90,
+            save_blend_file=True
+        )
 
-        if output_path.exists():
-            file_size_mb = output_path.stat().st_size / (1024 * 1024)
+        if result:
+            file_size_mb = result.stat().st_size / (1024 * 1024)
             print(f"      ✓ Rendered successfully!")
-            print(f"      File: {output_path.name}")
+            print(f"      File: {result.name}")
             print(f"      Size: {file_size_mb:.1f} MB")
+            return result
         else:
-            print(f"      ✗ Render file not created")
+            print(f"      ✗ Render failed")
             return None
 
-        # Export Blender file
-        blend_path = output_path.parent / "detroit_elevation_real.blend"
-        try:
-            bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
-            print(f"      ✓ Saved Blender file: {blend_path.name}")
-        except Exception as e:
-            print(f"      ⚠️  Could not save Blender file: {e}")
-
-        return output_path
-
     except Exception as e:
-        print(f"      ✗ Render failed: {str(e)}")
+        print(f"      ✗ Error during render: {str(e)}")
         import traceback
         traceback.print_exc()
         return None
