@@ -11,13 +11,12 @@ Data Source:
     - Location: ../../../geotiff-rayshade/detroit/
 
 Workflow:
-    1. Load and merge SRTM HGT tiles
-    2. Crop to Detroit metro area (42.25-42.45°N, 83.25-82.75°W)
-    3. Initialize Terrain object
-    4. Apply transforms
-    5. Set up color mapping (elevation-based)
-    6. Generate Blender mesh
-    7. Render to PNG
+    1. Load and merge all SRTM HGT tiles (full coverage)
+    2. Initialize Terrain object
+    3. Apply 10:1 downsampling to reduce vertex count
+    4. Set up Viridis color mapping (elevation-based)
+    5. Generate Blender mesh
+    6. Render to PNG
 
 Output:
     - PNG saved to: examples/detroit_elevation_real.png (1920×1440)
@@ -36,12 +35,13 @@ from rasterio.merge import merge
 from rasterio.windows import from_bounds
 from affine import Affine
 import matplotlib.cm as cm
+from scipy.ndimage import zoom
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import Terrain
+from src.terrain.core import Terrain, downsample_raster
 
 # Detroit metro bounds (rough bounding box)
 DETROIT_BOUNDS = {
@@ -97,41 +97,15 @@ def load_detroit_dem():
     # Extract first band (SRTM is single band)
     dem = merged_dem[0].astype(np.float32)
 
-    print(f"      Merged DEM shape: {dem.shape}")
-    print(f"      Elevation range: {np.nanmin(dem):.1f} - {np.nanmax(dem):.1f} meters")
-
-    # Crop to Detroit metro bounds
-    print(f"      Cropping to Detroit metro bounds...")
-
-    # Convert bounds to pixel window
-    window = from_bounds(
-        DETROIT_BOUNDS['west'], DETROIT_BOUNDS['south'],
-        DETROIT_BOUNDS['east'], DETROIT_BOUNDS['north'],
-        merged_transform
-    )
-
-    # Read cropped data
-    dem_cropped = dem[
-        int(window.row_off):int(window.row_off + window.height),
-        int(window.col_off):int(window.col_off + window.width)
-    ]
-
-    # Calculate new transform for cropped data
-    ul_x = merged_transform.c + window.col_off * merged_transform.a
-    ul_y = merged_transform.f + window.row_off * merged_transform.e
-    transform_cropped = Affine(
-        merged_transform.a, merged_transform.b, ul_x,
-        merged_transform.d, merged_transform.e, ul_y
-    )
-
-    print(f"      Cropped DEM shape: {dem_cropped.shape}")
-    print(f"      Cropped elevation range: {np.nanmin(dem_cropped):.1f} - {np.nanmax(dem_cropped):.1f} meters")
+    print(f"      Full merged DEM shape: {dem.shape}")
+    print(f"      Full elevation range: {np.nanmin(dem):.1f} - {np.nanmax(dem):.1f} meters")
 
     # Close all datasets
     for ds in datasets:
         ds.close()
 
-    return dem_cropped, transform_cropped
+    # Use full merged DEM (all tiles)
+    return dem, merged_transform
 
 
 def create_color_function():
@@ -157,7 +131,13 @@ def create_color_function():
         normalized[valid_mask] = (dem[valid_mask] - dem_min) / (dem_max - dem_min + 1e-8)
 
         # Apply Viridis colormap (vectorized)
-        viridis = cm.get_cmap('viridis')
+        try:
+            # Try new API (matplotlib >= 3.7)
+            import matplotlib
+            viridis = matplotlib.colormaps.get_cmap('viridis')
+        except (AttributeError, TypeError):
+            # Fall back to old API for older matplotlib versions
+            viridis = cm.get_cmap('viridis')
         rgba_array = viridis(normalized)  # Returns shape (H, W, 4) with RGBA values
         rgb = rgba_array[:, :, :3]  # Extract RGB channels (H, W, 3)
 
@@ -298,15 +278,27 @@ def main():
     print(f"      Terrain initialized")
     print(f"      DEM shape: {terrain.dem_shape}")
 
-    # Step 3: Apply transforms
-    print("\n[3/6] Applying coordinate transforms...")
+    # Step 3: Apply transforms (downsample to reduce mesh complexity)
+    print("\n[3/6] Applying transforms...")
 
-    def identity_transform(data, trans):
-        """Identity transform (no-op for demonstration)."""
-        return data, trans, None
+    # Downsample DEM to reduce vertex count (full merged DEM is very large)
+    # zoom_factor=0.1 reduces grid by 10x, making mesh manageable
+    print(f"      Original DEM shape: {terrain.dem_shape}")
+    print(f"      Downsampling by factor 0.1 to reduce vertices...")
 
-    terrain.transforms.append(identity_transform)
+    # Create a wrapper transform that uses downsample_raster and returns proper 3-tuple
+    def downsample_wrapper(data, trans):
+        """Wrapper for downsample_raster that returns (data, trans, crs) tuple."""
+        downsampled_data, new_trans = downsample_raster(zoom_factor=0.1, order=4)(data, trans)
+        return downsampled_data, new_trans, None  # Return 3-tuple with None CRS (no change)
+
+    terrain.transforms.append(downsample_wrapper)
     terrain.apply_transforms()
+
+    # Check downsampled size
+    transformed_dem = terrain.data_layers['dem']['transformed_data']
+    print(f"      Downsampled DEM shape: {transformed_dem.shape}")
+    print(f"      Estimated vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]}")
     print(f"      Transforms applied successfully")
 
     # Step 4: Set up color mapping
@@ -319,8 +311,8 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=135.0,
-            height_scale=0.007,  # Reduced height exaggeration
+            scale_factor=200.0,
+            height_scale=0.0035,  # Half elevation exaggeration for flatter appearance
             center_model=True,
             boundary_extension=True
         )
@@ -347,12 +339,11 @@ def main():
     print("Detroit Real Elevation Visualization Complete!")
     print("=" * 70)
     print(f"\nSummary:")
-    print(f"  ✓ Loaded SRTM tiles covering Detroit metro area")
-    print(f"  ✓ Cropped to Detroit bounds ({DETROIT_BOUNDS['south']:.2f}N-{DETROIT_BOUNDS['north']:.2f}N, "
-          f"{DETROIT_BOUNDS['west']:.2f}E-{DETROIT_BOUNDS['east']:.2f}E)")
+    print(f"  ✓ Loaded and merged all SRTM tiles (full coverage)")
+    print(f"  ✓ Downsampled 10:1 to reduce vertex count")
     print(f"  ✓ Created Terrain object with real elevation data")
-    print(f"  ✓ Applied transforms")
-    print(f"  ✓ Configured elevation-based color mapping")
+    print(f"  ✓ Applied transforms (downsampling + processing)")
+    print(f"  ✓ Configured Viridis elevation-based color mapping")
     print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
     if render_file:
         print(f"  ✓ Rendered to PNG: {render_file}")
