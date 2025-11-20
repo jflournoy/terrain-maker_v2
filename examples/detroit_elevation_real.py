@@ -29,78 +29,19 @@ Usage:
 import sys
 from pathlib import Path
 from math import radians
-import numpy as np
-import rasterio
-from rasterio.merge import merge
-from rasterio.windows import from_bounds
-from affine import Affine
-import matplotlib.cm as cm
-from scipy.ndimage import zoom
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, downsample_raster, scale_elevation, elevation_colormap,
-    clear_scene, setup_camera_and_light, setup_render_settings
+    Terrain, load_dem_files, downsample_raster, scale_elevation,
+    elevation_colormap, clear_scene, setup_camera_and_light,
+    setup_render_settings
 )
 
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
-
-
-def load_detroit_dem():
-    """
-    Load and merge SRTM tiles covering Detroit metro area.
-
-    Returns:
-        tuple: (dem_data, transform) - elevation array and affine transform
-    """
-    print("[1/6] Loading SRTM tiles...")
-
-    if not SRTM_TILES_DIR.exists():
-        raise FileNotFoundError(f"SRTM tiles directory not found: {SRTM_TILES_DIR}")
-
-    # Find all HGT files
-    hgt_files = sorted(SRTM_TILES_DIR.glob("*.hgt"))
-
-    if not hgt_files:
-        raise FileNotFoundError(f"No .hgt files found in {SRTM_TILES_DIR}")
-
-    print(f"      Found {len(hgt_files)} SRTM tiles")
-
-    # Open all datasets
-    datasets = []
-    for hgt_file in hgt_files:
-        try:
-            ds = rasterio.open(hgt_file)
-            datasets.append(ds)
-        except Exception as e:
-            print(f"      ⚠️  Could not open {hgt_file.name}: {e}")
-            continue
-
-    if not datasets:
-        raise ValueError("Could not open any SRTM tiles")
-
-    print(f"      Successfully opened {len(datasets)} tiles")
-    print(f"      Merging tiles...")
-
-    # Merge all datasets
-    merged_dem, merged_transform = merge(datasets)
-
-    # Extract first band (SRTM is single band)
-    dem = merged_dem[0].astype(np.float32)
-
-    print(f"      Full merged DEM shape: {dem.shape}")
-    print(f"      Full elevation range: {np.nanmin(dem):.1f} - {np.nanmax(dem):.1f} meters")
-
-    # Close all datasets
-    for ds in datasets:
-        ds.close()
-
-    # Use full merged DEM (all tiles)
-    return dem, merged_transform
 
 
 
@@ -208,8 +149,9 @@ def main():
         print("⚠️  Blender not available - skipping scene clear")
 
     # Step 1: Load DEM
+    print("[1/6] Loading SRTM tiles...")
     try:
-        dem_data, transform = load_detroit_dem()
+        dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
     except Exception as e:
         print(f"\n✗ Failed to load DEM: {e}")
         return 1
@@ -230,9 +172,9 @@ def main():
     print(f"      Scaling elevation by factor 0.5...")
 
     # Use class method for downsampling
-    terrain.transforms.append(downsample_raster(zoom_factor=0.1, order=4))
+    terrain.transforms.append(downsample_raster(zoom_factor=0.05, order=4))
     # Use class method for elevation scaling
-    terrain.transforms.append(scale_elevation(scale_factor=0.5))
+    terrain.transforms.append(scale_elevation(scale_factor=0.05))
     terrain.apply_transforms()
 
     # Check downsampled size
