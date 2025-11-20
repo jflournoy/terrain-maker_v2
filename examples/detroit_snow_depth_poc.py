@@ -8,7 +8,10 @@ This example demonstrates the terrain-maker library workflow:
 3. Apply coordinate transforms
 4. Set up color mapping
 5. Generate a Blender mesh
-6. Save the result
+6. Render to PNG
+
+Output:
+    - PNG saved to: examples/detroit_terrain.png (1920×1440)
 
 Usage:
     python examples/detroit_snow_depth_poc.py
@@ -16,6 +19,7 @@ Usage:
 
 import sys
 from pathlib import Path
+from math import radians
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
@@ -25,7 +29,7 @@ import numpy as np
 from affine import Affine
 
 # Import terrain-maker library
-from src.terrain.core import Terrain
+from src.terrain.core import Terrain, setup_camera_and_light, setup_render_settings
 
 
 def create_detroit_dem():
@@ -102,11 +106,11 @@ def create_color_function():
     return elevation_to_rgb
 
 
-def render_to_png(output_path="detroit_terrain.png"):
+def render_to_png(output_path=None):
     """Render the Blender scene to PNG.
 
     Args:
-        output_path: Path to save the rendered PNG (default: detroit_terrain.png)
+        output_path: Path to save the rendered PNG (default: examples/detroit_terrain.png)
 
     Returns:
         Path to the rendered file, or None if rendering failed
@@ -118,10 +122,39 @@ def render_to_png(output_path="detroit_terrain.png"):
         print("    (POC still successful - mesh was created)")
         return None
 
-    output_path = Path(output_path).resolve()
-    print(f"\n[6/6] Rendering to PNG: {output_path}...")
+    if output_path is None:
+        output_path = Path(__file__).parent / "detroit_terrain.png"
+    else:
+        output_path = Path(output_path)
+
+    output_path = output_path.resolve()
+    print(f"\n[6/6] Setting up camera and rendering to PNG...")
 
     try:
+        # Setup camera and lighting for good view
+        # Position camera in isometric-ish view (45 degrees from above)
+        camera_location = (120, 120, 100)  # x, y, z position
+        camera_angle = (radians(60), radians(45), radians(0))  # pitch, yaw, roll
+        camera_scale = 150  # Controls zoom level
+
+        setup_camera_and_light(
+            camera_angle=camera_angle,
+            camera_location=camera_location,
+            scale=camera_scale,
+            sun_angle=1.5,
+            sun_energy=2.5,
+            focal_length=50
+        )
+
+        # Configure render settings for quality
+        setup_render_settings(
+            use_gpu=True,
+            samples=64,  # Balance between quality and speed
+            preview_samples=16,
+            use_denoising=True,
+            denoiser='OPTIX'
+        )
+
         # Set render output
         bpy.context.scene.render.filepath = str(output_path)
         bpy.context.scene.render.image_settings.file_format = 'PNG'
@@ -131,14 +164,11 @@ def render_to_png(output_path="detroit_terrain.png"):
         # Set render resolution
         bpy.context.scene.render.resolution_x = 1920
         bpy.context.scene.render.resolution_y = 1440
+        bpy.context.scene.render.resolution_percentage = 100
 
-        # Use Cycles for better quality (if available)
-        try:
-            bpy.context.scene.render.engine = 'CYCLES'
-            bpy.context.scene.cycles.samples = 32  # Quick render
-        except:
-            # Fall back to Eevee if Cycles not available
-            bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+        print(f"      Camera: {camera_location}")
+        print(f"      Samples: 64 (quality render)")
+        print(f"      Rendering...")
 
         # Render and save
         bpy.ops.render.render(write_still=True)
@@ -155,6 +185,8 @@ def render_to_png(output_path="detroit_terrain.png"):
 
     except Exception as e:
         print(f"      ✗ Render failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
