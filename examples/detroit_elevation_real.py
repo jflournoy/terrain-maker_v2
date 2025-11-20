@@ -43,14 +43,6 @@ sys.path.insert(0, str(project_root))
 
 from src.terrain.core import Terrain, downsample_raster
 
-# Detroit metro bounds (rough bounding box)
-DETROIT_BOUNDS = {
-    'north': 42.45,
-    'south': 42.25,
-    'east': -82.75,
-    'west': -83.25,
-}
-
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
 
@@ -117,7 +109,10 @@ def create_color_function():
     - Yellow for high elevations
     """
     def elevation_to_rgb(dem):
-        """Map DEM elevation to RGB colors using Viridis colormap."""
+        """Map DEM elevation to RGB colors using Viridis colormap.
+
+        Colormap is scaled to span the full elevation range (min to max).
+        """
         # Handle NaN values
         valid_mask = ~np.isnan(dem)
         dem_valid = dem[valid_mask]
@@ -125,10 +120,11 @@ def create_color_function():
         if len(dem_valid) == 0:
             return np.zeros(dem.shape + (3,), dtype=np.uint8)
 
-        # Normalize elevation to 0-1 range
+        # Normalize elevation to 0-1 range covering the full elevation range
         dem_min, dem_max = dem_valid.min(), dem_valid.max()
         normalized = np.zeros_like(dem, dtype=np.float32)
         normalized[valid_mask] = (dem[valid_mask] - dem_min) / (dem_max - dem_min + 1e-8)
+        # Note: Viridis colormap now spans from min_elevation (purple) to max_elevation (yellow)
 
         # Apply Viridis colormap (vectorized)
         try:
@@ -285,14 +281,18 @@ def main():
     # zoom_factor=0.1 reduces grid by 10x, making mesh manageable
     print(f"      Original DEM shape: {terrain.dem_shape}")
     print(f"      Downsampling by factor 0.1 to reduce vertices...")
+    print(f"      Scaling elevation by factor 0.5...")
 
-    # Create a wrapper transform that uses downsample_raster and returns proper 3-tuple
-    def downsample_wrapper(data, trans):
-        """Wrapper for downsample_raster that returns (data, trans, crs) tuple."""
+    # Create a wrapper transform that applies both downsampling and elevation scaling
+    def downsample_and_scale_wrapper(data, trans):
+        """Wrapper for downsample_raster + elevation scaling, returns (data, trans, crs) tuple."""
+        # First downsample
         downsampled_data, new_trans = downsample_raster(zoom_factor=0.1, order=4)(data, trans)
-        return downsampled_data, new_trans, None  # Return 3-tuple with None CRS (no change)
+        # Then scale elevation by half
+        scaled_data = downsampled_data * 0.5
+        return scaled_data, new_trans, None  # Return 3-tuple with None CRS (no change)
 
-    terrain.transforms.append(downsample_wrapper)
+    terrain.transforms.append(downsample_and_scale_wrapper)
     terrain.apply_transforms()
 
     # Check downsampled size
@@ -311,8 +311,8 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=200.0,
-            height_scale=0.0035,  # Half elevation exaggeration for flatter appearance
+            scale_factor=400.0,  # 2x scale factor makes XY plane 50% smaller
+            height_scale=0.0035,  # Combined with 0.5x DEM scaling = 0.00175x effective height
             center_model=True,
             boundary_extension=True
         )
