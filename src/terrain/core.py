@@ -295,15 +295,13 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
         links.new(vertex_color.outputs['Color'], principled.inputs['Base Color'])
 
         # Mix between principled shader (reflected light) and emission (self-illuminated)
-        # Use vertex color alpha if available, otherwise emit fully
+        # Use mostly emission with some reflected light for better color visibility
         links.new(principled.outputs['BSDF'], mix_shader.inputs[1])
         links.new(emission.outputs['Emission'], mix_shader.inputs[2])
 
-        # For mix factor, prefer alpha channel if available, otherwise use constant
-        if 'Alpha' in vertex_color.outputs:
-            links.new(vertex_color.outputs['Alpha'], mix_shader.inputs[0])
-        else:
-            mix_shader.inputs[0].default_value = 0.3  # 30% principled, 70% emission
+        # Set mix factor to favor emission (70% emission, 30% principled)
+        # This ensures vertex colors are visible and properly colored
+        mix_shader.inputs[0].default_value = 0.3
 
         # Connect to output
         links.new(mix_shader.outputs['Shader'], output.inputs['Surface'])
