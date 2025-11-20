@@ -29,7 +29,7 @@ import numpy as np
 from affine import Affine
 
 # Import terrain-maker library
-from src.terrain.core import Terrain, setup_camera_and_light, setup_render_settings
+from src.terrain.core import Terrain, setup_camera_and_light
 
 
 def create_detroit_dem():
@@ -132,30 +132,22 @@ def render_to_png(output_path=None):
 
     try:
         # Setup camera and lighting for good view
-        # Position camera in isometric-ish view (45 degrees from above)
-        camera_location = (120, 120, 100)  # x, y, z position
-        camera_angle = (radians(60), radians(45), radians(0))  # pitch, yaw, roll
-        camera_scale = 150  # Controls zoom level
+        # The mesh is centered at origin and scaled by 100, so we need to position camera
+        # to look at it from a nice isometric angle
+        camera_location = (80, 80, 80)  # Position camera away from origin
+        camera_angle = (radians(65), radians(45), radians(0))  # 65° down pitch, 45° yaw
+        camera_scale = 200  # Zoom level to see the whole mesh
 
         setup_camera_and_light(
             camera_angle=camera_angle,
             camera_location=camera_location,
             scale=camera_scale,
-            sun_angle=1.5,
-            sun_energy=2.5,
+            sun_angle=2,
+            sun_energy=2,
             focal_length=50
         )
 
-        # Configure render settings for quality
-        setup_render_settings(
-            use_gpu=True,
-            samples=64,  # Balance between quality and speed
-            preview_samples=16,
-            use_denoising=True,
-            denoiser='OPTIX'
-        )
-
-        # Set render output
+        # Set basic render output settings first
         bpy.context.scene.render.filepath = str(output_path)
         bpy.context.scene.render.image_settings.file_format = 'PNG'
         bpy.context.scene.render.image_settings.color_mode = 'RGBA'
@@ -166,8 +158,12 @@ def render_to_png(output_path=None):
         bpy.context.scene.render.resolution_y = 1440
         bpy.context.scene.render.resolution_percentage = 100
 
+        # Set render engine and samples (simpler approach than setup_render_settings)
+        bpy.context.scene.render.engine = 'CYCLES'
+        bpy.context.scene.cycles.samples = 32
+
         print(f"      Camera: {camera_location}")
-        print(f"      Samples: 64 (quality render)")
+        print(f"      Samples: 32")
         print(f"      Rendering...")
 
         # Render and save
