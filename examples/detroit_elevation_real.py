@@ -35,6 +35,7 @@ import rasterio
 from rasterio.merge import merge
 from rasterio.windows import from_bounds
 from affine import Affine
+import matplotlib.cm as cm
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -137,11 +138,12 @@ def create_color_function():
     """
     Create a color mapping function for elevation-based coloring.
 
-    Maps low elevations to blue (water), medium to green (land),
-    and high to brown/gray (hills).
+    Uses the Viridis perceptually uniform colormap:
+    - Dark purple for low elevations
+    - Yellow for high elevations
     """
     def elevation_to_rgb(dem):
-        """Map DEM elevation to RGB colors."""
+        """Map DEM elevation to RGB colors using Viridis colormap."""
         # Handle NaN values
         valid_mask = ~np.isnan(dem)
         dem_valid = dem[valid_mask]
@@ -151,40 +153,19 @@ def create_color_function():
 
         # Normalize elevation to 0-1 range
         dem_min, dem_max = dem_valid.min(), dem_valid.max()
-        normalized = np.zeros_like(dem)
+        normalized = np.zeros_like(dem, dtype=np.float32)
         normalized[valid_mask] = (dem[valid_mask] - dem_min) / (dem_max - dem_min + 1e-8)
 
-        # Create RGB colors based on elevation
-        red = np.zeros_like(normalized)
-        green = np.zeros_like(normalized)
-        blue = np.zeros_like(normalized)
-
-        # Low elevations (0-0.33) - blueish green (water/low ground)
-        low_mask = (normalized < 0.33) & valid_mask
-        red[low_mask] = 0.1
-        green[low_mask] = 0.5
-        blue[low_mask] = 0.8
-
-        # Mid elevations (0.33-0.66) - green (meadow/land)
-        mid_mask = ((normalized >= 0.33) & (normalized < 0.66)) & valid_mask
-        red[mid_mask] = 0.3
-        green[mid_mask] = 0.7
-        blue[mid_mask] = 0.2
-
-        # High elevations (0.66-1.0) - brown/tan (hills)
-        high_mask = (normalized >= 0.66) & valid_mask
-        red[high_mask] = 0.7
-        green[high_mask] = 0.6
-        blue[high_mask] = 0.4
+        # Apply Viridis colormap (vectorized)
+        viridis = cm.get_cmap('viridis')
+        rgba_array = viridis(normalized)  # Returns shape (H, W, 4) with RGBA values
+        rgb = rgba_array[:, :, :3]  # Extract RGB channels (H, W, 3)
 
         # Set invalid areas to dark gray
         invalid_mask = ~valid_mask
-        red[invalid_mask] = 0.3
-        green[invalid_mask] = 0.3
-        blue[invalid_mask] = 0.3
+        rgb[invalid_mask] = [0.2, 0.2, 0.2]
 
-        # Stack to create RGB and convert to uint8
-        rgb = np.stack([red, green, blue], axis=-1)
+        # Convert to uint8
         return (rgb * 255).astype(np.uint8)
 
     return elevation_to_rgb
@@ -338,7 +319,7 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=120.0,
+            scale_factor=135.0,
             height_scale=0.007,  # Reduced height exaggeration
             center_model=True,
             boundary_extension=True
