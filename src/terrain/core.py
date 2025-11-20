@@ -642,8 +642,9 @@ def downsample_raster(zoom_factor=0.1, order=4, nodata_value=np.nan):
         logger.info(f"Original shape: {raster_data.shape}")
         logger.info(f"Downsampled shape: {downsampled.shape}")
         logger.info(f"Value range: {np.nanmin(downsampled):.2f} to {np.nanmax(downsampled):.2f}")
-        
-        return downsampled, new_transform
+
+        # Return 3-tuple for consistency with transform pipeline
+        return downsampled, new_transform, None
     
     return transform
 
@@ -696,9 +697,9 @@ def smooth_raster(window_size=None, nodata_value=np.nan):
         logger.info(f"Smoothing window size: {actual_window_size}")
         logger.info(f"Value range before smoothing: {np.nanmin(processed_data):.2f} to {np.nanmax(processed_data):.2f}")
         logger.info(f"Value range after smoothing: {np.nanmin(smoothed):.2f} to {np.nanmax(smoothed):.2f}")
-        
-        # Transform is unchanged by smoothing
-        return smoothed, transform
+
+        # Transform is unchanged by smoothing, return 3-tuple for consistency
+        return smoothed, transform, None
     
     return transform
 
@@ -771,6 +772,56 @@ def flip_raster(axis='horizontal'):
         return (new_data, new_transform, None)
 
     return transform_func
+
+
+def scale_elevation(scale_factor=1.0, nodata_value=np.nan):
+    """
+    Create a raster elevation scaling transform function.
+
+    Multiplies all elevation values by the scale factor. Useful for reducing
+    or amplifying terrain height without changing horizontal scale.
+
+    Args:
+        scale_factor (float): Multiplication factor for elevation values (default: 1.0)
+        nodata_value: Value to treat as no data (default: np.nan)
+
+    Returns:
+        function: A transform function that scales elevation data
+    """
+    logger = logging.getLogger(__name__)
+
+    def transform(raster_data, transform=None):
+        """
+        Scale elevation values in raster data.
+
+        Args:
+            raster_data: Input raster numpy array
+            transform: Optional affine transform (unchanged by scaling)
+
+        Returns:
+            tuple: (scaled_data, transform, None)
+        """
+        logger.info(f"Scaling elevation by factor {scale_factor}")
+
+        # Create output array
+        scaled_data = raster_data.copy()
+
+        # Mask out nodata values
+        mask = raster_data == nodata_value
+
+        # Scale the valid data
+        scaled_data[~mask] = raster_data[~mask] * scale_factor
+
+        # Preserve nodata values
+        scaled_data[mask] = nodata_value
+
+        logger.info(f"Original range: {np.nanmin(raster_data):.2f} to {np.nanmax(raster_data):.2f}")
+        logger.info(f"Scaled range: {np.nanmin(scaled_data):.2f} to {np.nanmax(scaled_data):.2f}")
+
+        # Transform is unchanged by scaling (affects Z only)
+        return scaled_data, transform, None
+
+    return transform
 
 
 def slope_colormap(slopes, cmap_name='terrain', min_slope=0, max_slope=45):
@@ -851,6 +902,69 @@ def slope_colormap(slopes, cmap_name='terrain', min_slope=0, max_slope=45):
     
     logger.info(f"Created slope colormap with shape {colors.shape}")
     return colors
+
+
+def elevation_colormap(dem_data, cmap_name='viridis', min_elev=None, max_elev=None):
+    """
+    Create a colormap based on elevation values.
+
+    Maps elevation data to colors using a matplotlib colormap.
+    Low elevations map to the start of the colormap, high elevations to the end.
+
+    Args:
+        dem_data: 2D numpy array of elevation values
+        cmap_name: Matplotlib colormap name (default: 'viridis')
+        min_elev: Minimum elevation for normalization (default: use data min)
+        max_elev: Maximum elevation for normalization (default: use data max)
+
+    Returns:
+        Array of RGB colors with shape (height, width, 3) as uint8
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Creating elevation colormap using {cmap_name}")
+
+    # Handle NaN values
+    valid_mask = ~np.isnan(dem_data)
+
+    # Auto-calculate min/max if not provided
+    if min_elev is None:
+        min_elev = np.nanmin(dem_data)
+    if max_elev is None:
+        max_elev = np.nanmax(dem_data)
+
+    logger.info(f"Elevation range: {min_elev:.1f} to {max_elev:.1f} meters")
+
+    # Normalize elevation to 0-1 range
+    if min_elev == max_elev:
+        normalized = np.zeros_like(dem_data, dtype=np.float32)
+    else:
+        normalized = np.zeros_like(dem_data, dtype=np.float32)
+        normalized[valid_mask] = (dem_data[valid_mask] - min_elev) / (max_elev - min_elev + 1e-8)
+
+    # Get colormap from matplotlib
+    try:
+        # Try new API (matplotlib >= 3.7)
+        import matplotlib
+        cmap = matplotlib.colormaps.get_cmap(cmap_name)
+    except (AttributeError, TypeError):
+        # Fall back to old API for older matplotlib versions
+        cmap = plt.cm.get_cmap(cmap_name)
+
+    # Apply colormap (returns RGBA with shape (H, W, 4))
+    rgba_array = cmap(normalized)
+
+    # Extract RGB channels only (drop alpha)
+    rgb = rgba_array[:, :, :3]
+
+    # Set invalid (NaN) areas to dark gray
+    rgb[~valid_mask] = [0.2, 0.2, 0.2]
+
+    # Convert to uint8
+    colors_uint8 = (rgb * 255).astype(np.uint8)
+
+    logger.info(f"Created elevation colormap with shape {colors_uint8.shape}")
+    return colors_uint8
+
 
 def transform_wrapper(transform_func):
     """

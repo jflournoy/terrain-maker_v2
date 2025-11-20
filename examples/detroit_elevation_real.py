@@ -41,7 +41,10 @@ from scipy.ndimage import zoom
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import Terrain, downsample_raster
+from src.terrain.core import (
+    Terrain, downsample_raster, scale_elevation, elevation_colormap,
+    clear_scene, setup_camera_and_light, setup_render_settings
+)
 
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
@@ -100,51 +103,6 @@ def load_detroit_dem():
     return dem, merged_transform
 
 
-def create_color_function():
-    """
-    Create a color mapping function for elevation-based coloring.
-
-    Uses the Viridis perceptually uniform colormap:
-    - Dark purple for low elevations
-    - Yellow for high elevations
-    """
-    def elevation_to_rgb(dem):
-        """Map DEM elevation to RGB colors using Viridis colormap.
-
-        Colormap is scaled to span the full elevation range (min to max).
-        """
-        # Handle NaN values
-        valid_mask = ~np.isnan(dem)
-        dem_valid = dem[valid_mask]
-
-        if len(dem_valid) == 0:
-            return np.zeros(dem.shape + (3,), dtype=np.uint8)
-
-        # Normalize elevation to 0-1 range covering the full elevation range
-        dem_min, dem_max = dem_valid.min(), dem_valid.max()
-        normalized = np.zeros_like(dem, dtype=np.float32)
-        normalized[valid_mask] = (dem[valid_mask] - dem_min) / (dem_max - dem_min + 1e-8)
-        # Note: Viridis colormap now spans from min_elevation (purple) to max_elevation (yellow)
-
-        # Apply Viridis colormap (vectorized)
-        try:
-            # Try new API (matplotlib >= 3.7)
-            import matplotlib
-            viridis = matplotlib.colormaps.get_cmap('viridis')
-        except (AttributeError, TypeError):
-            # Fall back to old API for older matplotlib versions
-            viridis = cm.get_cmap('viridis')
-        rgba_array = viridis(normalized)  # Returns shape (H, W, 4) with RGBA values
-        rgb = rgba_array[:, :, :3]  # Extract RGB channels (H, W, 3)
-
-        # Set invalid areas to dark gray
-        invalid_mask = ~valid_mask
-        rgb[invalid_mask] = [0.2, 0.2, 0.2]
-
-        # Convert to uint8
-        return (rgb * 255).astype(np.uint8)
-
-    return elevation_to_rgb
 
 
 def render_to_png(mesh_obj, output_path=None):
@@ -174,51 +132,31 @@ def render_to_png(mesh_obj, output_path=None):
         )
         camera_scale = 20.0
 
-        # Delete any existing cameras
-        for obj in list(bpy.data.objects):
-            if obj.type == 'CAMERA':
-                bpy.data.objects.remove(obj, do_unlink=True)
+        # Use class method to set up camera and light
+        camera, light = setup_camera_and_light(
+            camera_angle=camera_angle,
+            camera_location=camera_location,
+            scale=camera_scale,
+            sun_angle=2,
+            sun_energy=3,
+            focal_length=50
+        )
 
-        # Delete any existing lights
-        for obj in list(bpy.data.objects):
-            if obj.type == 'LIGHT':
-                bpy.data.objects.remove(obj, do_unlink=True)
+        # Use class method to configure render settings
+        setup_render_settings(
+            use_gpu=True,
+            samples=32,
+            use_denoising=False  # No denoising for this render
+        )
 
-        # Create camera
-        cam_data = bpy.data.cameras.new("Camera")
-        cam_data.lens = 50
-        cam_obj = bpy.data.objects.new("Camera", cam_data)
-        bpy.context.scene.collection.objects.link(cam_obj)
-
-        cam_obj.location = camera_location
-        cam_obj.rotation_euler = camera_angle
-        cam_data.type = 'PERSP'
-        cam_data.ortho_scale = camera_scale
-
-        bpy.context.scene.camera = cam_obj
-
-        # Create sun light
-        sun = bpy.data.lights.new(name="Sun", type='SUN')
-        sun_obj = bpy.data.objects.new("Sun", sun)
-        bpy.context.scene.collection.objects.link(sun_obj)
-
-        sun_obj.location = (10, 10, 10)
-        sun_obj.rotation_euler = (radians(45), radians(45), radians(0))
-        sun.angle = 2
-        sun.energy = 3
-
-        # Configure render settings
+        # Set output path and format
         bpy.context.scene.render.filepath = str(output_path)
         bpy.context.scene.render.image_settings.file_format = 'PNG'
         bpy.context.scene.render.image_settings.color_mode = 'RGBA'
         bpy.context.scene.render.image_settings.compression = 90
-
         bpy.context.scene.render.resolution_x = 1920
         bpy.context.scene.render.resolution_y = 1440
         bpy.context.scene.render.resolution_percentage = 100
-
-        bpy.context.scene.render.engine = 'CYCLES'
-        bpy.context.scene.cycles.samples = 32
 
         print(f"      Camera: TUNED VIEW")
         print(f"      Location: {camera_location}")
@@ -261,6 +199,14 @@ def main():
     print("Detroit Real Elevation Visualization")
     print("=" * 70)
 
+    # Clear Blender scene to remove default objects
+    try:
+        import bpy
+        clear_scene()
+        print("✓ Blender scene cleared")
+    except ImportError:
+        print("⚠️  Blender not available - skipping scene clear")
+
     # Step 1: Load DEM
     try:
         dem_data, transform = load_detroit_dem()
@@ -283,16 +229,10 @@ def main():
     print(f"      Downsampling by factor 0.1 to reduce vertices...")
     print(f"      Scaling elevation by factor 0.5...")
 
-    # Create a wrapper transform that applies both downsampling and elevation scaling
-    def downsample_and_scale_wrapper(data, trans):
-        """Wrapper for downsample_raster + elevation scaling, returns (data, trans, crs) tuple."""
-        # First downsample
-        downsampled_data, new_trans = downsample_raster(zoom_factor=0.1, order=4)(data, trans)
-        # Then scale elevation by half
-        scaled_data = downsampled_data * 0.5
-        return scaled_data, new_trans, None  # Return 3-tuple with None CRS (no change)
-
-    terrain.transforms.append(downsample_and_scale_wrapper)
+    # Use class method for downsampling
+    terrain.transforms.append(downsample_raster(zoom_factor=0.1, order=4))
+    # Use class method for elevation scaling
+    terrain.transforms.append(scale_elevation(scale_factor=0.5))
     terrain.apply_transforms()
 
     # Check downsampled size
@@ -303,9 +243,12 @@ def main():
 
     # Step 4: Set up color mapping
     print("\n[4/6] Setting up color mapping...")
-    color_func = create_color_function()
-    terrain.set_color_mapping(color_func, source_layers=['dem'])
-    print(f"      Color mapping configured")
+    # Use class method for elevation-based Viridis colormap
+    terrain.set_color_mapping(
+        lambda dem: elevation_colormap(dem, cmap_name='viridis'),
+        source_layers=['dem']
+    )
+    print(f"      Color mapping configured (Viridis colormap)")
 
     # Step 5: Create Blender mesh
     print("\n[5/6] Creating Blender mesh...")

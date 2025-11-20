@@ -12,7 +12,14 @@ import numpy as np
 import pytest
 from pathlib import Path
 from affine import Affine
-from src.terrain.core import Terrain, load_dem_files
+from src.terrain.core import Terrain, load_dem_files, clear_scene
+
+# Check if Blender is available
+try:
+    import bpy
+    HAS_BLENDER = True
+except ImportError:
+    HAS_BLENDER = False
 
 
 class TestDetroitEndToEnd:
@@ -212,6 +219,88 @@ class TestDetroitEndToEnd:
         assert mesh_obj is not None
         assert hasattr(bpy, 'context')
         assert bpy.context.scene is not None
+
+
+class TestSceneClearing:
+    """Test scene clearing for mesh creation."""
+
+    @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
+    def test_clear_scene_removes_objects(self):
+        """clear_scene() should remove all objects from Blender scene."""
+        # Create a simple cube to have an object in the scene
+        bpy.ops.mesh.primitive_cube_add(size=2)
+        initial_count = len(bpy.context.scene.objects)
+        assert initial_count > 0, "Scene should have at least one object"
+
+        # Clear the scene
+        clear_scene()
+
+        # Check that objects are gone
+        final_count = len(bpy.context.scene.objects)
+        assert final_count == 0, f"Scene should be empty after clear_scene(), but has {final_count} objects"
+
+    @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
+    def test_clear_scene_removes_cameras(self):
+        """clear_scene() should remove all cameras from scene."""
+        # Create a camera
+        bpy.ops.object.camera_add()
+        initial_cameras = [obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA']
+        assert len(initial_cameras) > 0, "Should have created a camera"
+
+        # Clear the scene
+        clear_scene()
+
+        # Check that cameras are gone
+        final_cameras = [obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA']
+        assert len(final_cameras) == 0, "Scene should have no cameras after clear_scene()"
+
+    @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
+    def test_clear_scene_removes_lights(self):
+        """clear_scene() should remove all lights from scene."""
+        # Create a light
+        bpy.ops.object.light_add(type='SUN')
+        initial_lights = [obj for obj in bpy.context.scene.objects if obj.type == 'LIGHT']
+        assert len(initial_lights) > 0, "Should have created a light"
+
+        # Clear the scene
+        clear_scene()
+
+        # Check that lights are gone
+        final_lights = [obj for obj in bpy.context.scene.objects if obj.type == 'LIGHT']
+        assert len(final_lights) == 0, "Scene should have no lights after clear_scene()"
+
+    @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
+    def test_scene_clean_before_mesh_creation(self):
+        """Scene should be cleaned before creating mesh."""
+        # Add some objects to the scene
+        bpy.ops.mesh.primitive_cube_add()
+        bpy.ops.object.camera_add()
+
+        initial_count = len(bpy.context.scene.objects)
+        assert initial_count > 0
+
+        # Clear and verify
+        clear_scene()
+        final_count = len(bpy.context.scene.objects)
+        assert final_count == 0
+
+        # Now create a DEM and mesh in clean scene
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        mesh_obj = terrain.create_mesh()
+        assert mesh_obj is not None
+
+        # Only the terrain mesh should exist
+        mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+        assert len(mesh_objects) == 1
 
 
 class TestDetroitDataIntegration:

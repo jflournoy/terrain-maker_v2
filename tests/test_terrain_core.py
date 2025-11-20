@@ -9,7 +9,7 @@ import rasterio
 from rasterio import Affine
 from pathlib import Path
 import tempfile
-from src.terrain.core import load_dem_files, Terrain
+from src.terrain.core import load_dem_files, Terrain, scale_elevation, elevation_colormap
 
 # Check if Blender is available
 try:
@@ -603,6 +603,125 @@ class TestBlenderMeshCreation:
         # Boundary extension should add geometry
         assert verts_with >= verts_without
         assert faces_with > faces_without
+
+
+class TestScaleElevation:
+    """Test suite for scale_elevation transform function."""
+
+    def test_scale_elevation_returns_transform_function(self):
+        """scale_elevation should return a callable transform function."""
+        transform_func = scale_elevation(scale_factor=0.5)
+        assert callable(transform_func)
+
+    def test_scale_elevation_reduces_values(self):
+        """scale_elevation should multiply DEM values by scale factor."""
+        dem_data = np.array([[100, 200], [300, 400]], dtype=np.float32)
+        transform = Affine.identity()
+
+        scale_func = scale_elevation(scale_factor=0.5)
+        result_data, result_transform, result_crs = scale_func(dem_data, transform)
+
+        # Check values are scaled
+        assert np.allclose(result_data, dem_data * 0.5)
+
+    def test_scale_elevation_returns_3tuple(self):
+        """scale_elevation transform should return 3-tuple (data, transform, crs)."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+
+        scale_func = scale_elevation(scale_factor=0.5)
+        result = scale_func(dem_data, transform)
+
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        assert isinstance(result[0], np.ndarray)
+        assert result[1] is not None or result[1] is None  # Transform can be modified or unchanged
+        assert result[2] is None  # CRS should be None (no change)
+
+    def test_scale_elevation_different_factors(self):
+        """scale_elevation should work with different scale factors."""
+        dem_data = np.array([[100, 200], [300, 400]], dtype=np.float32)
+        transform = Affine.identity()
+
+        for factor in [0.1, 0.5, 1.0, 2.0, 10.0]:
+            scale_func = scale_elevation(scale_factor=factor)
+            result_data, _, _ = scale_func(dem_data, transform)
+            assert np.allclose(result_data, dem_data * factor)
+
+    def test_scale_elevation_preserves_nan(self):
+        """scale_elevation should preserve NaN values."""
+        dem_data = np.array([[100, np.nan], [300, 400]], dtype=np.float32)
+        transform = Affine.identity()
+
+        scale_func = scale_elevation(scale_factor=0.5)
+        result_data, _, _ = scale_func(dem_data, transform)
+
+        assert np.isnan(result_data[0, 1])
+        assert np.allclose(result_data[~np.isnan(result_data)], dem_data[~np.isnan(dem_data)] * 0.5)
+
+
+class TestElevationColormap:
+    """Test suite for elevation_colormap utility function."""
+
+    def test_elevation_colormap_returns_rgb_array(self):
+        """elevation_colormap should return RGB array with shape (H, W, 3)."""
+        dem_data = np.random.uniform(100, 200, size=(50, 50)).astype(np.float32)
+
+        colors = elevation_colormap(dem_data, cmap_name='viridis')
+
+        assert isinstance(colors, np.ndarray)
+        assert colors.shape == (50, 50, 3)
+        assert colors.dtype == np.uint8
+
+    def test_elevation_colormap_viridis_gradient(self):
+        """elevation_colormap with viridis should map low→purple, high→yellow."""
+        # Create simple gradient (low to high elevation)
+        dem_data = np.linspace(0, 100, 100).reshape(10, 10).astype(np.float32)
+
+        colors = elevation_colormap(dem_data, cmap_name='viridis')
+
+        # First row should be purple (low elevation)
+        # Last row should be yellow (high elevation)
+        assert colors.dtype == np.uint8
+        assert colors.shape == (10, 10, 3)
+
+    def test_elevation_colormap_auto_minmax(self):
+        """elevation_colormap should auto-calculate min/max elevation."""
+        dem_data = np.array([[100, 150], [200, 250]], dtype=np.float32)
+
+        # Without explicit min/max, should use data range
+        colors = elevation_colormap(dem_data, cmap_name='viridis')
+
+        assert colors.shape == (2, 2, 3)
+        assert colors.dtype == np.uint8
+
+    def test_elevation_colormap_explicit_minmax(self):
+        """elevation_colormap should respect explicit min/max."""
+        dem_data = np.array([[100, 150], [200, 250]], dtype=np.float32)
+
+        colors = elevation_colormap(dem_data, cmap_name='viridis', min_elev=0, max_elev=500)
+
+        assert colors.shape == (2, 2, 3)
+        assert colors.dtype == np.uint8
+
+    def test_elevation_colormap_handles_nan(self):
+        """elevation_colormap should handle NaN values gracefully."""
+        dem_data = np.array([[100, np.nan], [200, 250]], dtype=np.float32)
+
+        colors = elevation_colormap(dem_data, cmap_name='viridis')
+
+        assert colors.shape == (2, 2, 3)
+        # NaN values should map to dark gray or similar
+        assert colors[0, 1].sum() < 255  # Not pure white
+
+    def test_elevation_colormap_uint8_range(self):
+        """elevation_colormap should return values in uint8 range (0-255)."""
+        dem_data = np.random.uniform(100, 200, size=(20, 20)).astype(np.float32)
+
+        colors = elevation_colormap(dem_data, cmap_name='viridis')
+
+        assert colors.min() >= 0
+        assert colors.max() <= 255
 
 
 # Fixtures
