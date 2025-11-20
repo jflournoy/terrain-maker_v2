@@ -41,67 +41,45 @@ This repository serves **dual purposes**:
 
 👉 **[See Python Setup Guide](docs/PYTHON_SETUP.md)** for installation and usage instructions
 
-## Quick Start (Choose Your Method)
+## Quick Start: Using This Repository
 
-### Method 1: Direct Use via NPX (No Installation)
+### Python Package Installation
+
+For the **terrain-maker Python package**:
 ```bash
-# Try the tools without installing anything
-npx claude-setup                     # Initialize in current project
-npx claude-setup learn add "insight" # Capture a learning
-npx claude-setup tdd start           # Start TDD workflow
-npx claude-setup docs                # Analyze documentation
-npx claude-setup monitor status      # Check repo health
+# See Python Setup Guide for installation
+# (currently requires manual setup from source)
+cd terrain-maker_v2
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
-**🎯 What NPX Setup Installs:**
-- **Claude command templates** (.claude/commands/) - 15+ battle-tested workflow commands
-- **AI agents** (.claude/agents/) - Intelligent automation for complex tasks
-- **Configuration files** (CLAUDE.md, AGENTS.md) - Project guidelines and agent documentation
-- **NPM scripts integration** - Adds essential commands to your package.json (hygiene, todo, commit, etc.)
-- **Script utilities** - Installs helper scripts for learn, tdd, docs, and monitoring features
+See [Python Setup Guide](docs/PYTHON_SETUP.md) for detailed instructions.
 
-**Setup Options:**
+### Claude Code Commands
+
+The `.claude/commands/` directory contains 14+ ready-to-use workflow commands:
 ```bash
-npx claude-setup                # Interactive setup (recommended)
-npx claude-setup --skip         # Preserve all existing files
-npx claude-setup --backup       # Backup existing files before replacing
-npx claude-setup --force        # Replace all files without prompting
-npx claude-setup --skip-scripts # Install commands only, don't modify package.json
+/hygiene                          # Check project health
+/tdd start "new feature"          # Start with tests
+/commit feat "add user auth"      # Quality-checked commit
+/learn "TDD clarified the API"    # Capture insights
+/todo                             # Manage tasks
+/next                             # Get next steps
+/docs                             # Update documentation
+/push                             # Push with quality checks
 ```
 
-**Conflict Resolution:**
-When existing files are detected, the interactive mode offers:
-- Skip - Keep your customizations
-- Backup - Save originals and install fresh
-- Merge - Add only non-conflicting files
-- Prefix - Add scripts with `claude:` prefix to avoid conflicts
+These commands are **integrated into Claude Code** - just type the slash command in the Claude Code UI.
 
-### Method 2: Global Installation
-```bash
-# Install globally for frequent use
-npm install -g claude-setup
-claude-setup          # Initialize commands
-claude-learn add "insight"
-claude-tdd start
-claude-docs
-claude-monitor status
-```
+## Why This Repository is Useful
 
-### Method 3: Clone Repository
-```bash
-# Clone and use as your project base
-git clone https://github.com/rmurphey/claude-setup.git my-project
-cd my-project
-# Commands are ready to use in .claude/commands/
-```
-
-## Why This Repository is Useful, Maybe
-
-✅ **Living Reference**: This repo uses its own commands - see our git history  
-✅ **Token-Efficient**: 87% reduction through npm script delegation ([proven metrics](docs/TOKEN_EFFICIENCY.md))  
-✅ **Best Practices**: Based on Anthropic's guidelines and 2025 industry standards  
-✅ **Production-Tested**: Commands refined through real-world usage  
-✅ **Self-Documenting**: The repository demonstrates every pattern it teaches
+✅ **Dual Purpose**: Works as both a Python geospatial library AND a Claude Code reference implementation
+✅ **TDD Foundation**: All new code developed test-first for clarity and correctness
+✅ **Best Practices**: Based on Anthropic's guidelines and 2025 industry standards
+✅ **Production-Ready**: Real working code for terrain visualization with extensible design
+✅ **Self-Improving**: Repository uses its own commands - see our git history to learn from practice
 
 ## 🤖 Automated Intelligence Features
 
