@@ -174,6 +174,164 @@ class TestTerrainInitialization:
         assert 100 < terrain.resolution[1] < 120
 
 
+class TestTerrainTransforms:
+    """Test suite for Terrain.apply_transforms method."""
+
+    def test_apply_transforms_does_nothing_with_no_transforms(self):
+        """apply_transforms should return early if no transforms are registered."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Call with no transforms registered
+        result = terrain.apply_transforms()
+
+        assert result is None
+        # Data layers should be unchanged
+        assert 'dem' in terrain.data_layers
+        assert 'transformed_data' not in terrain.data_layers['dem']
+
+    def test_apply_transforms_applies_single_transform(self):
+        """apply_transforms should apply a single registered transform to all layers."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Register a simple transform that multiplies by 2
+        def double_values(data, trans):
+            return data * 2, trans, None
+
+        terrain.transforms.append(double_values)
+        terrain.apply_transforms()
+
+        # DEM layer should have transformed data
+        assert 'transformed_data' in terrain.data_layers['dem']
+        transformed = terrain.data_layers['dem']['transformed_data']
+        np.testing.assert_array_almost_equal(transformed, dem_data * 2)
+
+    def test_apply_transforms_applies_multiple_transforms_in_sequence(self):
+        """apply_transforms should apply multiple transforms in order."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 10
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Register two transforms
+        def double_values(data, trans):
+            return data * 2, trans, None
+
+        def add_ten(data, trans):
+            return data + 10, trans, None
+
+        terrain.transforms = [double_values, add_ten]
+        terrain.apply_transforms()
+
+        # Should have: (10 * 2) + 10 = 30
+        transformed = terrain.data_layers['dem']['transformed_data']
+        np.testing.assert_array_almost_equal(transformed, np.ones((10, 10)) * 30)
+
+    def test_apply_transforms_marks_layer_as_transformed(self):
+        """apply_transforms should set 'transformed' flag on processed layers."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        assert terrain.data_layers['dem']['transformed'] is True
+
+    def test_apply_transforms_skips_already_transformed_layers(self):
+        """apply_transforms should skip layers that are already transformed."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        call_count = {'count': 0}
+
+        def counting_transform(data, trans):
+            call_count['count'] += 1
+            return data, trans, None
+
+        terrain.transforms.append(counting_transform)
+
+        # First application
+        terrain.apply_transforms()
+        assert call_count['count'] == 1
+
+        # Second application should skip already-transformed layer
+        terrain.apply_transforms()
+        assert call_count['count'] == 1  # Should not increase
+
+    def test_apply_transforms_stores_metadata(self):
+        """apply_transforms should store transform metadata in layer."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def my_transform(data, trans):
+            return data, trans, None
+
+        my_transform.__name__ = 'my_transform'
+        terrain.transforms.append(my_transform)
+        terrain.apply_transforms()
+
+        metadata = terrain.data_layers['dem']['transform_metadata']
+        assert 'transforms' in metadata
+        assert 'my_transform' in metadata['transforms']
+        assert 'original_shape' in metadata
+        assert 'transformed_shape' in metadata
+
+    def test_apply_transforms_handles_crs_changes(self):
+        """apply_transforms should update CRS if transform provides new one."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def transform_with_crs_change(data, trans):
+            new_crs = 'EPSG:3857'  # Web Mercator
+            return data, trans, new_crs
+
+        terrain.transforms.append(transform_with_crs_change)
+        terrain.apply_transforms()
+
+        assert terrain.data_layers['dem']['transformed_crs'] == 'EPSG:3857'
+
+    def test_apply_transforms_raises_on_transform_error(self):
+        """apply_transforms should raise exception if transform fails."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def failing_transform(data, trans):
+            raise ValueError("Transform failed")
+
+        terrain.transforms.append(failing_transform)
+
+        with pytest.raises(ValueError, match="Transform failed"):
+            terrain.apply_transforms()
+
+    def test_apply_transforms_preserves_transform_metadata(self):
+        """apply_transforms should preserve transform and CRS metadata."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        original_transform = Affine.scale(2.0, -2.0)
+        original_crs = 'EPSG:4326'
+
+        terrain = Terrain(dem_data, original_transform, dem_crs=original_crs)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        # Transform and CRS should be preserved
+        assert terrain.data_layers['dem']['transformed_transform'] == original_transform
+        assert terrain.data_layers['dem']['transformed_crs'] == original_crs
+
+
 # Fixtures
 
 @pytest.fixture
