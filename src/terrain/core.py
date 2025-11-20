@@ -1576,7 +1576,11 @@ class Terrain:
     
         # Ensure RGBA
         if colors.shape[-1] == 3:
-            alpha_channel = np.ones(colors.shape[:2] + (1,), dtype=colors.dtype)
+            # Create alpha channel with appropriate max value for the data type
+            if colors.dtype == np.uint8:
+                alpha_channel = np.full(colors.shape[:2] + (1,), 255, dtype=colors.dtype)
+            else:
+                alpha_channel = np.ones(colors.shape[:2] + (1,), dtype=colors.dtype)
             colors = np.concatenate([colors, alpha_channel], axis=-1)
     
         # Apply mask if provided
