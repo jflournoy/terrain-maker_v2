@@ -20,7 +20,6 @@ This repository serves **dual purposes**:
 **Package Goal**: Create a Python library that makes it easy to:
 
 - Load and visualize Digital Elevation Models (DEMs) from any source
-- Add arbitrary spatial data layers (snow depth, vegetation, temperature, etc.)
 - Apply custom transformations and analysis
 - Render 3D terrain visualizations with Blender
 - Cache results for efficient reprocessing
@@ -28,8 +27,6 @@ This repository serves **dual purposes**:
 **Example Projects**: Detroit Terrain Analysis
 
 - **Real Elevation**: Load actual SRTM tiles covering Detroit metro (1.3M vertices mesh)
-- **Snow Depth**: Integrate SNODAS snow depth measurements with terrain
-- **Analysis**: Spatial patterns, temporal trends, sledding suitability scores
 - **Visualization**: 3D terrain with color-mapped overlays in Blender
 
 **Key Features**:

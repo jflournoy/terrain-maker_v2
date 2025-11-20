@@ -90,7 +90,7 @@ def main():
     # Use class method for downsampling
     terrain.transforms.append(downsample_raster(zoom_factor=0.05, order=4))
     # Use class method for elevation scaling
-    terrain.transforms.append(scale_elevation(scale_factor=0.05))
+    terrain.transforms.append(scale_elevation(scale_factor=0.0001))
     terrain.apply_transforms()
 
     # Check downsampled size
@@ -112,8 +112,8 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=400.0,  # 2x scale factor makes XY plane 50% smaller
-            height_scale=0.0035,  # Combined with 0.5x DEM scaling = 0.00175x effective height
+            scale_factor=400.0,  
+            height_scale=1.0,  
             center_model=True,
             boundary_extension=True
         )
