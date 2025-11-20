@@ -249,105 +249,67 @@ def setup_render_settings(
 
 def apply_colormap_material(material: bpy.types.Material) -> None:
     """
-    Create a sophisticated material setup for terrain visualization with water blending.
-    
+    Create a simple material setup for terrain visualization using vertex colors.
+    Uses emission to guarantee colors are visible regardless of lighting.
+
     Args:
         material: Blender material to configure
     """
     logger.info(f"Setting up material nodes for {material.name}")
-    
+
     # Clear existing nodes
     material.node_tree.nodes.clear()
     nodes = material.node_tree.nodes
     links = material.node_tree.links
-    
+
     try:
-        # Create main shader nodes
+        # Create simple shader nodes with vertex color + emission
         output = nodes.new('ShaderNodeOutputMaterial')
-        terrain_water_mix = nodes.new('ShaderNodeMixShader')
-        terrain_shader = nodes.new('ShaderNodeBsdfPrincipled')
-        water_shader = nodes.new('ShaderNodeBsdfPrincipled')
-        
-        # Position nodes
-        output.location = (800, 300)
-        terrain_water_mix.location = (600, 300)
-        terrain_shader.location = (200, 400)
-        water_shader.location = (200, 100)
-        
-        # Configure terrain shader
-        logger.debug("Configuring terrain shader parameters")
-        terrain_params = {
-            'Metallic': 0.0,
-            'Roughness': 0.95,
-            'Specular IOR Level': 0.6,
-            'IOR': 1.0
-        }
-        for param, value in terrain_params.items():
-            terrain_shader.inputs[param].default_value = value
-        
-        # Configure water shader
-        logger.debug("Configuring water shader parameters")
-        # water_params = {
-        #     'Base Color': (0.1, 0.2, 0.35, 1.0),
-        #     'Metallic': 0.9,
-        #     'Roughness': 0.1,
-        #     'IOR': 1.33
-        # }
-        water_params = {
-            'Base Color': (1, 1, 1, 1.0),
-            'Metallic': 0.9,
-            'Roughness': 0.1,
-            'IOR': 1.33
-        }
-        for param, value in water_params.items():
-            water_shader.inputs[param].default_value = value
-        
-        # Create water detail nodes
-        logger.debug("Setting up water detail nodes")
-        noise = nodes.new('ShaderNodeTexNoise')
-        mapping = nodes.new('ShaderNodeMapping')
-        texcoord = nodes.new('ShaderNodeTexCoord')
-        bump = nodes.new('ShaderNodeBump')
+        principled = nodes.new('ShaderNodeBsdfPrincipled')
+        emission = nodes.new('ShaderNodeEmission')
+        mix_shader = nodes.new('ShaderNodeMixShader')
         vertex_color = nodes.new('ShaderNodeVertexColor')
-        
-        # Position detail nodes
-        noise.location = (0, 100)
-        mapping.location = (-200, 100)
-        texcoord.location = (-400, 100)
-        bump.location = (200, 0)
+
+        # Position nodes
+        output.location = (600, 300)
+        mix_shader.location = (400, 300)
+        principled.location = (200, 400)
+        emission.location = (200, 200)
         vertex_color.location = (0, 300)
-        
-        # Configure noise settings
-        noise_params = {
-            'Scale': 50,
-            'Detail': 3.0,
-            'Roughness': 0.5,
-            'Distortion': 0.3
-        }
-        for param, value in noise_params.items():
-            noise.inputs[param].default_value = value
-        
-        # Configure bump settings
-        bump.inputs['Strength'].default_value = 0.3
-        bump.inputs['Distance'].default_value = 0.1
-        
+
         # Set vertex color layer
         vertex_color.layer_name = "TerrainColors"
-        
-        # Create node connections
+
+        # Configure principled shader for reflectance
+        principled.inputs['Base Color'].default_value = (0.5, 0.5, 0.5, 1.0)
+        principled.inputs['Roughness'].default_value = 0.8
+
+        # Configure emission to use vertex colors
+        # Use vertex color directly as emission color with moderate strength
+        emission.inputs['Strength'].default_value = 1.5
+
+        # Create connections
         logger.debug("Creating node connections")
-        links.new(vertex_color.outputs['Color'], terrain_shader.inputs['Base Color'])
-        links.new(texcoord.outputs['Generated'], mapping.inputs['Vector'])
-        links.new(mapping.outputs['Vector'], noise.inputs['Vector'])
-        links.new(noise.outputs['Fac'], bump.inputs['Height'])
-        links.new(bump.outputs['Normal'], water_shader.inputs['Normal'])
-        links.new(vertex_color.outputs['Alpha'], terrain_water_mix.inputs[0])
-        links.new(terrain_shader.outputs['BSDF'], terrain_water_mix.inputs[2])
-        links.new(water_shader.outputs['BSDF'], terrain_water_mix.inputs[1])
-        links.new(terrain_water_mix.outputs[0], output.inputs['Surface'])
-        
+        # Vertex color drives both emission and base color
+        links.new(vertex_color.outputs['Color'], emission.inputs['Color'])
+        links.new(vertex_color.outputs['Color'], principled.inputs['Base Color'])
+
+        # Mix between principled shader (reflected light) and emission (self-illuminated)
+        # Use vertex color alpha if available, otherwise emit fully
+        links.new(principled.outputs['BSDF'], mix_shader.inputs[1])
+        links.new(emission.outputs['Emission'], mix_shader.inputs[2])
+
+        # For mix factor, prefer alpha channel if available, otherwise use constant
+        if 'Alpha' in vertex_color.outputs:
+            links.new(vertex_color.outputs['Alpha'], mix_shader.inputs[0])
+        else:
+            mix_shader.inputs[0].default_value = 0.3  # 30% principled, 70% emission
+
+        # Connect to output
+        links.new(mix_shader.outputs['Shader'], output.inputs['Surface'])
+
         logger.info("Material setup completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Error setting up material: {str(e)}")
         raise
@@ -1665,11 +1627,15 @@ class Terrain:
         """
         start_time = time.time()
         self.logger.info("Creating terrain mesh...")
-        
+
         # Get transformed DEM data
         if 'dem' not in self.data_layers or not self.data_layers['dem'].get('transformed', False):
             raise ValueError("Transformed DEM layer required for mesh creation")
-        
+
+        # Compute colors if color mapping is set and colors haven't been computed yet
+        if hasattr(self, 'color_mapping') and not hasattr(self, 'colors'):
+            self.compute_colors()
+
         dem_data = self.data_layers['dem']['transformed_data']
         height, width = dem_data.shape
         
@@ -1832,25 +1798,30 @@ class Terrain:
             if hasattr(self, 'colors') and self.colors is not None:
                 self.logger.info("Applying vertex colors with optimized method...")
                 color_layer = mesh.vertex_colors.new(name="TerrainColors")
-                
+
                 # OPTIMIZATION: Use numpy operations where possible
                 if len(color_layer.data) > 0:
-                    # Create color data array
+                    # Create color data array (Blender expects normalized 0-1 floats)
                     color_data = np.zeros((len(color_layer.data), 4), dtype=np.float32)
-                    
+
+                    # Normalize colors to 0-1 range if they're uint8
+                    colors_normalized = self.colors.astype(np.float32)
+                    if colors_normalized.max() > 1.0:
+                        colors_normalized = colors_normalized / 255.0
+
                     # For each polygon loop, get vertex and set color
                     for poly in mesh.polygons:
                         for loop_idx in poly.loop_indices:
                             vertex_idx = mesh.loops[loop_idx].vertex_index
-                            
+
                             # Only apply colors to top vertices
                             if vertex_idx < len(positions):
                                 y, x = y_valid[vertex_idx], x_valid[vertex_idx]
-                                
+
                                 # Check bounds
-                                if 0 <= y < self.colors.shape[0] and 0 <= x < self.colors.shape[1]:
-                                    color_data[loop_idx] = self.colors[y, x]
-                    
+                                if 0 <= y < colors_normalized.shape[0] and 0 <= x < colors_normalized.shape[1]:
+                                    color_data[loop_idx] = colors_normalized[y, x]
+
                     # Batch assign all colors at once
                     try:
                         color_layer.data.foreach_set('color', color_data.flatten())

@@ -131,20 +131,28 @@ def render_to_png(output_path=None):
     print(f"\n[6/6] Setting up camera and rendering to PNG...")
 
     try:
-        # Simple top-down view: camera directly above mesh looking straight down
-        # This is easy to debug - if the mesh exists, we'll see it
-        camera_location = (0, 0, 150)  # Directly above origin at z=150
-        camera_angle = (radians(90), radians(0), radians(0))  # 90° pitch = looking straight down
+        # Isometric view: camera at 45° angle showing all dimensions clearly
+        # This view shows elevation changes and terrain structure intuitively
+        camera_location = (100, 100, 100)  # Diagonal from origin
+        camera_angle = (radians(45), radians(0), radians(45))  # 45° isometric view
         camera_scale = 250  # Zoom level
 
+        # Set up camera and lights
         setup_camera_and_light(
             camera_angle=camera_angle,
             camera_location=camera_location,
             scale=camera_scale,
-            sun_angle=45,  # Sun from above too
-            sun_energy=2,
+            sun_angle=2,  # Sun disk blur angle (small = sharp shadows)
+            sun_energy=3,  # Brightness of sun
             focal_length=50
         )
+
+        # Reposition sun light to be higher and further away from terrain
+        # (setup_camera_and_light places it too low by default)
+        sun_obj = bpy.data.objects.get("Sun")
+        if sun_obj:
+            sun_obj.location = (100, 100, 200)  # High and far corner, above camera
+            sun_obj.rotation_euler = (radians(45), radians(45), radians(0))
 
         # Set basic render output settings
         bpy.context.scene.render.filepath = str(output_path)
@@ -161,8 +169,8 @@ def render_to_png(output_path=None):
         bpy.context.scene.render.engine = 'CYCLES'
         bpy.context.scene.cycles.samples = 32
 
-        print(f"      Camera: TOP-DOWN VIEW at {camera_location}")
-        print(f"      Looking: straight down (90° pitch)")
+        print(f"      Camera: ISOMETRIC VIEW at {camera_location}")
+        print(f"      Looking: 45° isometric angle")
         print(f"      Samples: 32")
         print(f"      Rendering...")
 
