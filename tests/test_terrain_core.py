@@ -506,6 +506,105 @@ class TestTerrainTransforms:
         assert terrain.data_layers['dem']['transformed_crs'] == original_crs
 
 
+@pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender (import bpy)")
+class TestBlenderMeshCreation:
+    """Test suite for Blender mesh creation functionality.
+
+    These tests require Blender to be importable as a Python library.
+    They will run when pytest is executed inside Blender or when bpy is available.
+    """
+
+    def test_blender_mesh_object_creation(self):
+        """Mesh creation should produce a valid Blender object."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        result = terrain.create_mesh()
+
+        # Verify result is a Blender object
+        assert result is not None
+        assert hasattr(result, 'name')
+        assert hasattr(result, 'data')
+        assert hasattr(result.data, 'vertices')
+
+    def test_blender_mesh_has_geometry(self):
+        """Created mesh should have vertices and faces."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        result = terrain.create_mesh()
+
+        # Mesh should have geometry
+        assert len(result.data.vertices) > 0
+        assert len(result.data.polygons) > 0
+
+    def test_blender_mesh_with_different_parameters(self):
+        """Mesh creation should accept and use different parameters."""
+        dem_data = np.arange(100, dtype=np.float32).reshape(10, 10)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        result = terrain.create_mesh(
+            scale_factor=50.0,
+            height_scale=2.0,
+            center_model=True,
+            boundary_extension=True
+        )
+
+        assert result is not None
+        assert len(result.data.vertices) > 0
+        assert len(result.data.polygons) > 0
+
+    def test_blender_mesh_boundary_extension_affects_geometry(self):
+        """Mesh with boundary extension should have more geometry."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        def identity_transform(data, trans):
+            return data, trans, None
+
+        terrain.transforms.append(identity_transform)
+        terrain.apply_transforms()
+
+        result_with = terrain.create_mesh(boundary_extension=True)
+        verts_with = len(result_with.data.vertices)
+        faces_with = len(result_with.data.polygons)
+
+        # Create another terrain for comparison
+        terrain2 = Terrain(dem_data.copy(), transform)
+        terrain2.transforms.append(identity_transform)
+        terrain2.apply_transforms()
+
+        result_without = terrain2.create_mesh(boundary_extension=False)
+        verts_without = len(result_without.data.vertices)
+        faces_without = len(result_without.data.polygons)
+
+        # Boundary extension should add geometry
+        assert verts_with >= verts_without
+        assert faces_with > faces_without
+
+
 # Fixtures
 
 @pytest.fixture

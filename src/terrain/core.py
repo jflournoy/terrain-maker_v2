@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import os
 import json
 import time
 from pathlib import Path
 import glob
-import bpy
+try:
+    import bpy
+except ImportError:
+    bpy = None
 from dataclasses import dataclass
 import rasterio
 from rasterio.merge import merge
@@ -1809,9 +1814,11 @@ class Terrain:
             
             # Extend vertices with boundary vertices
             vertices = np.vstack([positions, boundary_vertices])
+            # Add boundary faces to complete the mesh
+            faces.extend(boundary_faces)
         else:
             vertices = positions
-        
+
         # Create the Blender mesh
         self.logger.info(f"Creating Blender mesh with {len(vertices)} vertices and {len(faces)} faces...")
         
