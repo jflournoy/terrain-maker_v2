@@ -40,79 +40,14 @@ from src.terrain.core import (
     setup_render_settings, render_scene_to_file
 )
 
+try:
+    import bpy
+except ImportError:
+    bpy = None
+
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
 
-def render_to_png(mesh_obj, output_path=None):
-    """Render the Blender scene to PNG."""
-    if output_path is None:
-        output_path = Path(__file__).parent / "detroit_elevation_real.png"
-    else:
-        output_path = Path(output_path)
-
-    output_path = output_path.resolve()
-    print(f"\n[6/6] Setting up camera and rendering to PNG...")
-
-    try:
-        # Tuned camera parameters for Detroit elevation terrain
-        camera_location = (7.3589, -6.9257, 4.9583)
-        camera_rotation_deg = (63.559, 0, 46.692)
-        camera_angle = (
-            radians(camera_rotation_deg[0]),
-            radians(camera_rotation_deg[1]),
-            radians(camera_rotation_deg[2])
-        )
-        camera_scale = 20.0
-
-        # Use class method to set up camera and light
-        camera, light = setup_camera_and_light(
-            camera_angle=camera_angle,
-            camera_location=camera_location,
-            scale=camera_scale,
-            sun_angle=2,
-            sun_energy=3,
-            focal_length=50
-        )
-
-        # Use class method to configure render settings
-        setup_render_settings(
-            use_gpu=True,
-            samples=32,
-            use_denoising=False
-        )
-
-        print(f"      Camera: TUNED VIEW")
-        print(f"      Location: {camera_location}")
-        print(f"      Rotation: {camera_rotation_deg}")
-        print(f"      Samples: 32")
-        print(f"      Rendering...")
-
-        # Use class method to render and save
-        result = render_scene_to_file(
-            output_path=output_path,
-            width=1920,
-            height=1440,
-            file_format='PNG',
-            color_mode='RGBA',
-            compression=90,
-            save_blend_file=True
-        )
-
-        if result:
-            file_size_mb = result.stat().st_size / (1024 * 1024)
-            print(f"      ✓ Rendered successfully!")
-            print(f"      File: {result.name}")
-            print(f"      Size: {file_size_mb:.1f} MB")
-            return result
-        else:
-            print(f"      ✗ Render failed")
-            return None
-
-    except Exception as e:
-        print(f"      ✗ Error during render: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return None
 
 
 def main():
@@ -198,7 +133,58 @@ def main():
         return 1
 
     # Step 6: Render to PNG
-    render_file = render_to_png(mesh_obj)
+    print("\n[6/6] Setting up camera and rendering to PNG...")
+
+    # Tuned camera parameters for Detroit elevation terrain
+    camera_location = (7.3589, -6.9257, 4.9583)
+    camera_rotation_deg = (63.559, 0, 46.692)
+    camera_angle = (
+        radians(camera_rotation_deg[0]),
+        radians(camera_rotation_deg[1]),
+        radians(camera_rotation_deg[2])
+    )
+    camera_scale = 20.0
+
+    # Set up camera and light using class method
+    camera, light = setup_camera_and_light(
+        camera_angle=camera_angle,
+        camera_location=camera_location,
+        scale=camera_scale,
+        sun_angle=2,
+        sun_energy=3,
+        focal_length=50
+    )
+
+    # Configure render settings using class method
+    setup_render_settings(
+        use_gpu=True,
+        samples=32,
+        use_denoising=False
+    )
+
+    print(f"      Camera: TUNED VIEW")
+    print(f"      Location: {camera_location}")
+    print(f"      Rotation: {camera_rotation_deg}")
+    print(f"      Samples: 32")
+    print(f"      Rendering...")
+
+    # Render scene to file using class method
+    output_path = Path(__file__).parent / "detroit_elevation_real.png"
+    render_file = render_scene_to_file(
+        output_path=output_path,
+        width=1920,
+        height=1440,
+        file_format='PNG',
+        color_mode='RGBA',
+        compression=90,
+        save_blend_file=True
+    )
+
+    if render_file:
+        file_size_mb = render_file.stat().st_size / (1024 * 1024)
+        print(f"      ✓ Rendered successfully!")
+        print(f"      File: {render_file.name}")
+        print(f"      Size: {file_size_mb:.1f} MB")
 
     # Summary
     print("\n" + "=" * 70)
