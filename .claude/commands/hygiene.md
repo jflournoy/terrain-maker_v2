@@ -1,16 +1,18 @@
 ---
-allowed-tools: [Bash]
+
+allowed-tools: \[Bash]
 description: Project health check - code quality, tests, dependencies, and git status
 approach: script-delegation
 token-cost: ~150 (vs ~2000 for direct implementation)
 best-for: Quick daily health checks
----
+-----------------------------------
 
 # Project Hygiene Check
 
 Comprehensive project health assessment using npm scripts for efficiency.
 
 ## Your Task
+
 Run the project hygiene check:
 
 ```bash

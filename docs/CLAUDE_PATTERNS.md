@@ -9,6 +9,7 @@ Last updated: 2025-01-16
 Discovered patterns and strategies specific to Claude Code development sessions.
 
 ## Table of Contents
+
 - [Token Efficiency Patterns](#token-efficiency-patterns)
 - [Context Management](#context-management)
 - [Command Architecture](#command-architecture)
@@ -22,9 +23,11 @@ Discovered patterns and strategies specific to Claude Code development sessions.
 ## Token Efficiency Patterns
 
 ### NPM Script Delegation
+
 **Pattern**: Move command logic to npm scripts, keep Claude commands minimal
 
 #### Before (264 lines, ~3000 tokens)
+
 ```markdown
 # .claude/commands/hygiene.md
 <bash>
@@ -42,6 +45,7 @@ npm audit
 ```
 
 #### After (30 lines, ~300 tokens)
+
 ```markdown
 # .claude/commands/hygiene.md
 <bash>
@@ -50,6 +54,7 @@ npm run hygiene:full --silent
 ```
 
 #### Implementation in package.json
+
 ```json
 {
   "scripts": {
@@ -63,6 +68,7 @@ npm run hygiene:full --silent
 **Result**: 87-91% token reduction across all commands
 
 ### Token Budget Strategy
+
 | Task Type | Token Budget | Message Count |
 |-----------|-------------|---------------|
 | Bug Fix | 5K-10K | 10-30 |
@@ -71,7 +77,9 @@ npm run hygiene:full --silent
 | Architecture Change | 100K-200K | 200-500 |
 
 ### Batching File Operations
+
 **Anti-pattern**: Reading files one at a time
+
 ```markdown
 Read file1.js
 Read file2.js
@@ -79,6 +87,7 @@ Read file3.js
 ```
 
 **Pattern**: Batch related reads
+
 ```markdown
 Read file1.js, file2.js, file3.js in parallel
 ```
@@ -88,15 +97,18 @@ Read file1.js, file2.js, file3.js in parallel
 ## Context Management
 
 ### Checkpoint System
+
 **Pattern**: Regular context checkpoints prevent overload
 
 #### Checkpoint Triggers
+
 1. **Time-based**: Every 30 minutes
 2. **Interaction-based**: Every 20-30 messages
 3. **Complexity-based**: After major architecture decisions
 4. **Error-based**: After recovering from significant errors
 
 #### Checkpoint Actions
+
 ```bash
 # Save current state
 git stash
@@ -118,6 +130,7 @@ fi
 ```
 
 ### Context Preservation
+
 **Pattern**: Save critical information before compaction
 
 ```markdown
@@ -130,6 +143,7 @@ fi
 ```
 
 ### Context Window Optimization
+
 ```javascript
 // Priority levels for context
 const CONTEXT_PRIORITY = {
@@ -161,6 +175,7 @@ const CONTEXT_PRIORITY = {
 ## Command Architecture
 
 ### Subdirectory Organization Pattern
+
 **Pattern**: Organize command variants using subdirectories
 
 ```
@@ -175,6 +190,7 @@ const CONTEXT_PRIORITY = {
 ```
 
 ### Command Naming Conventions
+
 | Type | Pattern | Example |
 |------|---------|---------|
 | Action | verb | `commit`, `test`, `deploy` |
@@ -183,6 +199,7 @@ const CONTEXT_PRIORITY = {
 | Meta | meta-action | `token-check`, `session-save` |
 
 ### Command Discovery
+
 ```bash
 # Users can discover available commands
 ls .claude/commands/*.md | sed 's/.*\///' | sed 's/\.md//'
@@ -196,12 +213,14 @@ ls .claude/commands/detailed/*.md 2>/dev/null
 ## Living Reference Pattern
 
 ### Principles
+
 1. **Dogfooding**: Repository uses its own commands
 2. **Proof by Example**: Every pattern is demonstrated
 3. **Evolution Through Use**: Commands improve through actual usage
 4. **Reality Over Theory**: Practical implementation over theoretical design
 
 ### Implementation Strategy
+
 ```mermaid
 graph TD
     A[Template Repository] -->|Transform| B[Living Reference]
@@ -214,6 +233,7 @@ graph TD
 ```
 
 ### Success Metrics
+
 - Commands used: 100% coverage
 - Self-updates performed: Daily
 - Pattern validations: Every commit
@@ -224,6 +244,7 @@ graph TD
 ## Self-Documentation System
 
 ### Auto-Generation Pattern
+
 **Pattern**: Commands generate their own documentation
 
 ```bash
@@ -238,6 +259,7 @@ npm run docs:update -- --all
 ```
 
 ### Documentation Hierarchy
+
 ```
 docs/
 ├── COMMAND_CATALOG.md      # Auto-generated from commands
@@ -248,6 +270,7 @@ docs/
 ```
 
 ### Citation Management
+
 ```markdown
 <!-- Pattern for citations -->
 [Statement needing citation]^[1]
@@ -257,6 +280,7 @@ docs/
 ```
 
 ### Validation System
+
 ```javascript
 // Validate all citations are valid
 async function validateCitations(file) {
@@ -275,6 +299,7 @@ async function validateCitations(file) {
 ## Session Management
 
 ### Session Lifecycle
+
 ```mermaid
 graph LR
     A[Start] --> B[Load Context]
@@ -292,6 +317,7 @@ graph LR
 ### Session Patterns
 
 #### 1. Planning Phase
+
 ```markdown
 1. Read CLAUDE.md for project context
 2. Check GitHub issues for current state  
@@ -301,6 +327,7 @@ graph LR
 ```
 
 #### 2. Execution Phase
+
 ```markdown
 1. Mark todo as in_progress
 2. Execute task
@@ -310,6 +337,7 @@ graph LR
 ```
 
 #### 3. Reflection Phase
+
 ```markdown
 1. Document learnings
 2. Update patterns
@@ -318,6 +346,7 @@ graph LR
 ```
 
 ### Recovery Patterns
+
 **Pattern**: Graceful recovery from errors
 
 ```bash
@@ -341,35 +370,45 @@ fi
 ## Anti-patterns to Avoid
 
 ### 1. Context Tunnel Vision
+
 **Anti-pattern**: Losing sight of broader context
+
 ```markdown
 BAD: Deep diving into implementation without checking requirements
 GOOD: Regularly refer back to original task and goals
 ```
 
 ### 2. Assumption Cascade
+
 **Anti-pattern**: Building on unverified assumptions
+
 ```markdown
 BAD: Assuming file exists -> Making changes -> Discovering it doesn't
 GOOD: Verify first -> Plan -> Execute
 ```
 
 ### 3. Commit Sprawl
+
 **Anti-pattern**: Large, unfocused commits
+
 ```markdown
 BAD: 1000+ line commits mixing features
 GOOD: <200 line atomic commits with single purpose
 ```
 
 ### 4. Documentation Debt
+
 **Anti-pattern**: Postponing documentation
+
 ```markdown
 BAD: "I'll document this later"
 GOOD: Document as you go, update in real-time
 ```
 
 ### 5. Test Skipping
+
 **Anti-pattern**: Moving to next task without testing
+
 ```markdown
 BAD: Implement feature -> Move to next
 GOOD: Implement -> Test -> Fix -> Move
@@ -380,6 +419,7 @@ GOOD: Implement -> Test -> Fix -> Move
 ## Pattern Evolution
 
 ### Discovery Process
+
 1. **Observe**: Notice recurring situations
 2. **Document**: Capture in LEARNINGS.md
 3. **Abstract**: Extract general pattern
@@ -387,12 +427,13 @@ GOOD: Implement -> Test -> Fix -> Move
 5. **Codify**: Add to this document
 
 ### Pattern Maturity Levels
+
 | Level | Description | Action |
 |-------|-------------|--------|
 | 0 - Observation | Noticed once | Document in LEARNINGS |
 | 1 - Hypothesis | Seen 2-3 times | Track occurrences |
 | 2 - Pattern | Proven useful | Add to patterns |
-| 3 - Best Practice | Widely applicable | Promote to BEST_PRACTICES |
+| 3 - Best Practice | Widely applicable | Promote to BEST\_PRACTICES |
 | 4 - Standard | Essential pattern | Enforce via tooling |
 
 ---
@@ -400,9 +441,11 @@ GOOD: Implement -> Test -> Fix -> Move
 ## Session Preservation Pattern
 
 ### Overview
+
 Session preservation captures raw conversation transcripts for future reference. This is an optional feature that some users find valuable for learning and analysis.
 
 ### Implementation
+
 ```bash
 # Save current session
 npm run session:save
@@ -418,6 +461,7 @@ npm run session:list
 ```
 
 ### Directory Structure
+
 ```
 session-history/
 ├── YYYY-MM-DD/
@@ -428,19 +472,23 @@ session-history/
 ```
 
 ### Metadata Tracking
+
 Each session automatically captures:
+
 - Claude Code version
 - Timestamp
 - Session type (full/delta)
 - Environment context
 
 ### Use Cases
+
 - **Learning Analysis**: Review problem-solving approaches
 - **Pattern Discovery**: Identify recurring solutions
 - **Knowledge Base**: Build personal reference library
 - **Team Sharing**: Share successful debugging sessions
 
 ### Living Reference Practice
+
 This repository demonstrates session preservation by saving its own development sessions. These provide real examples of the feature in use.
 
 ---
@@ -448,12 +496,14 @@ This repository demonstrates session preservation by saving its own development 
 ## Meta-Patterns
 
 ### The Pattern of Patterns
+
 - Patterns emerge from repetition
 - Documentation crystallizes patterns
 - Automation codifies patterns
 - Evolution refines patterns
 
 ### Continuous Improvement
+
 ```mermaid
 graph TD
     A[Use] --> B[Observe]

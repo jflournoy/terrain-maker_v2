@@ -1,10 +1,11 @@
 ---
-allowed-tools: [Bash]
+
+allowed-tools: \[Bash]
 description: Your new best friend - TDD workflow that makes Claude amazing
 approach: script-delegation
 token-cost: ~100 (vs ~1500 for manual TDD guidance)
 best-for: Structured test-driven development
----
+--------------------------------------------
 
 # TDD Command - Your New Best Friend 🚀
 
@@ -27,8 +28,8 @@ Write a test. Get perfect code. Every time.
 #!/bin/bash
 
 # Start your TDD journey
-node scripts/tdd.js "$@"
-</bash>
+
+node scripts/tdd.js "$@" </bash>
 
 ## Quick Examples
 
@@ -54,6 +55,7 @@ With TDD, Claude becomes a senior engineer who ships perfect code.
 ## Your First TDD Experience
 
 Try this right now:
+
 ```bash
 /tdd demo
 ```
@@ -75,6 +77,7 @@ Watch Claude transform from chaos to clarity.
 ## Notes
 
 This command delegates to `scripts/tdd.js` which handles:
+
 - Test framework detection (Jest, Vitest, Mocha)
 - Automatic test running
 - RED-GREEN-REFACTOR cycle enforcement

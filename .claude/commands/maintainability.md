@@ -1,13 +1,15 @@
 ---
-allowed-tools: [Bash]
+
+allowed-tools: \[Bash]
 description: Code maintainability analysis and improvement recommendations
----
+--------------------------------------------------------------------------
 
 # Maintainability Analysis Command
 
 Analyze code health and maintainability metrics using npm scripts.
 
 ## Your Task
+
 Run maintainability analysis:
 
 ```bash

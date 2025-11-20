@@ -7,6 +7,7 @@ Last reviewed: 2025-08-18
 -->
 
 ## Table of Contents
+
 1. [Claude Code Specific Best Practices](#claude-code-specific-best-practices)
 2. [Test-Driven Development with Claude](#test-driven-development-with-claude)
 3. [Token Efficiency Strategies](#token-efficiency-strategies)
@@ -27,6 +28,7 @@ Last reviewed: 2025-08-18
 **Source**: [Anthropic Internal Teams Usage Patterns](https://www.anthropic.com/news/how-anthropic-teams-use-claude-code)
 
 The most successful Claude Code workflows follow this pattern:
+
 1. **Research and exploration** - Let Claude understand the codebase first
 2. **Planning and documentation** - Create a plan before implementation
 3. **Implementation** - Execute the plan with clear steps
@@ -42,12 +44,14 @@ The most successful Claude Code workflows follow this pattern:
 The default permission prompts can interrupt flow. Two approaches:
 
 **Safe Approach** (Recommended for production):
+
 ```bash
 # Allow specific safe operations
 claude --allow "npm run lint:*,npm test,git status"
 ```
 
 **Development Approach** (Use with caution):
+
 ```bash
 # Skip all permissions (similar to Cursor's yolo mode)
 claude --dangerously-skip-permissions
@@ -60,6 +64,7 @@ claude --dangerously-skip-permissions
 **Source**: [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code/slash-commands)
 
 Store reusable workflows as markdown files in `.claude/commands/`:
+
 - Commands become available via slash menu (type `/`)
 - Check into git for team sharing
 - Reduce repetitive prompting
@@ -70,6 +75,7 @@ Store reusable workflows as markdown files in `.claude/commands/`:
 **Source**: [Anthropic Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices)
 
 Every project should have a `CLAUDE.md` file documenting:
+
 - Repository etiquette (branch naming, merge vs. rebase)
 - Developer environment setup (pyenv, compiler versions)
 - Unexpected behaviors or warnings
@@ -116,17 +122,19 @@ Every project should have a `CLAUDE.md` file documenting:
 
 ### NPM Script Delegation Pattern
 
-**Source**: This Repository's Measured Results ([docs/TOKEN_EFFICIENCY.md](TOKEN_EFFICIENCY.md))
+**Source**: This Repository's Measured Results ([docs/TOKEN\_EFFICIENCY.md](TOKEN_EFFICIENCY.md))
 
 Achieve 87% token reduction through npm script delegation:
 
 **Before** (264 lines in command):
+
 ```markdown
 # Project Hygiene Check
 [... 250+ lines of bash logic ...]
 ```
 
 **After** (30 lines in command):
+
 ```markdown
 # Project Hygiene Check
 \`\`\`bash
@@ -135,6 +143,7 @@ npm run hygiene:full --silent
 ```
 
 **Measured Results**:
+
 - Average reduction: 89%
 - Hygiene command: 264 → 30 lines (88% reduction)
 - Commit command: 296 → 33 lines (88% reduction)
@@ -227,6 +236,7 @@ npm run hygiene:full --silent
 ### Quality Gates
 
 Implement these checks before allowing commits:
+
 - Linting and formatting compliance
 - Type checking (if applicable)
 - Test suite execution
@@ -266,6 +276,7 @@ Implement these checks before allowing commits:
 **Source**: [Conventional Commits v1.0.0](https://www.conventionalcommits.org/)
 
 **Structure**:
+
 ```
 <type>[optional scope]: <description>
 
@@ -275,6 +286,7 @@ Implement these checks before allowing commits:
 ```
 
 **Essential Types**:
+
 - `feat`: New features (MINOR version)
 - `fix`: Bug fixes (PATCH version)
 - `docs`: Documentation changes
@@ -283,6 +295,7 @@ Implement these checks before allowing commits:
 - `chore`: Maintenance tasks
 
 **Breaking Changes**:
+
 - Add `!` after type/scope: `feat!: breaking change`
 - Or include in footer: `BREAKING CHANGE: description`
 - Results in MAJOR version bump
@@ -349,9 +362,9 @@ Implement these checks before allowing commits:
    allowed-tools: [Bash, Read, Write]
    description: Brief command description
    ---
-   
+
    # Command Name
-   
+
    Instructions for Claude...
    ```
 
@@ -384,6 +397,7 @@ Implement these checks before allowing commits:
 Production sessions with Claude Code require different strategies than demo or learning sessions:
 
 #### 1. Directory Discipline
+
 **Learning**: Always return to repository root after operations
 
 ```bash
@@ -400,6 +414,7 @@ cd "$REPO_ROOT"
 ```
 
 #### 2. Atomic Commit Discipline
+
 **Learning**: Plan commits before making changes, not after
 
 ```markdown
@@ -416,6 +431,7 @@ cd "$REPO_ROOT"
 ```
 
 #### 3. Test-As-You-Go Principle
+
 **Learning**: Test immediately after each implementation
 
 ```bash
@@ -435,6 +451,7 @@ done
 ```
 
 #### 4. Context Management Strategy
+
 **Learning**: Proactive context management prevents confusion
 
 | Checkpoint Trigger | Action Required |
@@ -445,6 +462,7 @@ done
 | Error encountered | Capture state before fixing |
 
 #### 5. Real-Time Documentation
+
 **Learning**: Document decisions as they're made, not retrospectively
 
 ```markdown
@@ -459,26 +477,32 @@ done
 ### Production Patterns That Work
 
 #### 1. Living Reference Architecture
+
 **Proven**: Repository that uses its own tools validates patterns
 
 Benefits discovered:
+
 - Immediate feedback on command usability
 - Real-world testing of patterns
 - Credibility through actual use
 - Natural evolution through practice
 
 #### 2. Token Efficiency First
+
 **Proven**: 87-91% reduction transforms development velocity
 
 Real metrics from session:
+
 - Before: 264 lines per command (~3000 tokens)
 - After: 30 lines per command (~300 tokens)
 - Impact: 10x more iterations possible
 
 #### 3. Subdirectory Organization
+
 **Proven**: `.claude/commands/detailed/` pattern scales cleanly
 
 Advantages realized:
+
 - No namespace pollution
 - Clear variant hierarchy
 - Future-proof structure
@@ -505,27 +529,31 @@ Advantages realized:
 ### Production Session Checklist
 
 Before starting:
-- [ ] Read CLAUDE.md and check GitHub issues
-- [ ] Check recent git history
-- [ ] Create session plan with checkpoints
-- [ ] Estimate token budget
+
+- \[ ] Read CLAUDE.md and check GitHub issues
+- \[ ] Check recent git history
+- \[ ] Create session plan with checkpoints
+- \[ ] Estimate token budget
 
 During session:
-- [ ] Update todo list continuously
-- [ ] Test after each implementation
-- [ ] Document decisions real-time
-- [ ] Return to root after operations
-- [ ] Checkpoint every 30 minutes
+
+- \[ ] Update todo list continuously
+- \[ ] Test after each implementation
+- \[ ] Document decisions real-time
+- \[ ] Return to root after operations
+- \[ ] Checkpoint every 30 minutes
 
 After session:
-- [ ] Save session transcript (optional)
-- [ ] Document learnings
-- [ ] Update metrics
-- [ ] Plan next session
+
+- \[ ] Save session transcript (optional)
+- \[ ] Document learnings
+- \[ ] Update metrics
+- \[ ] Plan next session
 
 ### Session Preservation (Optional)
 
 If you choose to save sessions, consider:
+
 - **Before context compaction**: Preserve conversation before reset
 - **After major features**: Capture successful implementations
 - **Pattern discoveries**: Save when finding reusable solutions
@@ -542,6 +570,7 @@ Remember: Session saving is optional. Use it when it provides value to you.
 **Source**: Industry Best Practices
 
 Key metrics to track:
+
 - **Token usage** per command
 - **Execution time** statistics
 - **Error rates** and recovery

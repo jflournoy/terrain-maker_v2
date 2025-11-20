@@ -17,18 +17,21 @@ This repository demonstrates various ways of setting up Claude Code commands, in
 ### When to Use Each Approach
 
 **Use Direct Implementation when:**
+
 - Teaching or learning new patterns
 - Solving unique, one-time problems
 - Customization is more valuable than efficiency
 - You need to see Claude's problem-solving process
 
 **Use Script Delegation when:**
+
 - The task is repetitive and well-defined
 - The logic rarely changes
 - Speed and consistency matter more than flexibility
 - You're doing the same thing multiple times per session
 
 **Use Hybrid Approach when:**
+
 - You need both efficiency and intelligence
 - The task has stable parts and variable parts
 - You want to leverage existing tools with AI judgment
@@ -39,6 +42,7 @@ Each command in this repository includes metadata showing its approach and typic
 ## The Problem
 
 Traditional Claude Code commands embed all logic directly in markdown files:
+
 - Commands average 250-450 lines
 - Claude reads entire file content on each use
 - 19 commands × 300 lines = 5,700 lines per full scan
@@ -93,6 +97,7 @@ Add comprehensive scripts to `package.json`:
 Transform verbose commands into minimal delegates:
 
 **Before** (264 lines):
+
 ```markdown
 # Project Hygiene Check
 
@@ -100,6 +105,7 @@ Transform verbose commands into minimal delegates:
 ```
 
 **After** (30 lines):
+
 ```markdown
 # Project Hygiene Check
 
@@ -111,12 +117,14 @@ npm run hygiene:full --silent
 ### 3. Benefits
 
 #### For Users
+
 - **Faster Claude responses** - Less content to parse
 - **Lower costs** - Fewer tokens consumed
 - **Better performance** - Scripts run natively
 - **Reusability** - Scripts work without Claude
 
 #### For Development
+
 - **Maintainability** - Logic in one place
 - **Testability** - Scripts testable independently
 - **Version control** - Smaller diffs
@@ -127,6 +135,7 @@ npm run hygiene:full --silent
 ### Direct NPM Script Execution
 
 Users can run scripts directly without Claude:
+
 ```bash
 npm run hygiene
 npm run lint:check
@@ -136,6 +145,7 @@ npm run maintain:debt
 ### Command Templates
 
 Commands become simple script invocations:
+
 ```bash
 /hygiene        # → npm run hygiene
 /commit feat    # → npm run quality:pre-commit && git commit
@@ -145,23 +155,29 @@ Commands become simple script invocations:
 ## Migration Strategy
 
 ### Phase 1: High-Value Commands
+
 Migrate commands with most lines first:
+
 1. /maintainability (458 → 42 lines)
 2. /issue (442 → ~40 lines)
 3. /version-tag (437 → ~40 lines)
 
 ### Phase 2: Core Workflow
+
 Migrate frequently-used commands:
+
 1. /hygiene (264 → 30 lines)
 2. /commit (296 → 33 lines)
 3. /todo (305 → 43 lines)
 
 ### Phase 3: Remaining Commands
+
 Complete migration for all commands.
 
 ## NPM Script Categories
 
 ### Core Workflow
+
 ```json
 "hygiene": "Full health check",
 "todo:list": "Show tasks",
@@ -169,6 +185,7 @@ Complete migration for all commands.
 ```
 
 ### Quality Checks
+
 ```json
 "lint:check": "Code style validation",
 "test:check": "Run test suite",
@@ -176,6 +193,7 @@ Complete migration for all commands.
 ```
 
 ### Git Operations
+
 ```json
 "git:status:summary": "Quick git status",
 "git:check:staged": "Verify staged files",
@@ -183,6 +201,7 @@ Complete migration for all commands.
 ```
 
 ### Maintainability
+
 ```json
 "maintain:files": "Count code files",
 "maintain:debt": "Find TODO/FIXME",
@@ -192,21 +211,25 @@ Complete migration for all commands.
 ## Best Practices
 
 ### 1. Script Naming Convention
+
 - Use colons for namespacing: `category:action`
 - Keep names descriptive but concise
 - Group related scripts together
 
 ### 2. Error Handling
+
 - Use `|| echo 'message'` for graceful failures
 - Provide helpful error messages
 - Return appropriate exit codes
 
 ### 3. Silent Flags
+
 - Use `--silent` to reduce noise
 - Pipe to `/dev/null` when appropriate
 - Keep output focused and relevant
 
 ### 4. Composition
+
 - Build complex scripts from simple ones
 - Use `&&` for sequential execution
 - Create `:quick` and `:full` variants
@@ -214,6 +237,7 @@ Complete migration for all commands.
 ## Examples
 
 ### Minimal Hygiene Command
+
 ```markdown
 ---
 allowed-tools: [Bash]
@@ -228,6 +252,7 @@ npm run hygiene:full --silent
 ```
 
 ### Minimal Commit Command
+
 ```markdown
 ---
 allowed-tools: [Bash]
@@ -245,16 +270,19 @@ git commit -m "$1: $2"
 ## Measuring Success
 
 ### Token Metrics
+
 - Original: ~5,700 lines total
 - Optimized: ~700 lines total
 - **Savings: 87% reduction**
 
 ### Performance Metrics
+
 - Faster command execution
 - Reduced Claude response time
 - Lower API costs
 
 ### Developer Experience
+
 - Scripts work standalone
 - Easy to test and debug
 - Familiar npm ecosystem
@@ -262,7 +290,9 @@ git commit -m "$1: $2"
 ## Future Optimizations
 
 ### 1. Node.js Scripts
+
 For complex logic, use JavaScript:
+
 ```javascript
 // scripts/maintainability.js
 #!/usr/bin/env node
@@ -271,7 +301,9 @@ console.log(`Score: ${score}/100`);
 ```
 
 ### 2. Configuration Files
+
 Move thresholds to config:
+
 ```json
 // .claude-config.json
 {
@@ -281,7 +313,9 @@ Move thresholds to config:
 ```
 
 ### 3. Command Aliases
+
 Create ultra-minimal aliases:
+
 ```markdown
 # h.md (alias for hygiene)
 \`\`\`bash
@@ -292,6 +326,7 @@ npm run hygiene
 ## Conclusion
 
 By delegating to npm scripts, we achieve:
+
 - **87% token reduction** on average
 - **Better performance** through native execution
 - **Improved maintainability** with centralized logic

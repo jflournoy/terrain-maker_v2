@@ -241,6 +241,7 @@ pip install rasterio
 ### Blender Not Found
 
 Blender is optional for visualization only. Install from:
+
 - https://www.blender.org/download/
 
 ## Contributing

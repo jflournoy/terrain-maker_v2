@@ -10,6 +10,7 @@ Welcome to the **terrain-maker** documentation. This library makes it easy to cr
 ## What is terrain-maker?
 
 A Python library for:
+
 - Loading and processing Digital Elevation Models (SRTM, GeoTIFF, etc.)
 - Applying transforms (downsampling, smoothing, reprojection)
 - Creating custom color mappings
@@ -122,6 +123,7 @@ bpy.ops.render.render(write_still=True)
 ## Architecture
 
 **Data Pipeline:**
+
 ```
 Raw DEM Files
     ↓
@@ -142,13 +144,13 @@ Blender rendering → PNG/GLTF/etc.
 
 ## Documentation Structure
 
-- **[API_REFERENCE.md](API_REFERENCE.md)**
+- **[API\_REFERENCE.md](API_REFERENCE.md)**
   - Complete reference for all methods
   - Parameter documentation
   - Code examples
   - Performance benchmarks
 
-- **[PYTHON_SETUP.md](PYTHON_SETUP.md)**
+- **[PYTHON\_SETUP.md](PYTHON_SETUP.md)**
   - Environment setup
   - Dependency installation
   - Troubleshooting
@@ -156,6 +158,7 @@ Blender rendering → PNG/GLTF/etc.
 ## Support
 
 For issues or questions:
+
 1. Check the [API Reference](API_REFERENCE.md) for method details
 2. Review examples in `examples/` directory
 3. Check existing issues/discussions

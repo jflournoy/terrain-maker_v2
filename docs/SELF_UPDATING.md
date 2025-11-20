@@ -42,6 +42,7 @@ Last updated: YYYY-MM-DD
 ```
 
 This header:
+
 - Tells users how to update the document
 - Tracks when it was last updated
 - Provides the exact command to run
@@ -51,6 +52,7 @@ This header:
 The enhanced `/docs` command ([view command](.claude/commands/docs.md)) supports:
 
 #### Updating Documentation
+
 ```bash
 /docs update all              # Regenerate all documentation
 /docs update best-practices   # Update BEST_PRACTICES.md
@@ -60,6 +62,7 @@ The enhanced `/docs` command ([view command](.claude/commands/docs.md)) supports
 ```
 
 #### Validation
+
 ```bash
 /docs check-citations        # Validate all citations are current
 /docs validate-links         # Check all internal links work
@@ -68,6 +71,7 @@ The enhanced `/docs` command ([view command](.claude/commands/docs.md)) supports
 ```
 
 #### Adding Content
+
 ```bash
 /docs add-example hygiene    # Add real usage example for /hygiene
 /docs add-citation "source"  # Add new citation to references
@@ -77,6 +81,7 @@ The enhanced `/docs` command ([view command](.claude/commands/docs.md)) supports
 ### 3. Automatic Updates
 
 Documentation updates automatically when:
+
 - **Pre-commit**: Command counts in README
 - **Post-commit**: Usage metrics logged
 - **On PR**: Documentation consistency validated
@@ -109,6 +114,7 @@ Documentation updates automatically when:
 ### Updating Command Catalog
 
 The command catalog auto-generates from:
+
 1. Command files in `.claude/commands/`
 2. Usage examples from git history
 3. Metrics from `.claude/metrics.json`
@@ -127,6 +133,7 @@ The command catalog auto-generates from:
 ### Updating Best Practices
 
 Best practices update from:
+
 1. Latest Anthropic documentation
 2. Community patterns
 3. Measured metrics from this repo
@@ -145,6 +152,7 @@ Best practices update from:
 ### Updating Metrics
 
 Metrics auto-generate from:
+
 1. Git commit history
 2. Command usage logs
 3. Token consumption tracking
@@ -179,6 +187,7 @@ Content...
 ### Step 2: Register in `/docs` Command
 
 Add to `.claude/commands/docs.md`:
+
 ```bash
 case "your-doc-name":
   regenerate_your_doc
@@ -188,6 +197,7 @@ case "your-doc-name":
 ### Step 3: Add to Update Cycle
 
 Include in `/docs update all`:
+
 ```bash
 /docs update your-doc-name
 ```
@@ -197,6 +207,7 @@ Include in `/docs update all`:
 ### Citation Validation
 
 All citations must be:
+
 - Current (checked weekly)
 - Accessible (valid URLs)
 - Properly formatted
@@ -216,6 +227,7 @@ All citations must be:
 ### Link Validation
 
 Internal links are validated for:
+
 - File existence
 - Anchor validity
 - Correct paths
@@ -235,6 +247,7 @@ Internal links are validated for:
 ### Example Validation
 
 Code examples must:
+
 - Run without errors
 - Match current API
 - Include expected output
@@ -301,6 +314,7 @@ echo "# New Command" > .claude/commands/new-command.md
 ### Weekly Documentation Check
 
 `.github/workflows/docs-check.yml`:
+
 ```yaml
 name: Documentation Check
 on:
@@ -320,6 +334,7 @@ jobs:
 ### On Pull Request
 
 `.github/workflows/pr-docs.yml`:
+
 ```yaml
 name: PR Documentation Validation
 on: pull_request
@@ -338,6 +353,7 @@ jobs:
 ### 1. Always Include Update Headers
 
 Every document should start with:
+
 ```markdown
 <!-- 
 This document is self-updating. To regenerate:
@@ -349,6 +365,7 @@ Last updated: [date]
 ### 2. Use Structured Data
 
 Store metrics and data in JSON:
+
 ```json
 {
   "lastUpdated": "2025-01-16",
@@ -361,6 +378,7 @@ Store metrics and data in JSON:
 ### 3. Track Documentation Changes
 
 Log all updates:
+
 ```json
 {
   "timestamp": "2025-01-16T10:00:00Z",
@@ -374,6 +392,7 @@ Log all updates:
 ### 4. Provide Fallbacks
 
 Always include manual update instructions:
+
 ```markdown
 To update manually:
 1. Review current content
@@ -386,6 +405,7 @@ To update manually:
 ### 5. Version Documentation
 
 Track documentation versions:
+
 ```markdown
 <!-- Version: 2.1.0 -->
 <!-- Schema: v1 -->
@@ -397,6 +417,7 @@ Track documentation versions:
 ### Common Issues
 
 **Documentation won't update**
+
 ```bash
 # Check permissions
 ls -la docs/
@@ -409,6 +430,7 @@ ls -la docs/
 ```
 
 **Citations are broken**
+
 ```bash
 # List broken citations
 /docs check-citations --verbose
@@ -421,6 +443,7 @@ ls -la docs/
 ```
 
 **Metrics not generating**
+
 ```bash
 # Check metrics file
 cat .claude/metrics.json
@@ -516,6 +539,7 @@ Generate visual metrics:
 ## Future Enhancements
 
 Planned improvements:
+
 - AI-powered documentation suggestions
 - Automatic example extraction from usage
 - Real-time documentation updates

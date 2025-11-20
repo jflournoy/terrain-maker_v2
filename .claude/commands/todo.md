@@ -1,13 +1,15 @@
 ---
-allowed-tools: [Bash, Read, Write]
+
+allowed-tools: \[Bash, Read, Write]
 description: Task management using GitHub Issues for better collaboration and tracking
----
+--------------------------------------------------------------------------------------
 
 # Todo Management Command
 
 Manage tasks efficiently using GitHub Issues.
 
 ## Your Task
+
 Handle todo operations via GitHub Issues:
 
 **IMPORTANT**: If adding dates, always use `date "+%Y-%m-%d"` to get the current date. Never guess or assume dates.

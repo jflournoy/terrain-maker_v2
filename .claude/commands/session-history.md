@@ -1,7 +1,8 @@
 ---
-allowed-tools: [Bash, Read, Write]
+
+allowed-tools: \[Bash, Read, Write]
 description: Save and manage Claude Code conversation transcripts for analysis
----
+------------------------------------------------------------------------------
 
 # session-history
 
@@ -20,6 +21,7 @@ npm run session:save --silent
 ## What It Does
 
 Manages raw session history separate from checkpoints:
+
 - **save**: Capture full conversation transcript
 - **delta**: Save only changes since last save
 - **list**: Show recent session files
@@ -27,12 +29,14 @@ Manages raw session history separate from checkpoints:
 ## Output
 
 Session files are saved in `session-history/YYYY-MM-DD/` with format:
+
 - `session-NNN-HHMM.txt` for full saves
 - `session-NNN-HHMM-delta.txt` for delta saves
 
 ## When to Use
 
 Consider saving sessions:
+
 - Before context compaction
 - After solving complex problems
 - When discovering interesting patterns

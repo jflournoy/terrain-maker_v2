@@ -128,16 +128,21 @@ Your typical daily workflow with Claude Code:
 ## Tips for Efficient Workflows
 
 ### Chaining Commands
+
 Commands can be chained for efficiency:
+
 ```bash
 /hygiene && /todo list && /next
 ```
 
 ### Regular Health Checks
+
 Run `/hygiene` before and after major changes to catch issues early.
 
 ### Atomic Commits
+
 Use `/commit` frequently for small, focused commits rather than large batches.
 
 ### Continuous Learning
+
 Use `/learn` throughout the day to build your project knowledge base.

@@ -12,6 +12,7 @@
 ## All Commands by Category
 
 ### 🎯 Core Workflow
+
 ```bash
 /hygiene              # Check project health (lint, tests, deps)
 /todo [add|done|list] # Manage tasks in GitHub Issues
@@ -21,6 +22,7 @@
 ```
 
 ### 📋 Development & Testing
+
 ```bash
 /tdd start "feature"  # Start Test-Driven Development workflow
 /retrospective        # Analyze git history and patterns
@@ -28,6 +30,7 @@
 ```
 
 ### 📚 Documentation & Learning
+
 ```bash
 /docs                 # Analyze and update documentation
 /docs-explain         # Explain documentation structure
@@ -38,6 +41,7 @@
 ## Common Workflows
 
 ### 🌅 Start of Day
+
 ```bash
 /hygiene              # Check project status
 /todo list            # Review tasks
@@ -45,6 +49,7 @@
 ```
 
 ### 💻 During Development
+
 ```bash
 /todo add "task"      # Track new work
 /tdd start "feature"  # TDD for new features
@@ -52,6 +57,7 @@
 ```
 
 ### 🌙 End of Session
+
 ```bash
 /commit               # Commit changes
 /reflect              # Capture session learnings
@@ -119,6 +125,7 @@ End of session?
 ## Command Details
 
 ### `/hygiene` - Project Health Check
+
 - Runs linting checks
 - Executes test suite
 - Checks for outdated dependencies
@@ -126,60 +133,70 @@ End of session?
 - Quick way to ensure everything is working
 
 ### `/todo` - Task Management
+
 - Maintains tasks in GitHub Issues
 - Supports add, done, remove, list operations
 - Tracks task completion
 - Archives completed tasks
 
 ### `/commit` - Quality Commits
+
 - Runs quality checks before committing
 - Enforces atomic commits (1-3 files recommended)
 - Adds co-author attribution for Claude
 - Follows conventional commit format
 
 ### `/next` - AI Recommendations
+
 - Analyzes project state
 - Suggests next logical steps
 - Considers pending tasks and recent changes
 - Helps when you're unsure what to do
 
 ### `/tdd` - Test-Driven Development
+
 - Guides through RED-GREEN-REFACTOR cycle
 - Creates failing tests first
 - Implements minimal code to pass
 - Refactors with test safety net
 
 ### `/monitor` - CI Monitoring
+
 - Checks GitHub Actions status
 - Shows recent workflow runs
 - Identifies test failures
 - Tracks pull request status
 
 ### `/docs` - Documentation Management
+
 - Updates command catalog
 - Checks for broken links
 - Maintains documentation consistency
 - Auto-generates documentation
 
 ### `/learn` - Knowledge Capture
+
 - Records development insights
 - Maintains LEARNINGS.md
 - Archives learnings by date
 - Searchable knowledge base
 
 ### `/reflect` - Session Reflection
+
 - Captures end-of-session insights
 - Reviews accomplishments
 - Identifies patterns
 - Builds learning history
 
 ### `/retrospective` - Git Analysis
+
 - Analyzes commit patterns
 - Shows productivity metrics
 - Identifies improvement areas
 - Historical code analysis
 
 ### `/push` - Safe Push
+
 - Runs quality checks
 - Validates before pushing
 - Ensures CI readiness
@@ -205,7 +222,9 @@ CLAUDE.md            # AI guidelines
 ## Customization
 
 ### Modify Commands
+
 Edit files in `.claude/commands/`:
+
 ```bash
 # Make hygiene stricter
 vim .claude/commands/hygiene.md
@@ -213,6 +232,7 @@ vim .claude/commands/hygiene.md
 ```
 
 ### Create Command Aliases
+
 ```bash
 # Create short aliases
 cp .claude/commands/hygiene.md .claude/commands/h.md

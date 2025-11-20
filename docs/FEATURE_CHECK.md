@@ -60,6 +60,7 @@ The feature check runs automatically in GitHub Actions:
 #### Skip for Non-Feature Changes
 
 The check automatically skips when changes are:
+
 - Test files only
 - Documentation only
 - Configuration files only
@@ -206,7 +207,7 @@ If tests exist but aren't detected:
 If documentation exists but isn't detected:
 
 1. Include feature name in documentation
-2. Use recognizable variants (kebab-case, snake_case)
+2. Use recognizable variants (kebab-case, snake\_case)
 3. Add to README.md for guaranteed detection
 
 ## Benefits

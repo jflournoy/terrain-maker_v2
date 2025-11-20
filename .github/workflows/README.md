@@ -5,6 +5,7 @@ This repository uses GitHub Actions for continuous integration.
 ## Active Workflows
 
 ### 1. Test Suite (`test.yml`)
+
 - **Triggers**: Push to main/develop, Pull requests
 - **Purpose**: Run tests across multiple Node versions
 - **Matrix**: Node 16.x, 18.x, 20.x
@@ -15,6 +16,7 @@ This repository uses GitHub Actions for continuous integration.
   - Coverage reporting (Node 20.x only)
 
 ### 2. Quality Checks (`quality.yml`)
+
 - **Triggers**: Push to main/develop, Pull requests, Manual
 - **Purpose**: Comprehensive quality validation
 - **Checks**:
@@ -30,17 +32,20 @@ This repository uses GitHub Actions for continuous integration.
 
 The following workflows were removed to prevent false positive failures on push events:
 
-### ~~Scheduled Documentation Update (`docs-update.yml`)~~ 
+### ~~Scheduled Documentation Update (`docs-update.yml`)~~
+
 - **Status**: Removed - not needed yet
 - **Would trigger**: Weekly schedule or manual
 - **To restore**: `git checkout 76eb3b7 -- .github/workflows/docs-update.yml`
 
 ### ~~Release (`release.yml`)~~
-- **Status**: Removed - not doing releases yet  
+
+- **Status**: Removed - not doing releases yet
 - **Would trigger**: Version tags
 - **To restore**: `git checkout 76eb3b7 -- .github/workflows/release.yml`
 
 ### ~~Publish (`publish.yml`)~~
+
 - **Status**: Removed - not publishing to NPM yet
 - **Would trigger**: Release creation
 - **To restore**: `git checkout 76eb3b7 -- .github/workflows/publish.yml`
@@ -50,6 +55,7 @@ The following workflows were removed to prevent false positive failures on push 
 ## Local Testing
 
 ### Using npm scripts
+
 ```bash
 # Run quality checks locally
 npm run quality:ci
@@ -62,6 +68,7 @@ npm run docs validate
 ```
 
 ### Using act (GitHub Actions locally)
+
 ```bash
 # Install act
 brew install act  # macOS
@@ -85,12 +92,15 @@ act schedule -j update-docs
 ## Maintenance
 
 ### Adding new quality checks
+
 1. Add check to `quality.yml`
 2. Add corresponding npm script
 3. Test locally with `npm run quality:ci`
 
 ### Updating documentation schedule
+
 Edit the cron expression in `docs-update.yml`:
+
 ```yaml
 - cron: '0 2 * * 1'  # Weekly on Monday
 - cron: '0 2 * * *'  # Daily
@@ -100,16 +110,19 @@ Edit the cron expression in `docs-update.yml`:
 ## Troubleshooting
 
 ### Workflow not triggering
+
 - Check branch protection rules
 - Verify workflow file syntax
 - Check GitHub Actions status
 
 ### Documentation update failing
+
 - Ensure full git history is fetched
 - Check commit references are valid
 - Verify npm scripts work locally
 
 ### Quality checks failing
+
 - Run `npm run quality:ci` locally
 - Fix issues before pushing
 - Check Node version compatibility
