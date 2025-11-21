@@ -95,6 +95,11 @@
     "py:all": "npm run py:format && npm run py:lint && npm run py:type && npm run py:test",
     "// Python Examples": "=== Run Python example scripts ===",
     "py:example:detroit-elevation": "uv run examples/detroit_elevation_real.py",
+    "py:example:detroit-north": "uv run examples/detroit_elevation_real.py --view north",
+    "py:example:detroit-south": "uv run examples/detroit_elevation_real.py --view south",
+    "py:example:detroit-east": "uv run examples/detroit_elevation_real.py --view east",
+    "py:example:detroit-west": "uv run examples/detroit_elevation_real.py --view west",
+    "py:example:detroit-above": "uv run examples/detroit_elevation_real.py --view above",
     "py:examples:list": "ls -1 examples/*.py | xargs -I {} basename {}",
     "prepare": "husky"
   },

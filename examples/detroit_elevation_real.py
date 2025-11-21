@@ -11,6 +11,7 @@ With just a few lines of Python, you can:
   ✓ Reproject to proper geographic coordinates automatically
   ✓ Create publication-quality 3D visualizations
   ✓ Render with professional Blender integration
+  ✓ Generate multiple camera views with intelligent framing
 
 Data Source:
     - SRTM 90m Digital Elevation Model tiles (.hgt format)
@@ -20,19 +21,54 @@ Data Source:
 What Makes This Easy:
     ✓ Load tiles with one function call
     ✓ Configure mesh density with target vertices (not magic numbers)
-    ✓ Cardinal direction camera positioning (south, north, above, etc)
+    ✓ Cardinal direction camera positioning with view-specific framing
     ✓ Built-in color mapping from elevation data
     ✓ Automatic coordinate system handling
 
+Multiple Views:
+    The script supports command-line arguments to easily generate renders
+    from different camera angles with optimal framing for each view:
+
+    --view Options:
+        north, south, east, west      Cardinal directions
+        northeast, northwest, southeast, southwest  Diagonal views
+        above                         Overhead perspective
+
+    Example Commands:
+        npm run py:example:detroit-north
+        npm run py:example:detroit-south
+        npm run py:example:detroit-east
+        npm run py:example:detroit-west
+        npm run py:example:detroit-above
+
 Output:
-    - PNG saved to: examples/detroit_elevation_real.png (960×720)
-    - Blender file: examples/detroit_elevation_real.blend
+    - PNG saved to: examples/detroit_elevation_{view}.png (960×720)
+    - Blender file: examples/detroit_elevation_{view}.blend
 
 Usage:
-    python examples/detroit_elevation_real.py
+    python examples/detroit_elevation_real.py [OPTIONS]
+
+Options:
+    --view, -v {north,south,east,west,...}  Camera view direction (default: north)
+    --output, -o FILE                        Custom output filename
+    --camera-type, -c {PERSP,ORTHO}          Camera projection (default: PERSP)
+    --distance, -d FLOAT                     Camera distance multiplier (default: 0.264)
+    --elevation, -e FLOAT                    Camera elevation multiplier (default: 0.396)
+    --focal-length, -f FLOAT                 Focal length in mm (default: 15)
+
+Advanced Usage:
+    Create a dramatic southwest view with orthographic projection:
+        python examples/detroit_elevation_real.py --view southwest --camera-type ORTHO
+
+    Generate a custom output file:
+        python examples/detroit_elevation_real.py --view north --output my_render.png
+
+    Adjust camera distance for a wider view:
+        python examples/detroit_elevation_real.py --view north --distance 0.5
 """
 
 import sys
+import argparse
 from pathlib import Path
 
 # Add project root to path
@@ -53,10 +89,65 @@ except ImportError:
 # SRTM tiles directory
 SRTM_TILES_DIR = Path(__file__).parent.parent / "data" / "dem" / "detroit"
 
+# View-specific camera target offsets for better framing
+# Adjusts the focus point based on view direction to keep terrain centered
+VIEW_TARGET_OFFSETS = {
+    'north': (0, 2, 0),
+    'south': (0, -1.5, 0),
+    'east': (1.5, 0, 0),
+    'west': (-1.5, 0, 0),
+}
+
+
+def parse_args():
+    """Parse command line arguments for camera view configuration."""
+    parser = argparse.ArgumentParser(
+        description='Detroit Real Elevation Visualization with configurable camera views'
+    )
+    parser.add_argument(
+        '--view', '-v',
+        choices=['north', 'south', 'east', 'west',
+                 'northeast', 'northwest', 'southeast', 'southwest', 'above'],
+        default='north',
+        help='Camera direction/view (default: north)'
+    )
+    parser.add_argument(
+        '--distance', '-d',
+        type=float,
+        default=0.264,  # .33/1.25
+        help='Distance multiplier from mesh diagonal (default: 0.264)'
+    )
+    parser.add_argument(
+        '--elevation', '-e',
+        type=float,
+        default=0.396,  # .33/1.25*1.5
+        help='Camera elevation as fraction of mesh diagonal (default: 0.396)'
+    )
+    parser.add_argument(
+        '--camera-type', '-c',
+        choices=['PERSP', 'ORTHO'],
+        default='PERSP',
+        help='Camera type: PERSP (perspective) or ORTHO (orthographic) (default: PERSP)'
+    )
+    parser.add_argument(
+        '--focal-length', '-f',
+        type=float,
+        default=15,
+        help='Focal length in mm for perspective camera (default: 15)'
+    )
+    parser.add_argument(
+        '--output', '-o',
+        type=str,
+        default=None,
+        help='Output filename (default: detroit_elevation_{view}.png)'
+    )
+    return parser.parse_args()
 
 
 def main():
     """Run the Detroit real elevation visualization."""
+    args = parse_args()
+
     print("=" * 70)
     print("Detroit Real Elevation Visualization")
     print("=" * 70)
@@ -154,16 +245,19 @@ def main():
     # Step 6: Render to PNG
     print("\n[6/6] Setting up camera and rendering to PNG...")
 
-    # Position camera using cardinal directions (south, looking at mesh center)
+    # Get camera target offset for this view direction (or default to center)
+    look_at = VIEW_TARGET_OFFSETS.get(args.view, (0, 0, 0))
+
+    # Position camera using cardinal directions
     # This is much more intuitive than manual coordinate specification
     camera = position_camera_relative(
         mesh_obj,
-        look_at=(0,-1.5, 0),
-        direction='south',
-        distance=.33/1.25,        # 1.5x mesh diagonal away
-        elevation=.33/1.25*1.5,       # 0.5x mesh diagonal height
-        camera_type='PERSP',
-        focal_length=15,
+        look_at=look_at,
+        direction=args.view,
+        distance=args.distance,
+        elevation=args.elevation,
+        camera_type=args.camera_type,
+        focal_length=args.focal_length,
     )
 
     # Create sun light for terrain illumination
@@ -179,14 +273,17 @@ def main():
         use_denoising=False
     )
 
-    print(f"      Camera: South-facing cardinal view")
-    print(f"      Direction: south, distance: 1.5x, elevation: 0.5x")
-    print(f"      Type: Orthographic")
-    print(f"      Samples: 32")
+    print(f"      Camera: {args.view.title()}-facing cardinal view")
+    print(f"      Direction: {args.view}, distance: {args.distance:.3f}x, elevation: {args.elevation:.3f}x")
+    print(f"      Type: {args.camera_type}")
+    print(f"      Samples: 2048")
     print(f"      Rendering...")
 
     # Render scene to file using class method
-    output_path = Path(__file__).parent / "detroit_elevation_real.png"
+    if args.output:
+        output_path = Path(__file__).parent / args.output
+    else:
+        output_path = Path(__file__).parent / f"detroit_elevation_{args.view}.png"
     render_file = render_scene_to_file(
         output_path=output_path,
         width=WIDTH,
