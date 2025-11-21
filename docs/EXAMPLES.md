@@ -8,7 +8,7 @@ A complete example showing how to create stunning 3D terrain visualizations from
 
 ### The Result
 
-![Detroit Elevation Visualization](../examples/detroit_elevation_real.png)
+![Detroit Elevation Visualization](images/detroit_elevation_real.png)
 
 *Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data*
 
