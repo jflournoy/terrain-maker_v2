@@ -450,7 +450,7 @@ clear_scene()  # Start fresh
 
 ---
 
-### `setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50)`
+### `setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50, camera_type='PERSP')`
 
 Configure camera and sun light for terrain visualization.
 
@@ -458,14 +458,19 @@ Configure camera and sun light for terrain visualization.
 
 - `camera_angle` (tuple): Rotation in radians (x, y, z)
 - `camera_location` (tuple): Position in world coordinates (x, y, z)
-- `scale` (float): Orthographic scale for camera
+- `scale` (float): Camera scale value (ortho_scale for orthographic cameras)
 - `sun_angle` (float): Sun light angular size in degrees (default: 2)
 - `sun_energy` (float): Light intensity/energy (default: 3)
-- `focal_length` (float): Camera focal length in mm (default: 50)
+- `focal_length` (float): Camera focal length in mm (default: 50, perspective only)
+- `camera_type` (str): Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
 
 **Returns:** Tuple of (camera\_object, sun\_object)
 
-**Example:**
+**Raises:** ValueError if camera_type is not 'PERSP' or 'ORTHO'
+
+**Examples:**
+
+Perspective camera (default):
 
 ```python
 from src.terrain.core import setup_camera_and_light
@@ -475,10 +480,30 @@ camera, light = setup_camera_and_light(
     camera_angle=(radians(63.6), radians(0), radians(46.7)),
     camera_location=(7.36, -6.93, 4.96),
     scale=20.0,
-    sun_angle=2,
-    sun_energy=3
+    camera_type='PERSP',
+    focal_length=50
 )
 ```
+
+Orthographic camera:
+
+```python
+camera, light = setup_camera_and_light(
+    camera_angle=(radians(45), radians(0), radians(45)),
+    camera_location=(5.0, -5.0, 3.0),
+    scale=15.0,
+    camera_type='ORTHO'
+)
+```
+
+**Camera Type Comparison:**
+
+| Aspect | Perspective | Orthographic |
+|--------|-------------|--------------|
+| Real-world look | ✓ Natural depth | Flat, technical |
+| Scale parameter | Background distance feel | Image scale |
+| focal_length | Controls FOV | Ignored |
+| Best for | Natural renders | Technical visualization |
 
 **Typical Camera Angles:**
 

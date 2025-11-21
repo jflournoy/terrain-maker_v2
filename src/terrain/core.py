@@ -69,38 +69,50 @@ def clear_scene():
         
     logger.info("Scene cleared successfully")
 
-def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50):
+def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50, camera_type='PERSP'):
     """Configure camera and main light for terrain visualization.
-    
+
     Args:
         camera_angle: Tuple of (x,y,z) rotation angles in radians
         camera_location: Tuple of (x,y,z) camera position
-        scale: Camera orthographic scale value
+        scale: Camera scale value (ortho_scale for orthographic cameras)
         sun_angle: Angle of sun light in degrees (default: 2)
         sun_energy: Energy/intensity of sun light (default: 3)
-        focal_length: Camera focal length in mm (default: 50)
-        
+        focal_length: Camera focal length in mm (default: 50, used only for perspective)
+        camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
+
     Returns:
         tuple: (camera object, sun light object)
+
+    Raises:
+        ValueError: If camera_type is not 'PERSP' or 'ORTHO'
     """
+    # Validate camera_type
+    if camera_type not in ('PERSP', 'ORTHO'):
+        raise ValueError("camera_type must be 'PERSP' or 'ORTHO'")
+
     logger.info("Setting up camera and lighting...")
-    
+
     # Create camera
-    logger.debug("Creating camera...")
+    logger.debug(f"Creating {camera_type} camera...")
     cam_data = bpy.data.cameras.new("Camera")
-    cam_data.lens = focal_length
     cam_obj = bpy.data.objects.new("Camera", cam_data)
     bpy.context.scene.collection.objects.link(cam_obj)
-    
+
     cam_obj.location = camera_location
     cam_obj.rotation_euler = camera_angle
-    
-    cam_data.type = 'PERSP'
-    cam_data.ortho_scale = scale
-    
+
+    # Set camera type and type-specific parameters
+    cam_data.type = camera_type
+
+    if camera_type == 'PERSP':
+        cam_data.lens = focal_length
+        logger.debug(f"Perspective camera configured at {camera_location} with {focal_length}mm lens")
+    else:  # ORTHO
+        cam_data.ortho_scale = scale
+        logger.debug(f"Orthographic camera configured at {camera_location} with scale {scale}")
+
     bpy.context.scene.camera = cam_obj
-    
-    logger.debug(f"Camera configured at {camera_location} with {focal_length}mm lens")
     
     # Create sun light
     logger.debug("Creating sun light...")

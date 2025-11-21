@@ -814,6 +814,95 @@ class TestConfigureForTargetVertices:
         assert len(terrain.transforms) == 1
 
 
+@pytest.mark.skipif(not HAS_BLENDER, reason="Blender not available")
+class TestCameraSetup:
+    """Test suite for setup_camera_and_light camera type control."""
+
+    def test_setup_camera_and_light_defaults_to_perspective(self):
+        """setup_camera_and_light should default to perspective camera."""
+        from src.terrain.core import setup_camera_and_light
+
+        camera, light = setup_camera_and_light(
+            camera_angle=(0, 0, 0),
+            camera_location=(0, 0, 0),
+            scale=10.0,
+            focal_length=50
+        )
+
+        assert camera.data.type == 'PERSP', "Should default to perspective camera"
+
+    def test_setup_camera_and_light_accepts_camera_type_perspective(self):
+        """setup_camera_and_light should accept camera_type='PERSP'."""
+        from src.terrain.core import setup_camera_and_light
+
+        camera, light = setup_camera_and_light(
+            camera_angle=(0, 0, 0),
+            camera_location=(0, 0, 0),
+            scale=10.0,
+            camera_type='PERSP',
+            focal_length=50
+        )
+
+        assert camera.data.type == 'PERSP'
+        assert camera.data.lens == 50  # focal_length should be set
+
+    def test_setup_camera_and_light_accepts_camera_type_ortho(self):
+        """setup_camera_and_light should accept camera_type='ORTHO' for orthographic."""
+        from src.terrain.core import setup_camera_and_light
+
+        camera, light = setup_camera_and_light(
+            camera_angle=(0, 0, 0),
+            camera_location=(0, 0, 0),
+            scale=20.0,
+            camera_type='ORTHO'
+        )
+
+        assert camera.data.type == 'ORTHO', "Should create orthographic camera"
+        assert camera.data.ortho_scale == 20.0, "ortho_scale should be set from scale parameter"
+
+    def test_setup_camera_and_light_ortho_ignores_focal_length(self):
+        """setup_camera_and_light with ORTHO should ignore focal_length parameter."""
+        from src.terrain.core import setup_camera_and_light
+
+        camera, light = setup_camera_and_light(
+            camera_angle=(0, 0, 0),
+            camera_location=(0, 0, 0),
+            scale=20.0,
+            camera_type='ORTHO',
+            focal_length=100  # Should be ignored
+        )
+
+        assert camera.data.type == 'ORTHO'
+        assert camera.data.ortho_scale == 20.0
+
+    def test_setup_camera_and_light_invalid_camera_type_raises_error(self):
+        """setup_camera_and_light should raise ValueError for invalid camera_type."""
+        from src.terrain.core import setup_camera_and_light
+
+        with pytest.raises(ValueError, match="camera_type must be 'PERSP' or 'ORTHO'"):
+            setup_camera_and_light(
+                camera_angle=(0, 0, 0),
+                camera_location=(0, 0, 0),
+                scale=10.0,
+                camera_type='INVALID'
+            )
+
+    def test_setup_camera_and_light_perspective_uses_focal_length(self):
+        """setup_camera_and_light with perspective should apply focal_length correctly."""
+        from src.terrain.core import setup_camera_and_light
+
+        camera, light = setup_camera_and_light(
+            camera_angle=(0, 0, 0),
+            camera_location=(0, 0, 0),
+            scale=10.0,
+            camera_type='PERSP',
+            focal_length=75
+        )
+
+        assert camera.data.type == 'PERSP'
+        assert camera.data.lens == 75
+
+
 # Fixtures
 
 @pytest.fixture
