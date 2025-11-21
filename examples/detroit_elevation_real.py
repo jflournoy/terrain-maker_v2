@@ -33,8 +33,7 @@ Multiple Views:
         north, south, east, west      Cardinal directions
         northeast, northwest, southeast, southwest  Diagonal views
         above                         Overhead perspective
-                                      (Note: rotation may vary due to camera up-vector ambiguity)
-                                      Use --camera-type ORTHO for stable overhead views
+                                      (Uses elevated position for clean, stable rotation)
 
     Example Commands:
         npm run py:example:detroit-north
@@ -59,14 +58,18 @@ Options:
     --focal-length, -f FLOAT                 Focal length in mm (default: 15)
 
 Advanced Usage:
-    Create a dramatic southwest view with orthographic projection:
-        python examples/detroit_elevation_real.py --view southwest --camera-type ORTHO
+    Create a dramatic southwest view:
+        python examples/detroit_elevation_real.py --view southwest --distance 0.5
 
     Generate a custom output file:
         python examples/detroit_elevation_real.py --view north --output my_render.png
 
     Adjust camera distance for a wider view:
         python examples/detroit_elevation_real.py --view north --distance 0.5
+
+    Fine-tune the overhead perspective with different elevation angles:
+        python examples/detroit_elevation_real.py --view above --elevation 0.8  # More overhead
+        python examples/detroit_elevation_real.py --view above --elevation 1.5  # More angled
 """
 
 import sys
