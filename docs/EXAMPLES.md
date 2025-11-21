@@ -93,6 +93,67 @@ This will:
 4. Render a publication-quality PNG (2.0 MB)
 5. Save a Blender file for further editing
 
+### Example Output
+
+When you run the example, you'll see output like this:
+
+```
+======================================================================
+Detroit Real Elevation Visualization
+======================================================================
+✓ Blender scene cleared
+[1/6] Loading SRTM tiles...
+Opening DEM files: 100%|██████████| 110/110 [00:00<00:00, 1530.60it/s, opened=110]
+
+[2/6] Initializing Terrain object...
+      Terrain initialized
+      DEM shape: (36001, 39601)
+
+[3/6] Applying transforms...
+      Original DEM shape: (36001, 39601)
+      Configured for 1,382,400 target vertices
+      Calculated zoom_factor: 0.031139
+      Downsampled DEM shape: (1326, 1137)
+      Actual vertices: 1,507,662
+      Transforms applied successfully
+
+[4/6] Setting up color mapping...
+      Color mapping configured (Mako colormap)
+
+[5/6] Creating Blender mesh...
+      ✓ Mesh created successfully!
+      Vertices: 1370951
+      Polygons: 1368731
+
+[6/6] Setting up camera and rendering to PNG...
+      Camera: South-facing cardinal view
+      Direction: south, distance: 1.5x, elevation: 0.5x
+      Type: Orthographic
+      Samples: 32
+      Rendering...
+      ✓ Rendered successfully!
+      File: detroit_elevation_real.png
+      Size: 2.0 MB
+
+======================================================================
+Detroit Real Elevation Visualization Complete!
+======================================================================
+
+Summary:
+  ✓ Loaded and merged all SRTM tiles (full coverage)
+  ✓ Configured downsampling to target vertex count intelligently
+  ✓ Applied geographic coordinate reprojection (WGS84 → UTM)
+  ✓ Created Terrain object with real elevation data
+  ✓ Applied transforms (reproject + flip + scale)
+  ✓ Configured beautiful Mako elevation-based color mapping
+  ✓ Generated Blender mesh with 1370951 vertices
+  ✓ Rendered to PNG: /path/to/detroit_elevation_real.png
+
+That's it! Professional terrain visualization in just a few lines of Python!
+```
+
+The entire process takes about 30-40 seconds on modern hardware. You'll see progress bars for DEM loading and processing, with detailed logging of each transformation step.
+
 ### Output Files
 
 - `examples/detroit_elevation_real.png` - Final rendered image (960×720, 2.0 MB)
