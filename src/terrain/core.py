@@ -266,15 +266,21 @@ def position_camera_relative(
         target_pos = np.array(look_at)
 
     # Calculate rotation to point at target
-    # In Blender, camera's local -Z axis is forward, +Y is up
-    from mathutils import Vector
+    # Special case: for overhead (above) view, use zero rotation
+    # This avoids gimbal lock ambiguity when looking straight down
+    if direction == 'above':
+        from mathutils import Euler
+        camera_angle = Euler((0, 0, 0), 'XYZ')
+    else:
+        # In Blender, camera's local -Z axis is forward, +Y is up
+        from mathutils import Vector
 
-    cam_to_target = Vector(target_pos - camera_pos).normalized()
+        cam_to_target = Vector(target_pos - camera_pos).normalized()
 
-    # Use to_track_quat to calculate rotation
-    # Arguments: (forward_axis, up_axis) where -Z is camera forward, Y is world up
-    track_quat = cam_to_target.to_track_quat('-Z', 'Y')
-    camera_angle = track_quat.to_euler()
+        # Use to_track_quat to calculate rotation
+        # Arguments: (forward_axis, up_axis) where -Z is camera forward, Y is world up
+        track_quat = cam_to_target.to_track_quat('-Z', 'Y')
+        camera_angle = track_quat.to_euler()
 
     logger.debug(f"Camera position: {camera_pos}, angle: {camera_angle}")
 
