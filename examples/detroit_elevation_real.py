@@ -46,7 +46,7 @@ except ImportError:
     bpy = None
 
 # SRTM tiles directory
-SRTM_TILES_DIR = Path(__file__).parent.parent.parent / "geotiff-rayshade" / "detroit"
+SRTM_TILES_DIR = Path(__file__).parent.parent / "data" / "dem" / "detroit"
 
 
 
