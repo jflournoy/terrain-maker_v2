@@ -55,6 +55,7 @@ desktop.ini
 !.vscode/tasks.json
 !.vscode/launch.json
 .idea/
+.history/
 *.swp
 *.swo
 *~
