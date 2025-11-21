@@ -33,6 +33,8 @@ Multiple Views:
         north, south, east, west      Cardinal directions
         northeast, northwest, southeast, southwest  Diagonal views
         above                         Overhead perspective
+                                      (Note: rotation may vary due to camera up-vector ambiguity)
+                                      Use --camera-type ORTHO for stable overhead views
 
     Example Commands:
         npm run py:example:detroit-north
@@ -96,6 +98,7 @@ VIEW_TARGET_OFFSETS = {
     'south': (0, -1.5, 0),
     'east': (1.5, 0, 0),
     'west': (-1.5, 0, 0),
+    'above': (0, 0, 0),  # Overhead view - center is natural target
 }
 
 
