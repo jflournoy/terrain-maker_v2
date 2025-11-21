@@ -69,20 +69,18 @@ def clear_scene():
         
     logger.info("Scene cleared successfully")
 
-def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50, camera_type='PERSP'):
-    """Configure camera and main light for terrain visualization.
+def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_type='PERSP'):
+    """Configure camera for terrain visualization.
 
     Args:
         camera_angle: Tuple of (x,y,z) rotation angles in radians
         camera_location: Tuple of (x,y,z) camera position
         scale: Camera scale value (ortho_scale for orthographic cameras)
-        sun_angle: Angle of sun light in degrees (default: 2)
-        sun_energy: Energy/intensity of sun light (default: 3)
         focal_length: Camera focal length in mm (default: 50, used only for perspective)
         camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
 
     Returns:
-        tuple: (camera object, sun light object)
+        Camera object
 
     Raises:
         ValueError: If camera_type is not 'PERSP' or 'ORTHO'
@@ -91,9 +89,6 @@ def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, su
     if camera_type not in ('PERSP', 'ORTHO'):
         raise ValueError("camera_type must be 'PERSP' or 'ORTHO'")
 
-    logger.info("Setting up camera and lighting...")
-
-    # Create camera
     logger.debug(f"Creating {camera_type} camera...")
     cam_data = bpy.data.cameras.new("Camera")
     cam_obj = bpy.data.objects.new("Camera", cam_data)
@@ -113,22 +108,59 @@ def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, su
         logger.debug(f"Orthographic camera configured at {camera_location} with scale {scale}")
 
     bpy.context.scene.camera = cam_obj
-    
-    # Create sun light
+
+    return cam_obj
+
+
+def setup_light(location=(1, 1, 2), angle=2, energy=3, rotation_euler=(0, radians(315), 0)):
+    """Create and configure sun light for terrain visualization.
+
+    Args:
+        location: Tuple of (x,y,z) light position (default: (1, 1, 2))
+        angle: Angle of sun light in degrees (default: 2)
+        energy: Energy/intensity of sun light (default: 3)
+        rotation_euler: Tuple of (x,y,z) rotation angles in radians (default: sun from NW)
+
+    Returns:
+        Sun light object
+    """
     logger.debug("Creating sun light...")
     sun = bpy.data.lights.new(name="Sun", type='SUN')
     sun_obj = bpy.data.objects.new("Sun", sun)
     bpy.context.scene.collection.objects.link(sun_obj)
-    
-    sun_obj.location = (1, 1, 2)
-    sun_obj.rotation_euler = (radians(0), radians(315), radians(0))
-    sun.angle = sun_angle
-    sun.energy = sun_energy
-    
-    logger.debug(f"Sun light configured with angle {sun_angle}° and energy {sun_energy}")
+
+    sun_obj.location = location
+    sun_obj.rotation_euler = rotation_euler
+    sun.angle = angle
+    sun.energy = energy
+
+    logger.debug(f"Sun light configured with angle {angle}° and energy {energy}")
+
+    return sun_obj
+
+
+def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50, camera_type='PERSP'):
+    """Configure camera and main light for terrain visualization.
+
+    Convenience function that calls setup_camera() and setup_light().
+
+    Args:
+        camera_angle: Tuple of (x,y,z) rotation angles in radians
+        camera_location: Tuple of (x,y,z) camera position
+        scale: Camera scale value (ortho_scale for orthographic cameras)
+        sun_angle: Angle of sun light in degrees (default: 2)
+        sun_energy: Energy/intensity of sun light (default: 3)
+        focal_length: Camera focal length in mm (default: 50, used only for perspective)
+        camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
+
+    Returns:
+        tuple: (camera object, sun light object)
+    """
+    logger.info("Setting up camera and lighting...")
+    camera = setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
+    light = setup_light(angle=sun_angle, energy=sun_energy)
     logger.info("Camera and lighting setup complete")
-    
-    return cam_obj, sun_obj
+    return camera, light
 
 
 def position_camera_relative(
@@ -167,7 +199,7 @@ def position_camera_relative(
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
 
     Returns:
-        tuple: (camera object, sun light object)
+        Camera object
 
     Raises:
         ValueError: If direction is not recognized or camera_type is invalid
@@ -240,18 +272,20 @@ def position_camera_relative(
     # Set ortho scale based on mesh size if orthographic
     ortho_scale = mesh_diagonal * 1.2 if camera_type == 'ORTHO' else distance * mesh_diagonal
 
-    # Use existing camera setup function
-    camera, light = setup_camera_and_light(
+    # Create camera directly, optionally with light
+    camera = setup_camera(
         camera_angle=camera_angle,
         camera_location=tuple(camera_pos),
         scale=ortho_scale,
-        sun_angle=sun_angle,
-        sun_energy=sun_energy,
         focal_length=focal_length,
         camera_type=camera_type
     )
 
-    return camera, light
+    # Create light if sun parameters are provided
+    if sun_angle > 0 or sun_energy > 0:
+        setup_light(angle=sun_angle, energy=sun_energy)
+
+    return camera
 
 
 def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=0.0):

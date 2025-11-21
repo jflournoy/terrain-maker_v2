@@ -60,7 +60,7 @@ class TestPositionCameraRelative:
     def test_direction_above_positions_on_z_axis(self, mock_mesh):
         """Camera 'above' should be directly over mesh center on Z axis."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='above')
+        camera = position_camera_relative(mock_mesh, direction='above')
         center = get_mesh_center(mock_mesh)
         assert camera.location.x == pytest.approx(center[0], abs=0.1)
         assert camera.location.y == pytest.approx(center[1], abs=0.1)
@@ -69,22 +69,22 @@ class TestPositionCameraRelative:
     def test_direction_south_positions_negative_y(self, mock_mesh):
         """Camera 'south' should be at -Y from mesh center."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='south')
+        camera = position_camera_relative(mock_mesh, direction='south')
         center = get_mesh_center(mock_mesh)
         assert camera.location.y < center[1]  # South = negative Y
 
     def test_direction_north_positions_positive_y(self, mock_mesh):
         """Camera 'north' should be at +Y from mesh center."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='north')
+        camera = position_camera_relative(mock_mesh, direction='north')
         center = get_mesh_center(mock_mesh)
         assert camera.location.y > center[1]  # North = positive Y
 
     def test_distance_parameter_affects_position(self, mock_mesh):
         """Larger distance should place camera further from mesh."""
         from src.terrain.core import position_camera_relative
-        cam1, _ = position_camera_relative(mock_mesh, direction='south', distance=1.0)
-        cam2, _ = position_camera_relative(mock_mesh, direction='south', distance=2.0)
+        cam1 = position_camera_relative(mock_mesh, direction='south', distance=1.0)
+        cam2 = position_camera_relative(mock_mesh, direction='south', distance=2.0)
         dist1 = abs(cam1.location.y - get_mesh_center(mock_mesh)[1])
         dist2 = abs(cam2.location.y - get_mesh_center(mock_mesh)[1])
         assert dist2 > dist1
@@ -92,15 +92,15 @@ class TestPositionCameraRelative:
     def test_elevation_parameter_affects_z_position(self, mock_mesh):
         """Elevation parameter should control camera Z position."""
         from src.terrain.core import position_camera_relative
-        cam1, _ = position_camera_relative(mock_mesh, direction='south', elevation=0.3)
-        cam2, _ = position_camera_relative(mock_mesh, direction='south', elevation=0.7)
+        cam1 = position_camera_relative(mock_mesh, direction='south', elevation=0.3)
+        cam2 = position_camera_relative(mock_mesh, direction='south', elevation=0.7)
         assert cam2.location.z > cam1.location.z
 
     # === Direction/Rotation Tests (using forward vector) ===
     def test_camera_points_at_center(self, mock_mesh):
         """Camera forward vector should point toward mesh center."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='south', look_at='center')
+        camera = position_camera_relative(mock_mesh, direction='south', look_at='center')
 
         # Get actual forward direction from rotation matrix
         # Camera's local -Z axis is its forward direction
@@ -118,7 +118,7 @@ class TestPositionCameraRelative:
     def test_above_camera_looks_straight_down(self, mock_mesh):
         """Camera 'above' should look straight down (-Z direction in world space)."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='above', look_at='center')
+        camera = position_camera_relative(mock_mesh, direction='above', look_at='center')
 
         rot_matrix = camera.rotation_euler.to_matrix()
         forward = rot_matrix @ Vector((0, 0, -1))
@@ -132,21 +132,18 @@ class TestPositionCameraRelative:
     def test_south_camera_has_positive_pitch(self, mock_mesh):
         """Camera from 'south' should have positive X rotation (pitch up to look at terrain)."""
         from src.terrain.core import position_camera_relative
-        camera, _ = position_camera_relative(mock_mesh, direction='south', look_at='center')
+        camera = position_camera_relative(mock_mesh, direction='south', look_at='center')
 
         # X rotation should be positive (pitching up to see terrain above)
         assert camera.rotation_euler.x > 0.1, f"Expected positive pitch, got {camera.rotation_euler.x}"
 
     # === Return Value Tests ===
-    def test_returns_camera_and_light_tuple(self, mock_mesh):
-        """Should return (camera, light) tuple."""
+    def test_returns_camera_object(self, mock_mesh):
+        """Should return camera object."""
         from src.terrain.core import position_camera_relative
-        result = position_camera_relative(mock_mesh, direction='south')
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        camera, light = result
+        camera = position_camera_relative(mock_mesh, direction='south')
+        assert camera is not None
         assert camera.type == 'CAMERA'
-        assert light.type == 'LIGHT'
 
     # === Cardinal Directions ===
     def test_all_cardinal_directions_supported(self, mock_mesh):
@@ -157,6 +154,6 @@ class TestPositionCameraRelative:
                      'northeast', 'northwest', 'southeast', 'southwest']
 
         for direction in directions:
-            camera, light = position_camera_relative(mock_mesh, direction=direction)
+            camera = position_camera_relative(mock_mesh, direction=direction)
             assert camera is not None
-            assert light is not None
+            assert camera.type == 'CAMERA'
