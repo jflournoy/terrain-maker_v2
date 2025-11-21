@@ -28,7 +28,6 @@ Usage:
 
 import sys
 from pathlib import Path
-from math import radians
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -36,7 +35,7 @@ sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
     Terrain, load_dem_files, scale_elevation, flip_raster, reproject_raster,
-    elevation_colormap, clear_scene, setup_camera_and_light,
+    elevation_colormap, clear_scene, position_camera_relative, setup_light,
     setup_render_settings, render_scene_to_file
 )
 
@@ -145,24 +144,20 @@ def main():
     # Step 6: Render to PNG
     print("\n[6/6] Setting up camera and rendering to PNG...")
 
-    # Tuned camera parameters for Detroit elevation terrain
-    camera_location = (0, -5, 350)
-    camera_rotation_deg = (0.0, 0.0, 0.0)
-    camera_angle = (
-        radians(camera_rotation_deg[0]),
-        radians(camera_rotation_deg[1]),
-        radians(camera_rotation_deg[2])
+    # Position camera using cardinal directions (south, looking at mesh center)
+    # This is much more intuitive than manual coordinate specification
+    camera = position_camera_relative(
+        mesh_obj,
+        direction='south',
+        distance=1.5,        # 1.5x mesh diagonal away
+        elevation=0.5,       # 0.5x mesh diagonal height
+        camera_type='ORTHO'
     )
 
-    # Set up camera and light using class method
-    camera, light = setup_camera_and_light(
-        camera_angle=camera_angle,
-        camera_location=camera_location,
-        camera_type='ORTHO',
-        scale=20,
-        sun_angle=2,
-        sun_energy=3,
-        focal_length=30
+    # Create sun light for terrain illumination
+    light = setup_light(
+        angle=2,            # Narrow light cone
+        energy=3            # Brightness
     )
 
     # Configure render settings using class method
@@ -172,9 +167,9 @@ def main():
         use_denoising=False
     )
 
-    print(f"      Camera: TUNED VIEW")
-    print(f"      Location: {camera_location}")
-    print(f"      Rotation: {camera_rotation_deg}")
+    print(f"      Camera: South-facing cardinal view")
+    print(f"      Direction: south, distance: 1.5x, elevation: 0.5x")
+    print(f"      Type: Orthographic")
     print(f"      Samples: 32")
     print(f"      Rendering...")
 
