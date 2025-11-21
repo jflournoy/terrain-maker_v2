@@ -27,10 +27,9 @@ nav:
     - Quick Start: QUICK_START.md
   - Examples: EXAMPLES.md
   - API Reference: API_REFERENCE.md
-  - Guides:
+  - Appendix (Development & Workflows):
     - Workflows: WORKFLOWS.md
     - Best Practices: BEST_PRACTICES.md
-  - Appendix (Development):
     - TDD with Claude: TDD_WITH_CLAUDE.md
     - TDD Success Stories: TDD_SUCCESS_STORIES.md
     - Claude Patterns: CLAUDE_PATTERNS.md
