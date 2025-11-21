@@ -10,7 +10,8 @@ export default [
       'coverage/**',
       'htmlcov/**',
       '.pytest_cache/**',
-      '__pycache__/**'
+      '__pycache__/**',
+      'site/**'
     ]
   },
   js.configs.recommended,
