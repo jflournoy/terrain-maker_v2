@@ -25,22 +25,40 @@ What Makes This Easy:
     ✓ Built-in color mapping from elevation data
     ✓ Automatic coordinate system handling
 
-Multiple Views:
-    The script supports command-line arguments to easily generate renders
-    from different camera angles with optimal framing for each view:
+Camera Views - The Power of Intuitive Positioning:
+    The position_camera_relative() function makes it trivial to generate
+    publication-quality renders from ANY angle. Just specify a cardinal
+    direction and the camera automatically:
 
-    --view Options:
-        north, south, east, west      Cardinal directions
-        northeast, northwest, southeast, southwest  Diagonal views
-        above                         Overhead perspective
-                                      (Uses elevated position for clean, stable rotation)
+    ✓ Positions itself at the optimal distance
+    ✓ Sets elevation for dramatic effect
+    ✓ Targets the terrain with view-specific offsets for perfect framing
+    ✓ Calculates proper rotation to look at the target
 
-    Example Commands:
-        npm run py:example:detroit-north
-        npm run py:example:detroit-south
-        npm run py:example:detroit-east
-        npm run py:example:detroit-west
-        npm run py:example:detroit-above
+    Compare this to manual camera setup in Blender - coordinates, angles,
+    focal lengths. With position_camera_relative(), it's just ONE parameter!
+
+Available Views (with intelligent auto-framing):
+
+    Cardinal Directions:
+        north     - View from the north, looking south at the terrain
+        south     - View from the south, looking north (default framing offset: -1.5 on Y)
+        east      - View from the east, looking west
+        west      - View from the west, looking east
+
+    Diagonal Views:
+        northeast, northwest, southeast, southwest - Corner perspectives
+
+    Overhead:
+        above     - Perfect overhead view (zero rotation, stable framing)
+                    Uses intelligent elevation positioning for best perspective
+
+Quick Render Commands:
+    npm run py:example:detroit-north      # North-facing view
+    npm run py:example:detroit-south      # South-facing view
+    npm run py:example:detroit-east       # East-facing view
+    npm run py:example:detroit-west       # West-facing view
+    npm run py:example:detroit-above      # Overhead bird's-eye view
 
 Output:
     - PNG saved to: examples/detroit_elevation_{view}.png (960×720)
@@ -57,19 +75,39 @@ Options:
     --elevation, -e FLOAT                    Camera elevation multiplier (default: 0.396)
     --focal-length, -f FLOAT                 Focal length in mm (default: 15)
 
-Advanced Usage:
-    Create a dramatic southwest view:
-        python examples/detroit_elevation_real.py --view southwest --distance 0.5
+Why position_camera_relative() is Amazing:
+    ✓ ONE function generates professional renders from ANY direction
+    ✓ Automatic target offset adjustment for each view direction
+    ✓ No manual coordinate calculations needed
+    ✓ Consistent framing across all views
+    ✓ Easy A/B testing different perspectives
 
-    Generate a custom output file:
-        python examples/detroit_elevation_real.py --view north --output my_render.png
+Advanced Camera Customization:
 
-    Adjust camera distance for a wider view:
-        python examples/detroit_elevation_real.py --view north --distance 0.5
+    Dramatic southwest angled view:
+        python examples/detroit_elevation_real.py --view southwest --elevation 0.2
 
-    Fine-tune the overhead perspective with different elevation angles:
-        python examples/detroit_elevation_real.py --view above --elevation 0.3  # Lower, more angled view
-        python examples/detroit_elevation_real.py --view above --elevation 1.0  # Higher, more straight down
+    Close-up north perspective:
+        python examples/detroit_elevation_real.py --view north --distance 0.15
+
+    Wide-angle overview from northeast:
+        python examples/detroit_elevation_real.py --view northeast --distance 0.5 --elevation 0.6
+
+    Custom output file:
+        python examples/detroit_elevation_real.py --view north --output custom_render.png
+
+    High-altitude overhead view (adjust elevation):
+        python examples/detroit_elevation_real.py --view above --elevation 1.2
+
+Comparing Views:
+    Generate a complete set for comparison:
+        npm run py:example:detroit-north     # Side view
+        npm run py:example:detroit-south     # Opposite side
+        npm run py:example:detroit-east      # Another angle
+        npm run py:example:detroit-west      # Fourth cardinal
+        npm run py:example:detroit-above     # Bird's eye
+
+    All files saved with view-specific names for easy organization!
 """
 
 import sys
