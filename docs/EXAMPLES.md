@@ -58,7 +58,7 @@ terrain.configure_for_target_vertices(1_000_000)  # Automatically calculates opt
 ```
 
 #### Cardinal Direction Camera Positioning
-No more confusing coordinate calculations. Position your camera intuitively:
+No more confusing coordinate calculations. Position your camera intuitively with intelligent view-specific targeting:
 
 ```python
 camera = position_camera_relative(
@@ -66,8 +66,19 @@ camera = position_camera_relative(
     direction='south',      # Can be: north, south, east, west, northeast, etc.
     distance=1.5,           # Multiplier of mesh diagonal
     elevation=0.5,          # Height above center
+    look_at=(0, -1.5, 0),   # View-specific target offset (auto-calculated)
 )
 ```
+
+**What makes this powerful:**
+- Each cardinal direction has intelligent target offset adjustments
+- North: targets (0, 2, 0) - offsets north for perfect framing
+- South: targets (0, -1.5, 0) - offsets south for perfect framing
+- East/West: adjust X axis similarly for optimal perspective
+- The function automatically calculates rotation, distance, and elevation
+- Overhead view uses zero rotation to eliminate gimbal lock artifacts
+
+This eliminates trial-and-error camera positioning entirely!
 
 #### Geographic Coordinate Handling
 Automatic reprojection and proper coordinate system handling:
@@ -82,6 +93,7 @@ terrain.transforms.append(reproject_raster(
 
 ### Running This Example
 
+#### Basic Render
 ```bash
 python examples/detroit_elevation_real.py
 ```
@@ -90,8 +102,22 @@ This will:
 1. Load SRTM elevation tiles from `data/dem/detroit/`
 2. Process the data with intelligent downsampling
 3. Generate a 1,370,951 vertex Blender mesh
-4. Render a publication-quality PNG (2.0 MB)
+4. Render a publication-quality PNG (2.0 MB) from the north
 5. Save a Blender file for further editing
+
+#### Generate Multiple Views
+The example supports command-line arguments to easily create renders from different camera angles:
+
+```bash
+# Quick commands for each cardinal direction
+npm run py:example:detroit-north    # North view
+npm run py:example:detroit-south    # South view
+npm run py:example:detroit-east     # East view
+npm run py:example:detroit-west     # West view
+npm run py:example:detroit-above    # Overhead bird's-eye view
+```
+
+Each renders the same terrain from a different perspective with intelligent view-specific framing. Perfect for creating comparison sets or presentations!
 
 ### Example Output
 
@@ -176,7 +202,27 @@ With Terrain Maker, you get:
 
 ### Customization
 
-You can easily customize this example for your own data:
+#### Command-Line Camera Control
+The example script accepts arguments to customize rendering without code changes:
+
+```bash
+# Change view direction
+python examples/detroit_elevation_real.py --view east
+
+# Adjust camera distance (closer/farther)
+python examples/detroit_elevation_real.py --view north --distance 0.15
+
+# Change elevation (higher/lower viewpoint)
+python examples/detroit_elevation_real.py --view above --elevation 0.8
+
+# Custom output filename
+python examples/detroit_elevation_real.py --view west --output my_render.png
+
+# Switch to orthographic projection
+python examples/detroit_elevation_real.py --view north --camera-type ORTHO
+```
+
+#### In-Code Customization
 
 ```python
 # Change the colormap
@@ -187,7 +233,25 @@ position_camera_relative(mesh, direction='east', elevation=1.0)
 
 # Configure rendering
 setup_render_settings(samples=4096, use_denoising=True)
+
+# Create a presentation set of all views
+for view in ['north', 'south', 'east', 'west', 'above']:
+    position_camera_relative(mesh, direction=view)
+    render_scene_to_file(output_path=f"detroit_{view}.png")
 ```
+
+#### Generating Multiple Comparison Views
+
+Create a full set of renders for comparison or publication:
+
+```bash
+# Generate all cardinal views at once
+for view in north south east west above; do
+    npm run py:example:detroit-$view
+done
+```
+
+This creates 5 renders showing the terrain from different perspectives, with consistent framing and optimal camera positioning for each angle.
 
 ---
 
