@@ -39,7 +39,7 @@ Examples:
 
 **Methods:**
 
-- `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)` - Add a data layer, optionally reprojecting to match another layer
+- `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)` - Add a data layer, optionally reprojecting to match another layer.
 
 - `add_transform(self, transform_func)` - Add a transform function to the processing pipeline.
 
@@ -47,13 +47,13 @@ Examples:
 
 - `compute_colors(self)` - Compute colors using color_func and optionally mask_func.
 
-- `compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)` - Compute a new data layer from an existing one
+- `compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)` - Compute a new data layer from an existing one using a transformation function.
 
 - `configure_for_target_vertices(self, target_vertices, order)` - Configure downsampling to achieve approximately target_vertices.
 
 - `create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)` - Create a Blender mesh from transformed DEM data with both performance and control.
 
-- `set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)` - Set up how to map data to colors (RGB) and optionally a mask/alpha channel.
+- `set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)` - Set up how to map data layers to colors (RGB) and optionally a mask/alpha channel.
 
 - `visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)` - Create diagnostic visualization of any terrain data layer.
 
@@ -90,16 +90,41 @@ Examples:
 
 #### `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)`
 
-Add a data layer, optionally reprojecting to match another layer
+Add a data layer, optionally reprojecting to match another layer.
+
+Stores data with geographic metadata (CRS and transform). Can automatically
+reproject and resample to match an existing layer's grid for multi-layer analysis.
 
 Args:
-    name: Name of the layer
-    data: Input array
-    transform: Affine transform for the data
-    crs: CRS of input data
-    target_crs: Target CRS to reproject to (if None, use target_layer's CRS)
-    target_layer: Name of existing layer to match (for CRS and grid)
-    resampling: Resampling method for alignment
+    name (str): Unique name for this data layer (e.g., 'dem', 'elevation', 'slope').
+    data (np.ndarray): 2D array of data values, shape (height, width).
+    transform (rasterio.Affine): Affine transform mapping pixel to geographic coords.
+    crs (str): Coordinate reference system in EPSG format (e.g., 'EPSG:4326').
+    target_crs (str, optional): Target CRS to reproject to. If None and target_layer
+        specified, uses target layer's CRS. If None and no target, uses input crs.
+    target_layer (str, optional): Name of existing layer to match grid and CRS.
+        If specified, data is automatically reprojected and resampled to align.
+    resampling (rasterio.enums.Resampling): Resampling method for reprojection
+        (default: Resampling.bilinear). See rasterio docs for options.
+
+Returns:
+    None: Modifies internal data_layers dictionary.
+
+Raises:
+    KeyError: If target_layer specified but doesn't exist.
+    ValueError: If target_crs specified but no reference layer available.
+
+Examples:
+    >>> # Add elevation data with native CRS
+    >>> terrain.add_data_layer('dem', dem_array, transform, 'EPSG:4326')
+
+    >>> # Add overlay data, reproject to match DEM
+    >>> terrain.add_data_layer('landcover', lc_array, lc_transform, 'EPSG:3857',
+    ...                        target_layer='dem')
+
+    >>> # Use nearest-neighbor for categorical data
+    >>> terrain.add_data_layer('zones', zone_array, zone_transform, 'EPSG:4326',
+    ...                        target_layer='dem', resampling=Resampling.nearest)
 
 #### `add_transform(self, transform_func)`
 
@@ -161,17 +186,49 @@ Returns:
 
 #### `compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)`
 
-Compute a new data layer from an existing one
+Compute a new data layer from an existing one using a transformation function.
+
+Allows creating derived layers (e.g., slope, aspect, hillshade) from existing data.
+Results are stored as new layer and optionally cached.
 
 Args:
-    name: Name for the new layer
-    source_layer: Name of source layer to compute from
-    compute_func: Function that takes source array and returns computed array
-    transformed: Whether to use the transformed source data (default: False)
-    cache_key: Optional custom cache key for the computation
-    
+    name (str): Name for the computed layer.
+    source_layer (str): Name of existing source layer to compute from.
+    compute_func (Callable): Function that accepts source array (np.ndarray)
+        and returns computed array (np.ndarray). Can return same or different shape.
+    transformed (bool): If True, use already-transformed source data; if False,
+        use original source data (default: False).
+    cache_key (str, optional): Custom cache identifier. If None, auto-generated
+        from layer name and function name.
+
 Returns:
-    np.ndarray: The computed layer data
+    np.ndarray: The computed layer data array.
+
+Raises:
+    KeyError: If source_layer doesn't exist.
+    ValueError: If transformed=True but source hasn't been transformed.
+
+Examples:
+    >>> # Compute slope from DEM using scipy
+    >>> from scipy.ndimage import sobel
+    >>> slope = terrain.compute_data_layer(
+    ...     'slope', 'dem',
+    ...     lambda dem: np.sqrt(sobel(dem, axis=0)**2 + sobel(dem, axis=1)**2)
+    ... )
+
+    >>> # Compute hill-shade visualization
+    >>> from scipy.ndimage import gaussian_filter
+    >>> hillshade = terrain.compute_data_layer(
+    ...     'hillshade', 'dem',
+    ...     lambda dem: np.clip(gaussian_filter(dem, 2) * 0.5, 0, 1)
+    ... )
+
+    >>> # Compute from transformed (downsampled) data
+    >>> downsampled_slope = terrain.compute_data_layer(
+    ...     'slope_downsampled', 'dem',
+    ...     lambda dem: np.gradient(dem)[0],
+    ...     transformed=True
+    ... )
 
 #### `configure_for_target_vertices(self, target_vertices, order)`
 
@@ -395,18 +452,62 @@ Returns:
 
 #### `set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)`
 
-Set up how to map data to colors (RGB) and optionally a mask/alpha channel.
+Set up how to map data layers to colors (RGB) and optionally a mask/alpha channel.
+
+Allows flexible color mapping by applying a function to one or more data layers.
+Optionally applies a separate mask function for transparency/alpha channel control.
+Color mapping is applied during mesh creation with `compute_colors()`.
 
 Args:
-    color_func: Function that takes N data arrays (from source_layers)
-                and returns an (H, W, 3 or 4) float array (RGB or RGBA).
-    source_layers: List of layer names (strings) to feed to color_func.
-    color_kwargs: Dict of additional kwargs specifically for color_func.
-    mask_func: Optional function producing a mask (e.g., for water).
-               Can take one or more arrays as input.
-    mask_layers: Layer name(s) to supply to mask_func if different from source_layers.
-    mask_kwargs: Dict of additional kwargs specifically for mask_func.
-    mask_threshold: Optional convenience parameter if mask_func is threshold-based.
+    color_func (Callable): Function that accepts N data arrays (one per source_layers)
+        and returns colored array of shape (H, W, 3) for RGB or (H, W, 4) for RGBA.
+        Values should be in range [0, 1] for 8-bit output.
+    source_layers (list[str]): Names of data layers to pass to color_func, in order.
+        E.g., ['dem'] for single layer or ['red', 'green', 'blue'] for composite.
+    color_kwargs (dict, optional): Additional keyword arguments passed to color_func.
+    mask_func (Callable, optional): Function producing alpha/mask values (0-1) for
+        transparency. Takes layer arrays as input. If omitted, fully opaque.
+    mask_layers (list[str] | str, optional): Layer names for mask_func. If None,
+        uses source_layers. Single string converted to list.
+    mask_kwargs (dict, optional): Additional keyword arguments for mask_func.
+    mask_threshold (float, optional): If mask_func is threshold-based, convenience
+        parameter for threshold value (implementation-dependent).
+
+Returns:
+    None: Modifies internal color mapping configuration.
+
+Raises:
+    ValueError: If source_layers or mask_layers refer to non-existent layers.
+
+Examples:
+    >>> # Single-layer elevation with viridis colormap
+    >>> from matplotlib.cm import viridis
+    >>> terrain.set_color_mapping(
+    ...     lambda dem: viridis(dem / dem.max()),
+    ...     ['dem']
+    ... )
+
+    >>> # RGB composite from three layers
+    >>> terrain.set_color_mapping(
+    ...     lambda r, g, b: np.stack([r, g, b], axis=-1),
+    ...     ['red_band', 'green_band', 'blue_band']
+    ... )
+
+    >>> # Elevation with water transparency mask
+    >>> terrain.set_color_mapping(
+    ...     lambda dem: elevation_colormap(dem),
+    ...     ['dem'],
+    ...     mask_func=lambda dem: (dem > 0).astype(float),
+    ...     mask_layers=['dem']
+    ... )
+
+    >>> # Hillshade with elevation colors and slope transparency
+    >>> terrain.set_color_mapping(
+    ...     lambda dem: dem_colors,
+    ...     ['dem'],
+    ...     mask_func=lambda dem: 1 - np.clip(np.gradient(dem)[0], 0, 1),
+    ...     mask_layers=['dem']
+    ... )
 
 #### `setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)`
 
