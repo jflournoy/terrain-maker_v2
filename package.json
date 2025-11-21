@@ -49,6 +49,8 @@
     "docs:python": "python scripts/python-docs.py",
     "docs:python:validate": "python scripts/python-docs.py validate",
     "docs:python:stats": "python scripts/python-docs.py stats",
+    "docs:build": "uv run mkdocs build",
+    "docs:serve": "uv run python3 -m http.server 8080 --directory site",
     "markdown:lint": "remark . --quiet",
     "markdown:fix": "remark . --output",
     "// Advanced Commands": "=== Advanced workflow commands ===",
