@@ -2,811 +2,480 @@
 
 Comprehensive documentation of all classes and functions in the terrain-maker library.
 
+**Auto-generated from source code docstrings.**
+
 ## Table of Contents
 
-- [Terrain Class](#terrain-class)
-- [Data Loading](#data-loading)
-- [Transform Functions](#transform-functions)
-- [Analysis Functions](#analysis-functions)
-- [Blender Rendering](#blender-rendering)
-- [Utility Functions](#utility-functions)
+- [terrain.core](#terrain-core)
 
 ---
 
-## Terrain Class
+## terrain.core
 
-Core class for managing DEM data and terrain operations.
+### Classes
 
-### `Terrain.__init__(dem_data, transform, crs='EPSG:4326')`
+#### `Terrain`
 
-Initialize a Terrain object with elevation data.
+No documentation
 
-**Parameters:**
+**Methods:**
 
-- `dem_data` (np.ndarray): 2D array of elevation values (height × width)
-- `transform` (Affine): Affine transform mapping pixel coordinates to geographic coordinates
-- `crs` (str): Coordinate reference system in EPSG format (default: 'EPSG:4326' - WGS84)
+- `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)` - Add a data layer, optionally reprojecting to match another layer
 
-**Returns:** Terrain object
+- `add_transform(self, transform_func)` - Add a transform function to the pipeline
 
-**Example:**
+- `apply_transforms(self, cache)` - Apply transforms with efficient caching
 
-```python
-import numpy as np
-from affine import Affine
-from src.terrain.core import Terrain
+- `compute_colors(self)` - Compute colors using color_func and optionally mask_func.
 
-dem = np.random.rand(100, 100) * 1000  # 100×100 grid, elevation 0-1000m
-transform = Affine.identity()
-terrain = Terrain(dem, transform, crs='EPSG:4326')
-```
+- `compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)` - Compute a new data layer from an existing one
 
-**Properties:**
+- `configure_for_target_vertices(self, target_vertices, order)` - Configure downsampling to achieve approximately target_vertices.
 
-- `dem_shape`: Tuple of (height, width)
-- `data_layers`: Dictionary of all data layers
-- `transforms`: List of transforms to apply
-- `terrain_obj`: Blender object (after mesh creation)
+- `create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)` - Create a Blender mesh from transformed DEM data with both performance and control.
 
----
+- `set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)` - Set up how to map data to colors (RGB) and optionally a mask/alpha channel.
 
-### `Terrain.apply_transforms()`
+- `visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)` - Create diagnostic visualization of any terrain data layer.
 
-Apply all registered transforms to data layers in sequence.
 
-**Returns:** None (modifies in-place)
+#### `TerrainCache`
 
-**Behavior:**
+No documentation
 
-- Processes each transform in the order added
-- Caches results based on transform hash
-- Marks data layers as "transformed"
-- Stores CRS changes
+**Methods:**
 
-**Example:**
+- `exists(self, target_name)` - Check if target exists
 
-```python
-terrain.transforms.append(downsample_raster(zoom_factor=0.1))
-terrain.transforms.append(smooth_raster(window_size=3))
-terrain.apply_transforms()
-```
+- `get_target_path(self, target_name)` - Get path for a specific target
 
----
+- `load(self, target_name)` - Load GeoTIFF and metadata if it exists
 
-### `Terrain.configure_for_target_vertices(target_vertices, order=4)`
+- `save(self, target_name, data, transform, crs, metadata)` - Save data as GeoTIFF with CRS and metadata
+
+
+### Functions
+
+#### `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)`
+
+Add a data layer, optionally reprojecting to match another layer
+
+Args:
+    name: Name of the layer
+    data: Input array
+    transform: Affine transform for the data
+    crs: CRS of input data
+    target_crs: Target CRS to reproject to (if None, use target_layer's CRS)
+    target_layer: Name of existing layer to match (for CRS and grid)
+    resampling: Resampling method for alignment
+
+#### `add_transform(self, transform_func)`
+
+Add a transform function to the pipeline
+
+#### `apply_colormap_material(material)`
+
+Create a simple material setup for terrain visualization using vertex colors.
+Uses emission to guarantee colors are visible regardless of lighting.
+
+Args:
+    material: Blender material to configure
+
+#### `apply_transforms(self, cache)`
+
+Apply transforms with efficient caching
+
+#### `clear_scene()`
+
+No documentation
+
+#### `compute_colors(self)`
+
+Compute colors using color_func and optionally mask_func.
+
+Returns:
+    np.ndarray: RGBA color array.
+
+#### `compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)`
+
+Compute a new data layer from an existing one
+
+Args:
+    name: Name for the new layer
+    source_layer: Name of source layer to compute from
+    compute_func: Function that takes source array and returns computed array
+    transformed: Whether to use the transformed source data (default: False)
+    cache_key: Optional custom cache key for the computation
+    
+Returns:
+    np.ndarray: The computed layer data
+
+#### `configure_for_target_vertices(self, target_vertices, order)`
 
 Configure downsampling to achieve approximately target_vertices.
 
-This method calculates the appropriate zoom_factor to achieve a desired vertex count for mesh generation. It provides a more intuitive API than manually calculating zoom_factor from the original DEM shape.
+This method calculates the appropriate zoom_factor to achieve a desired
+vertex count for mesh generation. It provides a more intuitive API than
+manually calculating zoom_factor from the original DEM shape.
 
-**Parameters:**
+Args:
+    target_vertices: Desired vertex count for final mesh (e.g., 500_000)
+    order: Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic)
 
-- `target_vertices` (int): Desired vertex count for final mesh (e.g., 500_000)
-- `order` (int): Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic, default: 4)
+Returns:
+    Calculated zoom_factor that was added to transforms
 
-**Returns:** float - Calculated zoom_factor that was added to transforms
+Raises:
+    ValueError: If target_vertices is invalid
 
-**Raises:**
+Example:
+    terrain = Terrain(dem, transform)
+    zoom = terrain.configure_for_target_vertices(500_000)
+    print(f"Calculated zoom_factor: {zoom:.4f}")
+    terrain.apply_transforms()
+    mesh = terrain.create_mesh(scale_factor=400.0)
 
-- `ValueError`: If target_vertices is not a positive integer
+#### `create_background_plane(terrain_obj, depth, scale_factor, material_params)`
 
-**Example:**
+Create a large emissive plane beneath the terrain for background illumination.
 
-```python
-terrain = Terrain(dem, transform)
+Args:
+    terrain_obj: The terrain Blender object used for size reference
+    depth: Z-coordinate for the plane position
+    scale_factor: Scale multiplier for plane size relative to terrain
+    material_params: Optional dict to override default material parameters
 
-# Configure to achieve 500,000 vertices
-zoom = terrain.configure_for_target_vertices(500_000)
-print(f"Calculated zoom_factor: {zoom:.6f}")
+Returns:
+    bpy.types.Object: The created background plane object
 
-terrain.apply_transforms()
-mesh = terrain.create_mesh(scale_factor=400.0)
-```
+Raises:
+    ValueError: If terrain_obj is None or has invalid bounds
+    RuntimeError: If mesh or material creation fails
 
-**Benefits:**
+#### `create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)`
 
-- **Intuitive API**: Specify desired vertices instead of zoom_factor
-- **Automatic calculation**: No need to do manual math (sqrt of ratio)
-- **Safe**: Handles edge cases (target > source, invalid inputs)
-- **Informative**: Logs the calculated values for verification
+Create a Blender mesh from transformed DEM data with both performance and control.
 
-**Use Cases:**
+Args:
+    base_depth: Z-coordinate for the bottom of the terrain model (default: -0.2)
+    boundary_extension: Whether to create side faces around the terrain boundary (default: True)
+    scale_factor: Horizontal scale divisor for x/y coordinates (default: 100.0)
+    height_scale: Multiplier for elevation values (default: 1.0)
+    center_model: Whether to center the model at origin (default: True)
+    verbose: Whether to log detailed progress information (default: True)
 
-- Target specific mesh complexity for rendering performance
-- Achieve consistent vertex counts across different DEM sizes
-- Simplify experiment configuration in scripts
+Returns:
+    bpy.types.Object: The created terrain mesh object
 
----
+#### `downsample_raster(zoom_factor, order, nodata_value)`
 
-### `Terrain.set_color_mapping(color_func, source_layers=None, mask_func=None, mask_sources=None, mask_threshold=None, **kwargs)`
+Create a raster downsampling transform function with specified parameters.
 
-Configure color mapping for terrain visualization.
+Args:
+    zoom_factor: Scaling factor for downsampling (default: 0.1)
+    order: Interpolation order (default: 4)
+    nodata_value: Value to treat as no data (default: np.nan)
 
-**Parameters:**
+Returns:
+    function: A transform function that downsamples raster data
 
-- `color_func` (callable): Function that maps DEM values to RGB(A) colors
-  - Signature: `func(dem_array) -> np.ndarray` with shape `(height, width, 3)` or `(height, width, 4)`
-- `source_layers` (list): Data layers to use for color input (default: \['dem'])
-- `mask_func` (callable): Optional function to create transparency mask
-- `mask_sources` (list): Data layers for mask input
-- `mask_threshold` (float): Threshold for mask application
-- `**kwargs`: Additional keyword arguments passed to color\_func
+#### `elevation_colormap(dem_data, cmap_name, min_elev, max_elev)`
 
-**Returns:** None
+Create a colormap based on elevation values.
 
-**Example:**
+Maps elevation data to colors using a matplotlib colormap.
+Low elevations map to the start of the colormap, high elevations to the end.
 
-```python
-def elevation_to_color(dem):
-    # Normalize elevation
-    norm = (dem - dem.min()) / (dem.max() - dem.min() + 1e-8)
-    # Create RGB
-    rgb = np.stack([norm, norm*0.5, 1-norm], axis=-1)
-    return (rgb * 255).astype(np.uint8)
+Args:
+    dem_data: 2D numpy array of elevation values
+    cmap_name: Matplotlib colormap name (default: 'viridis')
+    min_elev: Minimum elevation for normalization (default: use data min)
+    max_elev: Maximum elevation for normalization (default: use data max)
 
-terrain.set_color_mapping(elevation_to_color, source_layers=['dem'])
-```
+Returns:
+    Array of RGB colors with shape (height, width, 3) as uint8
 
----
+#### `exists(self, target_name)`
 
-### `Terrain.create_mesh(base_depth=-0.2, boundary_extension=True, scale_factor=100.0, height_scale=1.0, center_model=True, verbose=True)`
+Check if target exists
 
-Generate a Blender 3D mesh from transformed DEM data.
+#### `flip_raster(axis)`
 
-**Parameters:**
+Create a transform function that mirrors (flips) the DEM data.
+If axis='horizontal', it flips top ↔ bottom.
+(In terms of rows, row=0 becomes row=(height-1).)
 
-- `base_depth` (float): Z-coordinate for terrain base (default: -0.2)
-- `boundary_extension` (bool): Whether to create side faces (default: True)
-- `scale_factor` (float): Horizontal scale divisor for coordinates (default: 100.0)
-- `height_scale` (float): Multiplier for elevation Z values (default: 1.0)
-- `center_model` (bool): Whether to center at origin (default: True)
-- `verbose` (bool): Log progress information (default: True)
+If axis='vertical', you could do left ↔ right (np.fliplr).
 
-**Returns:** bpy.types.Object (Blender mesh object)
+#### `get_target_path(self, target_name)`
 
-**Technical Details:**
+Get path for a specific target
 
-- Creates mesh using vectorized numpy operations
-- Optimizes boundary detection with morphological operations
-- Applies vertex colors from color mapping if available
-- Automatically creates and applies material
+#### `load(self, target_name)`
 
-**Example:**
+Load GeoTIFF and metadata if it exists
 
-```python
-mesh = terrain.create_mesh(
-    scale_factor=200.0,
-    height_scale=0.01,
-    center_model=True,
-    boundary_extension=True
-)
-```
+#### `load_dem_files(directory_path, pattern, recursive)`
 
----
+Load and merge DEM files from a directory into a single elevation dataset.
+Supports any raster format readable by rasterio (HGT, GeoTIFF, etc.).
 
-## Data Loading
+Args:
+    directory_path: Path to directory containing DEM files
+    pattern: File pattern to match (default: "*.hgt")
+    recursive: Whether to search subdirectories recursively (default: False)
 
-### `load_dem_files(directory_path, pattern='*.hgt', recursive=False)`
+Returns:
+    tuple: (merged_dem, transform) where:
+        - merged_dem: numpy array containing the merged elevation data
+        - transform: affine transform mapping pixel to geographic coordinates
+    
+Raises:
+    ValueError: If no valid DEM files are found or directory doesn't exist
+    OSError: If directory access fails or file reading fails
+    rasterio.errors.RasterioIOError: If there are issues reading the DEM files
 
-Load and merge multiple DEM files (HGT, GeoTIFF, etc.) from a directory.
+#### `position_camera_relative(mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length)`
 
-**Parameters:**
+Position camera relative to mesh using intuitive cardinal directions.
 
-- `directory_path` (str or Path): Directory containing DEM files
-- `pattern` (str): File glob pattern (default: '\*.hgt' for SRTM tiles)
-- `recursive` (bool): Search subdirectories recursively (default: False)
+Simplifies camera positioning by using natural directions (north, south, etc.)
+instead of absolute Blender coordinates. The camera is automatically positioned
+relative to the mesh bounds and rotated to point at the mesh center.
 
-**Returns:** Tuple of (dem\_array, transform)
+Args:
+    mesh_obj: Blender mesh object to position camera relative to
+    direction: Cardinal direction - one of:
+        'north', 'south', 'east', 'west' (horizontal directions)
+        'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
+        'above' (directly overhead)
+        Default: 'south'
+    distance: Distance multiplier relative to mesh diagonal
+        (e.g., 1.5 means 1.5x mesh_diagonal away). Default: 1.5
+    elevation: Height as fraction of mesh diagonal added to Z position
+        (0.0 = ground level, 1.0 = mesh_diagonal above ground). Default: 0.5
+    look_at: Where camera points - 'center' to point at mesh center,
+        or tuple (x, y, z) for custom target. Default: 'center'
+    camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
+    sun_angle: Angle of sun light in degrees. Default: 2
+    sun_energy: Intensity of sun light. Default: 3
+    focal_length: Camera focal length in mm (perspective cameras only). Default: 50
 
-- `dem_array` (np.ndarray): Merged elevation data
-- `transform` (Affine): Georeferencing transform
+Returns:
+    Camera object
 
-**Raises:**
+Raises:
+    ValueError: If direction is not recognized or camera_type is invalid
 
-- `ValueError`: If no valid DEM files found
-- `OSError`: If directory access fails
+#### `render_scene_to_file(output_path, width, height, file_format, color_mode, compression, save_blend_file)`
 
-**Example:**
+Render the current Blender scene to file.
 
-```python
-from src.terrain.core import load_dem_files
+Args:
+    output_path (str or Path): Path where output file will be saved
+    width (int): Render width in pixels (default: 1920)
+    height (int): Render height in pixels (default: 1440)
+    file_format (str): Output format 'PNG', 'JPEG', etc. (default: 'PNG')
+    color_mode (str): 'RGBA' or 'RGB' (default: 'RGBA')
+    compression (int): PNG compression level 0-100 (default: 90)
+    save_blend_file (bool): Also save .blend project file (default: True)
 
-dem, transform = load_dem_files('/path/to/srtm/tiles', pattern='*.hgt')
-print(f"Loaded DEM: {dem.shape}, range: {dem.min():.1f}-{dem.max():.1f}m")
-```
+Returns:
+    Path: Path to rendered file if successful, None otherwise
 
-**Supported Formats:**
+#### `reproject_raster(src_crs, dst_crs, nodata_value, num_threads)`
 
-- HGT (SRTM, Shuttle Radar Topography Mission)
-- GeoTIFF (any georeferenced TIFF)
-- Any format supported by rasterio
+Generalized raster reprojection function
 
----
+Args:
+    src_crs: Source coordinate reference system
+    dst_crs: Destination coordinate reference system
+    nodata_value: Value to use for areas outside original data
+    num_threads: Number of threads for parallel processing
 
-## Transform Functions
+Returns:
+    Function that transforms data and returns (data, transform, new_crs)
 
-Transform functions are factories that create transform operations for the transform pipeline. They modify DEM data and return (data, transform, crs) tuples.
+#### `sample_array(arr)`
 
-### `downsample_raster(zoom_factor=0.1, order=4, nodata_value=np.nan)`
+No documentation
 
-Create a downsampling transform using scipy interpolation.
+#### `save(self, target_name, data, transform, crs, metadata)`
 
-**Parameters:**
+Save data as GeoTIFF with CRS and metadata
 
-- `zoom_factor` (float): Scaling factor (0.1 = 10:1 reduction, 0.5 = 2:1)
-- `order` (int): Interpolation order (0=nearest, 1=linear, 4=bicubic) (default: 4)
-- `nodata_value`: Value marking missing data (default: np.nan)
+#### `scale_elevation(scale_factor, nodata_value)`
 
-**Returns:** Transform function
+Create a raster elevation scaling transform function.
 
-**Use Cases:**
+Multiplies all elevation values by the scale factor. Useful for reducing
+or amplifying terrain height without changing horizontal scale.
 
-- Reduce mesh complexity for large DEMs
-- Faster rendering at lower resolution
-- Memory-efficient processing
+Args:
+    scale_factor (float): Multiplication factor for elevation values (default: 1.0)
+    nodata_value: Value to treat as no data (default: np.nan)
 
-**Example:**
+Returns:
+    function: A transform function that scales elevation data
 
-```python
-from src.terrain.core import downsample_raster
+#### `set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)`
 
-# Reduce DEM by 10x using bicubic interpolation
-downsample = downsample_raster(zoom_factor=0.1, order=4)
-terrain.transforms.append(downsample)
-```
+Set up how to map data to colors (RGB) and optionally a mask/alpha channel.
 
-**Performance:**
+Args:
+    color_func: Function that takes N data arrays (from source_layers)
+                and returns an (H, W, 3 or 4) float array (RGB or RGBA).
+    source_layers: List of layer names (strings) to feed to color_func.
+    color_kwargs: Dict of additional kwargs specifically for color_func.
+    mask_func: Optional function producing a mask (e.g., for water).
+               Can take one or more arrays as input.
+    mask_layers: Layer name(s) to supply to mask_func if different from source_layers.
+    mask_kwargs: Dict of additional kwargs specifically for mask_func.
+    mask_threshold: Optional convenience parameter if mask_func is threshold-based.
 
-- 0.1 zoom on 36,000×39,600 grid: ~4 seconds
-- Preserves elevation statistics (min/max values)
+#### `setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)`
 
----
+Configure camera for terrain visualization.
 
-### `smooth_raster(window_size=None, nodata_value=np.nan)`
+Args:
+    camera_angle: Tuple of (x,y,z) rotation angles in radians
+    camera_location: Tuple of (x,y,z) camera position
+    scale: Camera scale value (ortho_scale for orthographic cameras)
+    focal_length: Camera focal length in mm (default: 50, used only for perspective)
+    camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
 
-Create a smoothing transform using median filtering.
+Returns:
+    Camera object
 
-**Parameters:**
+Raises:
+    ValueError: If camera_type is not 'PERSP' or 'ORTHO'
 
-- `window_size` (int or None): Filter window size in pixels
-  - None = auto-calculate from raster size
-  - Typical: 3-7 pixels for terrain smoothing
-- `nodata_value`: Value marking missing data (default: np.nan)
+#### `setup_camera_and_light(camera_angle, camera_location, scale, sun_angle, sun_energy, focal_length, camera_type)`
 
-**Returns:** Transform function
+Configure camera and main light for terrain visualization.
 
-**Use Cases:**
+Convenience function that calls setup_camera() and setup_light().
 
-- Remove noise from noisy DEM data
-- Smooth terrain before analysis
-- Prepare data for slope/aspect calculations
+Args:
+    camera_angle: Tuple of (x,y,z) rotation angles in radians
+    camera_location: Tuple of (x,y,z) camera position
+    scale: Camera scale value (ortho_scale for orthographic cameras)
+    sun_angle: Angle of sun light in degrees (default: 2)
+    sun_energy: Energy/intensity of sun light (default: 3)
+    focal_length: Camera focal length in mm (default: 50, used only for perspective)
+    camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
 
-**Example:**
+Returns:
+    tuple: (camera object, sun light object)
 
-```python
-from src.terrain.core import smooth_raster
+#### `setup_light(location, angle, energy, rotation_euler)`
 
-# Smooth with 5×5 median filter
-smooth = smooth_raster(window_size=5)
-terrain.transforms.append(smooth)
-```
+Create and configure sun light for terrain visualization.
 
-**Effect:**
+Args:
+    location: Tuple of (x,y,z) light position (default: (1, 1, 2))
+    angle: Angle of sun light in degrees (default: 2)
+    energy: Energy/intensity of sun light (default: 3)
+    rotation_euler: Tuple of (x,y,z) rotation angles in radians (default: sun from NW)
 
-- Preserves edges while smoothing
-- Reduces noise ~20-30%
-- Applied before other transforms
+Returns:
+    Sun light object
 
----
+#### `setup_render_settings(use_gpu, samples, preview_samples, use_denoising, denoiser, compute_device)`
 
-### `flip_raster(axis='horizontal')`
+Configure Blender render settings for high-quality terrain visualization.
 
-Create a transform that mirrors (flips) the DEM data.
+Args:
+    use_gpu: Whether to use GPU acceleration
+    samples: Number of render samples
+    preview_samples: Number of viewport preview samples
+    use_denoising: Whether to enable denoising
+    denoiser: Type of denoiser to use ('OPTIX', 'OPENIMAGEDENOISE', 'NLM')
+    compute_device: Compute device type ('OPTIX', 'CUDA', 'HIP', 'METAL')
 
-**Parameters:**
+#### `setup_world_atmosphere(density, scatter_color, anisotropy)`
 
-- `axis` (str): 'horizontal' (flip top↔bottom) or 'vertical' (flip left↔right)
+Set up world volume for atmospheric effects.
 
-**Returns:** Transform function
+Args:
+    density: Density of the atmospheric volume (default: 0.02)
+    scatter_color: RGBA color tuple for scatter (default: white)
+    anisotropy: Direction of scatter from -1 to 1 (default: 0 for uniform)
 
-**Use Cases:**
+Returns:
+    bpy.types.World: The configured world object
 
-- Correct for inverted coordinate systems
-- Mirror terrain for artistic effects
-- Align data from different sources
+#### `slope_colormap(slopes, cmap_name, min_slope, max_slope)`
 
-**Example:**
+Create a simple colormap based solely on terrain slopes.
 
-```python
-from src.terrain.core import flip_raster
+Args:
+    slopes: Array of slope values in degrees
+    cmap_name: Matplotlib colormap name (default: 'terrain')
+    min_slope: Minimum slope value for normalization (default: 0)
+    max_slope: Maximum slope value for normalization (default: 45)
+    
+Returns:
+    Array of RGBA colors with shape (*slopes.shape, 4)
 
-# Flip terrain vertically (invert rows)
-flip = flip_raster(axis='horizontal')
-terrain.transforms.append(flip)
-terrain.apply_transforms()
-```
+#### `smooth_raster(window_size, nodata_value)`
 
-**Technical Details:**
+Create a raster smoothing transform function with specified parameters.
 
-- Updates affine transform accordingly
-- Handles both axis-aligned and rotated rasters
-- Preserves all data statistics
+Args:
+    window_size: Size of median filter window 
+                (defaults to 5% of smallest dimension if None)
+    nodata_value: Value to treat as no data (default: np.nan)
 
----
+Returns:
+    function: A transform function that smooths raster data
 
-### `reproject_raster(src_crs='EPSG:4326', dst_crs='EPSG:32617', nodata_value=np.nan, num_threads=4)`
+#### `transform(raster_data, transform)`
 
-Create a coordinate system reprojection transform.
+Scale elevation values in raster data.
 
-**Parameters:**
+Args:
+    raster_data: Input raster numpy array
+    transform: Optional affine transform (unchanged by scaling)
 
-- `src_crs` (str): Source CRS in EPSG format (default: 'EPSG:4326' - WGS84)
-- `dst_crs` (str): Destination CRS (default: 'EPSG:32617' - UTM Zone 17N)
-- `nodata_value`: Value for areas outside source extent (default: np.nan)
-- `num_threads` (int): GDAL threads for parallel processing (default: 4)
+Returns:
+    tuple: (scaled_data, transform, None)
 
-**Returns:** Transform function
+#### `transform_func(data, transform)`
 
-**Use Cases:**
+No documentation
 
-- Convert between geographic and projected coordinates
-- Combine DEMs from different CRS
-- Prepare for analysis requiring projected coordinates
+#### `transform_wrapper(transform_func)`
 
-**Example:**
+Standardize transform function interface with consistent output
 
-```python
-from src.terrain.core import reproject_raster
+Args:
+    transform_func: The original transform function to wrap
 
-# Reproject from WGS84 (lat/lon) to UTM Zone 17N (meters)
-reproject = reproject_raster(
-    src_crs='EPSG:4326',
-    dst_crs='EPSG:32617'
-)
-terrain.transforms.append(reproject)
-```
+Returns:
+    A wrapped function with consistent signature and return format
 
-**Performance:**
+#### `visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)`
 
-- GDAL multi-threaded processing
-- Bilinear interpolation by default
-- Preserves elevation values during reprojection
+Create diagnostic visualization of any terrain data layer.
 
----
+Args:
+    layer: Name of data layer to visualize (default: 'dem')
+    use_transformed: Whether to use transformed or original data (default: False)
+    title: Plot title (default: auto-generated based on layer)
+    cmap: Matplotlib colormap
+    percentile_clip: Whether to clip extreme values
+    clip_percentiles: Tuple of (min, max) percentiles to clip (default: (1, 99))
+    max_pixels: Maximum number of pixels for subsampling
+    show_histogram: Whether to show the histogram panel (default: True)
 
-## Analysis Functions
+#### `wrapped_transform(data, transform)`
 
-### `slope_colormap(slopes, cmap_name='terrain', min_slope=0, max_slope=45)`
+Standardized transform wrapper with consistent signature
 
-Generate colors based on terrain slope values.
+Args:
+    data: Input numpy array to transform
+    transform: Optional affine transform 
 
-**Parameters:**
-
-- `slopes` (np.ndarray): 2D array of slope values in degrees
-- `cmap_name` (str): Matplotlib colormap name (default: 'terrain')
-- `min_slope` (float): Minimum slope for color range normalization (default: 0)
-- `max_slope` (float): Maximum slope for color range normalization (default: 45)
-
-**Returns:** np.ndarray of RGBA values, shape (height, width, 4)
-
-**Supported Colormaps:**
-
-- 'terrain': Brown→tan (terrain)
-- 'viridis': Purple→yellow (perceptually uniform)
-- 'plasma': Purple→yellow (high contrast)
-- 'twilight': Purple→orange (cyclic)
-- Any matplotlib colormap
-
-**Example:**
-
-```python
-from src.terrain.core import slope_colormap
-from scipy.ndimage import sobel
-
-# Calculate slope from DEM
-grad_x = sobel(dem_data, axis=0)
-grad_y = sobel(dem_data, axis=1)
-slopes = np.arctan(np.sqrt(grad_x**2 + grad_y**2)) * 180 / np.pi
-
-# Get colors
-colors = slope_colormap(slopes, cmap_name='viridis', min_slope=0, max_slope=60)
-```
-
-**Use Cases:**
-
-- Visualize terrain steepness
-- Identify erosion-prone areas
-- Highlight avalanche-prone slopes
-- Distinguish terrain types
-
----
-
-## Blender Rendering
-
-All Blender rendering functions require `import bpy`.
-
-### `clear_scene()`
-
-Delete all objects from the current Blender scene.
-
-**Parameters:** None
-
-**Returns:** None
-
-**Effect:**
-
-- Removes all objects (meshes, lights, cameras)
-- Calls `bpy.ops.wm.read_factory_settings(use_empty=True)`
-- Cleans up for fresh scene setup
-
-**Example:**
-
-```python
-from src.terrain.core import clear_scene
-
-clear_scene()  # Start fresh
-# ... create new objects ...
-```
-
----
-
-### `setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, sun_energy=3, focal_length=50, camera_type='PERSP')`
-
-Configure camera and sun light for terrain visualization.
-
-**Parameters:**
-
-- `camera_angle` (tuple): Rotation in radians (x, y, z)
-- `camera_location` (tuple): Position in world coordinates (x, y, z)
-- `scale` (float): Camera scale value (ortho_scale for orthographic cameras)
-- `sun_angle` (float): Sun light angular size in degrees (default: 2)
-- `sun_energy` (float): Light intensity/energy (default: 3)
-- `focal_length` (float): Camera focal length in mm (default: 50, perspective only)
-- `camera_type` (str): Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')
-
-**Returns:** Tuple of (camera\_object, sun\_object)
-
-**Raises:** ValueError if camera_type is not 'PERSP' or 'ORTHO'
-
-**Examples:**
-
-Perspective camera (default):
-
-```python
-from src.terrain.core import setup_camera_and_light
-from math import radians
-
-camera, light = setup_camera_and_light(
-    camera_angle=(radians(63.6), radians(0), radians(46.7)),
-    camera_location=(7.36, -6.93, 4.96),
-    scale=20.0,
-    camera_type='PERSP',
-    focal_length=50
-)
-```
-
-Orthographic camera:
-
-```python
-camera, light = setup_camera_and_light(
-    camera_angle=(radians(45), radians(0), radians(45)),
-    camera_location=(5.0, -5.0, 3.0),
-    scale=15.0,
-    camera_type='ORTHO'
-)
-```
-
-**Camera Type Comparison:**
-
-| Aspect | Perspective | Orthographic |
-|--------|-------------|--------------|
-| Real-world look | ✓ Natural depth | Flat, technical |
-| Scale parameter | Background distance feel | Image scale |
-| focal_length | Controls FOV | Ignored |
-| Best for | Natural renders | Technical visualization |
-
-**Typical Camera Angles:**
-
-- Isometric: (63.6°, 0°, 46.7°)
-- Top-down: (0°, 0°, 0°)
-- Front: (90°, 0°, 0°)
-- Side: (90°, 0°, 90°)
-
----
-
-### `setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=0.0)`
-
-Add volumetric atmospheric effects to world.
-
-**Parameters:**
-
-- `density` (float): Volume scatter density (default: 0.02)
-- `scatter_color` (tuple): RGBA color of scattered light (default: white)
-- `anisotropy` (float): Scatter direction (-1 to 1, 0 = uniform) (default: 0.0)
-
-**Returns:** bpy.types.World object
-
-**Use Cases:**
-
-- Create hazy atmospheric effects
-- Add volumetric fog
-- Improve visual depth
-
-**Example:**
-
-```python
-from src.terrain.core import setup_world_atmosphere
-
-world = setup_world_atmosphere(
-    density=0.02,
-    scatter_color=(1, 1, 1, 1),
-    anisotropy=0.0
-)
-```
-
----
-
-### `setup_render_settings(use_gpu=True, samples=128, preview_samples=32, use_denoising=True, denoiser='OPTIX', compute_device='OPTIX')`
-
-Configure Blender Cycles renderer settings.
-
-**Parameters:**
-
-- `use_gpu` (bool): Enable GPU acceleration (default: True)
-- `samples` (int): Render samples/bounces (default: 128)
-- `preview_samples` (int): Viewport preview samples (default: 32)
-- `use_denoising` (bool): Enable denoiser (default: True)
-- `denoiser` (str): 'OPTIX', 'OPENIMAGEDENOISE', or 'NLM' (default: 'OPTIX')
-- `compute_device` (str): 'OPTIX', 'CUDA', 'HIP', 'METAL' (default: 'OPTIX')
-
-**Returns:** None (configures scene in-place)
-
-**Quality Presets:**
-
-- Fast: samples=32, denoising=True
-- Medium: samples=64, denoising=True
-- High: samples=128, denoising=True
-- Ultra: samples=256, denoising=False
-
-**Example:**
-
-```python
-from src.terrain.core import setup_render_settings
-
-# High-quality rendering
-setup_render_settings(
-    use_gpu=True,
-    samples=128,
-    use_denoising=True,
-    denoiser='OPTIX'
-)
-```
-
----
-
-### `apply_colormap_material(material)`
-
-Configure material with vertex color support and emission.
-
-**Parameters:**
-
-- `material` (bpy.types.Material): Material to configure
-
-**Returns:** None (modifies in-place)
-
-**Shader Setup:**
-
-- Vertex Color node → reads TerrainColors layer
-- Emission shader → 70% color strength
-- Principled BSDF → 30% reflective
-- Mix shader → combines emission + reflection
-
-**Example:**
-
-```python
-import bpy
-from src.terrain.core import apply_colormap_material
-
-material = bpy.data.materials.new(name="TerrainMaterial")
-apply_colormap_material(material)
-mesh.materials.append(material)
-```
-
-**Result:**
-
-- Vertex colors visible regardless of lighting
-- Mix of self-illuminated and reflected appearance
-- Professional terrain visualization
-
----
-
-### `create_background_plane(terrain_obj, depth=-2.0, scale_factor=2.0, material_params=None)`
-
-Add a background plane beneath terrain for visual context.
-
-**Parameters:**
-
-- `terrain_obj` (bpy.types.Object): Terrain mesh for size reference
-- `depth` (float): Z-coordinate for plane (default: -2.0)
-- `scale_factor` (float): Scale relative to terrain (default: 2.0)
-- `material_params` (dict): Material customization
-  - 'base\_color': (R, G, B, A)
-  - 'emission\_color': (R, G, B, A)
-  - 'emission\_strength': float
-  - 'roughness': float
-  - 'metallic': float
-
-**Returns:** bpy.types.Object (background plane)
-
-**Example:**
-
-```python
-from src.terrain.core import create_background_plane
-
-bg_plane = create_background_plane(
-    terrain_obj=mesh,
-    depth=-2.0,
-    scale_factor=2.5,
-    material_params={
-        'emission_color': (0.8, 0.8, 0.9, 1.0),
-        'emission_strength': 0.3
-    }
-)
-```
-
----
-
-## Utility Functions
-
-### `transform_wrapper(transform_func)`
-
-Decorator for creating standardized transform functions.
-
-**Parameters:**
-
-- `transform_func` (callable): Function with signature `(data, transform) -> (data, transform, crs)`
-
-**Returns:** Wrapped transform function
-
-**Use Cases:**
-
-- Create custom transforms
-- Ensure consistent interface
-- Integrate external algorithms
-
-**Example:**
-
-```python
-from src.terrain.core import transform_wrapper
-
-@transform_wrapper
-def my_custom_transform(data, transform):
-    # Your processing here
-    processed_data = data * 2  # Example: double elevations
-    return processed_data, transform, None
-
-terrain.transforms.append(my_custom_transform)
-```
-
----
-
-## Common Patterns
-
-### Pattern 1: Load, Downsample, Smooth, Visualize
-
-```python
-from src.terrain.core import Terrain, load_dem_files, downsample_raster, smooth_raster
-
-# Load DEM
-dem, transform = load_dem_files('/path/to/tiles')
-
-# Create Terrain object
-terrain = Terrain(dem, transform)
-
-# Add transforms
-terrain.transforms.append(downsample_raster(zoom_factor=0.1))
-terrain.transforms.append(smooth_raster(window_size=5))
-terrain.apply_transforms()
-
-# Color by elevation
-def elev_color(dem):
-    norm = (dem - dem.min()) / (dem.max() - dem.min() + 1e-8)
-    rgb = np.stack([norm, 1-norm, 0.5], axis=-1)
-    return (rgb * 255).astype(np.uint8)
-
-terrain.set_color_mapping(elev_color)
-
-# Create mesh and render
-mesh = terrain.create_mesh(scale_factor=200, height_scale=0.01)
-```
-
-### Pattern 2: Full Rendering Pipeline
-
-```python
-from src.terrain.core import (
-    Terrain, clear_scene, setup_camera_and_light,
-    setup_render_settings, create_background_plane
-)
-
-# Load terrain (... steps omitted ...)
-
-# Setup Blender scene
-clear_scene()
-setup_render_settings(samples=64, use_denoising=True)
-cam, light = setup_camera_and_light(
-    camera_angle=(1.11, 0, 0.82),
-    camera_location=(10, -10, 5),
-    scale=20
-)
-bg = create_background_plane(mesh)
-
-# Render
-import bpy
-bpy.context.scene.render.filepath = "/output/render.png"
-bpy.ops.render.render(write_still=True)
-```
-
-### Pattern 3: Multi-layer Analysis
-
-```python
-# Load elevation and additional data
-dem, dem_trans = load_dem_files('/dem/')
-slope_data, _ = load_dem_files('/slope/')
-
-# Create terrain with multiple layers
-terrain = Terrain(dem, dem_trans)
-terrain.add_data_layer('slope', slope_data)
-
-# Apply transforms to elevation only
-terrain.transforms.append(downsample_raster(zoom_factor=0.1))
-terrain.apply_transforms()
-
-# Color by slope
-slope_colors = slope_colormap(terrain.data_layers['slope']['transformed_data'])
-terrain.set_color_mapping(lambda dem: slope_colors)
-```
-
----
-
-## Error Handling
-
-### Common Errors and Solutions
-
-**AttributeError: 'bpy' module not available**
-
-- Solution: Ensure running within Blender or with bpy installed
-- Blender must be in Python path
-
-**ValueError: Not enough values to unpack (expected 3, got 2)**
-
-- Solution: Transform functions must return 3-tuple: (data, transform, crs)
-- See `transform_wrapper` for correct pattern
-
-**Memory Error on large DEMs**
-
-- Solution: Use downsampling before mesh creation
-- Consider zoom\_factor=0.1 or lower
-
-**Blender crash on very large meshes (>20M vertices)**
-
-- Solution: Apply additional downsampling (0.05 factor)
-- Consider splitting into tiles
-
----
-
-## Performance Considerations
-
-| Operation | Time | Memory | Notes |
-|-----------|------|--------|-------|
-| Load 100 SRTM tiles | ~10s | 2 GB | Depends on disk I/O |
-| Downsample 10:1 | ~4s | Low | Bicubic interpolation |
-| Smooth (5×5 median) | ~5s | Medium | Generic filter |
-| Mesh creation (14M verts) | ~75s | 4 GB | Includes color application |
-| Render (32 samples) | ~2m | Variable | GPU recommended |
-
----
-
-## Version History
-
-- **1.0**: Initial release with core transforms and Blender integration
-- See CHANGELOG.md for detailed history
+Returns:
+    Tuple of (transformed_data, transform, [crs]) where CRS is optional
