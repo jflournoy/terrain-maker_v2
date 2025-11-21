@@ -85,7 +85,7 @@ def main():
 
     # Configure downsampling to target approximately 500,000 vertices
     # This automatically calculates the optimal zoom_factor
-    target_vertices = 500_000
+    target_vertices = 750_000
     zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
     print(f"      Configured for {target_vertices:,} target vertices")
     print(f"      Calculated zoom_factor: {zoom:.6f}")
@@ -113,7 +113,7 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=400.0,  
+            scale_factor=100.0,  
             height_scale=1.0,  
             center_model=True,
             boundary_extension=True
