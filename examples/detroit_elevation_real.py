@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
 """
-Detroit Real Elevation Visualization
+Detroit Real Elevation Visualization - Terrain Maker Example
 
-This example demonstrates loading real SRTM elevation data for the Detroit
-metro area and creating a 3D terrain visualization with Blender.
+This example demonstrates how EASY it is to create stunning 3D terrain
+visualizations with real-world geographic data using Terrain Maker.
+
+With just a few lines of Python, you can:
+  ✓ Load real SRTM elevation data from local tiles
+  ✓ Apply intelligent downsampling (no complex config needed!)
+  ✓ Reproject to proper geographic coordinates automatically
+  ✓ Create publication-quality 3D visualizations
+  ✓ Render with professional Blender integration
 
 Data Source:
     - SRTM 90m Digital Elevation Model tiles (.hgt format)
     - Downloaded from NASA Earth Explorer
-    - Location: ../../../geotiff-rayshade/detroit/
+    - Location: data/dem/detroit/
 
-Workflow:
-    1. Load and merge all SRTM HGT tiles (full coverage)
-    2. Initialize Terrain object
-    3. Apply 10:1 downsampling to reduce vertex count
-    4. Set up Viridis color mapping (elevation-based)
-    5. Generate Blender mesh
-    6. Render to PNG
+What Makes This Easy:
+    ✓ Load tiles with one function call
+    ✓ Configure mesh density with target vertices (not magic numbers)
+    ✓ Cardinal direction camera positioning (south, north, above, etc)
+    ✓ Built-in color mapping from elevation data
+    ✓ Automatic coordinate system handling
 
 Output:
-    - PNG saved to: examples/detroit_elevation_real.png (1920×1440)
+    - PNG saved to: examples/detroit_elevation_real.png (960×720)
     - Blender file: examples/detroit_elevation_real.blend
 
 Usage:
@@ -82,9 +88,12 @@ def main():
 
     print(f"      Original DEM shape: {terrain.dem_shape}")
 
+    WIDTH = 960
+    HEIGHT = 720
+
     # Configure downsampling to target approximately 500,000 vertices
     # This automatically calculates the optimal zoom_factor
-    target_vertices = 1_000_000
+    target_vertices = WIDTH*HEIGHT*2
     zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
     print(f"      Configured for {target_vertices:,} target vertices")
     print(f"      Calculated zoom_factor: {zoom:.6f}")
@@ -110,19 +119,20 @@ def main():
 
     # Step 4: Set up color mapping
     print("\n[4/6] Setting up color mapping...")
-    # Use class method for elevation-based Viridis colormap
+    # Use beautiful Mako colormap for elevation visualization
+    # (Mako = perceptually uniform, great for elevation data)
     terrain.set_color_mapping(
-        lambda dem: elevation_colormap(dem, cmap_name='viridis'),
+        lambda dem: elevation_colormap(dem, cmap_name='mako'),
         source_layers=['dem']
     )
-    print(f"      Color mapping configured (Viridis colormap)")
+    print(f"      Color mapping configured (Mako colormap)")
 
     # Step 5: Create Blender mesh
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
             scale_factor=100.0,  
-            height_scale=2.0,  
+            height_scale=4.0,  
             center_model=True,
             boundary_extension=True
         )
@@ -148,7 +158,7 @@ def main():
     # This is much more intuitive than manual coordinate specification
     camera = position_camera_relative(
         mesh_obj,
-        look_at=(0,-1,0),
+        look_at=(0,-1.5, 0),
         direction='south',
         distance=.33/1.25,        # 1.5x mesh diagonal away
         elevation=.33/1.25*1.5,       # 0.5x mesh diagonal height
@@ -165,7 +175,7 @@ def main():
     # Configure render settings using class method
     setup_render_settings(
         use_gpu=True,
-        samples=32,
+        samples=2048,
         use_denoising=False
     )
 
@@ -179,8 +189,8 @@ def main():
     output_path = Path(__file__).parent / "detroit_elevation_real.png"
     render_file = render_scene_to_file(
         output_path=output_path,
-        width=1920,
-        height=1440,
+        width=WIDTH,
+        height=HEIGHT,
         file_format='PNG',
         color_mode='RGBA',
         compression=90,
@@ -199,14 +209,15 @@ def main():
     print("=" * 70)
     print(f"\nSummary:")
     print(f"  ✓ Loaded and merged all SRTM tiles (full coverage)")
-    print(f"  ✓ Downsampled 10:1 to reduce vertex count")
+    print(f"  ✓ Configured downsampling to target vertex count intelligently")
+    print(f"  ✓ Applied geographic coordinate reprojection (WGS84 → UTM)")
     print(f"  ✓ Created Terrain object with real elevation data")
-    print(f"  ✓ Applied transforms (downsampling + processing)")
-    print(f"  ✓ Configured Viridis elevation-based color mapping")
+    print(f"  ✓ Applied transforms (reproject + flip + scale)")
+    print(f"  ✓ Configured beautiful Mako elevation-based color mapping")
     print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
     if render_file:
         print(f"  ✓ Rendered to PNG: {render_file}")
-    print(f"\nThe terrain visualization is ready!")
+    print(f"\nThat's it! Professional terrain visualization in just a few lines of Python!")
 
     return 0
 
