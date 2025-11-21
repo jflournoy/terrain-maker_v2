@@ -35,7 +35,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, load_dem_files, scale_elevation, flip_raster,
+    Terrain, load_dem_files, scale_elevation, flip_raster, reproject_raster,
     elevation_colormap, clear_scene, setup_camera_and_light,
     setup_render_settings, render_scene_to_file
 )
@@ -90,6 +90,13 @@ def main():
     print(f"      Configured for {target_vertices:,} target vertices")
     print(f"      Calculated zoom_factor: {zoom:.6f}")
 
+    # Reproject from WGS84 to UTM Zone 17N for proper geographic scaling
+    utm_reproject = reproject_raster(
+        src_crs='EPSG:4326',      # WGS84 (source: SRTM data)
+        dst_crs='EPSG:32617',     # UTM Zone 17N (Detroit area)
+        num_threads=4
+    )
+    terrain.transforms.append(utm_reproject)
     # Flip DEM data to correct north-south orientation
     terrain.transforms.append(flip_raster(axis='horizontal'))
     # Add elevation scaling to enhance height features
