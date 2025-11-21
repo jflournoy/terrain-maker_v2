@@ -68,8 +68,8 @@ Advanced Usage:
         python examples/detroit_elevation_real.py --view north --distance 0.5
 
     Fine-tune the overhead perspective with different elevation angles:
-        python examples/detroit_elevation_real.py --view above --elevation 0.8  # More overhead
-        python examples/detroit_elevation_real.py --view above --elevation 1.5  # More angled
+        python examples/detroit_elevation_real.py --view above --elevation 0.3  # Lower, more angled view
+        python examples/detroit_elevation_real.py --view above --elevation 1.0  # Higher, more straight down
 """
 
 import sys
