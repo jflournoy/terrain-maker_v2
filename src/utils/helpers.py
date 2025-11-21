@@ -30,8 +30,17 @@ import colorsys
 from matplotlib.colors import to_rgb
 
 def setup_logging(logger_name, log_file=None):
-    """Configure logging to both file and console with different levels"""
-    
+    """
+    Configure logger with console output at INFO level and optional file output.
+
+    Args:
+        logger_name (str): Name for the logger (typically module name).
+        log_file (str, optional): Path to log file. Currently disabled. Default: None.
+
+    Returns:
+        logging.Logger: Configured logger instance.
+    """
+
     # Create formatter
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -59,6 +68,15 @@ def setup_logging(logger_name, log_file=None):
     return logger
 
 def get_logger(logger_name):
+    """
+    Get or create a logger, avoiding duplicate handler creation.
+
+    Args:
+        logger_name (str): Name for the logger.
+
+    Returns:
+        logging.Logger: Configured logger instance, or existing logger if already configured.
+    """
     existing_logger = logging.getLogger(logger_name)
     if not existing_logger.handlers:  # Check if handlers already exist
         return setup_logging(logger_name)
@@ -1028,9 +1046,30 @@ def visualize_dem_steps(steps, cmap='viridis'):
     plt.tight_layout()
     plt.show()
 
-def setup_render_settings(use_gpu=True, samples=128, preview_samples=32, 
-                         use_denoising=True, denoiser='OPTIX', 
+def setup_render_settings(use_gpu=True, samples=128, preview_samples=32,
+                         use_denoising=True, denoiser='OPTIX',
                          compute_device='OPTIX'):
+    """
+    Configure Blender Cycles render engine with optimal settings for terrain visualization.
+
+    Sets up color management (sRGB), sampling parameters, light bouncing, and GPU acceleration.
+    Configures for high-quality output with proper color precision and transparency handling.
+
+    Args:
+        use_gpu (bool): Enable GPU rendering if available (default: True).
+        samples (int): Main render samples (default: 128).
+        preview_samples (int): Preview/viewport samples (default: 32).
+        use_denoising (bool): Enable OptiX denoising (default: True).
+        denoiser (str): Denoiser type - 'OPTIX' or 'OPENIMAGEDENOISE' (default: 'OPTIX').
+        compute_device (str): GPU compute device - 'OPTIX' or 'HIP' (default: 'OPTIX').
+
+    Returns:
+        None: Configures global scene settings in place.
+
+    Note:
+        Requires Blender Python API (bpy). Sets color depth to 16-bit for precision
+        and configures all devices for GPU rendering when use_gpu=True.
+    """
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
 
@@ -1089,6 +1128,22 @@ def setup_render_settings(use_gpu=True, samples=128, preview_samples=32,
     scene.cycles.use_adaptive_sampling = True
 
 def apply_colormap_material(mat):
+    """
+    Apply vertex color shader network to Blender material for terrain visualization.
+
+    Creates a shader node setup that displays vertex colors with a metallic finish.
+    Supports both terrain and water materials with blending based on alpha values.
+
+    Args:
+        mat (bpy.types.Material): Blender material to configure.
+
+    Returns:
+        None: Modifies material node tree in place.
+
+    Note:
+        Requires mesh to have vertex color attributes. Sets metallic terrain with
+        matte water blending using alpha channel. Clears existing nodes.
+    """
     mat.node_tree.nodes.clear()
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
