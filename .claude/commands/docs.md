@@ -1,7 +1,6 @@
 ---
 allowed-tools: \[Bash]
-description: Documentation maintenance and validation
-approach: script-delegation
+description: Maintain docs using script delegation
 best-for: Repetitive documentation updates
 ---
 
