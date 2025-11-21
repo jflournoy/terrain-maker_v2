@@ -226,7 +226,7 @@ def position_camera_relative(
 
     # Calculate rotation to point at target
     # In Blender, camera's local -Z axis is forward, +Y is up
-    from mathutils import Vector, Matrix
+    from mathutils import Vector
 
     cam_to_target = Vector(target_pos - camera_pos).normalized()
 
