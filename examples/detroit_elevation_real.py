@@ -146,8 +146,8 @@ def main():
     print("\n[6/6] Setting up camera and rendering to PNG...")
 
     # Tuned camera parameters for Detroit elevation terrain
-    camera_location = (7.3589, -6.9257, 4.9583)
-    camera_rotation_deg = (63.559, 0, 46.692)
+    camera_location = (0, -5, 350)
+    camera_rotation_deg = (0.0, 0.0, 0.0)
     camera_angle = (
         radians(camera_rotation_deg[0]),
         radians(camera_rotation_deg[1]),
@@ -159,7 +159,7 @@ def main():
         camera_angle=camera_angle,
         camera_location=camera_location,
         camera_type='ORTHO',
-        scale=15,
+        scale=20,
         sun_angle=2,
         sun_energy=3,
         focal_length=30
