@@ -724,6 +724,96 @@ class TestElevationColormap:
         assert colors.max() <= 255
 
 
+class TestConfigureForTargetVertices:
+    """Test suite for Terrain.configure_for_target_vertices method."""
+
+    def test_configure_for_target_vertices_returns_zoom_factor(self):
+        """configure_for_target_vertices should return calculated zoom_factor."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        zoom = terrain.configure_for_target_vertices(5000)
+
+        assert isinstance(zoom, float)
+        assert 0 < zoom <= 1.0
+
+    def test_configure_for_target_vertices_calculates_correct_zoom(self):
+        """configure_for_target_vertices should calculate correct zoom_factor."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Original: 100 × 100 = 10,000 vertices
+        # Target: 2,500 vertices
+        # Expected zoom: sqrt(2500 / 10000) = 0.5
+        zoom = terrain.configure_for_target_vertices(2500)
+
+        np.testing.assert_almost_equal(zoom, 0.5, decimal=6)
+
+    def test_configure_for_target_vertices_adds_to_transforms(self):
+        """configure_for_target_vertices should add downsampling transform."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        initial_count = len(terrain.transforms)
+        terrain.configure_for_target_vertices(5000)
+
+        assert len(terrain.transforms) == initial_count + 1
+        # Last transform should be downsampling
+        assert hasattr(terrain.transforms[-1], '__name__')
+
+    def test_configure_for_target_vertices_handles_small_targets(self):
+        """configure_for_target_vertices should handle very small targets."""
+        dem_data = np.ones((1000, 1000), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        zoom = terrain.configure_for_target_vertices(100)
+
+        assert 0 < zoom <= 0.01  # Should be heavily downsampled
+        assert len(terrain.transforms) == 1
+
+    def test_configure_for_target_vertices_exceeding_source(self):
+        """configure_for_target_vertices should clamp to zoom_factor=1.0 if target > source."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Original: 100 × 100 = 10,000 vertices
+        # Target: 50,000 vertices (exceeds source)
+        zoom = terrain.configure_for_target_vertices(50000)
+
+        assert zoom == 1.0  # Should not upsample
+
+    def test_configure_for_target_vertices_invalid_input(self):
+        """configure_for_target_vertices should raise ValueError for invalid input."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        with pytest.raises(ValueError):
+            terrain.configure_for_target_vertices(-1)
+
+        with pytest.raises(ValueError):
+            terrain.configure_for_target_vertices(0)
+
+        with pytest.raises(ValueError):
+            terrain.configure_for_target_vertices(1.5)  # Not an integer
+
+    def test_configure_for_target_vertices_with_custom_order(self):
+        """configure_for_target_vertices should accept custom interpolation order."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        zoom = terrain.configure_for_target_vertices(5000, order=1)
+
+        assert isinstance(zoom, float)
+        assert len(terrain.transforms) == 1
+
+
 # Fixtures
 
 @pytest.fixture

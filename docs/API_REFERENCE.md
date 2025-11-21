@@ -73,6 +73,51 @@ terrain.apply_transforms()
 
 ---
 
+### `Terrain.configure_for_target_vertices(target_vertices, order=4)`
+
+Configure downsampling to achieve approximately target_vertices.
+
+This method calculates the appropriate zoom_factor to achieve a desired vertex count for mesh generation. It provides a more intuitive API than manually calculating zoom_factor from the original DEM shape.
+
+**Parameters:**
+
+- `target_vertices` (int): Desired vertex count for final mesh (e.g., 500_000)
+- `order` (int): Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic, default: 4)
+
+**Returns:** float - Calculated zoom_factor that was added to transforms
+
+**Raises:**
+
+- `ValueError`: If target_vertices is not a positive integer
+
+**Example:**
+
+```python
+terrain = Terrain(dem, transform)
+
+# Configure to achieve 500,000 vertices
+zoom = terrain.configure_for_target_vertices(500_000)
+print(f"Calculated zoom_factor: {zoom:.6f}")
+
+terrain.apply_transforms()
+mesh = terrain.create_mesh(scale_factor=400.0)
+```
+
+**Benefits:**
+
+- **Intuitive API**: Specify desired vertices instead of zoom_factor
+- **Automatic calculation**: No need to do manual math (sqrt of ratio)
+- **Safe**: Handles edge cases (target > source, invalid inputs)
+- **Informative**: Logs the calculated values for verification
+
+**Use Cases:**
+
+- Target specific mesh complexity for rendering performance
+- Achieve consistent vertex counts across different DEM sizes
+- Simplify experiment configuration in scripts
+
+---
+
 ### `Terrain.set_color_mapping(color_func, source_layers=None, mask_func=None, mask_sources=None, mask_threshold=None, **kwargs)`
 
 Configure color mapping for terrain visualization.

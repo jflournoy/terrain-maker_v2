@@ -35,7 +35,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, load_dem_files, downsample_raster, scale_elevation,
+    Terrain, load_dem_files, scale_elevation,
     elevation_colormap, clear_scene, setup_camera_and_light,
     setup_render_settings, render_scene_to_file
 )
@@ -81,22 +81,23 @@ def main():
     # Step 3: Apply transforms (downsample to reduce mesh complexity)
     print("\n[3/6] Applying transforms...")
 
-    # Downsample DEM to reduce vertex count (full merged DEM is very large)
-    # zoom_factor=0.1 reduces grid by 10x, making mesh manageable
     print(f"      Original DEM shape: {terrain.dem_shape}")
-    print(f"      Downsampling by factor 0.1 to reduce vertices...")
-    print(f"      Scaling elevation by factor 0.5...")
 
-    # Use class method for downsampling
-    terrain.transforms.append(downsample_raster(zoom_factor=0.05, order=4))
-    # Use class method for elevation scaling
+    # Configure downsampling to target approximately 500,000 vertices
+    # This automatically calculates the optimal zoom_factor
+    target_vertices = 500_000
+    zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
+    print(f"      Configured for {target_vertices:,} target vertices")
+    print(f"      Calculated zoom_factor: {zoom:.6f}")
+
+    # Add elevation scaling to enhance height features
     terrain.transforms.append(scale_elevation(scale_factor=0.0001))
     terrain.apply_transforms()
 
     # Check downsampled size
     transformed_dem = terrain.data_layers['dem']['transformed_data']
     print(f"      Downsampled DEM shape: {transformed_dem.shape}")
-    print(f"      Estimated vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]}")
+    print(f"      Actual vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]:,}")
     print(f"      Transforms applied successfully")
 
     # Step 4: Set up color mapping

@@ -1661,8 +1661,62 @@ class Terrain:
                     })
                 
                 pbar.update(1)
-    
+
         self.logger.info("Transforms applied successfully")
+
+    def configure_for_target_vertices(self, target_vertices: int, order: int = 4) -> float:
+        """
+        Configure downsampling to achieve approximately target_vertices.
+
+        This method calculates the appropriate zoom_factor to achieve a desired
+        vertex count for mesh generation. It provides a more intuitive API than
+        manually calculating zoom_factor from the original DEM shape.
+
+        Args:
+            target_vertices: Desired vertex count for final mesh (e.g., 500_000)
+            order: Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic)
+
+        Returns:
+            Calculated zoom_factor that was added to transforms
+
+        Raises:
+            ValueError: If target_vertices is invalid
+
+        Example:
+            terrain = Terrain(dem, transform)
+            zoom = terrain.configure_for_target_vertices(500_000)
+            print(f"Calculated zoom_factor: {zoom:.4f}")
+            terrain.apply_transforms()
+            mesh = terrain.create_mesh(scale_factor=400.0)
+        """
+        if not isinstance(target_vertices, int) or target_vertices <= 0:
+            raise ValueError(f"target_vertices must be a positive integer, got {target_vertices}")
+
+        original_h, original_w = self.dem_shape
+        original_vertices = original_h * original_w
+
+        if target_vertices > original_vertices:
+            self.logger.warning(
+                f"Target vertices ({target_vertices:,}) exceeds source vertices "
+                f"({original_vertices:,}). Using original resolution (zoom_factor=1.0)."
+            )
+            zoom_factor = 1.0
+        else:
+            # Calculate zoom_factor: vertices = (H * zoom) * (W * zoom)
+            # So: zoom_factor = sqrt(target_vertices / (H * W))
+            zoom_factor = np.sqrt(target_vertices / original_vertices)
+
+        self.logger.info(
+            f"Configuring for {target_vertices:,} target vertices\n"
+            f"  Original DEM: {original_h} × {original_w} ({original_vertices:,} vertices)\n"
+            f"  Calculated zoom_factor: {zoom_factor:.6f}\n"
+            f"  Resulting grid: {int(original_h * zoom_factor)} × {int(original_w * zoom_factor)}"
+        )
+
+        # Add downsampling transform to the pipeline
+        self.transforms.append(downsample_raster(zoom_factor=zoom_factor, order=order))
+
+        return zoom_factor
 
     def set_color_mapping(
         self,
