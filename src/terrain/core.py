@@ -130,6 +130,130 @@ def setup_camera_and_light(camera_angle, camera_location, scale, sun_angle=2, su
     
     return cam_obj, sun_obj
 
+
+def position_camera_relative(
+    mesh_obj,
+    direction='south',
+    distance=1.5,
+    elevation=0.5,
+    look_at='center',
+    camera_type='ORTHO',
+    sun_angle=2,
+    sun_energy=3,
+    focal_length=50
+):
+    """Position camera relative to mesh using intuitive cardinal directions.
+
+    Simplifies camera positioning by using natural directions (north, south, etc.)
+    instead of absolute Blender coordinates. The camera is automatically positioned
+    relative to the mesh bounds and rotated to point at the mesh center.
+
+    Args:
+        mesh_obj: Blender mesh object to position camera relative to
+        direction: Cardinal direction - one of:
+            'north', 'south', 'east', 'west' (horizontal directions)
+            'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
+            'above' (directly overhead)
+            Default: 'south'
+        distance: Distance multiplier relative to mesh diagonal
+            (e.g., 1.5 means 1.5x mesh_diagonal away). Default: 1.5
+        elevation: Height as fraction of mesh diagonal added to Z position
+            (0.0 = ground level, 1.0 = mesh_diagonal above ground). Default: 0.5
+        look_at: Where camera points - 'center' to point at mesh center,
+            or tuple (x, y, z) for custom target. Default: 'center'
+        camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
+        sun_angle: Angle of sun light in degrees. Default: 2
+        sun_energy: Intensity of sun light. Default: 3
+        focal_length: Camera focal length in mm (perspective cameras only). Default: 50
+
+    Returns:
+        tuple: (camera object, sun light object)
+
+    Raises:
+        ValueError: If direction is not recognized or camera_type is invalid
+    """
+    # Direction vector mappings (Blender Z-up coordinate system)
+    DIRECTIONS = {
+        'north': (0, 1, 0),           # +Y
+        'south': (0, -1, 0),          # -Y
+        'east': (1, 0, 0),            # +X
+        'west': (-1, 0, 0),           # -X
+        'above': (0, 0, 1),           # +Z (straight up)
+        'northeast': (0.7071, 0.7071, 0),
+        'northwest': (-0.7071, 0.7071, 0),
+        'southeast': (0.7071, -0.7071, 0),
+        'southwest': (-0.7071, -0.7071, 0),
+    }
+
+    if direction not in DIRECTIONS:
+        raise ValueError(f"Invalid direction '{direction}'. Must be one of: {', '.join(DIRECTIONS.keys())}")
+
+    logger.info(f"Positioning camera {direction} of mesh with {camera_type} camera")
+
+    # Get mesh bounds
+    bbox = mesh_obj.bound_box
+    xs = [v[0] for v in bbox]
+    ys = [v[1] for v in bbox]
+    zs = [v[2] for v in bbox]
+
+    center = np.array([
+        (min(xs) + max(xs)) / 2,
+        (min(ys) + max(ys)) / 2,
+        (min(zs) + max(zs)) / 2
+    ])
+
+    # Calculate mesh diagonal for scaling
+    mesh_size = np.array([max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs)])
+    mesh_diagonal = np.linalg.norm(mesh_size)
+
+    # Get direction vector and calculate camera position
+    dir_vector = np.array(DIRECTIONS[direction])
+
+    # For 'above', position directly overhead; for others, position offset from center
+    if direction == 'above':
+        camera_pos = center.copy()
+    else:
+        camera_pos = center + dir_vector * distance * mesh_diagonal
+
+    # Add elevation (height above ground)
+    camera_pos[2] = center[2] + elevation * mesh_diagonal
+
+    # Determine look-at target
+    if look_at == 'center':
+        target_pos = center
+    else:
+        target_pos = np.array(look_at)
+
+    # Calculate rotation to point at target
+    # In Blender, camera's local -Z axis is forward, +Y is up
+    from mathutils import Vector, Matrix
+
+    cam_to_target = Vector(target_pos - camera_pos).normalized()
+
+    # Use to_track_quat to calculate rotation
+    # Arguments: (forward_axis, up_axis) where -Z is camera forward, Y is world up
+    track_quat = cam_to_target.to_track_quat('-Z', 'Y')
+    camera_angle = track_quat.to_euler()
+
+    logger.debug(f"Camera position: {camera_pos}, angle: {camera_angle}")
+
+    # Set ortho scale based on mesh size if orthographic
+    ortho_scale = mesh_diagonal * 1.2 if camera_type == 'ORTHO' else distance * mesh_diagonal
+
+    # Use existing camera setup function
+    camera, light = setup_camera_and_light(
+        camera_angle=camera_angle,
+        camera_location=tuple(camera_pos),
+        scale=ortho_scale,
+        sun_angle=sun_angle,
+        sun_energy=sun_energy,
+        focal_length=focal_length,
+        camera_type=camera_type
+    )
+
+    return camera, light
+
+
 def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=0.0):
     """Set up world volume for atmospheric effects.
     
