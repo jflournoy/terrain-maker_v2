@@ -27,13 +27,16 @@ This repository serves **dual purposes**:
 **Example Projects**: Detroit Terrain Analysis
 
 - **Real Elevation**: Load actual SRTM tiles covering Detroit metro (1.3M vertices mesh)
+- **Multi-View Rendering**: Generate renders from any cardinal direction with intelligent camera positioning
 - **Visualization**: 3D terrain with color-mapped overlays in Blender
+- **Easy CLI Control**: Use npm commands to quickly generate comparison views: `npm run py:example:detroit-north`, etc.
 
 **Key Features**:
 
 - **DEM Processing**: Load and merge Digital Elevation Models (SRTM .hgt, GeoTIFF)
 - **Flexible Data Layers**: Add any spatial dataset (raster or vector formats)
 - **Geospatial Operations**: Reproject, resample, smooth, and transform terrain data
+- **Intuitive Camera Control**: Position cameras with cardinal directions (north, south, east, west, above) with intelligent framing
 - **Blender Integration**: Generate high-quality 3D renderings with custom materials
 - **Smart Caching**: Avoid recomputation with hash-based caching system
 - **Extensible Design**: Easy to add new data sources and visualization methods
