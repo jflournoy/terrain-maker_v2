@@ -55,6 +55,15 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 def clear_scene():
+    """
+    Clear all objects from the Blender scene.
+
+    Resets the scene to factory settings (empty scene) and removes all default
+    objects. Useful before importing terrain meshes to ensure a clean workspace.
+
+    Raises:
+        RuntimeError: If Blender module (bpy) is not available.
+    """
     logger.info("Clearing Blender scene...")
     
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -960,6 +969,7 @@ def flip_raster(axis='horizontal'):
     """
 
     def transform_func(data, transform=None):
+        """Flip array along specified axis and update transform if provided."""
         # 1) Flip the array in pixel space
         if axis == 'horizontal':
             # Top <-> bottom
@@ -1294,6 +1304,22 @@ def transform_wrapper(transform_func):
     return wrapped_transform
 
 class TerrainCache:
+    """
+    Cache manager for terrain data processing results.
+
+    Handles persistent storage and retrieval of transformed terrain data layers
+    as GeoTIFF files with geographic metadata. Supports loading and saving with
+    coordinate reference system (CRS) and custom metadata.
+
+    Attributes:
+        cache_dir (Path): Root directory for cached GeoTIFF files.
+        logger (logging.Logger): Logger instance for cache operations.
+
+    Examples:
+        >>> cache = TerrainCache('my_cache_dir')
+        >>> cache.save('dem_transformed', dem_array, transform, 'EPSG:32617')
+        >>> data, transform, crs = cache.load('dem_transformed')
+    """
     def __init__(self, cache_dir: str = 'terrain_cache'):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1374,19 +1400,48 @@ class TerrainCache:
         }
 
 class Terrain:
-    def __init__(self, dem_data: np.ndarray, 
+    """
+    Core class for managing Digital Elevation Model (DEM) data and terrain operations.
+
+    Handles loading, transforming, and visualizing terrain data from raster sources.
+    Supports coordinate reprojection, downsampling, color mapping, and 3D mesh generation
+    for Blender visualization. Uses efficient caching to avoid recomputation of transforms.
+
+    Attributes:
+        dem_shape (tuple): Shape of DEM array as (height, width).
+        dem_transform (rasterio.Affine): Affine transform for geographic coordinates.
+        data_layers (dict): Dictionary of data layers (DEM, overlays, derived data).
+        transforms (list): List of transform functions to apply.
+        vertices (np.ndarray): Vertex positions for generated mesh.
+        vertex_colors (np.ndarray): RGBA colors for mesh vertices.
+
+    Examples:
+        >>> dem_data = np.random.rand(100, 100) * 1000
+        >>> transform = rasterio.Affine.identity()
+        >>> terrain = Terrain(dem_data, transform, dem_crs='EPSG:4326')
+        >>> terrain.apply_transforms()
+        >>> mesh = terrain.create_mesh(scale_factor=100.0)
+    """
+    def __init__(self, dem_data: np.ndarray,
                  dem_transform: rasterio.Affine,
                  dem_crs: str = 'EPSG:4326',
                  cache_dir: str = 'terrain_cache',
                  logger: Optional[logging.Logger] = None) -> None:
         """
         Initialize terrain from DEM data.
-        
+
         Args:
-            dem_data: DEM array of shape (height, width) containing elevation values
-            transform: Affine transform mapping pixel to geographic coordinates
-            cache_dir: Directory for caching computations
-            logger: Optional logger instance
+            dem_data (np.ndarray): DEM array of shape (height, width) containing elevation values.
+                Integer types are converted to float32. Must be 2D.
+            dem_transform (rasterio.Affine): Affine transform mapping pixel coordinates to
+                geographic coordinates.
+            dem_crs (str): Coordinate reference system in EPSG format (default: 'EPSG:4326').
+            cache_dir (str): Directory for caching computations (default: 'terrain_cache').
+            logger (logging.Logger, optional): Logger instance for diagnostic output.
+
+        Raises:
+            TypeError: If dem_data is not a numpy array or has unsupported dtype.
+            ValueError: If dem_data is not 2D.
         """
         self.logger = logger or logging.getLogger(__name__)
         self.logger.info("Initializing Terrain Cache")
@@ -1511,6 +1566,7 @@ class Terrain:
         
         # Subsampling to prevent memory issues
         def sample_array(arr):
+            """Downsample array for visualization if it exceeds max_pixels limit."""
             total_pixels = arr.size
             if total_pixels <= max_pixels:
                 return arr
@@ -1582,7 +1638,20 @@ class Terrain:
         self.logger.info("Visualization complete.")
     
     def add_transform(self, transform_func):
-        """Add a transform function to the pipeline"""
+        """
+        Add a transform function to the processing pipeline.
+
+        Args:
+            transform_func (callable): Function that transforms DEM data. Should accept
+                (dem_array: np.ndarray) and return transformed np.ndarray.
+
+        Returns:
+            None: Modifies internal transforms list in place.
+
+        Examples:
+            >>> terrain.add_transform(lambda dem: gaussian_filter(dem, sigma=2))
+            >>> terrain.apply_transforms()
+        """
         wrapped_transform = transform_wrapper(transform_func)
         
         self.transforms.append(wrapped_transform)
@@ -1759,7 +1828,23 @@ class Terrain:
         return computed_data
        
     def apply_transforms(self, cache=False):
-        """Apply transforms with efficient caching"""
+        """
+        Apply all transforms to all data layers with optional caching.
+
+        Processes each data layer through the transform pipeline. Results are cached
+        to avoid recomputation. Transforms are applied in order.
+
+        Args:
+            cache (bool): Whether to cache results (default: False).
+
+        Returns:
+            None: Updates internal data_layers with 'transformed_data' for each layer.
+
+        Examples:
+            >>> terrain.add_transform(flip_raster(axis='horizontal'))
+            >>> terrain.apply_transforms(cache=True)
+            >>> dem_data = terrain.data_layers['dem']['transformed_data']
+        """
         if not self.transforms:
             self.logger.warning("No transforms to apply")
             return
@@ -2026,21 +2111,33 @@ class Terrain:
     
         return colors
 
-    def create_mesh(self, base_depth=-0.2, boundary_extension=True, 
+    def create_mesh(self, base_depth=-0.2, boundary_extension=True,
                     scale_factor=100.0, height_scale=1.0, center_model=True, verbose=True):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
-        
+
+        Generates vertices from DEM elevation values and faces for connectivity. Optionally
+        creates boundary faces to close the mesh into a solid. Supports coordinate scaling
+        and elevation scaling for visualization.
+
         Args:
-            base_depth: Z-coordinate for the bottom of the terrain model (default: -0.2)
-            boundary_extension: Whether to create side faces around the terrain boundary (default: True)
-            scale_factor: Horizontal scale divisor for x/y coordinates (default: 100.0)
-            height_scale: Multiplier for elevation values (default: 1.0)
-            center_model: Whether to center the model at origin (default: True)
-            verbose: Whether to log detailed progress information (default: True)
-        
+            base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
+                Used when boundary_extension=True to create side faces.
+            boundary_extension (bool): Whether to create side faces around the terrain boundary
+                to close the mesh (default: True). If False, creates open terrain surface.
+            scale_factor (float): Horizontal scale divisor for x/y coordinates (default: 100.0).
+                Higher values produce smaller meshes. E.g., 100 means 100 DEM units = 1 Blender unit.
+            height_scale (float): Multiplier for elevation values (default: 1.0). Vertically
+                exaggerates or reduces terrain features. Values > 1 exaggerate, < 1 flatten.
+            center_model (bool): Whether to center the model at origin (default: True).
+                Centers XY coordinates but preserves absolute Z elevation values.
+            verbose (bool): Whether to log detailed progress information (default: True).
+
         Returns:
-            bpy.types.Object: The created terrain mesh object
+            bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
+
+        Raises:
+            ValueError: If transformed DEM layer is not available (apply_transforms() not called).
         """
         start_time = time.time()
         self.logger.info("Creating terrain mesh...")

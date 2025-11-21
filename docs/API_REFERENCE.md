@@ -16,15 +16,34 @@ Comprehensive documentation of all classes and functions in the terrain-maker li
 
 #### `Terrain`
 
-No documentation
+Core class for managing Digital Elevation Model (DEM) data and terrain operations.
+
+Handles loading, transforming, and visualizing terrain data from raster sources.
+Supports coordinate reprojection, downsampling, color mapping, and 3D mesh generation
+for Blender visualization. Uses efficient caching to avoid recomputation of transforms.
+
+Attributes:
+    dem_shape (tuple): Shape of DEM array as (height, width).
+    dem_transform (rasterio.Affine): Affine transform for geographic coordinates.
+    data_layers (dict): Dictionary of data layers (DEM, overlays, derived data).
+    transforms (list): List of transform functions to apply.
+    vertices (np.ndarray): Vertex positions for generated mesh.
+    vertex_colors (np.ndarray): RGBA colors for mesh vertices.
+
+Examples:
+    >>> dem_data = np.random.rand(100, 100) * 1000
+    >>> transform = rasterio.Affine.identity()
+    >>> terrain = Terrain(dem_data, transform, dem_crs='EPSG:4326')
+    >>> terrain.apply_transforms()
+    >>> mesh = terrain.create_mesh(scale_factor=100.0)
 
 **Methods:**
 
 - `add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)` - Add a data layer, optionally reprojecting to match another layer
 
-- `add_transform(self, transform_func)` - Add a transform function to the pipeline
+- `add_transform(self, transform_func)` - Add a transform function to the processing pipeline.
 
-- `apply_transforms(self, cache)` - Apply transforms with efficient caching
+- `apply_transforms(self, cache)` - Apply all transforms to all data layers with optional caching.
 
 - `compute_colors(self)` - Compute colors using color_func and optionally mask_func.
 
@@ -41,7 +60,20 @@ No documentation
 
 #### `TerrainCache`
 
-No documentation
+Cache manager for terrain data processing results.
+
+Handles persistent storage and retrieval of transformed terrain data layers
+as GeoTIFF files with geographic metadata. Supports loading and saving with
+coordinate reference system (CRS) and custom metadata.
+
+Attributes:
+    cache_dir (Path): Root directory for cached GeoTIFF files.
+    logger (logging.Logger): Logger instance for cache operations.
+
+Examples:
+    >>> cache = TerrainCache('my_cache_dir')
+    >>> cache.save('dem_transformed', dem_array, transform, 'EPSG:32617')
+    >>> data, transform, crs = cache.load('dem_transformed')
 
 **Methods:**
 
@@ -71,7 +103,18 @@ Args:
 
 #### `add_transform(self, transform_func)`
 
-Add a transform function to the pipeline
+Add a transform function to the processing pipeline.
+
+Args:
+    transform_func (callable): Function that transforms DEM data. Should accept
+        (dem_array: np.ndarray) and return transformed np.ndarray.
+
+Returns:
+    None: Modifies internal transforms list in place.
+
+Examples:
+    >>> terrain.add_transform(lambda dem: gaussian_filter(dem, sigma=2))
+    >>> terrain.apply_transforms()
 
 #### `apply_colormap_material(material)`
 
@@ -83,11 +126,31 @@ Args:
 
 #### `apply_transforms(self, cache)`
 
-Apply transforms with efficient caching
+Apply all transforms to all data layers with optional caching.
+
+Processes each data layer through the transform pipeline. Results are cached
+to avoid recomputation. Transforms are applied in order.
+
+Args:
+    cache (bool): Whether to cache results (default: False).
+
+Returns:
+    None: Updates internal data_layers with 'transformed_data' for each layer.
+
+Examples:
+    >>> terrain.add_transform(flip_raster(axis='horizontal'))
+    >>> terrain.apply_transforms(cache=True)
+    >>> dem_data = terrain.data_layers['dem']['transformed_data']
 
 #### `clear_scene()`
 
-No documentation
+Clear all objects from the Blender scene.
+
+Resets the scene to factory settings (empty scene) and removes all default
+objects. Useful before importing terrain meshes to ensure a clean workspace.
+
+Raises:
+    RuntimeError: If Blender module (bpy) is not available.
 
 #### `compute_colors(self)`
 
@@ -156,16 +219,28 @@ Raises:
 
 Create a Blender mesh from transformed DEM data with both performance and control.
 
+Generates vertices from DEM elevation values and faces for connectivity. Optionally
+creates boundary faces to close the mesh into a solid. Supports coordinate scaling
+and elevation scaling for visualization.
+
 Args:
-    base_depth: Z-coordinate for the bottom of the terrain model (default: -0.2)
-    boundary_extension: Whether to create side faces around the terrain boundary (default: True)
-    scale_factor: Horizontal scale divisor for x/y coordinates (default: 100.0)
-    height_scale: Multiplier for elevation values (default: 1.0)
-    center_model: Whether to center the model at origin (default: True)
-    verbose: Whether to log detailed progress information (default: True)
+    base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
+        Used when boundary_extension=True to create side faces.
+    boundary_extension (bool): Whether to create side faces around the terrain boundary
+        to close the mesh (default: True). If False, creates open terrain surface.
+    scale_factor (float): Horizontal scale divisor for x/y coordinates (default: 100.0).
+        Higher values produce smaller meshes. E.g., 100 means 100 DEM units = 1 Blender unit.
+    height_scale (float): Multiplier for elevation values (default: 1.0). Vertically
+        exaggerates or reduces terrain features. Values > 1 exaggerate, < 1 flatten.
+    center_model (bool): Whether to center the model at origin (default: True).
+        Centers XY coordinates but preserves absolute Z elevation values.
+    verbose (bool): Whether to log detailed progress information (default: True).
 
 Returns:
-    bpy.types.Object: The created terrain mesh object
+    bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
+
+Raises:
+    ValueError: If transformed DEM layer is not available (apply_transforms() not called).
 
 #### `downsample_raster(zoom_factor, order, nodata_value)`
 
@@ -298,7 +373,7 @@ Returns:
 
 #### `sample_array(arr)`
 
-No documentation
+Downsample array for visualization if it exceeds max_pixels limit.
 
 #### `save(self, target_name, data, transform, crs, metadata)`
 
@@ -443,7 +518,7 @@ Returns:
 
 #### `transform_func(data, transform)`
 
-No documentation
+Flip array along specified axis and update transform if provided.
 
 #### `transform_wrapper(transform_func)`
 

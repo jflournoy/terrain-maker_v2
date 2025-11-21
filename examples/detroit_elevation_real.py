@@ -122,7 +122,7 @@ def main():
     try:
         mesh_obj = terrain.create_mesh(
             scale_factor=100.0,  
-            height_scale=1.0,  
+            height_scale=2.0,  
             center_model=True,
             boundary_extension=True
         )
@@ -148,10 +148,12 @@ def main():
     # This is much more intuitive than manual coordinate specification
     camera = position_camera_relative(
         mesh_obj,
+        look_at=(0,-1,0),
         direction='south',
-        distance=1.5,        # 1.5x mesh diagonal away
-        elevation=0.5,       # 0.5x mesh diagonal height
-        camera_type='ORTHO'
+        distance=.33/1.25,        # 1.5x mesh diagonal away
+        elevation=.33/1.25*1.5,       # 0.5x mesh diagonal height
+        camera_type='PERSP',
+        focal_length=15,
     )
 
     # Create sun light for terrain illumination
