@@ -35,7 +35,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, load_dem_files, scale_elevation,
+    Terrain, load_dem_files, scale_elevation, flip_raster,
     elevation_colormap, clear_scene, setup_camera_and_light,
     setup_render_settings, render_scene_to_file
 )
@@ -85,11 +85,13 @@ def main():
 
     # Configure downsampling to target approximately 500,000 vertices
     # This automatically calculates the optimal zoom_factor
-    target_vertices = 750_000
+    target_vertices = 1_000_000
     zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
     print(f"      Configured for {target_vertices:,} target vertices")
     print(f"      Calculated zoom_factor: {zoom:.6f}")
 
+    # Flip DEM data to correct north-south orientation
+    terrain.transforms.append(flip_raster(axis='horizontal'))
     # Add elevation scaling to enhance height features
     terrain.transforms.append(scale_elevation(scale_factor=0.0001))
     terrain.apply_transforms()
@@ -144,16 +146,16 @@ def main():
         radians(camera_rotation_deg[1]),
         radians(camera_rotation_deg[2])
     )
-    camera_scale = 20.0
 
     # Set up camera and light using class method
     camera, light = setup_camera_and_light(
         camera_angle=camera_angle,
         camera_location=camera_location,
-        scale=camera_scale,
+        camera_type='ORTHO',
+        scale=15,
         sun_angle=2,
         sun_energy=3,
-        focal_length=50
+        focal_length=30
     )
 
     # Configure render settings using class method
