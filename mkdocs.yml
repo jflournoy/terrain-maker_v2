@@ -1,0 +1,46 @@
+site_name: Terrain-Maker Documentation
+site_description: GeoTIFF terrain visualization and analysis with Blender rendering
+docs_dir: docs
+site_dir: site
+repo_url: https://github.com/your-repo/terrain-maker
+repo_name: terrain-maker
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+  features:
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Examples: EXAMPLES.md
+  - Python Setup: PYTHON_SETUP.md
+  - API Reference: API_REFERENCE.md
+  - Best Practices: BEST_PRACTICES.md
+  - Workflows: WORKFLOWS.md
+  - TDD with Claude: TDD_WITH_CLAUDE.md
+  - Quick Reference: QUICK_REFERENCE.md
+  - Advanced:
+    - API Setup: API_SETUP.md
+    - Claude Patterns: CLAUDE_PATTERNS.md
+    - Agent Patterns: AGENT_PATTERNS.md
+    - Token Efficiency: TOKEN_EFFICIENCY.md
+    - Feature Check: FEATURE_CHECK.md
+    - Self Updating: SELF_UPDATING.md
+    - TDD Success Stories: TDD_SUCCESS_STORIES.md
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - tables
+  - codehilite
+  - extra
