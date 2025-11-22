@@ -9,7 +9,8 @@ With just a few lines of Python, you can:
   ✓ Load real SRTM elevation data from local tiles
   ✓ Apply intelligent downsampling (no complex config needed!)
   ✓ Reproject to proper geographic coordinates automatically
-  ✓ Create publication-quality 3D visualizations
+  ✓ Detect water bodies using slope-based analysis
+  ✓ Create publication-quality 3D visualizations with water rendering
   ✓ Render with professional Blender integration
   ✓ Generate multiple camera views with intelligent framing
 
@@ -266,10 +267,12 @@ def main():
     print("\n[5/6] Creating Blender mesh...")
     try:
         mesh_obj = terrain.create_mesh(
-            scale_factor=100.0,  
-            height_scale=4.0,  
+            scale_factor=100.0,
+            height_scale=4.0,
             center_model=True,
-            boundary_extension=True
+            boundary_extension=True,
+            detect_water=True,              # Enable water body detection
+            water_slope_threshold=0.5       # Identify flat areas as water
         )
 
         if mesh_obj is None:
@@ -355,10 +358,11 @@ def main():
     print(f"  ✓ Created Terrain object with real elevation data")
     print(f"  ✓ Applied transforms (reproject + flip + scale)")
     print(f"  ✓ Configured beautiful Mako elevation-based color mapping")
+    print(f"  ✓ Detected and applied water bodies (slope-based identification)")
     print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
     if render_file:
         print(f"  ✓ Rendered to PNG: {render_file}")
-    print(f"\nThat's it! Professional terrain visualization in just a few lines of Python!")
+    print(f"\nThat's it! Professional terrain visualization with water detection in just a few lines of Python!")
 
     return 0
 

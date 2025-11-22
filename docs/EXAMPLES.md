@@ -43,8 +43,9 @@ Each view is automatically framed with intelligent target offset adjustments. No
 ✓ **Loading Real Geographic Data**: Automatically loads and merges SRTM HGT tiles
 ✓ **Intelligent Mesh Optimization**: Configure mesh density by target vertex count, not magic numbers
 ✓ **Coordinate Transformation**: Automatic reprojection from WGS84 to UTM coordinates
+✓ **Water Body Detection**: Automatic identification of water bodies using slope-based analysis
 ✓ **Intuitive Camera Control**: Position cameras using cardinal directions (north, south, above, etc)
-✓ **Beautiful Visualization**: Professional Blender rendering with color mapping
+✓ **Beautiful Visualization**: Professional Blender rendering with color mapping and water shader
 
 ### The Code
 
@@ -68,8 +69,13 @@ terrain.set_color_mapping(
     source_layers=['dem']
 )
 
-# 5. Create mesh and render
-mesh = terrain.create_mesh(scale_factor=100.0, height_scale=4.0)
+# 5. Create mesh with water detection and render
+mesh = terrain.create_mesh(
+    scale_factor=100.0,
+    height_scale=4.0,
+    detect_water=True,              # Enable water body detection
+    water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
+)
 camera = position_camera_relative(mesh, direction='south', distance=1.5)
 render_scene_to_file(output_path="detroit.png", width=960, height=720)
 ```
@@ -116,6 +122,27 @@ terrain.transforms.append(reproject_raster(
     num_threads=4
 ))
 ```
+
+#### Water Body Detection & Rendering
+Automatic water body identification using slope-based analysis:
+
+```python
+# Create mesh with water detection enabled
+mesh = terrain.create_mesh(
+    scale_factor=100.0,
+    height_scale=4.0,
+    detect_water=True,              # Enable water body detection
+    water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
+)
+```
+
+**How it works:**
+- Uses Sobel operators to compute terrain slope from elevation data
+- Identifies pixels with slope below threshold as potential water bodies
+- Applies morphological operations to smooth water boundaries and fill gaps
+- Sets vertex alpha channel based on water detection for shader-based rendering
+- Water bodies render with special shader properties (metallic blue, reflection, etc.)
+- Adjust `water_slope_threshold` to find more or fewer water bodies (higher = more sensitive)
 
 ### Running This Example
 
@@ -222,9 +249,11 @@ Traditional terrain visualization typically requires:
 With Terrain Maker, you get:
 - **Automatic mesh optimization** by target vertex count
 - **Built-in geographic transforms** with sensible defaults
+- **Water body detection** using slope-based analysis
 - **Intuitive cardinal direction camera positioning**
 - **Professional Blender integration** out of the box
 - **Color mapping from elevation data** in one line
+- **Water shader rendering** for realistic water visualization
 
 ### Customization
 
