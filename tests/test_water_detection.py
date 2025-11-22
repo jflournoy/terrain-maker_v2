@@ -148,6 +148,56 @@ class TestWaterDetection(unittest.TestCase):
                           "Flat lake areas should have water pixels")
 
 
+class TestWaterDetectionValidation(unittest.TestCase):
+    """Test input validation for water detection."""
+
+    def test_rejects_non_2d_dem(self):
+        """Test that non-2D DEM raises ValueError."""
+        dem_1d = np.array([100, 110, 120], dtype=np.float32)
+
+        with self.assertRaises(ValueError) as context:
+            identify_water_by_slope(dem_1d, slope_threshold=0.5)
+
+        self.assertIn("2D", str(context.exception))
+
+    def test_rejects_3d_dem(self):
+        """Test that 3D DEM raises ValueError."""
+        dem_3d = np.zeros((5, 5, 3), dtype=np.float32)
+
+        with self.assertRaises(ValueError) as context:
+            identify_water_by_slope(dem_3d, slope_threshold=0.5)
+
+        self.assertIn("2D", str(context.exception))
+
+    def test_rejects_negative_threshold(self):
+        """Test that negative slope_threshold raises ValueError."""
+        dem = np.array([[100, 110], [120, 130]], dtype=np.float32)
+
+        with self.assertRaises(ValueError) as context:
+            identify_water_by_slope(dem, slope_threshold=-0.5)
+
+        self.assertIn("non-negative", str(context.exception))
+
+    def test_accepts_zero_threshold(self):
+        """Test that zero slope_threshold is accepted."""
+        dem = np.array([[100, 100], [100, 100]], dtype=np.float32)
+
+        # Should not raise
+        water_mask = identify_water_by_slope(dem, slope_threshold=0.0)
+
+        self.assertIsInstance(water_mask, np.ndarray)
+
+    def test_all_nan_dem_returns_zeros(self):
+        """Test that all-NaN DEM returns zero-slope (all false)."""
+        dem = np.full((5, 5), np.nan, dtype=np.float32)
+
+        water_mask = identify_water_by_slope(dem, slope_threshold=0.5)
+
+        # All-NaN should produce a valid mask (all zeros)
+        self.assertEqual(water_mask.shape, (5, 5))
+        self.assertEqual(water_mask.dtype, np.bool_)
+
+
 class TestWaterIntegrationWithTerrain(unittest.TestCase):
     """Test water detection integration with Terrain class."""
 

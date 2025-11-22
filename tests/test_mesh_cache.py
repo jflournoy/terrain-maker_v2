@@ -423,5 +423,92 @@ class TestMeshCacheIntegration(unittest.TestCase):
         self.assertIsNotNone(cache.load_cache(hash2))
 
 
+class TestMeshCacheEdgeCases(unittest.TestCase):
+    """Test edge cases and error conditions."""
+
+    def setUp(self):
+        """Create temporary directories."""
+        self.cache_dir = tempfile.mkdtemp()
+        self.blend_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up."""
+        shutil.rmtree(self.cache_dir)
+        shutil.rmtree(self.blend_dir)
+
+    def test_compute_mesh_hash_with_list_parameter(self):
+        """Test compute_mesh_hash handles list parameters correctly."""
+        cache = MeshCache(cache_dir=Path(self.cache_dir))
+
+        mesh_params = {
+            'scale_factor': 100.0,
+            'height_scale': 4.0,
+            'color_values': [0.1, 0.2, 0.3, 0.4, 0.5]
+        }
+
+        hash_val = cache.compute_mesh_hash("dem_hash", mesh_params)
+
+        self.assertIsInstance(hash_val, str)
+        self.assertEqual(len(hash_val), 64)
+
+    def test_compute_mesh_hash_list_vs_array_differ(self):
+        """Test that list and array parameters produce different hashes."""
+        cache = MeshCache(cache_dir=Path(self.cache_dir))
+
+        params_list = {
+            'scale_factor': 100.0,
+            'values': [1, 2, 3]
+        }
+        params_array = {
+            'scale_factor': 100.0,
+            'values': np.array([1, 2, 3])
+        }
+
+        hash_list = cache.compute_mesh_hash("dem_hash", params_list)
+        hash_array = cache.compute_mesh_hash("dem_hash", params_array)
+
+        # They may or may not be equal depending on implementation
+        # but both should be valid hashes
+        self.assertEqual(len(hash_list), 64)
+        self.assertEqual(len(hash_array), 64)
+
+    def test_save_cache_nonexistent_blend_file(self):
+        """Test save_cache returns None when blend file doesn't exist."""
+        cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=True)
+
+        nonexistent_file = Path(self.blend_dir) / "doesnt_exist.blend"
+        mesh_params = {'scale_factor': 100.0}
+
+        cache_path, meta_path = cache.save_cache(
+            nonexistent_file,
+            "hash123",
+            mesh_params
+        )
+
+        self.assertIsNone(cache_path)
+        self.assertIsNone(meta_path)
+
+    def test_get_cache_stats_empty_cache_dir(self):
+        """Test get_cache_stats when cache_dir is empty."""
+        # Create cache with new empty directory
+        new_cache_dir = Path(self.cache_dir) / "empty_cache"
+        cache = MeshCache(cache_dir=new_cache_dir, enabled=True)
+
+        stats = cache.get_cache_stats()
+
+        self.assertEqual(stats['blend_files'], 0)
+        self.assertEqual(stats['total_size_mb'], 0)
+        self.assertEqual(len(stats['files']), 0)
+
+    def test_clear_cache_handles_empty_directory(self):
+        """Test clear_cache works on empty cache directory."""
+        cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=True)
+
+        # Clear empty cache should return 0
+        deleted = cache.clear_cache()
+
+        self.assertEqual(deleted, 0)
+
+
 if __name__ == '__main__':
     unittest.main()

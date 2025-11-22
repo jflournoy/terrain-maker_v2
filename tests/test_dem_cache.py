@@ -360,6 +360,36 @@ class TestDEMCacheEdgeCases(unittest.TestCase):
             self.assertIn('name', file_info)
             self.assertIn('size_mb', file_info)
 
+    def test_get_cache_stats_empty_cache_dir(self):
+        """Test get_cache_stats when cache directory is empty."""
+        new_cache_dir = Path(self.cache_dir) / "empty_cache"
+        cache = DEMCache(cache_dir=new_cache_dir, enabled=True)
+
+        stats = cache.get_cache_stats()
+
+        self.assertEqual(stats['cache_files'], 0)
+        self.assertEqual(stats['total_size_mb'], 0)
+        self.assertEqual(len(stats['files']), 0)
+
+    def test_clear_cache_deletes_matching_files(self):
+        """Test that clear_cache removes files matching pattern."""
+        cache = DEMCache(cache_dir=Path(self.cache_dir), enabled=True)
+
+        dem = np.array([[100, 110]], dtype=np.float32)
+        transform = Affine(1, 0, 0, 0, -1, 100)
+        cache.save_cache(dem, transform, "hash1", cache_name="test_item")
+
+        # Verify files exist
+        test_files = list(Path(self.cache_dir).glob("test_item_*"))
+        self.assertGreater(len(test_files), 0)
+
+        # Clear and verify files removed
+        deleted = cache.clear_cache(cache_name="test_item")
+        self.assertGreater(deleted, 0)
+
+        test_files_after = list(Path(self.cache_dir).glob("test_item_*"))
+        self.assertEqual(len(test_files_after), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
