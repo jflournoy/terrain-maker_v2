@@ -16,20 +16,33 @@ A complete example showing how to create stunning 3D terrain visualizations from
 
 The example demonstrates the power of `position_camera_relative()` by generating professional renders from different camera angles - each with optimal framing for its view direction:
 
-**North View** (looking south at terrain)
-![Detroit North View](images/detroit_elevation_north.png)
-
-**South View** (looking north - offset for perfect framing)
-![Detroit South View](images/detroit_elevation_south.png)
-
-**East View** (looking west)
-![Detroit East View](images/detroit_elevation_east.png)
-
-**West View** (looking east)
-![Detroit West View](images/detroit_elevation_west.png)
-
-**Overhead View** (perfect 90° down with zero rotation)
-![Detroit Above View](images/detroit_elevation_above.png)
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0;">
+  <div style="text-align: center;">
+    <strong>North View</strong><br/>
+    <small>(looking south)</small><br/>
+    ![Detroit North View](images/detroit_elevation_north.png)
+  </div>
+  <div style="text-align: center;">
+    <strong>East View</strong><br/>
+    <small>(looking west)</small><br/>
+    ![Detroit East View](images/detroit_elevation_east.png)
+  </div>
+  <div style="text-align: center;">
+    <strong>South View</strong><br/>
+    <small>(looking north)</small><br/>
+    ![Detroit South View](images/detroit_elevation_south.png)
+  </div>
+  <div style="text-align: center; grid-column: 1;">
+    <strong>West View</strong><br/>
+    <small>(looking east)</small><br/>
+    ![Detroit West View](images/detroit_elevation_west.png)
+  </div>
+  <div style="text-align: center; grid-column: 2 / span 2;">
+    <strong>Overhead View</strong><br/>
+    <small>(90° down, zero rotation)</small><br/>
+    ![Detroit Above View](images/detroit_elevation_above.png)
+  </div>
+</div>
 
 **Generate these views yourself:**
 ```bash

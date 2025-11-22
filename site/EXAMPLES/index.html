@@ -1356,16 +1356,34 @@
 <p><em>Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data</em></p>
 <h3 id="multiple-views-with-intelligent-camera-positioning">Multiple Views with Intelligent Camera Positioning<a class="headerlink" href="#multiple-views-with-intelligent-camera-positioning" title="Permanent link">&para;</a></h3>
 <p>The example demonstrates the power of <code>position_camera_relative()</code> by generating professional renders from different camera angles - each with optimal framing for its view direction:</p>
-<p><strong>North View</strong> (looking south at terrain)
-<img alt="Detroit North View" src="../images/detroit_elevation_north.png" /></p>
-<p><strong>South View</strong> (looking north - offset for perfect framing)
-<img alt="Detroit South View" src="../images/detroit_elevation_south.png" /></p>
-<p><strong>East View</strong> (looking west)
-<img alt="Detroit East View" src="../images/detroit_elevation_east.png" /></p>
-<p><strong>West View</strong> (looking east)
-<img alt="Detroit West View" src="../images/detroit_elevation_west.png" /></p>
-<p><strong>Overhead View</strong> (perfect 90° down with zero rotation)
-<img alt="Detroit Above View" src="../images/detroit_elevation_above.png" /></p>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0;">
+  <div style="text-align: center;">
+    <strong>North View</strong><br/>
+    <small>(looking south)</small><br/>
+    ![Detroit North View](images/detroit_elevation_north.png)
+  </div>
+  <div style="text-align: center;">
+    <strong>East View</strong><br/>
+    <small>(looking west)</small><br/>
+    ![Detroit East View](images/detroit_elevation_east.png)
+  </div>
+  <div style="text-align: center;">
+    <strong>South View</strong><br/>
+    <small>(looking north)</small><br/>
+    ![Detroit South View](images/detroit_elevation_south.png)
+  </div>
+  <div style="text-align: center; grid-column: 1;">
+    <strong>West View</strong><br/>
+    <small>(looking east)</small><br/>
+    ![Detroit West View](images/detroit_elevation_west.png)
+  </div>
+  <div style="text-align: center; grid-column: 2 / span 2;">
+    <strong>Overhead View</strong><br/>
+    <small>(90° down, zero rotation)</small><br/>
+    ![Detroit Above View](images/detroit_elevation_above.png)
+  </div>
+</div>
+
 <p><strong>Generate these views yourself:</strong></p>
 <div class="codehilite"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">     </span><span class="c1"># or any of: south, east, west, above</span>
 </code></pre></div>
