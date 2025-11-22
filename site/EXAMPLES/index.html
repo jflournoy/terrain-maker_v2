@@ -681,6 +681,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#regenerating-example-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regenerating Example Images
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1322,6 +1333,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#regenerating-example-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regenerating Example Images
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1630,6 +1652,32 @@ python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w">
 </code></pre></div>
 
 <p>This creates 5 renders showing the terrain from different perspectives, with consistent framing and optimal camera positioning for each angle.</p>
+<h3 id="regenerating-example-images">Regenerating Example Images<a class="headerlink" href="#regenerating-example-images" title="Permanent link">&para;</a></h3>
+<p>When you update the example code or want to refresh the documentation images with the latest rendering, use these npm commands:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate the main example image (south view - default)</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-elevation
+
+<span class="c1"># Generate specific views</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-south<span class="w">      </span><span class="c1"># South view (recommended for main image)</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">      </span><span class="c1"># North view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-east<span class="w">       </span><span class="c1"># East view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-west<span class="w">       </span><span class="c1"># West view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-above<span class="w">      </span><span class="c1"># Overhead view</span>
+
+<span class="c1"># Generate all views at once</span>
+<span class="k">for</span><span class="w"> </span>view<span class="w"> </span><span class="k">in</span><span class="w"> </span>south<span class="w"> </span>north<span class="w"> </span>east<span class="w"> </span>west<span class="w"> </span>above<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-<span class="nv">$view</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p><strong>Output locations:</strong>
+- Main image: <code>examples/detroit_elevation_real.png</code>
+- View-specific: <code>examples/detroit_elevation_{north,south,east,west,above}.png</code>
+- Blender files: <code>examples/detroit_elevation_{view}.blend</code></p>
+<p><strong>Each render takes 30-40 seconds on modern hardware.</strong> The images are then automatically included in the documentation gallery when you run:</p>
+<div class="codehilite"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>docs:build
+</code></pre></div>
+
 <hr />
 <p><strong>Want to try it yourself?</strong> See <a href="../QUICK_REFERENCE/">Quick Reference</a> for API documentation and <a href="../API_REFERENCE/">API Reference</a> for detailed function signatures.</p>
 
