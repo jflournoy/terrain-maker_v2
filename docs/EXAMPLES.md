@@ -137,7 +137,7 @@ terrain.transforms.append(reproject_raster(
 ```
 
 #### Water Body Detection & Rendering
-Automatic water body identification using slope-based analysis:
+Automatic water body identification using slope-based analysis with blue shader coloring:
 
 ```python
 # Create mesh with water detection enabled
@@ -147,15 +147,30 @@ mesh = terrain.create_mesh(
     detect_water=True,              # Enable water body detection
     water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
 )
+
+# Apply blue water shader to color water bodies
+apply_water_shader(mesh.data.materials[0], water_color=(0.1, 0.4, 0.8))
 ```
 
 **How it works:**
+
+**Detection Phase:**
 - Uses Sobel operators to compute terrain slope from elevation data
 - Identifies pixels with slope below threshold as potential water bodies
 - Applies morphological operations to smooth water boundaries and fill gaps
-- Sets vertex alpha channel based on water detection for shader-based rendering
-- Water bodies render with special shader properties (metallic blue, reflection, etc.)
+- Marks water pixels with alpha channel = 1.0 for shader-based rendering
+
+**Rendering Phase:**
+- `apply_water_shader()` configures a material with water-aware blending
+- Uses vertex alpha channel to mix between water color and elevation colors
+- Water areas (alpha = 1.0) render as beautiful blue
+- Land areas (alpha = 0.0) show elevation colors from the Mako colormap
+- Results in realistic visualization with distinct water features
+
+**Customization:**
 - Adjust `water_slope_threshold` to find more or fewer water bodies (higher = more sensitive)
+- Change water color by passing `water_color` parameter: `apply_water_shader(material, water_color=(0.2, 0.5, 0.9))`
+- Threshold of 0.5° works well for most real-world elevation data
 
 ### Running This Example
 
