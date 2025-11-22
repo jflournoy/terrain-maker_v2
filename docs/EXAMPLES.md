@@ -136,20 +136,18 @@ terrain.transforms.append(reproject_raster(
 ))
 ```
 
-#### Water Body Detection & Rendering
-Automatic water body identification using slope-based analysis with blue shader coloring:
+#### Water Body Detection & Blue Coloring
+Automatic water body identification using slope-based analysis with direct blue coloring:
 
 ```python
 # Create mesh with water detection enabled
+# Water pixels are automatically colored blue, land shows elevation colors
 mesh = terrain.create_mesh(
     scale_factor=100.0,
     height_scale=4.0,
     detect_water=True,              # Enable water body detection
     water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
 )
-
-# Apply blue water shader to color water bodies
-apply_water_shader(mesh.data.materials[0], water_color=(0.1, 0.4, 0.8))
 ```
 
 **How it works:**
@@ -158,19 +156,17 @@ apply_water_shader(mesh.data.materials[0], water_color=(0.1, 0.4, 0.8))
 - Uses Sobel operators to compute terrain slope from elevation data
 - Identifies pixels with slope below threshold as potential water bodies
 - Applies morphological operations to smooth water boundaries and fill gaps
-- Marks water pixels with alpha channel = 1.0 for shader-based rendering
 
-**Rendering Phase:**
-- `apply_water_shader()` configures a material with water-aware blending
-- Uses vertex alpha channel to mix between water color and elevation colors
-- Water areas (alpha = 1.0) render as beautiful blue
-- Land areas (alpha = 0.0) show elevation colors from the Mako colormap
-- Results in realistic visualization with distinct water features
+**Coloring Phase:**
+- Directly colors detected water pixels blue (RGB: 26, 102, 204)
+- Land pixels retain their elevation-based Mako colormap colors
+- Results in clear visual distinction between water and terrain
+- Water is colored during mesh creation, no shader configuration needed
 
 **Customization:**
 - Adjust `water_slope_threshold` to find more or fewer water bodies (higher = more sensitive)
-- Change water color by passing `water_color` parameter: `apply_water_shader(material, water_color=(0.2, 0.5, 0.9))`
-- Threshold of 0.5° works well for most real-world elevation data
+- The default threshold of 0.5° works well for most real-world elevation data
+- For noisy terrain, increase threshold; for detailed water features, decrease it
 
 ### Running This Example
 
@@ -182,8 +178,8 @@ python examples/detroit_elevation_real.py
 This will:
 1. Load SRTM elevation tiles from `data/dem/detroit/`
 2. Process the data with intelligent downsampling
-3. Generate a 1,370,951 vertex Blender mesh
-4. Render a publication-quality PNG (2.0 MB) from the north
+3. Generate a ~1.4 million vertex Blender mesh
+4. Render a publication-quality PNG with blue water coloring from the south
 5. Save a Blender file for further editing
 
 #### Generate Multiple Views

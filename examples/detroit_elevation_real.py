@@ -122,7 +122,7 @@ sys.path.insert(0, str(project_root))
 from src.terrain.core import (
     Terrain, load_dem_files, scale_elevation, flip_raster, reproject_raster,
     elevation_colormap, clear_scene, position_camera_relative, setup_light,
-    setup_render_settings, render_scene_to_file, apply_water_shader
+    setup_render_settings, render_scene_to_file
 )
 
 try:
@@ -153,8 +153,8 @@ def parse_args():
         '--view', '-v',
         choices=['north', 'south', 'east', 'west',
                  'northeast', 'northwest', 'southeast', 'southwest', 'above'],
-        default='north',
-        help='Camera direction/view (default: north)'
+        default='south',
+        help='Camera direction/view (default: south)'
     )
     parser.add_argument(
         '--distance', '-d',
@@ -282,11 +282,7 @@ def main():
         print(f"      ✓ Mesh created successfully!")
         print(f"      Vertices: {len(mesh_obj.data.vertices)}")
         print(f"      Polygons: {len(mesh_obj.data.polygons)}")
-
-        # Apply water shader to color water blue
-        if mesh_obj.data.materials:
-            apply_water_shader(mesh_obj.data.materials[0])
-            print(f"      ✓ Water shader applied (blue coloring for detected water bodies)")
+        print(f"      ✓ Water colored blue (from slope-based detection)")
 
     except Exception as e:
         print(f"      ✗ Error creating mesh: {e}")

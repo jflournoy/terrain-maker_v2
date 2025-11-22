@@ -544,10 +544,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#water-body-detection-rendering" class="md-nav__link">
+  <a href="#water-body-detection-blue-coloring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Water Body Detection &amp; Rendering
+        Water Body Detection &amp; Blue Coloring
       
     </span>
   </a>
@@ -1185,10 +1185,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#water-body-detection-rendering" class="md-nav__link">
+  <a href="#water-body-detection-blue-coloring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Water Body Detection &amp; Rendering
+        Water Body Detection &amp; Blue Coloring
       
     </span>
   </a>
@@ -1461,36 +1461,32 @@
 <span class="p">))</span>
 </code></pre></div>
 
-<h4 id="water-body-detection-rendering">Water Body Detection &amp; Rendering<a class="headerlink" href="#water-body-detection-rendering" title="Permanent link">&para;</a></h4>
-<p>Automatic water body identification using slope-based analysis with blue shader coloring:</p>
+<h4 id="water-body-detection-blue-coloring">Water Body Detection &amp; Blue Coloring<a class="headerlink" href="#water-body-detection-blue-coloring" title="Permanent link">&para;</a></h4>
+<p>Automatic water body identification using slope-based analysis with direct blue coloring:</p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># Create mesh with water detection enabled</span>
+<span class="c1"># Water pixels are automatically colored blue, land shows elevation colors</span>
 <span class="n">mesh</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">create_mesh</span><span class="p">(</span>
     <span class="n">scale_factor</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
     <span class="n">height_scale</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
     <span class="n">detect_water</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>              <span class="c1"># Enable water body detection</span>
     <span class="n">water_slope_threshold</span><span class="o">=</span><span class="mf">0.5</span>       <span class="c1"># Flat areas (slope &lt; 0.5°) are water</span>
 <span class="p">)</span>
-
-<span class="c1"># Apply blue water shader to color water bodies</span>
-<span class="n">apply_water_shader</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">materials</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">water_color</span><span class="o">=</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">))</span>
 </code></pre></div>
 
 <p><strong>How it works:</strong></p>
 <p><strong>Detection Phase:</strong>
 - Uses Sobel operators to compute terrain slope from elevation data
 - Identifies pixels with slope below threshold as potential water bodies
-- Applies morphological operations to smooth water boundaries and fill gaps
-- Marks water pixels with alpha channel = 1.0 for shader-based rendering</p>
-<p><strong>Rendering Phase:</strong>
-- <code>apply_water_shader()</code> configures a material with water-aware blending
-- Uses vertex alpha channel to mix between water color and elevation colors
-- Water areas (alpha = 1.0) render as beautiful blue
-- Land areas (alpha = 0.0) show elevation colors from the Mako colormap
-- Results in realistic visualization with distinct water features</p>
+- Applies morphological operations to smooth water boundaries and fill gaps</p>
+<p><strong>Coloring Phase:</strong>
+- Directly colors detected water pixels blue (RGB: 26, 102, 204)
+- Land pixels retain their elevation-based Mako colormap colors
+- Results in clear visual distinction between water and terrain
+- Water is colored during mesh creation, no shader configuration needed</p>
 <p><strong>Customization:</strong>
 - Adjust <code>water_slope_threshold</code> to find more or fewer water bodies (higher = more sensitive)
-- Change water color by passing <code>water_color</code> parameter: <code>apply_water_shader(material, water_color=(0.2, 0.5, 0.9))</code>
-- Threshold of 0.5° works well for most real-world elevation data</p>
+- The default threshold of 0.5° works well for most real-world elevation data
+- For noisy terrain, increase threshold; for detailed water features, decrease it</p>
 <h3 id="running-this-example">Running This Example<a class="headerlink" href="#running-this-example" title="Permanent link">&para;</a></h3>
 <h4 id="basic-render">Basic Render<a class="headerlink" href="#basic-render" title="Permanent link">&para;</a></h4>
 <div class="codehilite"><pre><span></span><code>python<span class="w"> </span>examples/detroit_elevation_real.py
@@ -1499,8 +1495,8 @@
 <p>This will:
 1. Load SRTM elevation tiles from <code>data/dem/detroit/</code>
 2. Process the data with intelligent downsampling
-3. Generate a 1,370,951 vertex Blender mesh
-4. Render a publication-quality PNG (2.0 MB) from the north
+3. Generate a ~1.4 million vertex Blender mesh
+4. Render a publication-quality PNG with blue water coloring from the south
 5. Save a Blender file for further editing</p>
 <h4 id="generate-multiple-views">Generate Multiple Views<a class="headerlink" href="#generate-multiple-views" title="Permanent link">&para;</a></h4>
 <p>The example supports command-line arguments to easily create renders from different camera angles:</p>

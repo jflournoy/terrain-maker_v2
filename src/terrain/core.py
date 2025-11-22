@@ -2353,23 +2353,21 @@ class Terrain:
             dem_data = self.data_layers['dem']['transformed_data']
             water_mask = identify_water_by_slope(dem_data, slope_threshold=water_slope_threshold, fill_holes=True)
 
-            # Apply water mask to colors' alpha channel
-            # If colors exist, blend water mask into alpha
+            # Apply water mask to colors: color water blue, keep elevation colors for land
+            # Water color: RGB (26, 102, 204) normalized to (0.1, 0.4, 0.8)
+            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
+
+            # If colors exist, overwrite water pixels with blue
             if hasattr(self, 'colors') and self.colors is not None:
-                # Ensure we have RGBA
-                if self.colors.shape[-1] == 3:
-                    alpha = np.ones((self.colors.shape[0], self.colors.shape[1], 1), dtype=self.colors.dtype)
-                    self.colors = np.concatenate([self.colors, alpha], axis=-1)
+                # Ensure we have RGB (drop alpha if present for now)
+                if self.colors.shape[-1] >= 3:
+                    self.colors = self.colors[..., :3]
 
-                # Apply water mask to alpha: water = 1.0 (opaque), land = 0.0 (transparent)
-                # This allows the water shader to detect and render water appropriately
-                self.colors[..., 3] = np.where(water_mask, 1.0, 0.0)
-                if self.colors.dtype == np.uint8:
-                    self.colors[..., 3] = np.where(water_mask, 255, 0)
-
-                self.logger.info(f"Water mask applied to alpha channel ({np.sum(water_mask)} water pixels)")
+                # Color water pixels blue
+                self.colors[water_mask] = water_color
+                self.logger.info(f"Water colored blue ({np.sum(water_mask)} water pixels)")
             else:
-                # No colors yet, create them with water alpha
+                # No colors yet, create them with water coloring
                 height, width = dem_data.shape
                 if dem_data.dtype == np.float32 or dem_data.dtype == np.float64:
                     # Normalize elevation for color
@@ -2386,15 +2384,19 @@ class Terrain:
                     gray = np.clip(normalized * 255, 0, 255).astype(np.uint8)
                     rgb = np.stack([gray, gray, gray], axis=-1)
 
-                    # Add water alpha
-                    alpha = np.where(water_mask, 255, 0).astype(np.uint8)
-                    self.colors = np.concatenate([rgb[..., None], alpha[..., None]], axis=-1)
+                    # Override water pixels with blue
+                    rgb[water_mask] = water_color
+                    self.colors = rgb
                 else:
                     # If DEM is already scaled, use it directly
                     gray = np.clip(dem_data, 0, 255).astype(np.uint8)
                     rgb = np.stack([gray, gray, gray], axis=-1)
-                    alpha = np.where(water_mask, 255, 0).astype(np.uint8)
-                    self.colors = np.concatenate([rgb[..., None], alpha[..., None]], axis=-1)
+
+                    # Override water pixels with blue
+                    rgb[water_mask] = water_color
+                    self.colors = rgb
+
+                self.logger.info(f"Colors created with water coloring ({np.sum(water_mask)} water pixels as blue)")
 
         dem_data = self.data_layers['dem']['transformed_data']
         height, width = dem_data.shape
