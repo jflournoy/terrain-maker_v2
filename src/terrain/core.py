@@ -2220,13 +2220,15 @@ class Terrain:
         return colors
 
     def create_mesh(self, base_depth=-0.2, boundary_extension=True,
-                    scale_factor=100.0, height_scale=1.0, center_model=True, verbose=True):
+                    scale_factor=100.0, height_scale=1.0, center_model=True, verbose=True,
+                    detect_water=False, water_slope_threshold=0.5):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
 
         Generates vertices from DEM elevation values and faces for connectivity. Optionally
         creates boundary faces to close the mesh into a solid. Supports coordinate scaling
-        and elevation scaling for visualization.
+        and elevation scaling for visualization. Can optionally detect and apply water bodies
+        to vertex alpha channel for water rendering.
 
         Args:
             base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
@@ -2240,6 +2242,10 @@ class Terrain:
             center_model (bool): Whether to center the model at origin (default: True).
                 Centers XY coordinates but preserves absolute Z elevation values.
             verbose (bool): Whether to log detailed progress information (default: True).
+            detect_water (bool): Whether to detect water bodies and apply to alpha channel
+                (default: False). Uses slope-based detection.
+            water_slope_threshold (float): Maximum slope in degrees to classify as water
+                (default: 0.5). Only used if detect_water=True.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -2257,6 +2263,57 @@ class Terrain:
         # Compute colors if color mapping is set and colors haven't been computed yet
         if hasattr(self, 'color_mapping') and not hasattr(self, 'colors'):
             self.compute_colors()
+
+        # Apply water detection if requested
+        if detect_water:
+            self.logger.info(f"Detecting water bodies (slope threshold: {water_slope_threshold}°)...")
+            from src.terrain.water import identify_water_by_slope
+
+            dem_data = self.data_layers['dem']['transformed_data']
+            water_mask = identify_water_by_slope(dem_data, slope_threshold=water_slope_threshold, fill_holes=True)
+
+            # Apply water mask to colors' alpha channel
+            # If colors exist, blend water mask into alpha
+            if hasattr(self, 'colors') and self.colors is not None:
+                # Ensure we have RGBA
+                if self.colors.shape[-1] == 3:
+                    alpha = np.ones((self.colors.shape[0], self.colors.shape[1], 1), dtype=self.colors.dtype)
+                    self.colors = np.concatenate([self.colors, alpha], axis=-1)
+
+                # Apply water mask to alpha: water = 1.0 (opaque), land = 0.0 (transparent)
+                # This allows the water shader to detect and render water appropriately
+                self.colors[..., 3] = np.where(water_mask, 1.0, 0.0)
+                if self.colors.dtype == np.uint8:
+                    self.colors[..., 3] = np.where(water_mask, 255, 0)
+
+                self.logger.info(f"Water mask applied to alpha channel ({np.sum(water_mask)} water pixels)")
+            else:
+                # No colors yet, create them with water alpha
+                height, width = dem_data.shape
+                if dem_data.dtype == np.float32 or dem_data.dtype == np.float64:
+                    # Normalize elevation for color
+                    valid = ~np.isnan(dem_data)
+                    if np.any(valid):
+                        min_elev = np.nanmin(dem_data)
+                        max_elev = np.nanmax(dem_data)
+                        normalized = np.zeros_like(dem_data)
+                        normalized[valid] = (dem_data[valid] - min_elev) / (max_elev - min_elev + 1e-8)
+                    else:
+                        normalized = np.zeros_like(dem_data)
+
+                    # Create grayscale RGB from elevation
+                    gray = np.clip(normalized * 255, 0, 255).astype(np.uint8)
+                    rgb = np.stack([gray, gray, gray], axis=-1)
+
+                    # Add water alpha
+                    alpha = np.where(water_mask, 255, 0).astype(np.uint8)
+                    self.colors = np.concatenate([rgb[..., None], alpha[..., None]], axis=-1)
+                else:
+                    # If DEM is already scaled, use it directly
+                    gray = np.clip(dem_data, 0, 255).astype(np.uint8)
+                    rgb = np.stack([gray, gray, gray], axis=-1)
+                    alpha = np.where(water_mask, 255, 0).astype(np.uint8)
+                    self.colors = np.concatenate([rgb[..., None], alpha[..., None]], axis=-1)
 
         dem_data = self.data_layers['dem']['transformed_data']
         height, width = dem_data.shape
