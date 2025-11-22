@@ -574,6 +574,87 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
         logger.error(f"Error setting up material: {str(e)}")
         raise
 
+
+def apply_water_shader(material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.1, 0.4, 0.8)) -> None:
+    """
+    Apply water shader to material, coloring water areas based on vertex alpha channel.
+    Uses alpha channel to mix between water color and elevation colors.
+    Water pixels (alpha=1.0) render as water color; land pixels (alpha=0.0) show elevation colors.
+
+    Args:
+        material: Blender material to configure
+        water_color: RGB tuple for water (default: blue 0.1, 0.4, 0.8)
+    """
+    logger.info(f"Setting up water shader for {material.name}")
+
+    # Clear existing nodes
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    try:
+        # Create nodes
+        output = nodes.new('ShaderNodeOutputMaterial')
+        principled = nodes.new('ShaderNodeBsdfPrincipled')
+        emission = nodes.new('ShaderNodeEmission')
+        mix_shader = nodes.new('ShaderNodeMixShader')
+        vertex_color = nodes.new('ShaderNodeVertexColor')
+        mix_rgb = nodes.new('ShaderNodeMixRGB')  # Mix colors based on alpha
+
+        # Position nodes
+        output.location = (800, 300)
+        mix_shader.location = (600, 300)
+        mix_rgb.location = (400, 300)
+        principled.location = (200, 400)
+        emission.location = (200, 200)
+        vertex_color.location = (0, 300)
+
+        # Set vertex color layer
+        vertex_color.layer_name = "TerrainColors"
+
+        # Configure water color
+        water_rgba = (*water_color, 1.0)
+
+        # Configure emission shader
+        emission.inputs['Strength'].default_value = 1.5
+
+        # Set principled shader
+        principled.inputs['Base Color'].default_value = (0.5, 0.5, 0.5, 1.0)
+        principled.inputs['Roughness'].default_value = 0.6  # Water is slightly smoother
+
+        # Configure mix RGB for blending land and water colors
+        # Factor from alpha: 0 = land (use vertex color), 1 = water (use water color)
+        mix_rgb.inputs['Color1'].default_value = water_rgba  # Water color
+        mix_rgb.inputs['Color2'].default_value = (0.5, 0.5, 0.5, 1.0)  # Default (overridden by vertex color)
+
+        # Create connections
+        logger.debug("Creating node connections with water shader")
+
+        # Use alpha channel from vertex color to control water/land mixing
+        # Alpha > 0.5 = water, Alpha < 0.5 = land
+        links.new(vertex_color.outputs['Alpha'], mix_rgb.inputs['Fac'])
+
+        # Use vertex color as the land color input (Color2)
+        links.new(vertex_color.outputs['Color'], mix_rgb.inputs['Color2'])
+
+        # Use mixed color for both emission and principled
+        links.new(mix_rgb.outputs['Color'], emission.inputs['Color'])
+        links.new(mix_rgb.outputs['Color'], principled.inputs['Base Color'])
+
+        # Mix between principled and emission
+        links.new(principled.outputs['BSDF'], mix_shader.inputs[1])
+        links.new(emission.outputs['Emission'], mix_shader.inputs[2])
+        mix_shader.inputs[0].default_value = 0.3
+
+        # Connect to output
+        links.new(mix_shader.outputs['Shader'], output.inputs['Surface'])
+
+        logger.info("Water shader setup completed successfully")
+
+    except Exception as e:
+        logger.error(f"Error setting up water shader: {str(e)}")
+        raise
+
 def create_background_plane(
     terrain_obj: bpy.types.Object, 
     depth: float = -2.0, 
