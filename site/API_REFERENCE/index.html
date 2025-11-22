@@ -1,0 +1,2389 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../EXAMPLES/">
+      
+      
+        <link rel="next" href="../WORKFLOWS/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>API Reference - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#terrain-maker-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terraincore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        terrain.core
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="terrain.core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#terrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terraincache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TerrainCache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add_data_layerself-name-data-transform-crs-target_crs-target_layer-resampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add_transformself-transform_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_transform(self, transform_func)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply_colormap_materialmaterial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_colormap_material(material)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply_transformsself-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transforms(self, cache)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear_scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear_scene()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compute_colorsself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute_colors(self)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compute_data_layerself-name-source_layer-compute_func-transformed-cache_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configure_for_target_verticesself-target_vertices-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        configure_for_target_vertices(self, target_vertices, order)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_background_planeterrain_obj-depth-scale_factor-material_params" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_background_plane(terrain_obj, depth, scale_factor, material_params)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_meshself-base_depth-boundary_extension-scale_factor-height_scale-center_model-verbose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downsample_rasterzoom_factor-order-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        downsample_raster(zoom_factor, order, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#elevation_colormapdem_data-cmap_name-min_elev-max_elev" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        elevation_colormap(dem_data, cmap_name, min_elev, max_elev)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existsself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        exists(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flip_rasteraxis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        flip_raster(axis)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_target_pathself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_target_path(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_dem_filesdirectory_path-pattern-recursive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_dem_files(directory_path, pattern, recursive)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#position_camera_relativemesh_obj-direction-distance-elevation-look_at-camera_type-sun_angle-sun_energy-focal_length" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        position_camera_relative(mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render_scene_to_fileoutput_path-width-height-file_format-color_mode-compression-save_blend_file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_scene_to_file(output_path, width, height, file_format, color_mode, compression, save_blend_file)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproject_rastersrc_crs-dst_crs-nodata_value-num_threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reproject_raster(src_crs, dst_crs, nodata_value, num_threads)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sample_arrayarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sample_array(arr)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saveself-target_name-data-transform-crs-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save(self, target_name, data, transform, crs, metadata)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scale_elevationscale_factor-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scale_elevation(scale_factor, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_color_mappingself-color_func-source_layers-color_kwargs-mask_func-mask_layers-mask_kwargs-mask_threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_cameracamera_angle-camera_location-scale-focal_length-camera_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_camera_and_lightcamera_angle-camera_location-scale-sun_angle-sun_energy-focal_length-camera_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_camera_and_light(camera_angle, camera_location, scale, sun_angle, sun_energy, focal_length, camera_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_lightlocation-angle-energy-rotation_euler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_light(location, angle, energy, rotation_euler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_render_settingsuse_gpu-samples-preview_samples-use_denoising-denoiser-compute_device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_render_settings(use_gpu, samples, preview_samples, use_denoising, denoiser, compute_device)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_world_atmospheredensity-scatter_color-anisotropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_world_atmosphere(density, scatter_color, anisotropy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slope_colormapslopes-cmap_name-min_slope-max_slope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        slope_colormap(slopes, cmap_name, min_slope, max_slope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smooth_rasterwindow_size-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        smooth_raster(window_size, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transformraster_data-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform(raster_data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transform_funcdata-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_func(data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transform_wrappertransform_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_wrapper(transform_func)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualize_demself-layer-use_transformed-title-cmap-percentile_clip-clip_percentiles-max_pixels-show_histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wrapped_transformdata-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wrapped_transform(data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terraincore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        terrain.core
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="terrain.core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#terrain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terrain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#terraincache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TerrainCache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add_data_layerself-name-data-transform-crs-target_crs-target_layer-resampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add_transformself-transform_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add_transform(self, transform_func)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply_colormap_materialmaterial" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_colormap_material(material)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply_transformsself-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        apply_transforms(self, cache)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear_scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        clear_scene()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compute_colorsself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute_colors(self)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compute_data_layerself-name-source_layer-compute_func-transformed-cache_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configure_for_target_verticesself-target_vertices-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        configure_for_target_vertices(self, target_vertices, order)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_background_planeterrain_obj-depth-scale_factor-material_params" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_background_plane(terrain_obj, depth, scale_factor, material_params)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#create_meshself-base_depth-boundary_extension-scale_factor-height_scale-center_model-verbose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downsample_rasterzoom_factor-order-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        downsample_raster(zoom_factor, order, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#elevation_colormapdem_data-cmap_name-min_elev-max_elev" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        elevation_colormap(dem_data, cmap_name, min_elev, max_elev)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existsself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        exists(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flip_rasteraxis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        flip_raster(axis)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_target_pathself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_target_path(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadself-target_name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load(self, target_name)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_dem_filesdirectory_path-pattern-recursive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_dem_files(directory_path, pattern, recursive)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#position_camera_relativemesh_obj-direction-distance-elevation-look_at-camera_type-sun_angle-sun_energy-focal_length" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        position_camera_relative(mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#render_scene_to_fileoutput_path-width-height-file_format-color_mode-compression-save_blend_file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        render_scene_to_file(output_path, width, height, file_format, color_mode, compression, save_blend_file)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproject_rastersrc_crs-dst_crs-nodata_value-num_threads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reproject_raster(src_crs, dst_crs, nodata_value, num_threads)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sample_arrayarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sample_array(arr)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#saveself-target_name-data-transform-crs-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        save(self, target_name, data, transform, crs, metadata)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scale_elevationscale_factor-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        scale_elevation(scale_factor, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_color_mappingself-color_func-source_layers-color_kwargs-mask_func-mask_layers-mask_kwargs-mask_threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_cameracamera_angle-camera_location-scale-focal_length-camera_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_camera_and_lightcamera_angle-camera_location-scale-sun_angle-sun_energy-focal_length-camera_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_camera_and_light(camera_angle, camera_location, scale, sun_angle, sun_energy, focal_length, camera_type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_lightlocation-angle-energy-rotation_euler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_light(location, angle, energy, rotation_euler)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_render_settingsuse_gpu-samples-preview_samples-use_denoising-denoiser-compute_device" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_render_settings(use_gpu, samples, preview_samples, use_denoising, denoiser, compute_device)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup_world_atmospheredensity-scatter_color-anisotropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        setup_world_atmosphere(density, scatter_color, anisotropy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slope_colormapslopes-cmap_name-min_slope-max_slope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        slope_colormap(slopes, cmap_name, min_slope, max_slope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smooth_rasterwindow_size-nodata_value" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        smooth_raster(window_size, nodata_value)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transformraster_data-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform(raster_data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transform_funcdata-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_func(data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transform_wrappertransform_func" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_wrapper(transform_func)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#visualize_demself-layer-use_transformed-title-cmap-percentile_clip-clip_percentiles-max_pixels-show_histogram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wrapped_transformdata-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        wrapped_transform(data, transform)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="terrain-maker-api-reference">terrain-maker API Reference<a class="headerlink" href="#terrain-maker-api-reference" title="Permanent link">&para;</a></h1>
+<p>Comprehensive documentation of all classes and functions in the terrain-maker library.</p>
+<p><strong>Auto-generated from source code docstrings.</strong></p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#terrain-core">terrain.core</a></li>
+</ul>
+<hr />
+<h2 id="terraincore">terrain.core<a class="headerlink" href="#terraincore" title="Permanent link">&para;</a></h2>
+<h3 id="classes">Classes<a class="headerlink" href="#classes" title="Permanent link">&para;</a></h3>
+<h4 id="terrain"><code>Terrain</code><a class="headerlink" href="#terrain" title="Permanent link">&para;</a></h4>
+<p>Core class for managing Digital Elevation Model (DEM) data and terrain operations.</p>
+<p>Handles loading, transforming, and visualizing terrain data from raster sources.
+Supports coordinate reprojection, downsampling, color mapping, and 3D mesh generation
+for Blender visualization. Uses efficient caching to avoid recomputation of transforms.</p>
+<p>Attributes:
+    dem_shape (tuple): Shape of DEM array as (height, width).
+    dem_transform (rasterio.Affine): Affine transform for geographic coordinates.
+    data_layers (dict): Dictionary of data layers (DEM, overlays, derived data).
+    transforms (list): List of transform functions to apply.
+    vertices (np.ndarray): Vertex positions for generated mesh.
+    vertex_colors (np.ndarray): RGBA colors for mesh vertices.</p>
+<p>Examples:
+    &gt;&gt;&gt; dem_data = np.random.rand(100, 100) * 1000
+    &gt;&gt;&gt; transform = rasterio.Affine.identity()
+    &gt;&gt;&gt; terrain = Terrain(dem_data, transform, dem_crs='EPSG:4326')
+    &gt;&gt;&gt; terrain.apply_transforms()
+    &gt;&gt;&gt; mesh = terrain.create_mesh(scale_factor=100.0)</p>
+<p><strong>Methods:</strong></p>
+<ul>
+<li>
+<p><code>add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)</code> - Add a data layer, optionally reprojecting to match another layer.</p>
+</li>
+<li>
+<p><code>add_transform(self, transform_func)</code> - Add a transform function to the processing pipeline.</p>
+</li>
+<li>
+<p><code>apply_transforms(self, cache)</code> - Apply all transforms to all data layers with optional caching.</p>
+</li>
+<li>
+<p><code>compute_colors(self)</code> - Compute colors using color_func and optionally mask_func.</p>
+</li>
+<li>
+<p><code>compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)</code> - Compute a new data layer from an existing one using a transformation function.</p>
+</li>
+<li>
+<p><code>configure_for_target_vertices(self, target_vertices, order)</code> - Configure downsampling to achieve approximately target_vertices.</p>
+</li>
+<li>
+<p><code>create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)</code> - Create a Blender mesh from transformed DEM data with both performance and control.</p>
+</li>
+<li>
+<p><code>set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)</code> - Set up how to map data layers to colors (RGB) and optionally a mask/alpha channel.</p>
+</li>
+<li>
+<p><code>visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)</code> - Create diagnostic visualization of any terrain data layer.</p>
+</li>
+</ul>
+<h4 id="terraincache"><code>TerrainCache</code><a class="headerlink" href="#terraincache" title="Permanent link">&para;</a></h4>
+<p>Cache manager for terrain data processing results.</p>
+<p>Handles persistent storage and retrieval of transformed terrain data layers
+as GeoTIFF files with geographic metadata. Supports loading and saving with
+coordinate reference system (CRS) and custom metadata.</p>
+<p>Attributes:
+    cache_dir (Path): Root directory for cached GeoTIFF files.
+    logger (logging.Logger): Logger instance for cache operations.</p>
+<p>Examples:
+    &gt;&gt;&gt; cache = TerrainCache('my_cache_dir')
+    &gt;&gt;&gt; cache.save('dem_transformed', dem_array, transform, 'EPSG:32617')
+    &gt;&gt;&gt; data, transform, crs = cache.load('dem_transformed')</p>
+<p><strong>Methods:</strong></p>
+<ul>
+<li>
+<p><code>exists(self, target_name)</code> - Check if target exists</p>
+</li>
+<li>
+<p><code>get_target_path(self, target_name)</code> - Get path for a specific target</p>
+</li>
+<li>
+<p><code>load(self, target_name)</code> - Load GeoTIFF and metadata if it exists</p>
+</li>
+<li>
+<p><code>save(self, target_name, data, transform, crs, metadata)</code> - Save data as GeoTIFF with CRS and metadata</p>
+</li>
+</ul>
+<h3 id="functions">Functions<a class="headerlink" href="#functions" title="Permanent link">&para;</a></h3>
+<h4 id="add_data_layerself-name-data-transform-crs-target_crs-target_layer-resampling"><code>add_data_layer(self, name, data, transform, crs, target_crs, target_layer, resampling)</code><a class="headerlink" href="#add_data_layerself-name-data-transform-crs-target_crs-target_layer-resampling" title="Permanent link">&para;</a></h4>
+<p>Add a data layer, optionally reprojecting to match another layer.</p>
+<p>Stores data with geographic metadata (CRS and transform). Can automatically
+reproject and resample to match an existing layer's grid for multi-layer analysis.</p>
+<p>Args:
+    name (str): Unique name for this data layer (e.g., 'dem', 'elevation', 'slope').
+    data (np.ndarray): 2D array of data values, shape (height, width).
+    transform (rasterio.Affine): Affine transform mapping pixel to geographic coords.
+    crs (str): Coordinate reference system in EPSG format (e.g., 'EPSG:4326').
+    target_crs (str, optional): Target CRS to reproject to. If None and target_layer
+        specified, uses target layer's CRS. If None and no target, uses input crs.
+    target_layer (str, optional): Name of existing layer to match grid and CRS.
+        If specified, data is automatically reprojected and resampled to align.
+    resampling (rasterio.enums.Resampling): Resampling method for reprojection
+        (default: Resampling.bilinear). See rasterio docs for options.</p>
+<p>Returns:
+    None: Modifies internal data_layers dictionary.</p>
+<p>Raises:
+    KeyError: If target_layer specified but doesn't exist.
+    ValueError: If target_crs specified but no reference layer available.</p>
+<p>Examples:
+    &gt;&gt;&gt; # Add elevation data with native CRS
+    &gt;&gt;&gt; terrain.add_data_layer('dem', dem_array, transform, 'EPSG:4326')</p>
+<div class="codehilite"><pre><span></span><code>&gt;&gt;&gt; # Add overlay data, reproject to match DEM
+&gt;&gt;&gt; terrain.add_data_layer(&#39;landcover&#39;, lc_array, lc_transform, &#39;EPSG:3857&#39;,
+<span class="k">...</span>                        target_layer=&#39;dem&#39;)
+
+&gt;&gt;&gt; # Use nearest-neighbor for categorical data
+&gt;&gt;&gt; terrain.add_data_layer(&#39;zones&#39;, zone_array, zone_transform, &#39;EPSG:4326&#39;,
+<span class="k">...</span>                        target_layer=&#39;dem&#39;, resampling=Resampling.nearest)
+</code></pre></div>
+
+<h4 id="add_transformself-transform_func"><code>add_transform(self, transform_func)</code><a class="headerlink" href="#add_transformself-transform_func" title="Permanent link">&para;</a></h4>
+<p>Add a transform function to the processing pipeline.</p>
+<p>Args:
+    transform_func (callable): Function that transforms DEM data. Should accept
+        (dem_array: np.ndarray) and return transformed np.ndarray.</p>
+<p>Returns:
+    None: Modifies internal transforms list in place.</p>
+<p>Examples:
+    &gt;&gt;&gt; terrain.add_transform(lambda dem: gaussian_filter(dem, sigma=2))
+    &gt;&gt;&gt; terrain.apply_transforms()</p>
+<h4 id="apply_colormap_materialmaterial"><code>apply_colormap_material(material)</code><a class="headerlink" href="#apply_colormap_materialmaterial" title="Permanent link">&para;</a></h4>
+<p>Create a simple material setup for terrain visualization using vertex colors.
+Uses emission to guarantee colors are visible regardless of lighting.</p>
+<p>Args:
+    material: Blender material to configure</p>
+<h4 id="apply_transformsself-cache"><code>apply_transforms(self, cache)</code><a class="headerlink" href="#apply_transformsself-cache" title="Permanent link">&para;</a></h4>
+<p>Apply all transforms to all data layers with optional caching.</p>
+<p>Processes each data layer through the transform pipeline. Results are cached
+to avoid recomputation. Transforms are applied in order.</p>
+<p>Args:
+    cache (bool): Whether to cache results (default: False).</p>
+<p>Returns:
+    None: Updates internal data_layers with 'transformed_data' for each layer.</p>
+<p>Examples:
+    &gt;&gt;&gt; terrain.add_transform(flip_raster(axis='horizontal'))
+    &gt;&gt;&gt; terrain.apply_transforms(cache=True)
+    &gt;&gt;&gt; dem_data = terrain.data_layers['dem']['transformed_data']</p>
+<h4 id="clear_scene"><code>clear_scene()</code><a class="headerlink" href="#clear_scene" title="Permanent link">&para;</a></h4>
+<p>Clear all objects from the Blender scene.</p>
+<p>Resets the scene to factory settings (empty scene) and removes all default
+objects. Useful before importing terrain meshes to ensure a clean workspace.</p>
+<p>Raises:
+    RuntimeError: If Blender module (bpy) is not available.</p>
+<h4 id="compute_colorsself"><code>compute_colors(self)</code><a class="headerlink" href="#compute_colorsself" title="Permanent link">&para;</a></h4>
+<p>Compute colors using color_func and optionally mask_func.</p>
+<p>Returns:
+    np.ndarray: RGBA color array.</p>
+<h4 id="compute_data_layerself-name-source_layer-compute_func-transformed-cache_key"><code>compute_data_layer(self, name, source_layer, compute_func, transformed, cache_key)</code><a class="headerlink" href="#compute_data_layerself-name-source_layer-compute_func-transformed-cache_key" title="Permanent link">&para;</a></h4>
+<p>Compute a new data layer from an existing one using a transformation function.</p>
+<p>Allows creating derived layers (e.g., slope, aspect, hillshade) from existing data.
+Results are stored as new layer and optionally cached.</p>
+<p>Args:
+    name (str): Name for the computed layer.
+    source_layer (str): Name of existing source layer to compute from.
+    compute_func (Callable): Function that accepts source array (np.ndarray)
+        and returns computed array (np.ndarray). Can return same or different shape.
+    transformed (bool): If True, use already-transformed source data; if False,
+        use original source data (default: False).
+    cache_key (str, optional): Custom cache identifier. If None, auto-generated
+        from layer name and function name.</p>
+<p>Returns:
+    np.ndarray: The computed layer data array.</p>
+<p>Raises:
+    KeyError: If source_layer doesn't exist.
+    ValueError: If transformed=True but source hasn't been transformed.</p>
+<p>Examples:
+    &gt;&gt;&gt; # Compute slope from DEM using scipy
+    &gt;&gt;&gt; from scipy.ndimage import sobel
+    &gt;&gt;&gt; slope = terrain.compute_data_layer(
+    ...     'slope', 'dem',
+    ...     lambda dem: np.sqrt(sobel(dem, axis=0)<strong>2 + sobel(dem, axis=1)</strong>2)
+    ... )</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="c1"># Compute hill-shade visualization</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.ndimage</span><span class="w"> </span><span class="kn">import</span> <span class="n">gaussian_filter</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">hillshade</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">compute_data_layer</span><span class="p">(</span>
+<span class="o">...</span>     <span class="s1">&#39;hillshade&#39;</span><span class="p">,</span> <span class="s1">&#39;dem&#39;</span><span class="p">,</span>
+<span class="o">...</span>     <span class="k">lambda</span> <span class="n">dem</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">gaussian_filter</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="o">...</span> <span class="p">)</span>
+
+<span class="o">&gt;&gt;&gt;</span> <span class="c1"># Compute from transformed (downsampled) data</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">downsampled_slope</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">compute_data_layer</span><span class="p">(</span>
+<span class="o">...</span>     <span class="s1">&#39;slope_downsampled&#39;</span><span class="p">,</span> <span class="s1">&#39;dem&#39;</span><span class="p">,</span>
+<span class="o">...</span>     <span class="k">lambda</span> <span class="n">dem</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">gradient</span><span class="p">(</span><span class="n">dem</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span>
+<span class="o">...</span>     <span class="n">transformed</span><span class="o">=</span><span class="kc">True</span>
+<span class="o">...</span> <span class="p">)</span>
+</code></pre></div>
+
+<h4 id="configure_for_target_verticesself-target_vertices-order"><code>configure_for_target_vertices(self, target_vertices, order)</code><a class="headerlink" href="#configure_for_target_verticesself-target_vertices-order" title="Permanent link">&para;</a></h4>
+<p>Configure downsampling to achieve approximately target_vertices.</p>
+<p>This method calculates the appropriate zoom_factor to achieve a desired
+vertex count for mesh generation. It provides a more intuitive API than
+manually calculating zoom_factor from the original DEM shape.</p>
+<p>Args:
+    target_vertices: Desired vertex count for final mesh (e.g., 500_000)
+    order: Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic)</p>
+<p>Returns:
+    Calculated zoom_factor that was added to transforms</p>
+<p>Raises:
+    ValueError: If target_vertices is invalid</p>
+<p>Example:
+    terrain = Terrain(dem, transform)
+    zoom = terrain.configure_for_target_vertices(500_000)
+    print(f"Calculated zoom_factor: {zoom:.4f}")
+    terrain.apply_transforms()
+    mesh = terrain.create_mesh(scale_factor=400.0)</p>
+<h4 id="create_background_planeterrain_obj-depth-scale_factor-material_params"><code>create_background_plane(terrain_obj, depth, scale_factor, material_params)</code><a class="headerlink" href="#create_background_planeterrain_obj-depth-scale_factor-material_params" title="Permanent link">&para;</a></h4>
+<p>Create a large emissive plane beneath the terrain for background illumination.</p>
+<p>Args:
+    terrain_obj: The terrain Blender object used for size reference
+    depth: Z-coordinate for the plane position
+    scale_factor: Scale multiplier for plane size relative to terrain
+    material_params: Optional dict to override default material parameters</p>
+<p>Returns:
+    bpy.types.Object: The created background plane object</p>
+<p>Raises:
+    ValueError: If terrain_obj is None or has invalid bounds
+    RuntimeError: If mesh or material creation fails</p>
+<h4 id="create_meshself-base_depth-boundary_extension-scale_factor-height_scale-center_model-verbose"><code>create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose)</code><a class="headerlink" href="#create_meshself-base_depth-boundary_extension-scale_factor-height_scale-center_model-verbose" title="Permanent link">&para;</a></h4>
+<p>Create a Blender mesh from transformed DEM data with both performance and control.</p>
+<p>Generates vertices from DEM elevation values and faces for connectivity. Optionally
+creates boundary faces to close the mesh into a solid. Supports coordinate scaling
+and elevation scaling for visualization.</p>
+<p>Args:
+    base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
+        Used when boundary_extension=True to create side faces.
+    boundary_extension (bool): Whether to create side faces around the terrain boundary
+        to close the mesh (default: True). If False, creates open terrain surface.
+    scale_factor (float): Horizontal scale divisor for x/y coordinates (default: 100.0).
+        Higher values produce smaller meshes. E.g., 100 means 100 DEM units = 1 Blender unit.
+    height_scale (float): Multiplier for elevation values (default: 1.0). Vertically
+        exaggerates or reduces terrain features. Values &gt; 1 exaggerate, &lt; 1 flatten.
+    center_model (bool): Whether to center the model at origin (default: True).
+        Centers XY coordinates but preserves absolute Z elevation values.
+    verbose (bool): Whether to log detailed progress information (default: True).</p>
+<p>Returns:
+    bpy.types.Object | None: The created terrain mesh object, or None if creation failed.</p>
+<p>Raises:
+    ValueError: If transformed DEM layer is not available (apply_transforms() not called).</p>
+<h4 id="downsample_rasterzoom_factor-order-nodata_value"><code>downsample_raster(zoom_factor, order, nodata_value)</code><a class="headerlink" href="#downsample_rasterzoom_factor-order-nodata_value" title="Permanent link">&para;</a></h4>
+<p>Create a raster downsampling transform function with specified parameters.</p>
+<p>Args:
+    zoom_factor: Scaling factor for downsampling (default: 0.1)
+    order: Interpolation order (default: 4)
+    nodata_value: Value to treat as no data (default: np.nan)</p>
+<p>Returns:
+    function: A transform function that downsamples raster data</p>
+<h4 id="elevation_colormapdem_data-cmap_name-min_elev-max_elev"><code>elevation_colormap(dem_data, cmap_name, min_elev, max_elev)</code><a class="headerlink" href="#elevation_colormapdem_data-cmap_name-min_elev-max_elev" title="Permanent link">&para;</a></h4>
+<p>Create a colormap based on elevation values.</p>
+<p>Maps elevation data to colors using a matplotlib colormap.
+Low elevations map to the start of the colormap, high elevations to the end.</p>
+<p>Args:
+    dem_data: 2D numpy array of elevation values
+    cmap_name: Matplotlib colormap name (default: 'viridis')
+    min_elev: Minimum elevation for normalization (default: use data min)
+    max_elev: Maximum elevation for normalization (default: use data max)</p>
+<p>Returns:
+    Array of RGB colors with shape (height, width, 3) as uint8</p>
+<h4 id="existsself-target_name"><code>exists(self, target_name)</code><a class="headerlink" href="#existsself-target_name" title="Permanent link">&para;</a></h4>
+<p>Check if target exists</p>
+<h4 id="flip_rasteraxis"><code>flip_raster(axis)</code><a class="headerlink" href="#flip_rasteraxis" title="Permanent link">&para;</a></h4>
+<p>Create a transform function that mirrors (flips) the DEM data.
+If axis='horizontal', it flips top ↔ bottom.
+(In terms of rows, row=0 becomes row=(height-1).)</p>
+<p>If axis='vertical', you could do left ↔ right (np.fliplr).</p>
+<h4 id="get_target_pathself-target_name"><code>get_target_path(self, target_name)</code><a class="headerlink" href="#get_target_pathself-target_name" title="Permanent link">&para;</a></h4>
+<p>Get path for a specific target</p>
+<h4 id="loadself-target_name"><code>load(self, target_name)</code><a class="headerlink" href="#loadself-target_name" title="Permanent link">&para;</a></h4>
+<p>Load GeoTIFF and metadata if it exists</p>
+<h4 id="load_dem_filesdirectory_path-pattern-recursive"><code>load_dem_files(directory_path, pattern, recursive)</code><a class="headerlink" href="#load_dem_filesdirectory_path-pattern-recursive" title="Permanent link">&para;</a></h4>
+<p>Load and merge DEM files from a directory into a single elevation dataset.
+Supports any raster format readable by rasterio (HGT, GeoTIFF, etc.).</p>
+<p>Args:
+    directory_path: Path to directory containing DEM files
+    pattern: File pattern to match (default: "*.hgt")
+    recursive: Whether to search subdirectories recursively (default: False)</p>
+<p>Returns:
+    tuple: (merged_dem, transform) where:
+        - merged_dem: numpy array containing the merged elevation data
+        - transform: affine transform mapping pixel to geographic coordinates</p>
+<p>Raises:
+    ValueError: If no valid DEM files are found or directory doesn't exist
+    OSError: If directory access fails or file reading fails
+    rasterio.errors.RasterioIOError: If there are issues reading the DEM files</p>
+<h4 id="position_camera_relativemesh_obj-direction-distance-elevation-look_at-camera_type-sun_angle-sun_energy-focal_length"><code>position_camera_relative(mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length)</code><a class="headerlink" href="#position_camera_relativemesh_obj-direction-distance-elevation-look_at-camera_type-sun_angle-sun_energy-focal_length" title="Permanent link">&para;</a></h4>
+<p>Position camera relative to mesh using intuitive cardinal directions.</p>
+<p>Simplifies camera positioning by using natural directions (north, south, etc.)
+instead of absolute Blender coordinates. The camera is automatically positioned
+relative to the mesh bounds and rotated to point at the mesh center.</p>
+<p>Args:
+    mesh_obj: Blender mesh object to position camera relative to
+    direction: Cardinal direction - one of:
+        'north', 'south', 'east', 'west' (horizontal directions)
+        'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
+        'above' (directly overhead)
+        Default: 'south'
+    distance: Distance multiplier relative to mesh diagonal
+        (e.g., 1.5 means 1.5x mesh_diagonal away). Default: 1.5
+    elevation: Height as fraction of mesh diagonal added to Z position
+        (0.0 = ground level, 1.0 = mesh_diagonal above ground). Default: 0.5
+    look_at: Where camera points - 'center' to point at mesh center,
+        or tuple (x, y, z) for custom target. Default: 'center'
+    camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
+    sun_angle: Angle of sun light in degrees. Default: 2
+    sun_energy: Intensity of sun light. Default: 3
+    focal_length: Camera focal length in mm (perspective cameras only). Default: 50</p>
+<p>Returns:
+    Camera object</p>
+<p>Raises:
+    ValueError: If direction is not recognized or camera_type is invalid</p>
+<h4 id="render_scene_to_fileoutput_path-width-height-file_format-color_mode-compression-save_blend_file"><code>render_scene_to_file(output_path, width, height, file_format, color_mode, compression, save_blend_file)</code><a class="headerlink" href="#render_scene_to_fileoutput_path-width-height-file_format-color_mode-compression-save_blend_file" title="Permanent link">&para;</a></h4>
+<p>Render the current Blender scene to file.</p>
+<p>Args:
+    output_path (str or Path): Path where output file will be saved
+    width (int): Render width in pixels (default: 1920)
+    height (int): Render height in pixels (default: 1440)
+    file_format (str): Output format 'PNG', 'JPEG', etc. (default: 'PNG')
+    color_mode (str): 'RGBA' or 'RGB' (default: 'RGBA')
+    compression (int): PNG compression level 0-100 (default: 90)
+    save_blend_file (bool): Also save .blend project file (default: True)</p>
+<p>Returns:
+    Path: Path to rendered file if successful, None otherwise</p>
+<h4 id="reproject_rastersrc_crs-dst_crs-nodata_value-num_threads"><code>reproject_raster(src_crs, dst_crs, nodata_value, num_threads)</code><a class="headerlink" href="#reproject_rastersrc_crs-dst_crs-nodata_value-num_threads" title="Permanent link">&para;</a></h4>
+<p>Generalized raster reprojection function</p>
+<p>Args:
+    src_crs: Source coordinate reference system
+    dst_crs: Destination coordinate reference system
+    nodata_value: Value to use for areas outside original data
+    num_threads: Number of threads for parallel processing</p>
+<p>Returns:
+    Function that transforms data and returns (data, transform, new_crs)</p>
+<h4 id="sample_arrayarr"><code>sample_array(arr)</code><a class="headerlink" href="#sample_arrayarr" title="Permanent link">&para;</a></h4>
+<p>Downsample array for visualization if it exceeds max_pixels limit.</p>
+<h4 id="saveself-target_name-data-transform-crs-metadata"><code>save(self, target_name, data, transform, crs, metadata)</code><a class="headerlink" href="#saveself-target_name-data-transform-crs-metadata" title="Permanent link">&para;</a></h4>
+<p>Save data as GeoTIFF with CRS and metadata</p>
+<h4 id="scale_elevationscale_factor-nodata_value"><code>scale_elevation(scale_factor, nodata_value)</code><a class="headerlink" href="#scale_elevationscale_factor-nodata_value" title="Permanent link">&para;</a></h4>
+<p>Create a raster elevation scaling transform function.</p>
+<p>Multiplies all elevation values by the scale factor. Useful for reducing
+or amplifying terrain height without changing horizontal scale.</p>
+<p>Args:
+    scale_factor (float): Multiplication factor for elevation values (default: 1.0)
+    nodata_value: Value to treat as no data (default: np.nan)</p>
+<p>Returns:
+    function: A transform function that scales elevation data</p>
+<h4 id="set_color_mappingself-color_func-source_layers-color_kwargs-mask_func-mask_layers-mask_kwargs-mask_threshold"><code>set_color_mapping(self, color_func, source_layers, color_kwargs, mask_func, mask_layers, mask_kwargs, mask_threshold)</code><a class="headerlink" href="#set_color_mappingself-color_func-source_layers-color_kwargs-mask_func-mask_layers-mask_kwargs-mask_threshold" title="Permanent link">&para;</a></h4>
+<p>Set up how to map data layers to colors (RGB) and optionally a mask/alpha channel.</p>
+<p>Allows flexible color mapping by applying a function to one or more data layers.
+Optionally applies a separate mask function for transparency/alpha channel control.
+Color mapping is applied during mesh creation with <code>compute_colors()</code>.</p>
+<p>Args:
+    color_func (Callable): Function that accepts N data arrays (one per source_layers)
+        and returns colored array of shape (H, W, 3) for RGB or (H, W, 4) for RGBA.
+        Values should be in range [0, 1] for 8-bit output.
+    source_layers (list[str]): Names of data layers to pass to color_func, in order.
+        E.g., ['dem'] for single layer or ['red', 'green', 'blue'] for composite.
+    color_kwargs (dict, optional): Additional keyword arguments passed to color_func.
+    mask_func (Callable, optional): Function producing alpha/mask values (0-1) for
+        transparency. Takes layer arrays as input. If omitted, fully opaque.
+    mask_layers (list[str] | str, optional): Layer names for mask_func. If None,
+        uses source_layers. Single string converted to list.
+    mask_kwargs (dict, optional): Additional keyword arguments for mask_func.
+    mask_threshold (float, optional): If mask_func is threshold-based, convenience
+        parameter for threshold value (implementation-dependent).</p>
+<p>Returns:
+    None: Modifies internal color mapping configuration.</p>
+<p>Raises:
+    ValueError: If source_layers or mask_layers refer to non-existent layers.</p>
+<p>Examples:
+    &gt;&gt;&gt; # Single-layer elevation with viridis colormap
+    &gt;&gt;&gt; from matplotlib.cm import viridis
+    &gt;&gt;&gt; terrain.set_color_mapping(
+    ...     lambda dem: viridis(dem / dem.max()),
+    ...     ['dem']
+    ... )</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">RGB</span><span class="w"> </span><span class="nx">composite</span><span class="w"> </span><span class="nx">from</span><span class="w"> </span><span class="nx">three</span><span class="w"> </span><span class="nx">layers</span>
+<span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="nx">terrain</span><span class="p">.</span><span class="nx">set_color_mapping</span><span class="p">(</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">lambda</span><span class="w"> </span><span class="nx">r</span><span class="p">,</span><span class="w"> </span><span class="nx">g</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">:</span><span class="w"> </span><span class="nx">np</span><span class="p">.</span><span class="nx">stack</span><span class="p">([</span><span class="nx">r</span><span class="p">,</span><span class="w"> </span><span class="nx">g</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">],</span><span class="w"> </span><span class="nx">axis</span><span class="p">=</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+<span class="o">...</span><span class="w">     </span><span class="p">[</span><span class="err">&#39;</span><span class="nx">red_band</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">green_band</span><span class="err">&#39;</span><span class="p">,</span><span class="w"> </span><span class="err">&#39;</span><span class="nx">blue_band</span><span class="err">&#39;</span><span class="p">]</span>
+<span class="o">...</span><span class="w"> </span><span class="p">)</span>
+
+<span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">Elevation</span><span class="w"> </span><span class="nx">with</span><span class="w"> </span><span class="nx">water</span><span class="w"> </span><span class="nx">transparency</span><span class="w"> </span><span class="nx">mask</span>
+<span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="nx">terrain</span><span class="p">.</span><span class="nx">set_color_mapping</span><span class="p">(</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">lambda</span><span class="w"> </span><span class="nx">dem</span><span class="p">:</span><span class="w"> </span><span class="nx">elevation_colormap</span><span class="p">(</span><span class="nx">dem</span><span class="p">),</span>
+<span class="o">...</span><span class="w">     </span><span class="p">[</span><span class="err">&#39;</span><span class="nx">dem</span><span class="err">&#39;</span><span class="p">],</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">mask_func</span><span class="p">=</span><span class="nx">lambda</span><span class="w"> </span><span class="nx">dem</span><span class="p">:</span><span class="w"> </span><span class="p">(</span><span class="nx">dem</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">).</span><span class="nx">astype</span><span class="p">(</span><span class="nx">float</span><span class="p">),</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">mask_layers</span><span class="p">=[</span><span class="err">&#39;</span><span class="nx">dem</span><span class="err">&#39;</span><span class="p">]</span>
+<span class="o">...</span><span class="w"> </span><span class="p">)</span>
+
+<span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">Hillshade</span><span class="w"> </span><span class="nx">with</span><span class="w"> </span><span class="nx">elevation</span><span class="w"> </span><span class="nx">colors</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="nx">slope</span><span class="w"> </span><span class="nx">transparency</span>
+<span class="o">&gt;&gt;</span><span class="p">&gt;</span><span class="w"> </span><span class="nx">terrain</span><span class="p">.</span><span class="nx">set_color_mapping</span><span class="p">(</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">lambda</span><span class="w"> </span><span class="nx">dem</span><span class="p">:</span><span class="w"> </span><span class="nx">dem_colors</span><span class="p">,</span>
+<span class="o">...</span><span class="w">     </span><span class="p">[</span><span class="err">&#39;</span><span class="nx">dem</span><span class="err">&#39;</span><span class="p">],</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">mask_func</span><span class="p">=</span><span class="nx">lambda</span><span class="w"> </span><span class="nx">dem</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nx">np</span><span class="p">.</span><span class="nx">clip</span><span class="p">(</span><span class="nx">np</span><span class="p">.</span><span class="nx">gradient</span><span class="p">(</span><span class="nx">dem</span><span class="p">)[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span>
+<span class="o">...</span><span class="w">     </span><span class="nx">mask_layers</span><span class="p">=[</span><span class="err">&#39;</span><span class="nx">dem</span><span class="err">&#39;</span><span class="p">]</span>
+<span class="o">...</span><span class="w"> </span><span class="p">)</span>
+</code></pre></div>
+
+<h4 id="setup_cameracamera_angle-camera_location-scale-focal_length-camera_type"><code>setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)</code><a class="headerlink" href="#setup_cameracamera_angle-camera_location-scale-focal_length-camera_type" title="Permanent link">&para;</a></h4>
+<p>Configure camera for terrain visualization.</p>
+<p>Args:
+    camera_angle: Tuple of (x,y,z) rotation angles in radians
+    camera_location: Tuple of (x,y,z) camera position
+    scale: Camera scale value (ortho_scale for orthographic cameras)
+    focal_length: Camera focal length in mm (default: 50, used only for perspective)
+    camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')</p>
+<p>Returns:
+    Camera object</p>
+<p>Raises:
+    ValueError: If camera_type is not 'PERSP' or 'ORTHO'</p>
+<h4 id="setup_camera_and_lightcamera_angle-camera_location-scale-sun_angle-sun_energy-focal_length-camera_type"><code>setup_camera_and_light(camera_angle, camera_location, scale, sun_angle, sun_energy, focal_length, camera_type)</code><a class="headerlink" href="#setup_camera_and_lightcamera_angle-camera_location-scale-sun_angle-sun_energy-focal_length-camera_type" title="Permanent link">&para;</a></h4>
+<p>Configure camera and main light for terrain visualization.</p>
+<p>Convenience function that calls setup_camera() and setup_light().</p>
+<p>Args:
+    camera_angle: Tuple of (x,y,z) rotation angles in radians
+    camera_location: Tuple of (x,y,z) camera position
+    scale: Camera scale value (ortho_scale for orthographic cameras)
+    sun_angle: Angle of sun light in degrees (default: 2)
+    sun_energy: Energy/intensity of sun light (default: 3)
+    focal_length: Camera focal length in mm (default: 50, used only for perspective)
+    camera_type: Camera type 'PERSP' (perspective) or 'ORTHO' (orthographic) (default: 'PERSP')</p>
+<p>Returns:
+    tuple: (camera object, sun light object)</p>
+<h4 id="setup_lightlocation-angle-energy-rotation_euler"><code>setup_light(location, angle, energy, rotation_euler)</code><a class="headerlink" href="#setup_lightlocation-angle-energy-rotation_euler" title="Permanent link">&para;</a></h4>
+<p>Create and configure sun light for terrain visualization.</p>
+<p>Args:
+    location: Tuple of (x,y,z) light position (default: (1, 1, 2))
+    angle: Angle of sun light in degrees (default: 2)
+    energy: Energy/intensity of sun light (default: 3)
+    rotation_euler: Tuple of (x,y,z) rotation angles in radians (default: sun from NW)</p>
+<p>Returns:
+    Sun light object</p>
+<h4 id="setup_render_settingsuse_gpu-samples-preview_samples-use_denoising-denoiser-compute_device"><code>setup_render_settings(use_gpu, samples, preview_samples, use_denoising, denoiser, compute_device)</code><a class="headerlink" href="#setup_render_settingsuse_gpu-samples-preview_samples-use_denoising-denoiser-compute_device" title="Permanent link">&para;</a></h4>
+<p>Configure Blender render settings for high-quality terrain visualization.</p>
+<p>Args:
+    use_gpu: Whether to use GPU acceleration
+    samples: Number of render samples
+    preview_samples: Number of viewport preview samples
+    use_denoising: Whether to enable denoising
+    denoiser: Type of denoiser to use ('OPTIX', 'OPENIMAGEDENOISE', 'NLM')
+    compute_device: Compute device type ('OPTIX', 'CUDA', 'HIP', 'METAL')</p>
+<h4 id="setup_world_atmospheredensity-scatter_color-anisotropy"><code>setup_world_atmosphere(density, scatter_color, anisotropy)</code><a class="headerlink" href="#setup_world_atmospheredensity-scatter_color-anisotropy" title="Permanent link">&para;</a></h4>
+<p>Set up world volume for atmospheric effects.</p>
+<p>Args:
+    density: Density of the atmospheric volume (default: 0.02)
+    scatter_color: RGBA color tuple for scatter (default: white)
+    anisotropy: Direction of scatter from -1 to 1 (default: 0 for uniform)</p>
+<p>Returns:
+    bpy.types.World: The configured world object</p>
+<h4 id="slope_colormapslopes-cmap_name-min_slope-max_slope"><code>slope_colormap(slopes, cmap_name, min_slope, max_slope)</code><a class="headerlink" href="#slope_colormapslopes-cmap_name-min_slope-max_slope" title="Permanent link">&para;</a></h4>
+<p>Create a simple colormap based solely on terrain slopes.</p>
+<p>Args:
+    slopes: Array of slope values in degrees
+    cmap_name: Matplotlib colormap name (default: 'terrain')
+    min_slope: Minimum slope value for normalization (default: 0)
+    max_slope: Maximum slope value for normalization (default: 45)</p>
+<p>Returns:
+    Array of RGBA colors with shape (*slopes.shape, 4)</p>
+<h4 id="smooth_rasterwindow_size-nodata_value"><code>smooth_raster(window_size, nodata_value)</code><a class="headerlink" href="#smooth_rasterwindow_size-nodata_value" title="Permanent link">&para;</a></h4>
+<p>Create a raster smoothing transform function with specified parameters.</p>
+<p>Args:
+    window_size: Size of median filter window 
+                (defaults to 5% of smallest dimension if None)
+    nodata_value: Value to treat as no data (default: np.nan)</p>
+<p>Returns:
+    function: A transform function that smooths raster data</p>
+<h4 id="transformraster_data-transform"><code>transform(raster_data, transform)</code><a class="headerlink" href="#transformraster_data-transform" title="Permanent link">&para;</a></h4>
+<p>Scale elevation values in raster data.</p>
+<p>Args:
+    raster_data: Input raster numpy array
+    transform: Optional affine transform (unchanged by scaling)</p>
+<p>Returns:
+    tuple: (scaled_data, transform, None)</p>
+<h4 id="transform_funcdata-transform"><code>transform_func(data, transform)</code><a class="headerlink" href="#transform_funcdata-transform" title="Permanent link">&para;</a></h4>
+<p>Flip array along specified axis and update transform if provided.</p>
+<h4 id="transform_wrappertransform_func"><code>transform_wrapper(transform_func)</code><a class="headerlink" href="#transform_wrappertransform_func" title="Permanent link">&para;</a></h4>
+<p>Standardize transform function interface with consistent output</p>
+<p>Args:
+    transform_func: The original transform function to wrap</p>
+<p>Returns:
+    A wrapped function with consistent signature and return format</p>
+<h4 id="visualize_demself-layer-use_transformed-title-cmap-percentile_clip-clip_percentiles-max_pixels-show_histogram"><code>visualize_dem(self, layer, use_transformed, title, cmap, percentile_clip, clip_percentiles, max_pixels, show_histogram)</code><a class="headerlink" href="#visualize_demself-layer-use_transformed-title-cmap-percentile_clip-clip_percentiles-max_pixels-show_histogram" title="Permanent link">&para;</a></h4>
+<p>Create diagnostic visualization of any terrain data layer.</p>
+<p>Args:
+    layer: Name of data layer to visualize (default: 'dem')
+    use_transformed: Whether to use transformed or original data (default: False)
+    title: Plot title (default: auto-generated based on layer)
+    cmap: Matplotlib colormap
+    percentile_clip: Whether to clip extreme values
+    clip_percentiles: Tuple of (min, max) percentiles to clip (default: (1, 99))
+    max_pixels: Maximum number of pixels for subsampling
+    show_histogram: Whether to show the histogram panel (default: True)</p>
+<h4 id="wrapped_transformdata-transform"><code>wrapped_transform(data, transform)</code><a class="headerlink" href="#wrapped_transformdata-transform" title="Permanent link">&para;</a></h4>
+<p>Standardized transform wrapper with consistent signature</p>
+<p>Args:
+    data: Input numpy array to transform
+    transform: Optional affine transform </p>
+<p>Returns:
+    Tuple of (transformed_data, transform, [crs]) where CRS is optional</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

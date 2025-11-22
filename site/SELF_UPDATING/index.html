@@ -1,0 +1,2641 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../FEATURE_CHECK/">
+      
+      
+        <link rel="next" href="../API_SETUP/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Self Updating - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#self-updating-documentation-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Self Updating
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-self-documentation-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Self-Documentation Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Self-Documentation Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-documentation-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Documentation Headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-the-docs-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The /docs Command
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The /docs Command">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding Content
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-automatic-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Automatic Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-tracking-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Tracking Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-specific-sections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Specific Sections
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Updating Specific Sections">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-command-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Command Catalog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#updating-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#updating-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-new-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding New Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-document-with-header" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Create Document with Header
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-register-in-docs-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Register in /docs Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-add-to-update-cycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Add to Update Cycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#citation-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#link-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Link Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#real-world-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-World Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Real-World Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-after-adding-new-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: After Adding New Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-weekly-maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Weekly Maintenance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Before Release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#github-actions-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Actions Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GitHub Actions Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#weekly-documentation-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weekly Documentation Check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-pull-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On Pull Request
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices-for-self-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices for Self-Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices for Self-Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-always-include-update-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Always Include Update Headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-use-structured-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Use Structured Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-track-documentation-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Track Documentation Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-provide-fallbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Provide Fallbacks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-version-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Version Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-documentation-generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Documentation Generators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metrics-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-to-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing to Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contributing to Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-new-self-updating-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Self-Updating Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-self-documentation-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Self-Documentation Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How Self-Documentation Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-documentation-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Documentation Headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-the-docs-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The /docs Command
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The /docs Command">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding Content
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-automatic-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Automatic Updates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-tracking-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Tracking Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-specific-sections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Specific Sections
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Updating Specific Sections">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#updating-command-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Command Catalog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#updating-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#updating-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating Metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-new-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding New Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-document-with-header" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Create Document with Header
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-register-in-docs-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Register in /docs Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-add-to-update-cycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Add to Update Cycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation System
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation System">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#citation-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Citation Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#link-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Link Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#real-world-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-World Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Real-World Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-after-adding-new-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: After Adding New Command
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-weekly-maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Weekly Maintenance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-before-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Before Release
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#github-actions-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Actions Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GitHub Actions Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#weekly-documentation-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Weekly Documentation Check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-pull-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On Pull Request
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices-for-self-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices for Self-Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices for Self-Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-always-include-update-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Always Include Update Headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-use-structured-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Use Structured Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-track-documentation-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Track Documentation Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-provide-fallbacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Provide Fallbacks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-version-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Version Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-documentation-generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Documentation Generators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Templates
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metrics-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-to-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing to Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contributing to Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-new-self-updating-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding New Self-Updating Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Standards
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="self-updating-documentation-guide">Self-Updating Documentation Guide<a class="headerlink" href="#self-updating-documentation-guide" title="Permanent link">&para;</a></h1>
+<!-- 
+This document is self-updating. To regenerate:
+In Claude Code: /docs update self-updating
+Last updated: 2025-01-16
+-->
+
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This repository implements a self-documenting system where all documentation can be regenerated and updated using Claude Code commands. This ensures documentation stays current with the codebase and best practices.</p>
+<h2 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Update all documentation</span>
+/docs<span class="w"> </span>update<span class="w"> </span>all
+
+<span class="c1"># Update specific documentation</span>
+/docs<span class="w"> </span>update<span class="w"> </span>best-practices
+/docs<span class="w"> </span>update<span class="w"> </span>catalog
+/docs<span class="w"> </span>update<span class="w"> </span>readme
+
+<span class="c1"># Validate documentation</span>
+/docs<span class="w"> </span>check-citations
+/docs<span class="w"> </span>validate-links
+/docs<span class="w"> </span>check-examples
+</code></pre></div>
+
+<h2 id="how-self-documentation-works">How Self-Documentation Works<a class="headerlink" href="#how-self-documentation-works" title="Permanent link">&para;</a></h2>
+<h3 id="1-documentation-headers">1. Documentation Headers<a class="headerlink" href="#1-documentation-headers" title="Permanent link">&para;</a></h3>
+<p>Every documentation file includes a self-update header:</p>
+<div class="codehilite"><pre><span></span><code>&lt;!-- 
+This document is self-updating. To regenerate:
+In Claude Code: /docs update [document-name]
+Last updated: YYYY-MM-DD
+--&gt;
+</code></pre></div>
+
+<p>This header:</p>
+<ul>
+<li>Tells users how to update the document</li>
+<li>Tracks when it was last updated</li>
+<li>Provides the exact command to run</li>
+</ul>
+<h3 id="2-the-docs-command">2. The <code>/docs</code> Command<a class="headerlink" href="#2-the-docs-command" title="Permanent link">&para;</a></h3>
+<p>The enhanced <code>/docs</code> command (<a href=".claude/commands/docs.md">view command</a>) supports:</p>
+<h4 id="updating-documentation">Updating Documentation<a class="headerlink" href="#updating-documentation" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code>/docs<span class="w"> </span>update<span class="w"> </span>all<span class="w">              </span><span class="c1"># Regenerate all documentation</span>
+/docs<span class="w"> </span>update<span class="w"> </span>best-practices<span class="w">   </span><span class="c1"># Update BEST_PRACTICES.md</span>
+/docs<span class="w"> </span>update<span class="w"> </span>catalog<span class="w">         </span><span class="c1"># Update COMMAND_CATALOG.md</span>
+/docs<span class="w"> </span>update<span class="w"> </span>readme<span class="w">          </span><span class="c1"># Update README.md</span>
+/docs<span class="w"> </span>update<span class="w"> </span>metrics<span class="w">         </span><span class="c1"># Update metrics and statistics</span>
+</code></pre></div>
+
+<h4 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code>/docs<span class="w"> </span>check-citations<span class="w">        </span><span class="c1"># Validate all citations are current</span>
+/docs<span class="w"> </span>validate-links<span class="w">         </span><span class="c1"># Check all internal links work</span>
+/docs<span class="w"> </span>check-examples<span class="w">         </span><span class="c1"># Verify code examples run</span>
+/docs<span class="w"> </span>check-counts<span class="w">          </span><span class="c1"># Verify command counts are accurate</span>
+</code></pre></div>
+
+<h4 id="adding-content">Adding Content<a class="headerlink" href="#adding-content" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code>/docs<span class="w"> </span>add-example<span class="w"> </span>hygiene<span class="w">    </span><span class="c1"># Add real usage example for /hygiene</span>
+/docs<span class="w"> </span>add-citation<span class="w"> </span><span class="s2">&quot;source&quot;</span><span class="w">  </span><span class="c1"># Add new citation to references</span>
+/docs<span class="w"> </span>generate-metrics<span class="w">       </span><span class="c1"># Generate usage metrics report</span>
+</code></pre></div>
+
+<h3 id="3-automatic-updates">3. Automatic Updates<a class="headerlink" href="#3-automatic-updates" title="Permanent link">&para;</a></h3>
+<p>Documentation updates automatically when:</p>
+<ul>
+<li><strong>Pre-commit</strong>: Command counts in README</li>
+<li><strong>Post-commit</strong>: Usage metrics logged</li>
+<li><strong>On PR</strong>: Documentation consistency validated</li>
+<li><strong>Weekly</strong>: Citation validity checked (via GitHub Actions)</li>
+<li><strong>Monthly</strong>: Full documentation regeneration</li>
+</ul>
+<h2 id="documentation-structure">Documentation Structure<a class="headerlink" href="#documentation-structure" title="Permanent link">&para;</a></h2>
+<h3 id="core-documents">Core Documents<a class="headerlink" href="#core-documents" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Purpose</th>
+<th>Update Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>README.md</code></td>
+<td>Repository overview</td>
+<td><code>/docs update readme</code></td>
+</tr>
+<tr>
+<td><code>docs/BEST_PRACTICES.md</code></td>
+<td>Claude Code best practices</td>
+<td><code>/docs update best-practices</code></td>
+</tr>
+<tr>
+<td><code>docs/COMMAND_CATALOG.md</code></td>
+<td>All commands reference</td>
+<td><code>/docs update catalog</code></td>
+</tr>
+<tr>
+<td><code>docs/TOKEN_EFFICIENCY.md</code></td>
+<td>Token optimization guide</td>
+<td><code>/docs update token-efficiency</code></td>
+</tr>
+<tr>
+<td><code>docs/SELF_UPDATING.md</code></td>
+<td>This guide</td>
+<td><code>/docs update self-updating</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="self-tracking-files">Self-Tracking Files<a class="headerlink" href="#self-tracking-files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+<th>Auto-Updates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.claude/metrics.json</code></td>
+<td>Usage statistics</td>
+<td>On each command use</td>
+</tr>
+<tr>
+<td><code>.claude/learnings.md</code></td>
+<td>Captured insights</td>
+<td>Via <code>/learn</code> command</td>
+</tr>
+<tr>
+<td><code>.claude/documentation-log.json</code></td>
+<td>Update history</td>
+<td>On each doc update</td>
+</tr>
+<tr>
+<td><code>GitHub Issues</code></td>
+<td>Current tasks</td>
+<td>Via <code>/todo</code> command</td>
+</tr>
+</tbody>
+</table>
+<h2 id="updating-specific-sections">Updating Specific Sections<a class="headerlink" href="#updating-specific-sections" title="Permanent link">&para;</a></h2>
+<h3 id="updating-command-catalog">Updating Command Catalog<a class="headerlink" href="#updating-command-catalog" title="Permanent link">&para;</a></h3>
+<p>The command catalog auto-generates from:</p>
+<ol>
+<li>Command files in <code>.claude/commands/</code></li>
+<li>Usage examples from git history</li>
+<li>Metrics from <code>.claude/metrics.json</code></li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Full catalog regeneration</span>
+/docs<span class="w"> </span>update<span class="w"> </span>catalog
+
+<span class="c1"># Add new command documentation</span>
+/docs<span class="w"> </span>add-command<span class="w"> </span>new-command-name
+
+<span class="c1"># Update specific command section</span>
+/docs<span class="w"> </span>update-command<span class="w"> </span>hygiene
+</code></pre></div>
+
+<h3 id="updating-best-practices">Updating Best Practices<a class="headerlink" href="#updating-best-practices" title="Permanent link">&para;</a></h3>
+<p>Best practices update from:</p>
+<ol>
+<li>Latest Anthropic documentation</li>
+<li>Community patterns</li>
+<li>Measured metrics from this repo</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Update all best practices</span>
+/docs<span class="w"> </span>update<span class="w"> </span>best-practices
+
+<span class="c1"># Update specific section</span>
+/docs<span class="w"> </span>update<span class="w"> </span>best-practices<span class="w"> </span>--section<span class="w"> </span><span class="s2">&quot;Token Efficiency&quot;</span>
+
+<span class="c1"># Add new best practice</span>
+/docs<span class="w"> </span>add-practice<span class="w"> </span><span class="s2">&quot;New Pattern&quot;</span><span class="w"> </span>--citation<span class="w"> </span><span class="s2">&quot;source&quot;</span>
+</code></pre></div>
+
+<h3 id="updating-metrics">Updating Metrics<a class="headerlink" href="#updating-metrics" title="Permanent link">&para;</a></h3>
+<p>Metrics auto-generate from:</p>
+<ol>
+<li>Git commit history</li>
+<li>Command usage logs</li>
+<li>Token consumption tracking</li>
+</ol>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate metrics report</span>
+/docs<span class="w"> </span>generate-metrics
+
+<span class="c1"># Update specific metric</span>
+/docs<span class="w"> </span>update-metric<span class="w"> </span>token-savings
+
+<span class="c1"># Generate comparison report</span>
+/docs<span class="w"> </span>compare-metrics<span class="w"> </span>--before<span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</code></pre></div>
+
+<h2 id="adding-new-documentation">Adding New Documentation<a class="headerlink" href="#adding-new-documentation" title="Permanent link">&para;</a></h2>
+<h3 id="step-1-create-document-with-header">Step 1: Create Document with Header<a class="headerlink" href="#step-1-create-document-with-header" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>&lt;!-- 
+This document is self-updating. To regenerate:
+In Claude Code: /docs update [your-doc-name]
+Last updated: 2025-01-16
+--&gt;
+
+<span class="gh"># Your Document Title</span>
+
+Content...
+</code></pre></div>
+
+<h3 id="step-2-register-in-docs-command">Step 2: Register in <code>/docs</code> Command<a class="headerlink" href="#step-2-register-in-docs-command" title="Permanent link">&para;</a></h3>
+<p>Add to <code>.claude/commands/docs.md</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="s2">&quot;your-doc-name&quot;</span>:
+<span class="w">  </span>regenerate_your_doc
+<span class="w">  </span><span class="p">;;</span>
+</code></pre></div>
+
+<h3 id="step-3-add-to-update-cycle">Step 3: Add to Update Cycle<a class="headerlink" href="#step-3-add-to-update-cycle" title="Permanent link">&para;</a></h3>
+<p>Include in <code>/docs update all</code>:</p>
+<div class="codehilite"><pre><span></span><code>/docs<span class="w"> </span>update<span class="w"> </span>your-doc-name
+</code></pre></div>
+
+<h2 id="validation-system">Validation System<a class="headerlink" href="#validation-system" title="Permanent link">&para;</a></h2>
+<h3 id="citation-validation">Citation Validation<a class="headerlink" href="#citation-validation" title="Permanent link">&para;</a></h3>
+<p>All citations must be:</p>
+<ul>
+<li>Current (checked weekly)</li>
+<li>Accessible (valid URLs)</li>
+<li>Properly formatted</li>
+<li>Attributed correctly</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Check all citations</span>
+/docs<span class="w"> </span>check-citations
+
+<span class="c1"># Update broken citations</span>
+/docs<span class="w"> </span>fix-citations
+
+<span class="c1"># Add citation</span>
+/docs<span class="w"> </span>add-citation<span class="w"> </span><span class="s2">&quot;Author, Title, URL, Date&quot;</span>
+</code></pre></div>
+
+<h3 id="link-validation">Link Validation<a class="headerlink" href="#link-validation" title="Permanent link">&para;</a></h3>
+<p>Internal links are validated for:</p>
+<ul>
+<li>File existence</li>
+<li>Anchor validity</li>
+<li>Correct paths</li>
+<li>No orphaned documents</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Check all links</span>
+/docs<span class="w"> </span>validate-links
+
+<span class="c1"># Fix broken links</span>
+/docs<span class="w"> </span>fix-links
+
+<span class="c1"># Generate link map</span>
+/docs<span class="w"> </span>link-map
+</code></pre></div>
+
+<h3 id="example-validation">Example Validation<a class="headerlink" href="#example-validation" title="Permanent link">&para;</a></h3>
+<p>Code examples must:</p>
+<ul>
+<li>Run without errors</li>
+<li>Match current API</li>
+<li>Include expected output</li>
+<li>Have proper formatting</li>
+</ul>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Test all examples</span>
+/docs<span class="w"> </span>check-examples
+
+<span class="c1"># Update example</span>
+/docs<span class="w"> </span>update-example<span class="w"> </span><span class="s2">&quot;example-name&quot;</span>
+
+<span class="c1"># Extract example from git history</span>
+/docs<span class="w"> </span>extract-example<span class="w"> </span><span class="s2">&quot;commit-hash&quot;</span>
+</code></pre></div>
+
+<h2 id="real-world-examples">Real-World Examples<a class="headerlink" href="#real-world-examples" title="Permanent link">&para;</a></h2>
+<h3 id="example-1-after-adding-new-command">Example 1: After Adding New Command<a class="headerlink" href="#example-1-after-adding-new-command" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Create new command</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;# New Command&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>.claude/commands/new-command.md
+
+<span class="c1"># 2. Update documentation</span>
+/docs<span class="w"> </span>update<span class="w"> </span>catalog<span class="w">        </span><span class="c1"># Add to catalog</span>
+/docs<span class="w"> </span>update<span class="w"> </span>readme<span class="w">         </span><span class="c1"># Update command count</span>
+/docs<span class="w"> </span>generate-metrics<span class="w">      </span><span class="c1"># Include in metrics</span>
+
+<span class="c1"># 3. Validate</span>
+/docs<span class="w"> </span>validate-all
+</code></pre></div>
+
+<h3 id="example-2-weekly-maintenance">Example 2: Weekly Maintenance<a class="headerlink" href="#example-2-weekly-maintenance" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Run weekly maintenance</span>
+/docs<span class="w"> </span>maintenance
+
+<span class="c1"># This automatically:</span>
+<span class="c1"># - Checks all citations</span>
+<span class="c1"># - Validates all links</span>
+<span class="c1"># - Updates metrics</span>
+<span class="c1"># - Regenerates stale docs</span>
+<span class="c1"># - Creates maintenance report</span>
+</code></pre></div>
+
+<h3 id="example-3-before-release">Example 3: Before Release<a class="headerlink" href="#example-3-before-release" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Pre-release documentation update</span>
+/docs<span class="w"> </span>prepare-release<span class="w"> </span>v2.1.0
+
+<span class="c1"># This automatically:</span>
+<span class="c1"># - Updates all documentation</span>
+<span class="c1"># - Generates changelog</span>
+<span class="c1"># - Updates version numbers</span>
+<span class="c1"># - Creates release notes</span>
+<span class="c1"># - Validates everything</span>
+</code></pre></div>
+
+<h2 id="github-actions-integration">GitHub Actions Integration<a class="headerlink" href="#github-actions-integration" title="Permanent link">&para;</a></h2>
+<h3 id="weekly-documentation-check">Weekly Documentation Check<a class="headerlink" href="#weekly-documentation-check" title="Permanent link">&para;</a></h3>
+<p><code>.github/workflows/docs-check.yml</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Documentation Check</span>
+<span class="nt">on</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">schedule</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cron</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;0</span><span class="nv"> </span><span class="s">0</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">0&#39;</span><span class="w">  </span><span class="c1"># Weekly on Sunday</span>
+<span class="nt">jobs</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">check-docs</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+<span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v2</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Check Documentation</span>
+<span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">          </span><span class="no">npx claude-code --command &quot;/docs check-citations&quot;</span>
+<span class="w">          </span><span class="no">npx claude-code --command &quot;/docs validate-links&quot;</span>
+</code></pre></div>
+
+<h3 id="on-pull-request">On Pull Request<a class="headerlink" href="#on-pull-request" title="Permanent link">&para;</a></h3>
+<p><code>.github/workflows/pr-docs.yml</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PR Documentation Validation</span>
+<span class="nt">on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pull_request</span>
+<span class="nt">jobs</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">validate</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+<span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v2</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validate Documentation</span>
+<span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">          </span><span class="no">npx claude-code --command &quot;/docs validate-all&quot;</span>
+</code></pre></div>
+
+<h2 id="best-practices-for-self-documentation">Best Practices for Self-Documentation<a class="headerlink" href="#best-practices-for-self-documentation" title="Permanent link">&para;</a></h2>
+<h3 id="1-always-include-update-headers">1. Always Include Update Headers<a class="headerlink" href="#1-always-include-update-headers" title="Permanent link">&para;</a></h3>
+<p>Every document should start with:</p>
+<div class="codehilite"><pre><span></span><code>&lt;!-- 
+This document is self-updating. To regenerate:
+In Claude Code: /docs update [name]
+Last updated: [date]
+--&gt;
+</code></pre></div>
+
+<h3 id="2-use-structured-data">2. Use Structured Data<a class="headerlink" href="#2-use-structured-data" title="Permanent link">&para;</a></h3>
+<p>Store metrics and data in JSON:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;lastUpdated&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2025-01-16&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;commandCount&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">23</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tokenSavings&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.87</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;automatic&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="3-track-documentation-changes">3. Track Documentation Changes<a class="headerlink" href="#3-track-documentation-changes" title="Permanent link">&para;</a></h3>
+<p>Log all updates:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2025-01-16T10:00:00Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;document&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;BEST_PRACTICES.md&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;update&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;sections&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Token Efficiency&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;citations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="nt">&quot;added&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;updated&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="4-provide-fallbacks">4. Provide Fallbacks<a class="headerlink" href="#4-provide-fallbacks" title="Permanent link">&para;</a></h3>
+<p>Always include manual update instructions:</p>
+<div class="codehilite"><pre><span></span><code>To update manually:
+<span class="k">1.</span> Review current content
+<span class="k">2.</span> Check citations
+<span class="k">3.</span> Update examples
+<span class="k">4.</span> Validate links
+<span class="k">5.</span> Update timestamp
+</code></pre></div>
+
+<h3 id="5-version-documentation">5. Version Documentation<a class="headerlink" href="#5-version-documentation" title="Permanent link">&para;</a></h3>
+<p>Track documentation versions:</p>
+<div class="codehilite"><pre><span></span><code>&lt;!-- Version: 2.1.0 --&gt;
+&lt;!-- Schema: v1 --&gt;
+&lt;!-- Format: CommonMark --&gt;
+</code></pre></div>
+
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<p><strong>Documentation won't update</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Check permissions</span>
+ls<span class="w"> </span>-la<span class="w"> </span>docs/
+
+<span class="c1"># Force regeneration</span>
+/docs<span class="w"> </span>update<span class="w"> </span><span class="o">[</span>name<span class="o">]</span><span class="w"> </span>--force
+
+<span class="c1"># Check for errors</span>
+/docs<span class="w"> </span>validate<span class="w"> </span><span class="o">[</span>name<span class="o">]</span>
+</code></pre></div>
+
+<p><strong>Citations are broken</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># List broken citations</span>
+/docs<span class="w"> </span>check-citations<span class="w"> </span>--verbose
+
+<span class="c1"># Update citation URL</span>
+/docs<span class="w"> </span>fix-citation<span class="w"> </span><span class="s2">&quot;old-url&quot;</span><span class="w"> </span><span class="s2">&quot;new-url&quot;</span>
+
+<span class="c1"># Remove invalid citation</span>
+/docs<span class="w"> </span>remove-citation<span class="w"> </span><span class="s2">&quot;citation-id&quot;</span>
+</code></pre></div>
+
+<p><strong>Metrics not generating</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Check metrics file</span>
+cat<span class="w"> </span>.claude/metrics.json
+
+<span class="c1"># Regenerate from git history</span>
+/docs<span class="w"> </span>rebuild-metrics
+
+<span class="c1"># Reset metrics</span>
+/docs<span class="w"> </span>reset-metrics<span class="w"> </span>--confirm
+</code></pre></div>
+
+<h2 id="advanced-features">Advanced Features<a class="headerlink" href="#advanced-features" title="Permanent link">&para;</a></h2>
+<h3 id="custom-documentation-generators">Custom Documentation Generators<a class="headerlink" href="#custom-documentation-generators" title="Permanent link">&para;</a></h3>
+<p>Create custom generators in <code>.claude/generators/</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1">// .claude/generators/custom-doc.js</span>
+<span class="nx">module</span><span class="p">.</span><span class="nx">exports</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;custom-doc&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">generate</span><span class="o">:</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Custom generation logic</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">documentContent</span><span class="p">;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nx">validate</span><span class="o">:</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">(</span><span class="nx">content</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Validation logic</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">isValid</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">};</span>
+</code></pre></div>
+
+<h3 id="documentation-templates">Documentation Templates<a class="headerlink" href="#documentation-templates" title="Permanent link">&para;</a></h3>
+<p>Use templates for consistency:</p>
+<div class="codehilite"><pre><span></span><code>&lt;!-- .claude/templates/guide-template.md --&gt;
+&lt;!-- 
+This document is self-updating. To regenerate:
+In Claude Code: /docs update {{name}}
+Last updated: {{date}}
+--&gt;
+
+<span class="gh"># {{title}}</span>
+
+<span class="gu">## Overview</span>
+{{overview}}
+
+<span class="gu">## Usage</span>
+{{usage}}
+
+<span class="gu">## Examples</span>
+{{examples}}
+
+<span class="gu">## References</span>
+{{references}}
+</code></pre></div>
+
+<h3 id="metrics-dashboard">Metrics Dashboard<a class="headerlink" href="#metrics-dashboard" title="Permanent link">&para;</a></h3>
+<p>Generate visual metrics:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate dashboard</span>
+/docs<span class="w"> </span>dashboard
+
+<span class="c1"># Export metrics</span>
+/docs<span class="w"> </span>export-metrics<span class="w"> </span>--format<span class="w"> </span>csv
+
+<span class="c1"># Compare periods</span>
+/docs<span class="w"> </span>compare<span class="w"> </span>--from<span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span><span class="w"> </span>--to<span class="w"> </span><span class="s2">&quot;2025-01-16&quot;</span>
+</code></pre></div>
+
+<h2 id="contributing-to-documentation">Contributing to Documentation<a class="headerlink" href="#contributing-to-documentation" title="Permanent link">&para;</a></h2>
+<h3 id="adding-new-self-updating-features">Adding New Self-Updating Features<a class="headerlink" href="#adding-new-self-updating-features" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Identify repetitive updates</strong> - What changes frequently?</li>
+<li><strong>Create generator</strong> - Automate the update process</li>
+<li><strong>Add validation</strong> - Ensure quality</li>
+<li><strong>Document the process</strong> - Update this guide</li>
+<li><strong>Test thoroughly</strong> - Verify automation works</li>
+</ol>
+<h3 id="documentation-standards">Documentation Standards<a class="headerlink" href="#documentation-standards" title="Permanent link">&para;</a></h3>
+<ul>
+<li>All documentation must be self-updating</li>
+<li>Include clear update instructions</li>
+<li>Validate before committing</li>
+<li>Track all changes</li>
+<li>Maintain citation accuracy</li>
+</ul>
+<h2 id="future-enhancements">Future Enhancements<a class="headerlink" href="#future-enhancements" title="Permanent link">&para;</a></h2>
+<p>Planned improvements:</p>
+<ul>
+<li>AI-powered documentation suggestions</li>
+<li>Automatic example extraction from usage</li>
+<li>Real-time documentation updates</li>
+<li>Cross-reference validation</li>
+<li>Multi-language support</li>
+<li>Documentation versioning</li>
+</ul>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code Documentation</a></li>
+<li><a href="https://commonmark.org/">CommonMark Specification</a></li>
+<li><a href="https://semver.org/">Semantic Versioning</a></li>
+<li><a href="https://docs.github.com/en/actions">GitHub Actions Documentation</a></li>
+</ol>
+<hr />
+<p><em>Last updated: 2025-01-16</em>
+<em>Run <code>/docs update self-updating</code> to regenerate.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

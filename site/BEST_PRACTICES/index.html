@@ -1,0 +1,2718 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../WORKFLOWS/">
+      
+      
+        <link rel="next" href="../TDD_WITH_CLAUDE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Best Practices - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#claude-code-best-practices-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Best Practices
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claude-code-specific-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code Specific Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code Specific Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-structured-workflow-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Structured Workflow Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-permission-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Permission Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-custom-commands-best-practice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Custom Commands Best Practice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-claudemd-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CLAUDE.md Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-driven-development-with-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test-Driven Development with Claude
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test-Driven Development with Claude">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-tdd-advantage-with-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The TDD Advantage with AI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tdd-best-practices-for-2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TDD Best Practices for 2025
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-efficiency-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Efficiency Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Token Efficiency Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#npm-script-delegation-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NPM Script Delegation Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-optimization-techniques" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Optimization Techniques
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Automation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Automation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ai-powered-development-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI-Powered Development Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#team-collaboration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Collaboration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Team Collaboration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#patterns-from-anthropic-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patterns from Anthropic Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collaboration-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collaboration Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-and-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security and Quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security and Quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality Gates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#self-documenting-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Documenting Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventional-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventional Commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Conventional Commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#specification-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specification Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2025-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2025 Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#managing-claudes-context-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managing Claude's Context Window
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Development
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Command Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-effective-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Effective Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lessons-from-production-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lessons from Production Sessions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lessons from Production Sessions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-world-session-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-World Session Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Real-World Session Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-directory-discipline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Directory Discipline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-atomic-commit-discipline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Atomic Commit Discipline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-test-as-you-go-principle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Test-As-You-Go Principle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-context-management-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Context Management Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-real-time-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Real-Time Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-patterns-that-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production Patterns That Work
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Production Patterns That Work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-living-reference-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Living Reference Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-token-efficiency-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Token Efficiency First
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-subdirectory-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Subdirectory Organization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-anti-patterns-to-avoid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Anti-patterns to Avoid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-session-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production Session Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-preservation-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Preservation (Optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics and Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Metrics and Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tracking-success" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracking Success
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#continuous-improvement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous Improvement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#claude-code-specific-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code Specific Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code Specific Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-structured-workflow-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Structured Workflow Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-permission-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Permission Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-custom-commands-best-practice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Custom Commands Best Practice
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-claudemd-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CLAUDE.md Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-driven-development-with-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test-Driven Development with Claude
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test-Driven Development with Claude">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-tdd-advantage-with-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The TDD Advantage with AI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tdd-best-practices-for-2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TDD Best Practices for 2025
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-efficiency-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Efficiency Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Token Efficiency Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#npm-script-delegation-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NPM Script Delegation Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#token-optimization-techniques" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Optimization Techniques
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workflow-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workflow Automation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Workflow Automation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ai-powered-development-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI-Powered Development Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#team-collaboration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Collaboration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Team Collaboration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#patterns-from-anthropic-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patterns from Anthropic Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collaboration-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collaboration Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-and-quality" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security and Quality
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security and Quality">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality Gates
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation Standards
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#self-documenting-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-Documenting Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventional-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventional Commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Conventional Commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#specification-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Specification Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2025-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2025 Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#managing-claudes-context-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managing Claude's Context Window
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#command-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Development
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Command Development">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-effective-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Effective Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lessons-from-production-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lessons from Production Sessions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lessons from Production Sessions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#real-world-session-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-World Session Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Real-World Session Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-directory-discipline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Directory Discipline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-atomic-commit-discipline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Atomic Commit Discipline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-test-as-you-go-principle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Test-As-You-Go Principle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-context-management-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Context Management Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-real-time-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Real-Time Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-patterns-that-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production Patterns That Work
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Production Patterns That Work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-living-reference-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Living Reference Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-token-efficiency-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Token Efficiency First
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-subdirectory-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Subdirectory Organization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-anti-patterns-to-avoid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Anti-patterns to Avoid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-session-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production Session Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-preservation-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session Preservation (Optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics and Validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Metrics and Validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tracking-success" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracking Success
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#continuous-improvement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous Improvement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="claude-code-best-practices-guide">Claude Code Best Practices Guide<a class="headerlink" href="#claude-code-best-practices-guide" title="Permanent link">&para;</a></h1>
+<!-- 
+This document contains best practices for using Claude Code effectively.
+Last updated: 2025-08-18
+Last reviewed: 2025-08-18
+-->
+
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#claude-code-specific-best-practices">Claude Code Specific Best Practices</a></li>
+<li><a href="#test-driven-development-with-claude">Test-Driven Development with Claude</a></li>
+<li><a href="#token-efficiency-strategies">Token Efficiency Strategies</a></li>
+<li><a href="#workflow-automation">Workflow Automation</a></li>
+<li><a href="#team-collaboration">Team Collaboration</a></li>
+<li><a href="#security-and-quality">Security and Quality</a></li>
+<li><a href="#documentation-standards">Documentation Standards</a></li>
+<li><a href="#conventional-commits">Conventional Commits</a></li>
+<li><a href="#context-management">Context Management</a></li>
+<li><a href="#command-development">Command Development</a></li>
+</ol>
+<hr />
+<h2 id="claude-code-specific-best-practices">Claude Code Specific Best Practices<a class="headerlink" href="#claude-code-specific-best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="1-structured-workflow-approach">1. Structured Workflow Approach<a class="headerlink" href="#1-structured-workflow-approach" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.anthropic.com/news/how-anthropic-teams-use-claude-code">Anthropic Internal Teams Usage Patterns</a></p>
+<p>The most successful Claude Code workflows follow this pattern:</p>
+<ol>
+<li><strong>Research and exploration</strong> - Let Claude understand the codebase first</li>
+<li><strong>Planning and documentation</strong> - Create a plan before implementation</li>
+<li><strong>Implementation</strong> - Execute the plan with clear steps</li>
+<li><strong>Testing and validation</strong> - Verify all changes work correctly</li>
+<li><strong>Commit and PR creation</strong> - Use Claude's git integration</li>
+</ol>
+<blockquote>
+<p>"Steps #1-#2 are crucial—without them, Claude tends to jump straight to coding a solution. While sometimes that's what you want, asking Claude to research and plan first significantly improves performance for problems requiring deeper thinking upfront."</p>
+</blockquote>
+<h3 id="2-permission-management">2. Permission Management<a class="headerlink" href="#2-permission-management" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.builder.io/blog/claude-code">Community Best Practices (Builder.io)</a></p>
+<p>The default permission prompts can interrupt flow. Two approaches:</p>
+<p><strong>Safe Approach</strong> (Recommended for production):</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Allow specific safe operations</span>
+claude<span class="w"> </span>--allow<span class="w"> </span><span class="s2">&quot;npm run lint:*,npm test,git status&quot;</span>
+</code></pre></div>
+
+<p><strong>Development Approach</strong> (Use with caution):</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Skip all permissions (similar to Cursor&#39;s yolo mode)</span>
+claude<span class="w"> </span>--dangerously-skip-permissions
+</code></pre></div>
+
+<blockquote>
+<p>"Every time I open Claude Code, I hit Command+C and run <code>claude --dangerously-skip-permissions</code>. It's not as dangerous as it sounds — think of it as Cursor's old yolo mode."</p>
+</blockquote>
+<h3 id="3-custom-commands-best-practice">3. Custom Commands Best Practice<a class="headerlink" href="#3-custom-commands-best-practice" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://docs.anthropic.com/en/docs/claude-code/slash-commands">Claude Code Documentation</a></p>
+<p>Store reusable workflows as markdown files in <code>.claude/commands/</code>:</p>
+<ul>
+<li>Commands become available via slash menu (type <code>/</code>)</li>
+<li>Check into git for team sharing</li>
+<li>Reduce repetitive prompting</li>
+<li>Ensure consistent execution</li>
+</ul>
+<h3 id="4-claudemd-configuration">4. CLAUDE.md Configuration<a class="headerlink" href="#4-claudemd-configuration" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.anthropic.com/engineering/claude-code-best-practices">Anthropic Best Practices</a></p>
+<p>Every project should have a <code>CLAUDE.md</code> file documenting:</p>
+<ul>
+<li>Repository etiquette (branch naming, merge vs. rebase)</li>
+<li>Developer environment setup (pyenv, compiler versions)</li>
+<li>Unexpected behaviors or warnings</li>
+<li>Project-specific conventions</li>
+<li>Quality standards and thresholds</li>
+</ul>
+<hr />
+<h2 id="test-driven-development-with-claude">Test-Driven Development with Claude<a class="headerlink" href="#test-driven-development-with-claude" title="Permanent link">&para;</a></h2>
+<h3 id="the-tdd-advantage-with-ai">The TDD Advantage with AI<a class="headerlink" href="#the-tdd-advantage-with-ai" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://pragmaticengineer.com/p/two-years-of-using-ai">Community Testing Patterns</a></p>
+<blockquote>
+<p>"Test-driven development (TDD) becomes even more powerful when using Claude Code. The robots LOVE TDD. Seriously. They eat it up. With TDD you have the robot friend build out the test, and the mock. Then your next prompt you build the mock to be real. And the robot just loves this. It is the most effective counter to hallucination and LLM scope drift I have found."</p>
+</blockquote>
+<h3 id="tdd-best-practices-for-2025">TDD Best Practices for 2025<a class="headerlink" href="#tdd-best-practices-for-2025" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.browserstack.com/guide/what-is-test-driven-development">BrowserStack TDD Guide</a></p>
+<ol>
+<li><strong>Follow Red-Green-Refactor</strong></li>
+<li>Write failing test first (Red)</li>
+<li>Write minimal code to pass (Green)</li>
+<li>
+<p>Refactor for clarity (Refactor)</p>
+</li>
+<li>
+<p><strong>Keep Tests Atomic</strong></p>
+</li>
+<li>Each test focuses on one behavior</li>
+<li>Avoid testing multiple functionalities</li>
+<li>
+<p>Improves debugging and maintenance</p>
+</li>
+<li>
+<p><strong>Start Simple</strong></p>
+</li>
+<li>Begin with the simplest test case</li>
+<li>Test fundamental features first</li>
+<li>
+<p>Progress to complex interactions</p>
+</li>
+<li>
+<p><strong>Comprehensive Coverage</strong></p>
+</li>
+<li>Include negative tests (failure conditions)</li>
+<li>Test boundary values (edge cases)</li>
+<li>Use equivalence partitioning</li>
+</ol>
+<hr />
+<h2 id="token-efficiency-strategies">Token Efficiency Strategies<a class="headerlink" href="#token-efficiency-strategies" title="Permanent link">&para;</a></h2>
+<h3 id="npm-script-delegation-pattern">NPM Script Delegation Pattern<a class="headerlink" href="#npm-script-delegation-pattern" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: This Repository's Measured Results (<a href="../TOKEN_EFFICIENCY/">docs/TOKEN_EFFICIENCY.md</a>)</p>
+<p>Achieve 87% token reduction through npm script delegation:</p>
+<p><strong>Before</strong> (264 lines in command):</p>
+<div class="codehilite"><pre><span></span><code><span class="gh"># Project Hygiene Check</span>
+[... 250+ lines of bash logic ...]
+</code></pre></div>
+
+<p><strong>After</strong> (30 lines in command):</p>
+<div class="codehilite"><pre><span></span><code><span class="gh"># Project Hygiene Check</span>
+\`\`\`bash
+npm run hygiene:full --silent
+\`\`\`
+</code></pre></div>
+
+<p><strong>Measured Results</strong>:</p>
+<ul>
+<li>Average reduction: 89%</li>
+<li>Hygiene command: 264 → 30 lines (88% reduction)</li>
+<li>Commit command: 296 → 33 lines (88% reduction)</li>
+<li>Maintainability: 458 → 42 lines (90% reduction)</li>
+</ul>
+<h3 id="token-optimization-techniques">Token Optimization Techniques<a class="headerlink" href="#token-optimization-techniques" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Delegate to scripts</strong> - Move logic to npm/shell scripts</li>
+<li><strong>Use references</strong> - Link to files rather than embedding</li>
+<li><strong>Batch operations</strong> - Combine multiple tool calls</li>
+<li><strong>Context management</strong> - Proactively compact at checkpoints</li>
+</ol>
+<hr />
+<h2 id="workflow-automation">Workflow Automation<a class="headerlink" href="#workflow-automation" title="Permanent link">&para;</a></h2>
+<h3 id="ai-powered-development-practices">AI-Powered Development Practices<a class="headerlink" href="#ai-powered-development-practices" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.leanware.co/insights/best-practices-ai-software-development">2025 Industry Report</a></p>
+<ol>
+<li><strong>Supervised AI Agents</strong></li>
+<li>Human oversight for code generation</li>
+<li>Review agent reasoning and outputs</li>
+<li>Approve terminal command execution</li>
+<li>
+<p>Rollback capability when needed</p>
+</li>
+<li>
+<p><strong>CI/CD Integration</strong></p>
+</li>
+<li>Automate TDD-driven testing in pipelines</li>
+<li>Make testing integral to deployment</li>
+<li>Use AI for test generation</li>
+<li>
+<p>Monitor code quality metrics</p>
+</li>
+<li>
+<p><strong>Strategic Implementation</strong></p>
+</li>
+<li>Start with pilot projects</li>
+<li>Focus on high-impact use cases</li>
+<li>Integrate seamlessly with existing tools</li>
+<li>Measure and iterate on results</li>
+</ol>
+<hr />
+<h2 id="team-collaboration">Team Collaboration<a class="headerlink" href="#team-collaboration" title="Permanent link">&para;</a></h2>
+<h3 id="patterns-from-anthropic-teams">Patterns from Anthropic Teams<a class="headerlink" href="#patterns-from-anthropic-teams" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.anthropic.com/news/how-anthropic-teams-use-claude-code">How Anthropic Teams Use Claude Code</a></p>
+<blockquote>
+<p>"The pattern became clear: agentic coding isn't just accelerating traditional development. It's dissolving the boundary between technical and non-technical work, turning anyone who can describe a problem into someone who can build a solution."</p>
+</blockquote>
+<h3 id="collaboration-best-practices">Collaboration Best Practices<a class="headerlink" href="#collaboration-best-practices" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Shared Commands</strong></li>
+<li>Check <code>.claude/commands/</code> into version control</li>
+<li>Document team-specific workflows</li>
+<li>
+<p>Create command templates for common tasks</p>
+</li>
+<li>
+<p><strong>Code Review Integration</strong>
+   <code>bash
+   /install-github-app  # Automated PR reviews</code></p>
+<blockquote>
+<p>"Claude often finds bugs that humans miss. Humans nitpick variable names. Claude finds actual logic errors and security issues."</p>
+</blockquote>
+</li>
+<li>
+<p><strong>Knowledge Sharing</strong></p>
+</li>
+<li>Use <code>/learn</code> to capture insights</li>
+<li>Document patterns in CLAUDE.md</li>
+<li>Share effective prompts as commands</li>
+</ol>
+<hr />
+<h2 id="security-and-quality">Security and Quality<a class="headerlink" href="#security-and-quality" title="Permanent link">&para;</a></h2>
+<h3 id="security-best-practices">Security Best Practices<a class="headerlink" href="#security-best-practices" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.ibm.com/think/topics/ai-in-software-development">IBM AI Development Guide</a></p>
+<ol>
+<li><strong>Data Access Control</strong></li>
+<li>Know which data an agent can access</li>
+<li>Understand where data is sent</li>
+<li>
+<p>Manage software supply chain risks</p>
+</li>
+<li>
+<p><strong>Code Review Requirements</strong></p>
+</li>
+<li>All AI-generated code needs review</li>
+<li>Annotate AI changes in commits</li>
+<li>
+<p>Track AI-assisted changes</p>
+</li>
+<li>
+<p><strong>Quality Assurance</strong></p>
+</li>
+<li>Automated testing for all changes</li>
+<li>Version control for rollback</li>
+<li>Comprehensive test coverage</li>
+</ol>
+<h3 id="quality-gates">Quality Gates<a class="headerlink" href="#quality-gates" title="Permanent link">&para;</a></h3>
+<p>Implement these checks before allowing commits:</p>
+<ul>
+<li>Linting and formatting compliance</li>
+<li>Type checking (if applicable)</li>
+<li>Test suite execution</li>
+<li>Build validation</li>
+<li>Security scanning for secrets</li>
+<li>File size monitoring</li>
+</ul>
+<hr />
+<h2 id="documentation-standards">Documentation Standards<a class="headerlink" href="#documentation-standards" title="Permanent link">&para;</a></h2>
+<h3 id="self-documenting-code">Self-Documenting Code<a class="headerlink" href="#self-documenting-code" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://codewave.com/insights/ai-automation-software-development/">Software Development Best Practices 2025</a></p>
+<ol>
+<li><strong>AI-Generated Documentation</strong></li>
+<li>Document the "why" not only the "what"</li>
+<li>Include context for AI decisions</li>
+<li>
+<p>Link to relevant issues/PRs</p>
+</li>
+<li>
+<p><strong>Living Documentation</strong></p>
+</li>
+<li>Update docs with code changes</li>
+<li>Use <code>/docs</code> command regularly</li>
+<li>
+<p>Track documentation metrics</p>
+</li>
+<li>
+<p><strong>Citation Requirements</strong></p>
+</li>
+<li>Cite sources for best practices</li>
+<li>Reference official documentation</li>
+<li>Include community patterns with attribution</li>
+</ol>
+<hr />
+<h2 id="conventional-commits">Conventional Commits<a class="headerlink" href="#conventional-commits" title="Permanent link">&para;</a></h2>
+<h3 id="specification-compliance">Specification Compliance<a class="headerlink" href="#specification-compliance" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.conventionalcommits.org/">Conventional Commits v1.0.0</a></p>
+<p><strong>Structure</strong>:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&lt;</span><span class="n">type</span><span class="o">&gt;</span><span class="p">[</span><span class="n">optional</span><span class="w"> </span><span class="n">scope</span><span class="p">]</span><span class="o">:</span><span class="w"> </span><span class="o">&lt;</span><span class="n">description</span><span class="o">&gt;</span>
+
+<span class="p">[</span><span class="n">optional</span><span class="w"> </span><span class="n">body</span><span class="p">]</span>
+
+<span class="p">[</span><span class="n">optional</span><span class="w"> </span><span class="n">footer</span><span class="p">(</span><span class="n">s</span><span class="p">)]</span>
+</code></pre></div>
+
+<p><strong>Essential Types</strong>:</p>
+<ul>
+<li><code>feat</code>: New features (MINOR version)</li>
+<li><code>fix</code>: Bug fixes (PATCH version)</li>
+<li><code>docs</code>: Documentation changes</li>
+<li><code>test</code>: Test additions/corrections</li>
+<li><code>refactor</code>: Code restructuring</li>
+<li><code>chore</code>: Maintenance tasks</li>
+</ul>
+<p><strong>Breaking Changes</strong>:</p>
+<ul>
+<li>Add <code>!</code> after type/scope: <code>feat!: breaking change</code></li>
+<li>Or include in footer: <code>BREAKING CHANGE: description</code></li>
+<li>Results in MAJOR version bump</li>
+</ul>
+<h3 id="2025-best-practices">2025 Best Practices<a class="headerlink" href="#2025-best-practices" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://www.enlume.com/blogs/mastering-commit-messages-a-guide-to-conventional-commits-and-best-practices">Conventional Commits Guide</a></p>
+<ol>
+<li><strong>Automation Integration</strong></li>
+<li>Use with semantic versioning</li>
+<li>Auto-generate changelogs</li>
+<li>
+<p>Integrate with CI/CD</p>
+</li>
+<li>
+<p><strong>Team Standards</strong></p>
+</li>
+<li>Enforce via commitlint</li>
+<li>Use git hooks (husky)</li>
+<li>
+<p>Regular team reviews</p>
+</li>
+<li>
+<p><strong>Message Quality</strong></p>
+</li>
+<li>Present tense, lowercase</li>
+<li>No period at end</li>
+<li>Focus on single concern</li>
+<li>Explain "why" in body</li>
+</ol>
+<hr />
+<h2 id="context-management">Context Management<a class="headerlink" href="#context-management" title="Permanent link">&para;</a></h2>
+<h3 id="managing-claudes-context-window">Managing Claude's Context Window<a class="headerlink" href="#managing-claudes-context-window" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: <a href="https://docs.anthropic.com/en/docs/claude-code/memory">Claude Code Documentation</a></p>
+<ol>
+<li><strong>Proactive Compaction</strong>
+   <code>bash
+   /compact  # Manually compact at checkpoints</code></li>
+<li>Compact after feature completion</li>
+<li>Compact before starting new work</li>
+<li>
+<p>Monitor context indicator</p>
+</li>
+<li>
+<p><strong>Context Optimization</strong></p>
+</li>
+<li>Keep prompts focused</li>
+<li>Reference files vs embedding</li>
+<li>Use batch operations</li>
+<li>
+<p>Clear context between major tasks</p>
+</li>
+<li>
+<p><strong>Cost Management</strong></p>
+</li>
+<li>Track token usage per session</li>
+<li>Use <code>/estimate</code> before tasks</li>
+<li>Monitor actual vs estimated usage</li>
+<li>Optimize expensive operations</li>
+</ol>
+<hr />
+<h2 id="command-development">Command Development<a class="headerlink" href="#command-development" title="Permanent link">&para;</a></h2>
+<h3 id="creating-effective-commands">Creating Effective Commands<a class="headerlink" href="#creating-effective-commands" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: This Repository's Experience</p>
+<ol>
+<li><strong>Command Structure</strong>
+   ```markdown</li>
+</ol>
+<hr />
+<p>allowed-tools: [Bash, Read, Write]
+   description: Brief command description</p>
+<hr />
+<p># Command Name</p>
+<p>Instructions for Claude...
+   ```</p>
+<ol>
+<li><strong>Token Efficiency</strong></li>
+<li>Delegate to npm scripts</li>
+<li>Keep commands under 50 lines</li>
+<li>Use references not embedding</li>
+<li>
+<p>Provide clear, concise instructions</p>
+</li>
+<li>
+<p><strong>Testing Commands</strong></p>
+</li>
+<li>Test on multiple project types</li>
+<li>Validate cross-platform</li>
+<li>Measure token usage</li>
+<li>
+<p>Document edge cases</p>
+</li>
+<li>
+<p><strong>Documentation</strong></p>
+</li>
+<li>Include usage examples</li>
+<li>Document prerequisites</li>
+<li>Explain configuration options</li>
+<li>Provide troubleshooting guide</li>
+</ol>
+<hr />
+<h2 id="lessons-from-production-sessions">Lessons from Production Sessions<a class="headerlink" href="#lessons-from-production-sessions" title="Permanent link">&para;</a></h2>
+<h3 id="real-world-session-management">Real-World Session Management<a class="headerlink" href="#real-world-session-management" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: Production usage patterns from extended Claude Code sessions</p>
+<p>Production sessions with Claude Code require different strategies than demo or learning sessions:</p>
+<h4 id="1-directory-discipline">1. Directory Discipline<a class="headerlink" href="#1-directory-discipline" title="Permanent link">&para;</a></h4>
+<p><strong>Learning</strong>: Always return to repository root after operations</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Anti-pattern - Getting lost in subdirectories</span>
+<span class="nb">cd</span><span class="w"> </span>.claude/commands/
+<span class="c1"># ... operations ...</span>
+<span class="c1"># Forget to return, next operations fail</span>
+
+<span class="c1"># Best Practice - Always return home</span>
+<span class="nv">REPO_ROOT</span><span class="o">=</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>
+<span class="nb">cd</span><span class="w"> </span>.claude/commands/
+<span class="c1"># ... operations ...</span>
+<span class="nb">cd</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$REPO_ROOT</span><span class="s2">&quot;</span>
+</code></pre></div>
+
+<h4 id="2-atomic-commit-discipline">2. Atomic Commit Discipline<a class="headerlink" href="#2-atomic-commit-discipline" title="Permanent link">&para;</a></h4>
+<p><strong>Learning</strong>: Plan commits before making changes, not after</p>
+<div class="codehilite"><pre><span></span><code><span class="gh"># Anti-pattern - Retroactive splitting</span>
+<span class="k">-</span><span class="w"> </span>Make 1000+ line changes
+<span class="k">-</span><span class="w"> </span>Try to split into logical commits
+<span class="k">-</span><span class="w"> </span>Lose context and grouping
+
+<span class="gh"># Best Practice - Plan first</span>
+<span class="k">1.</span> Define commit boundaries (&lt;200 lines)
+<span class="k">2.</span> Make focused changes
+<span class="k">3.</span> Commit immediately
+<span class="k">4.</span> Move to next atomic unit
+</code></pre></div>
+
+<h4 id="3-test-as-you-go-principle">3. Test-As-You-Go Principle<a class="headerlink" href="#3-test-as-you-go-principle" title="Permanent link">&para;</a></h4>
+<p><strong>Learning</strong>: Test immediately after each implementation</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Anti-pattern</span>
+<span class="k">for</span><span class="w"> </span>script<span class="w"> </span><span class="k">in</span><span class="w"> </span>scripts/*<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nv">npm_script_name</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$script</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="w">  </span><span class="c1"># Create npm script</span>
+<span class="k">done</span>
+<span class="c1"># Test everything at end - cascading failures</span>
+
+<span class="c1"># Best Practice</span>
+<span class="k">for</span><span class="w"> </span>script<span class="w"> </span><span class="k">in</span><span class="w"> </span>scripts/*<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nv">npm_script_name</span><span class="o">=</span><span class="k">$(</span>basename<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$script</span><span class="s2">&quot;</span><span class="k">)</span>
+<span class="w">  </span><span class="c1"># Create npm script</span>
+<span class="w">  </span>npm<span class="w"> </span>run<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$npm_script_name</span><span class="s2">&quot;</span><span class="w"> </span>--silent<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Failed: </span><span class="nv">$npm_script_name</span><span class="s2">&quot;</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<h4 id="4-context-management-strategy">4. Context Management Strategy<a class="headerlink" href="#4-context-management-strategy" title="Permanent link">&para;</a></h4>
+<p><strong>Learning</strong>: Proactive context management prevents confusion</p>
+<table>
+<thead>
+<tr>
+<th>Checkpoint Trigger</th>
+<th>Action Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30 minutes elapsed</td>
+<td>Save checkpoint, assess progress</td>
+</tr>
+<tr>
+<td>30 interactions</td>
+<td>Consider compaction</td>
+</tr>
+<tr>
+<td>Major decision made</td>
+<td>Document rationale immediately</td>
+</tr>
+<tr>
+<td>Error encountered</td>
+<td>Capture state before fixing</td>
+</tr>
+</tbody>
+</table>
+<h4 id="5-real-time-documentation">5. Real-Time Documentation<a class="headerlink" href="#5-real-time-documentation" title="Permanent link">&para;</a></h4>
+<p><strong>Learning</strong>: Document decisions as they're made, not retrospectively</p>
+<div class="codehilite"><pre><span></span><code><span class="gh"># GitHub Issues - Update in real-time</span>
+<span class="gu">## Decision: Use NPM Script Delegation</span>
+<span class="k">-</span><span class="w"> </span>Time: 14:32
+<span class="k">-</span><span class="w"> </span>Rationale: 87% token reduction measured
+<span class="k">-</span><span class="w"> </span>Tradeoff: Slight indirection vs massive efficiency
+<span class="k">-</span><span class="w"> </span>Result: Implemented across all commands
+</code></pre></div>
+
+<h3 id="production-patterns-that-work">Production Patterns That Work<a class="headerlink" href="#production-patterns-that-work" title="Permanent link">&para;</a></h3>
+<h4 id="1-living-reference-architecture">1. Living Reference Architecture<a class="headerlink" href="#1-living-reference-architecture" title="Permanent link">&para;</a></h4>
+<p><strong>Proven</strong>: Repository that uses its own tools validates patterns</p>
+<p>Benefits discovered:</p>
+<ul>
+<li>Immediate feedback on command usability</li>
+<li>Real-world testing of patterns</li>
+<li>Credibility through actual use</li>
+<li>Natural evolution through practice</li>
+</ul>
+<h4 id="2-token-efficiency-first">2. Token Efficiency First<a class="headerlink" href="#2-token-efficiency-first" title="Permanent link">&para;</a></h4>
+<p><strong>Proven</strong>: 87-91% reduction transforms development velocity</p>
+<p>Real metrics from session:</p>
+<ul>
+<li>Before: 264 lines per command (~3000 tokens)</li>
+<li>After: 30 lines per command (~300 tokens)</li>
+<li>Impact: 10x more iterations possible</li>
+</ul>
+<h4 id="3-subdirectory-organization">3. Subdirectory Organization<a class="headerlink" href="#3-subdirectory-organization" title="Permanent link">&para;</a></h4>
+<p><strong>Proven</strong>: <code>.claude/commands/detailed/</code> pattern scales cleanly</p>
+<p>Advantages realized:</p>
+<ul>
+<li>No namespace pollution</li>
+<li>Clear variant hierarchy</li>
+<li>Future-proof structure</li>
+<li>Easy discovery</li>
+</ul>
+<h3 id="session-anti-patterns-to-avoid">Session Anti-patterns to Avoid<a class="headerlink" href="#session-anti-patterns-to-avoid" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Assumption Cascade</strong></li>
+<li>Making changes based on unverified assumptions</li>
+<li>
+<p>Solution: Verify state before each operation</p>
+</li>
+<li>
+<p><strong>Context Tunnel Vision</strong></p>
+</li>
+<li>Losing sight of original goals</li>
+<li>
+<p>Solution: Regular goal alignment checks</p>
+</li>
+<li>
+<p><strong>Documentation Debt</strong></p>
+</li>
+<li>"I'll document later" never happens</li>
+<li>
+<p>Solution: Document inline with implementation</p>
+</li>
+<li>
+<p><strong>Test Skipping</strong></p>
+</li>
+<li>Moving forward without validation</li>
+<li>Solution: Test before marking complete</li>
+</ol>
+<h3 id="production-session-checklist">Production Session Checklist<a class="headerlink" href="#production-session-checklist" title="Permanent link">&para;</a></h3>
+<p>Before starting:</p>
+<ul>
+<li>[ ] Read CLAUDE.md and check GitHub issues</li>
+<li>[ ] Check recent git history</li>
+<li>[ ] Create session plan with checkpoints</li>
+<li>[ ] Estimate token budget</li>
+</ul>
+<p>During session:</p>
+<ul>
+<li>[ ] Update todo list continuously</li>
+<li>[ ] Test after each implementation</li>
+<li>[ ] Document decisions real-time</li>
+<li>[ ] Return to root after operations</li>
+<li>[ ] Checkpoint every 30 minutes</li>
+</ul>
+<p>After session:</p>
+<ul>
+<li>[ ] Save session transcript (optional)</li>
+<li>[ ] Document learnings</li>
+<li>[ ] Update metrics</li>
+<li>[ ] Plan next session</li>
+</ul>
+<h3 id="session-preservation-optional">Session Preservation (Optional)<a class="headerlink" href="#session-preservation-optional" title="Permanent link">&para;</a></h3>
+<p>If you choose to save sessions, consider:</p>
+<ul>
+<li><strong>Before context compaction</strong>: Preserve conversation before reset</li>
+<li><strong>After major features</strong>: Capture successful implementations</li>
+<li><strong>Pattern discoveries</strong>: Save when finding reusable solutions</li>
+<li><strong>Every 30-60 minutes</strong>: For long sessions you want to preserve</li>
+</ul>
+<p>Remember: Session saving is optional. Use it when it provides value to you.</p>
+<hr />
+<h2 id="metrics-and-validation">Metrics and Validation<a class="headerlink" href="#metrics-and-validation" title="Permanent link">&para;</a></h2>
+<h3 id="tracking-success">Tracking Success<a class="headerlink" href="#tracking-success" title="Permanent link">&para;</a></h3>
+<p><strong>Source</strong>: Industry Best Practices</p>
+<p>Key metrics to track:</p>
+<ul>
+<li><strong>Token usage</strong> per command</li>
+<li><strong>Execution time</strong> statistics</li>
+<li><strong>Error rates</strong> and recovery</li>
+<li><strong>User satisfaction</strong> scores</li>
+<li><strong>Cost per feature</strong> delivered</li>
+</ul>
+<h3 id="continuous-improvement">Continuous Improvement<a class="headerlink" href="#continuous-improvement" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Regular reviews of command effectiveness</li>
+<li>Update based on user feedback</li>
+<li>Monitor Claude API changes</li>
+<li>Incorporate new best practices</li>
+<li>Share learnings with community</li>
+</ol>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="https://www.anthropic.com/engineering/claude-code-best-practices">Anthropic Claude Code Best Practices</a></li>
+<li><a href="https://www.anthropic.com/news/how-anthropic-teams-use-claude-code">How Anthropic Teams Use Claude Code</a></li>
+<li><a href="https://www.conventionalcommits.org/">Conventional Commits v1.0.0 Specification</a></li>
+<li><a href="https://www.browserstack.com/guide/what-is-test-driven-development">Test-Driven Development Guide (BrowserStack)</a></li>
+<li><a href="https://www.ibm.com/think/topics/ai-in-software-development">AI in Software Development (IBM)</a></li>
+<li><a href="https://www.builder.io/blog/claude-code">Community Patterns (Builder.io)</a></li>
+<li><a href="https://github.com/hesreallyhim/awesome-claude-code">Awesome Claude Code Repository</a></li>
+<li><a href="https://newsletter.pragmaticengineer.com/p/two-years-of-using-ai">Two Years of Using AI Tools (Pragmatic Engineer)</a></li>
+</ol>
+<hr />
+<p><em>Last updated: 2025-08-18</em>
+<em>Document maintained manually - review periodically for updates</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

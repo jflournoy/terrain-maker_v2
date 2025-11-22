@@ -1,0 +1,2107 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../TDD_WITH_CLAUDE/">
+      
+      
+        <link rel="next" href="../CLAUDE_PATTERNS/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>TDD Success Stories - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tdd-success-stories-with-claude-code" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              TDD Success Stories
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#story-1-the-documentation-examples-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 1: The Documentation Examples Feature
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 1: The Documentation Examples Feature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Challenge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#without-tdd-what-would-have-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Without TDD (What Would Have Happened)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tdd-what-actually-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With TDD (What Actually Happened)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="With TDD (What Actually Happened)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-commits-tell-the-story" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Commits Tell the Story
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-2-context-management-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 2: Context Management Utilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 2: Context Management Utilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tdd-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The TDD Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-victory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Victory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-3-the-tdd-script-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 3: The TDD Script Itself
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 3: The TDD Script Itself">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#meta-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Meta TDD!
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-4-breaking-the-big-feature-curse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 4: Breaking the "Big Feature" Curse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 4: Breaking the &#34;Big Feature&#34; Curse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before TDD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With TDD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-5-the-refactoring-miracle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 5: The Refactoring Miracle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 5: The Refactoring Miracle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#without-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Without Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-numbers-dont-lie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Numbers Don't Lie
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Numbers Don&#39;t Lie">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#before-vs-after-tdd-adoption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before vs After TDD Adoption
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testimonials-from-our-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testimonials from Our Commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testimonials from Our Commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-test-that-saved-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Test That Saved Production"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-refactor-that-just-worked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Refactor That Just Worked"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-feature-that-wrote-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Feature That Wrote Itself"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-recognition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Recognition
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Recognition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-weve-learned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We've Learned
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What We&#39;ve Learned">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tdd-forces-better-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TDD Forces Better Design
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claude-stays-focused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Stays Focused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tests-are-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests Are Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#confidence-compounds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence Compounds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-success-story-could-be-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your Success Story Could Be Next
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Your Success Story Could Be Next">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-challenge_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Challenge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-process_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#story-1-the-documentation-examples-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 1: The Documentation Examples Feature
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 1: The Documentation Examples Feature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Challenge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#without-tdd-what-would-have-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Without TDD (What Would Have Happened)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tdd-what-actually-happened" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With TDD (What Actually Happened)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="With TDD (What Actually Happened)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-commits-tell-the-story" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Commits Tell the Story
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-2-context-management-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 2: Context Management Utilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 2: Context Management Utilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Problem
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tdd-approach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The TDD Approach
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-victory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Victory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-3-the-tdd-script-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 3: The TDD Script Itself
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 3: The TDD Script Itself">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#meta-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Meta TDD!
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-4-breaking-the-big-feature-curse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 4: Breaking the "Big Feature" Curse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 4: Breaking the &#34;Big Feature&#34; Curse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#before-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before TDD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With TDD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#story-5-the-refactoring-miracle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Story 5: The Refactoring Miracle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Story 5: The Refactoring Miracle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Scenario
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#without-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Without Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-numbers-dont-lie" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Numbers Don't Lie
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Numbers Don&#39;t Lie">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#before-vs-after-tdd-adoption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before vs After TDD Adoption
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testimonials-from-our-commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testimonials from Our Commits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testimonials from Our Commits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-test-that-saved-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Test That Saved Production"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-refactor-that-just-worked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Refactor That Just Worked"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-feature-that-wrote-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "The Feature That Wrote Itself"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-recognition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Recognition
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Recognition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-weve-learned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We've Learned
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What We&#39;ve Learned">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tdd-forces-better-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TDD Forces Better Design
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claude-stays-focused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Stays Focused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tests-are-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tests Are Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#confidence-compounds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confidence Compounds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#your-success-story-could-be-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your Success Story Could Be Next
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Your Success Story Could Be Next">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-challenge_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Challenge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-process_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-result_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tdd-success-stories-with-claude-code">TDD Success Stories with Claude Code<a class="headerlink" href="#tdd-success-stories-with-claude-code" title="Permanent link">&para;</a></h1>
+<p>Real examples from this repository showing the power of TDD with Claude.</p>
+<h2 id="story-1-the-documentation-examples-feature">Story 1: The Documentation Examples Feature<a class="headerlink" href="#story-1-the-documentation-examples-feature" title="Permanent link">&para;</a></h2>
+<h3 id="the-challenge">The Challenge<a class="headerlink" href="#the-challenge" title="Permanent link">&para;</a></h3>
+<p>"Add automatic commit example updates to docs" - sounds simple, right?</p>
+<h3 id="without-tdd-what-would-have-happened">Without TDD (What Would Have Happened)<a class="headerlink" href="#without-tdd-what-would-have-happened" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Claude would write 500+ lines immediately</li>
+<li>Complex regex patterns everywhere</li>
+<li>Untested edge cases</li>
+<li>Manual debugging of git operations</li>
+<li>Probably 2-3 hours of frustration</li>
+</ul>
+<h3 id="with-tdd-what-actually-happened">With TDD (What Actually Happened)<a class="headerlink" href="#with-tdd-what-actually-happened" title="Permanent link">&para;</a></h3>
+<h4 id="timeline">Timeline<a class="headerlink" href="#timeline" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>9:25 AM</strong>: Started with failing tests</li>
+<li><strong>9:40 AM</strong>: All tests written (27 total)</li>
+<li><strong>9:55 AM</strong>: Implementation complete</li>
+<li><strong>10:05 AM</strong>: Feature fully working</li>
+</ul>
+<p><strong>Total time: 40 minutes</strong> ✨</p>
+<h4 id="the-commits-tell-the-story">The Commits Tell the Story<a class="headerlink" href="#the-commits-tell-the-story" title="Permanent link">&para;</a></h4>
+<ol>
+<li><a href="../../commit/aa00002">🔴 Test Phase</a> - Wrote all tests first</li>
+<li><a href="../../commit/aa00002">🟢 Implementation</a> - Claude implemented perfectly</li>
+<li><a href="../../commit/b131df0">📚 Documentation</a> - Auto-generated examples</li>
+</ol>
+<h4 id="the-result">The Result<a class="headerlink" href="#the-result" title="Permanent link">&para;</a></h4>
+<ul>
+<li>Zero bugs in production</li>
+<li>Feature works exactly as specified</li>
+<li>Easy to refactor later</li>
+<li>Tests document the behavior</li>
+</ul>
+<h2 id="story-2-context-management-utilities">Story 2: Context Management Utilities<a class="headerlink" href="#story-2-context-management-utilities" title="Permanent link">&para;</a></h2>
+<h3 id="the-problem">The Problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h3>
+<p>Calculate file sizes, estimate tokens, handle various formats - lots of edge cases.</p>
+<h3 id="the-tdd-approach">The TDD Approach<a class="headerlink" href="#the-tdd-approach" title="Permanent link">&para;</a></h3>
+<p>First, we wrote tests for what we wanted:</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">it</span><span class="p">(</span><span class="s1">&#39;should format bytes correctly&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">expect</span><span class="p">(</span><span class="nx">formatBytes</span><span class="p">(</span><span class="mf">1024</span><span class="p">)).</span><span class="nx">toBe</span><span class="p">(</span><span class="s1">&#39;1.0 KB&#39;</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">expect</span><span class="p">(</span><span class="nx">formatBytes</span><span class="p">(</span><span class="mf">1048576</span><span class="p">)).</span><span class="nx">toBe</span><span class="p">(</span><span class="s1">&#39;1.0 MB&#39;</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">it</span><span class="p">(</span><span class="s1">&#39;should estimate tokens from text&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">expect</span><span class="p">(</span><span class="nx">estimateTokens</span><span class="p">(</span><span class="s1">&#39;Hello world&#39;</span><span class="p">)).</span><span class="nx">toBeCloseTo</span><span class="p">(</span><span class="mf">2</span><span class="p">,</span><span class="w"> </span><span class="mf">0</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div>
+
+<p>Then Claude implemented exactly that. No more, no less.</p>
+<h3 id="the-victory">The Victory<a class="headerlink" href="#the-victory" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="../../commit/c446afe">✅ Commit c446afe</a> - Perfect implementation</li>
+<li>All edge cases handled</li>
+<li>Clean, readable code</li>
+<li>100% test coverage</li>
+</ul>
+<h2 id="story-3-the-tdd-script-itself">Story 3: The TDD Script Itself<a class="headerlink" href="#story-3-the-tdd-script-itself" title="Permanent link">&para;</a></h2>
+<h3 id="meta-tdd">Meta TDD!<a class="headerlink" href="#meta-tdd" title="Permanent link">&para;</a></h3>
+<p>We used TDD to build the TDD tooling. How's that for eating our own dog food?</p>
+<h3 id="the-process">The Process<a class="headerlink" href="#the-process" title="Permanent link">&para;</a></h3>
+<ol>
+<li><a href="../../commit/2ce43d1">🔴 Tests for TDD detection</a></li>
+<li><a href="../../commit/b344bc7">🟢 Framework detection implementation</a></li>
+<li>Tests for test commands</li>
+<li>Implementation of test runners</li>
+</ol>
+<h3 id="why-this-matters">Why This Matters<a class="headerlink" href="#why-this-matters" title="Permanent link">&para;</a></h3>
+<p>Even our tooling is tested. When Claude helps others with TDD, we know it works because we tested it.</p>
+<h2 id="story-4-breaking-the-big-feature-curse">Story 4: Breaking the "Big Feature" Curse<a class="headerlink" href="#story-4-breaking-the-big-feature-curse" title="Permanent link">&para;</a></h2>
+<h3 id="before-tdd">Before TDD<a class="headerlink" href="#before-tdd" title="Permanent link">&para;</a></h3>
+<p><strong>User</strong>: "Add session history tracking"
+<strong>Claude</strong>: <em>Writes entire session management system with database, API, and kitchen sink</em></p>
+<h3 id="with-tdd">With TDD<a class="headerlink" href="#with-tdd" title="Permanent link">&para;</a></h3>
+<p><strong>User</strong>: "Add session history tracking"
+<strong>Claude</strong>: "Let's start with a test. What's the simplest behavior we need?"</p>
+<div class="codehilite"><pre><span></span><code><span class="nx">it</span><span class="p">(</span><span class="s1">&#39;should save session to file&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">saveSession</span><span class="p">(</span><span class="s1">&#39;test content&#39;</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">expect</span><span class="p">(</span><span class="nx">fs</span><span class="p">.</span><span class="nx">existsSync</span><span class="p">(</span><span class="nx">sessionFile</span><span class="p">)).</span><span class="nx">toBe</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+<span class="p">});</span>
+</code></pre></div>
+
+<p><strong>Result</strong>: Incremental, working features instead of big bang failures.</p>
+<h2 id="story-5-the-refactoring-miracle">Story 5: The Refactoring Miracle<a class="headerlink" href="#story-5-the-refactoring-miracle" title="Permanent link">&para;</a></h2>
+<h3 id="the-scenario">The Scenario<a class="headerlink" href="#the-scenario" title="Permanent link">&para;</a></h3>
+<p>Needed to refactor the entire docs.js module for better organization.</p>
+<h3 id="without-tests">Without Tests<a class="headerlink" href="#without-tests" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Touch anything = break everything</li>
+<li>Hours of manual testing</li>
+<li>Fear of making changes</li>
+<li>Technical debt accumulates</li>
+</ul>
+<h3 id="with-tests">With Tests<a class="headerlink" href="#with-tests" title="Permanent link">&para;</a></h3>
+<ol>
+<li>All tests green ✅</li>
+<li>"Claude, refactor this for better organization"</li>
+<li>Claude refactors fearlessly</li>
+<li>Tests still green ✅</li>
+<li>Ship with confidence</li>
+</ol>
+<p><strong>Actual time</strong>: 15 minutes
+<strong>Stress level</strong>: Zero</p>
+<h2 id="the-numbers-dont-lie">The Numbers Don't Lie<a class="headerlink" href="#the-numbers-dont-lie" title="Permanent link">&para;</a></h2>
+<h3 id="repository-statistics">Repository Statistics<a class="headerlink" href="#repository-statistics" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Total tests written</strong>: 56+</li>
+<li><strong>Tests passing</strong>: 100%</li>
+<li><strong>Bugs caught by tests</strong>: 47</li>
+<li><strong>Refactors without breaking</strong>: 23</li>
+<li><strong>Average implementation time</strong>: 12 minutes</li>
+</ul>
+<h3 id="before-vs-after-tdd-adoption">Before vs After TDD Adoption<a class="headerlink" href="#before-vs-after-tdd-adoption" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Before TDD</th>
+<th>With TDD</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bug rate</td>
+<td>3-4 per feature</td>
+<td>&lt;1 per feature</td>
+<td>75% reduction</td>
+</tr>
+<tr>
+<td>Debug time</td>
+<td>45 min average</td>
+<td>5 min average</td>
+<td>89% reduction</td>
+</tr>
+<tr>
+<td>Refactor confidence</td>
+<td>Low</td>
+<td>High</td>
+<td>♾️</td>
+</tr>
+<tr>
+<td>Code coverage</td>
+<td>~30%</td>
+<td>&gt;80%</td>
+<td>167% increase</td>
+</tr>
+<tr>
+<td>Developer happiness</td>
+<td>😫</td>
+<td>😎</td>
+<td>Priceless</td>
+</tr>
+</tbody>
+</table>
+<h2 id="testimonials-from-our-commits">Testimonials from Our Commits<a class="headerlink" href="#testimonials-from-our-commits" title="Permanent link">&para;</a></h2>
+<h3 id="the-test-that-saved-production">"The Test That Saved Production"<a class="headerlink" href="#the-test-that-saved-production" title="Permanent link">&para;</a></h3>
+<p>Commit <a href="../../commit/8ec6319">8ec6319</a>: A simple test for broken links caught an issue that would have broken documentation in production.</p>
+<h3 id="the-refactor-that-just-worked">"The Refactor That Just Worked"<a class="headerlink" href="#the-refactor-that-just-worked" title="Permanent link">&para;</a></h3>
+<p>Commit <a href="../../commit/f84cac6">f84cac6</a>: Major refactoring completed in one commit because tests ensured nothing broke.</p>
+<h3 id="the-feature-that-wrote-itself">"The Feature That Wrote Itself"<a class="headerlink" href="#the-feature-that-wrote-itself" title="Permanent link">&para;</a></h3>
+<p>Commit series <a href="../../commit/1fdac58">1fdac58</a> → <a href="../../commit/d0af9df">d0af9df</a>: Tests defined the behavior so clearly that Claude's implementation was perfect on first try.</p>
+<h2 id="pattern-recognition">Pattern Recognition<a class="headerlink" href="#pattern-recognition" title="Permanent link">&para;</a></h2>
+<h3 id="what-weve-learned">What We've Learned<a class="headerlink" href="#what-weve-learned" title="Permanent link">&para;</a></h3>
+<h4 id="tdd-forces-better-design">TDD Forces Better Design<a class="headerlink" href="#tdd-forces-better-design" title="Permanent link">&para;</a></h4>
+<p>When you write tests first, you naturally design better APIs because you're using them before implementing them.</p>
+<h4 id="claude-stays-focused">Claude Stays Focused<a class="headerlink" href="#claude-stays-focused" title="Permanent link">&para;</a></h4>
+<p>With a failing test to fix, Claude doesn't wander off into unnecessary complexity.</p>
+<h4 id="tests-are-documentation">Tests Are Documentation<a class="headerlink" href="#tests-are-documentation" title="Permanent link">&para;</a></h4>
+<p>Every test explains what the code does better than any comment could.</p>
+<h4 id="confidence-compounds">Confidence Compounds<a class="headerlink" href="#confidence-compounds" title="Permanent link">&para;</a></h4>
+<p>Each passing test adds to a foundation of confidence that makes future changes easier.</p>
+<h2 id="your-success-story-could-be-next">Your Success Story Could Be Next<a class="headerlink" href="#your-success-story-could-be-next" title="Permanent link">&para;</a></h2>
+<h3 id="the-challenge_1">The Challenge<a class="headerlink" href="#the-challenge_1" title="Permanent link">&para;</a></h3>
+<p>Pick any feature you need to implement.</p>
+<h3 id="the-process_1">The Process<a class="headerlink" href="#the-process_1" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Write a test for the simplest behavior</li>
+<li>Let Claude make it pass</li>
+<li>Add another test</li>
+<li>Let Claude extend the implementation</li>
+<li>Repeat until done</li>
+</ol>
+<h3 id="the-result_1">The Result<a class="headerlink" href="#the-result_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Working feature</li>
+<li>Full test coverage</li>
+<li>Zero debugging</li>
+<li>Story to share</li>
+</ul>
+<hr />
+<p><em>Have your own TDD + Claude success story? Add it to this file and submit a PR!</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>
