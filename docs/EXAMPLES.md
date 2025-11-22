@@ -12,6 +12,32 @@ A complete example showing how to create stunning 3D terrain visualizations from
 
 *Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data*
 
+### Multiple Views with Intelligent Camera Positioning
+
+The example demonstrates the power of `position_camera_relative()` by generating professional renders from different camera angles - each with optimal framing for its view direction:
+
+**North View** (looking south at terrain)
+![Detroit North View](images/detroit_elevation_north.png)
+
+**South View** (looking north - offset for perfect framing)
+![Detroit South View](images/detroit_elevation_south.png)
+
+**East View** (looking west)
+![Detroit East View](images/detroit_elevation_east.png)
+
+**West View** (looking east)
+![Detroit West View](images/detroit_elevation_west.png)
+
+**Overhead View** (perfect 90° down with zero rotation)
+![Detroit Above View](images/detroit_elevation_above.png)
+
+**Generate these views yourself:**
+```bash
+npm run py:example:detroit-north     # or any of: south, east, west, above
+```
+
+Each view is automatically framed with intelligent target offset adjustments. No manual coordinate calculations needed!
+
 ### What This Example Shows
 
 ✓ **Loading Real Geographic Data**: Automatically loads and merges SRTM HGT tiles
