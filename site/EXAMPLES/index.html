@@ -1374,8 +1374,8 @@
 <h2 id="detroit-elevation-visualization">Detroit Elevation Visualization<a class="headerlink" href="#detroit-elevation-visualization" title="Permanent link">&para;</a></h2>
 <p>A complete example showing how to create stunning 3D terrain visualizations from real SRTM elevation data with just a few lines of Python.</p>
 <h3 id="the-result">The Result<a class="headerlink" href="#the-result" title="Permanent link">&para;</a></h3>
-<p><img alt="Detroit Elevation Visualization" src="../images/detroit_elevation_real.png" /></p>
-<p><em>Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data</em></p>
+<p><img alt="Detroit Elevation Visualization" src="../images/detroit_elevation_south.png" /></p>
+<p><em>Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data with water body detection enabled</em></p>
 <h3 id="multiple-views-with-intelligent-camera-positioning">Multiple Views with Intelligent Camera Positioning<a class="headerlink" href="#multiple-views-with-intelligent-camera-positioning" title="Permanent link">&para;</a></h3>
 <p>The example demonstrates the power of <code>position_camera_relative()</code> by generating professional renders from different camera angles - each with optimal framing for its view direction:</p>
 <table>
@@ -1599,8 +1599,9 @@ npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-above<s
 <p>The entire process takes about 30-40 seconds on modern hardware. You'll see progress bars for DEM loading and processing, with detailed logging of each transformation step.</p>
 <h3 id="output-files">Output Files<a class="headerlink" href="#output-files" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>examples/detroit_elevation_real.png</code> - Final rendered image (960×720, 2.0 MB)</li>
-<li><code>examples/detroit_elevation_real.blend</code> - Blender file for further editing</li>
+<li><code>examples/detroit_elevation_south.png</code> - Main example render (south view, 960×720, 2.1 MB)</li>
+<li><code>examples/detroit_elevation_{north,east,west,above}.png</code> - Alternative views</li>
+<li><code>examples/detroit_elevation_{view}.blend</code> - Blender files for further editing</li>
 </ul>
 <h3 id="why-terrain-maker-makes-this-easy">Why Terrain Maker Makes This Easy<a class="headerlink" href="#why-terrain-maker-makes-this-easy" title="Permanent link">&para;</a></h3>
 <p>Traditional terrain visualization typically requires:
@@ -1679,7 +1680,7 @@ npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-above<s
 </code></pre></div>
 
 <p><strong>Output locations:</strong>
-- Main image: <code>examples/detroit_elevation_real.png</code>
+- Main image: <code>examples/detroit_elevation_south.png</code> (recommended for documentation)
 - View-specific: <code>examples/detroit_elevation_{north,south,east,west,above}.png</code>
 - Blender files: <code>examples/detroit_elevation_{view}.blend</code></p>
 <p><strong>Each render takes 30-40 seconds on modern hardware.</strong> The images are then automatically included in the documentation gallery when you run:</p>

@@ -8,9 +8,9 @@ A complete example showing how to create stunning 3D terrain visualizations from
 
 ### The Result
 
-![Detroit Elevation Visualization](images/detroit_elevation_real.png)
+![Detroit Elevation Visualization](images/detroit_elevation_south.png)
 
-*Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data*
+*Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data with water body detection enabled*
 
 ### Multiple Views with Intelligent Camera Positioning
 
@@ -242,8 +242,9 @@ The entire process takes about 30-40 seconds on modern hardware. You'll see prog
 
 ### Output Files
 
-- `examples/detroit_elevation_real.png` - Final rendered image (960×720, 2.0 MB)
-- `examples/detroit_elevation_real.blend` - Blender file for further editing
+- `examples/detroit_elevation_south.png` - Main example render (south view, 960×720, 2.1 MB)
+- `examples/detroit_elevation_{north,east,west,above}.png` - Alternative views
+- `examples/detroit_elevation_{view}.blend` - Blender files for further editing
 
 ### Why Terrain Maker Makes This Easy
 
@@ -337,7 +338,7 @@ done
 ```
 
 **Output locations:**
-- Main image: `examples/detroit_elevation_real.png`
+- Main image: `examples/detroit_elevation_south.png` (recommended for documentation)
 - View-specific: `examples/detroit_elevation_{north,south,east,west,above}.png`
 - Blender files: `examples/detroit_elevation_{view}.blend`
 
