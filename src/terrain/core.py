@@ -2302,7 +2302,7 @@ class Terrain:
 
     def create_mesh(self, base_depth=-0.2, boundary_extension=True,
                     scale_factor=100.0, height_scale=1.0, center_model=True, verbose=True,
-                    detect_water=False, water_slope_threshold=0.5):
+                    detect_water=False, water_slope_threshold=0.5, water_mask=None):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
 
@@ -2324,9 +2324,12 @@ class Terrain:
                 Centers XY coordinates but preserves absolute Z elevation values.
             verbose (bool): Whether to log detailed progress information (default: True).
             detect_water (bool): Whether to detect water bodies and apply to alpha channel
-                (default: False). Uses slope-based detection.
-            water_slope_threshold (float): Maximum slope in degrees to classify as water
-                (default: 0.5). Only used if detect_water=True.
+                (default: False). Uses slope-based detection on transformed DEM.
+            water_slope_threshold (float): Maximum slope magnitude to classify as water
+                (default: 0.5). Only used if detect_water=True and water_mask is None.
+            water_mask (np.ndarray): Pre-computed boolean water mask (True=water, False=land).
+                If provided, this mask is used instead of computing water detection.
+                Allows water detection on unscaled DEM before elevation scaling transforms.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -2346,25 +2349,36 @@ class Terrain:
             self.compute_colors()
 
         # Apply water detection if requested
-        if detect_water:
-            self.logger.info(f"Detecting water bodies (slope threshold: {water_slope_threshold}°)...")
-            from src.terrain.water import identify_water_by_slope
+        if detect_water or water_mask is not None:
+            if water_mask is None:
+                # Compute water mask from transformed DEM (if no pre-computed mask provided)
+                self.logger.info(f"Detecting water bodies (slope threshold: {water_slope_threshold})...")
+                from src.terrain.water import identify_water_by_slope
 
-            dem_data = self.data_layers['dem']['transformed_data']
-            water_mask = identify_water_by_slope(dem_data, slope_threshold=water_slope_threshold, fill_holes=True)
+                dem_data = self.data_layers['dem']['transformed_data']
+                water_mask = identify_water_by_slope(dem_data, slope_threshold=water_slope_threshold, fill_holes=True)
+            else:
+                self.logger.info(f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)")
 
             # Apply water mask to colors: color water blue, keep elevation colors for land
-            # Water color: RGB (26, 102, 204) normalized to (0.1, 0.4, 0.8)
+            # Water color: RGB (26, 102, 204)
             water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
 
             # If colors exist, overwrite water pixels with blue
             if hasattr(self, 'colors') and self.colors is not None:
-                # Ensure we have RGB (drop alpha if present for now)
-                if self.colors.shape[-1] >= 3:
-                    self.colors = self.colors[..., :3]
+                # Extract RGB channels (keep alpha if present)
+                has_alpha = self.colors.shape[-1] >= 4
+                rgb_data = self.colors[..., :3]
 
                 # Color water pixels blue
-                self.colors[water_mask] = water_color
+                rgb_data[water_mask] = water_color
+
+                # Reconstruct with alpha channel if needed
+                if has_alpha:
+                    self.colors[..., :3] = rgb_data
+                else:
+                    self.colors = rgb_data
+
                 self.logger.info(f"Water colored blue ({np.sum(water_mask)} water pixels)")
             else:
                 # No colors yet, create them with water coloring

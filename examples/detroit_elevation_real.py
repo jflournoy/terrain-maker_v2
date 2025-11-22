@@ -243,12 +243,44 @@ def main():
     terrain.transforms.append(utm_reproject)
     # Flip DEM data to correct north-south orientation
     terrain.transforms.append(flip_raster(axis='horizontal'))
-    # Add elevation scaling to enhance height features
+
+    # IMPORTANT: We will detect water BEFORE elevation scaling is applied
+    # Water detection must operate on unscaled elevation data to get meaningful slope magnitudes
+    # (if we use scaled elevation, all slopes become too small to differentiate water from land)
+
+    # Add elevation scaling to enhance height features (applied after water detection)
     terrain.transforms.append(scale_elevation(scale_factor=0.0001))
     terrain.apply_transforms()
 
+    # Detect water on the UNSCALED DEM (before elevation scaling transform)
+    # The key insight: elevation scaling makes slopes tiny (0.0-0.027), so we must detect
+    # water on the unscaled DEM where slopes are larger and the threshold makes sense
+    print(f"      Detecting water bodies (on unscaled DEM)...")
+    try:
+        from src.terrain.water import identify_water_by_slope
+        import numpy as np
+
+        transformed_dem = terrain.data_layers['dem']['transformed_data']
+
+        # The transformed_dem has been scaled by 0.0001
+        # Unscale it to get the values BEFORE elevation scaling
+        unscaled_dem = transformed_dem / 0.0001
+
+        # Now detect water on this unscaled (but still downsampled) DEM
+        # Water bodies are essentially flat (slope ~0), while terrain has measurable slopes
+        # Using an extremely low threshold to catch only true flat water areas
+        water_mask = identify_water_by_slope(
+            unscaled_dem,
+            slope_threshold=0.01,  # Extremely low threshold for nearly-flat water (slope magnitude)
+            fill_holes=True
+        )
+        print(f"      Water detected: {np.sum(water_mask)} water pixels ({100*np.sum(water_mask)/water_mask.size:.1f}% of terrain)")
+    except Exception as e:
+        print(f"      ⚠️  Water detection failed: {e}")
+        print(f"      Falling back to scaled-DEM detection (may be inaccurate)...")
+        water_mask = None
+
     # Check downsampled size
-    transformed_dem = terrain.data_layers['dem']['transformed_data']
     print(f"      Downsampled DEM shape: {transformed_dem.shape}")
     print(f"      Actual vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]:,}")
     print(f"      Transforms applied successfully")
@@ -271,8 +303,7 @@ def main():
             height_scale=4.0,
             center_model=True,
             boundary_extension=True,
-            detect_water=True,              # Enable water body detection
-            water_slope_threshold=0.1       # Identify flat areas as water (slope magnitude)
+            water_mask=water_mask              # Use pre-computed water mask from unscaled DEM
         )
 
         if mesh_obj is None:
