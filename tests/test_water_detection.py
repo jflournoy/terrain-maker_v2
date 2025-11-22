@@ -43,7 +43,7 @@ class TestWaterDetection(unittest.TestCase):
     def test_identifies_flat_areas_as_water(self):
         """Test that flat areas (low slope) are identified as water."""
         # Create DEM with flat lake in top-left, sharply sloped terrain on right
-        # Need EXTREMELY exaggerated elevation changes for Sobel detection to work on small arrays
+        # Using Horn's method which computes slope magnitude from convolution
         dem = np.array([
             [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
             [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
@@ -52,10 +52,10 @@ class TestWaterDetection(unittest.TestCase):
             [1000.0, 1000.0, 1000.0, 5500.0, 10000.0],
         ], dtype=np.float32)
 
-        # Use a higher threshold (45 degrees) to account for steep slopes in small arrays
-        water_mask = identify_water_by_slope(dem, slope_threshold=45.0)
+        # Use a threshold appropriate for Horn's slope magnitude (not degrees)
+        water_mask = identify_water_by_slope(dem, slope_threshold=100.0)
 
-        # Top-left area should have water (flat, slope=0)
+        # Top-left area should have water (flat, slope magnitude ~0)
         # Right side should have no water (very steeply sloped)
         flat_area_water_count = np.sum(water_mask[:3, :3])
         sloped_area_water_count = np.sum(water_mask[:, 4])
@@ -73,12 +73,12 @@ class TestWaterDetection(unittest.TestCase):
                 # Create smooth elevation ramp: increases gradually from (0,0) to (14,14)
                 dem[i, j] = 1000 + i * 10 + j * 8
 
-        # Very strict threshold - only areas with zero slope (corners)
-        very_strict = identify_water_by_slope(dem, slope_threshold=1.0, fill_holes=False)
+        # Very strict threshold - only areas with very low slope magnitude
+        very_strict = identify_water_by_slope(dem, slope_threshold=0.01, fill_holes=False)
         very_strict_count = np.sum(very_strict)
 
-        # More lenient threshold
-        lenient = identify_water_by_slope(dem, slope_threshold=20.0, fill_holes=False)
+        # More lenient threshold for Horn's slope magnitude
+        lenient = identify_water_by_slope(dem, slope_threshold=1.0, fill_holes=False)
         lenient_count = np.sum(lenient)
 
         # Higher threshold should identify more water pixels
@@ -96,8 +96,8 @@ class TestWaterDetection(unittest.TestCase):
             [120, 120, 120, 130, 140],
         ], dtype=np.float32)
 
-        # Should not raise an error
-        water_mask = identify_water_by_slope(dem, slope_threshold=1.0)
+        # Should not raise an error with Horn's slope magnitude threshold
+        water_mask = identify_water_by_slope(dem, slope_threshold=10.0)
 
         # NaN locations might be marked as water or land, but shouldn't crash
         self.assertEqual(water_mask.shape, dem.shape)
@@ -114,10 +114,10 @@ class TestWaterDetection(unittest.TestCase):
         ], dtype=np.float32)
 
         # Without filling: noise creates inconsistent patterns
-        without_fill = identify_water_by_slope(dem, slope_threshold=20.0, fill_holes=False)
+        without_fill = identify_water_by_slope(dem, slope_threshold=5.0, fill_holes=False)
 
         # With filling: morphological operations should smooth noise
-        with_fill = identify_water_by_slope(dem, slope_threshold=20.0, fill_holes=True)
+        with_fill = identify_water_by_slope(dem, slope_threshold=5.0, fill_holes=True)
 
         # Both should produce valid boolean masks
         self.assertIsInstance(with_fill, np.ndarray)
@@ -136,7 +136,8 @@ class TestWaterDetection(unittest.TestCase):
         dem[20:30, 20:30] = 500.0
         dem[70:80, 70:80] = 800.0
 
-        water_mask = identify_water_by_slope(dem, slope_threshold=1.0)
+        # Use slope magnitude threshold appropriate for Horn's method
+        water_mask = identify_water_by_slope(dem, slope_threshold=0.5)
 
         self.assertEqual(water_mask.shape, (100, 100))
         # Flat lake areas should have some water detection

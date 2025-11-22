@@ -14,20 +14,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def identify_water_by_slope(dem_data, slope_threshold=0.5, fill_holes=True):
+def identify_water_by_slope(dem_data, slope_threshold=0.1, fill_holes=True):
     """
     Identify water bodies by detecting flat areas (low slope).
 
     Water bodies typically have very flat surfaces with near-zero slope.
-    This function calculates local slope and identifies pixels below the threshold
-    as potential water. Optionally applies morphological operations to fill small
-    gaps and smooth the water mask.
+    This function calculates local slope using Horn's method and identifies pixels
+    below the threshold as potential water. Optionally applies morphological
+    operations to fill small gaps and smooth the water mask.
 
     Args:
         dem_data (np.ndarray): Digital elevation model as 2D array (height values)
-        slope_threshold (float): Maximum slope in degrees to classify as water.
-                               Default: 0.5° (very flat surfaces)
-                               Range: 0.0 to ~45.0
+        slope_threshold (float): Maximum slope magnitude to classify as water.
+                               Default: 0.1 (very flat surfaces)
+                               Typical range: 0.05 to 0.5 depending on DEM resolution
+                               Values are gradient magnitude from Horn's method
         fill_holes (bool): Apply morphological operations to fill small gaps
                           in water mask and smooth boundaries. Default: True
 
@@ -40,7 +41,7 @@ def identify_water_by_slope(dem_data, slope_threshold=0.5, fill_holes=True):
 
     Examples:
         >>> dem = np.array([[100, 100, 110], [100, 100, 110], [110, 110, 120]])
-        >>> water_mask = identify_water_by_slope(dem, slope_threshold=1.0)
+        >>> water_mask = identify_water_by_slope(dem, slope_threshold=0.1)
         >>> water_mask.dtype
         dtype('bool')
         >>> water_mask.shape
@@ -52,7 +53,7 @@ def identify_water_by_slope(dem_data, slope_threshold=0.5, fill_holes=True):
     if slope_threshold < 0:
         raise ValueError(f"slope_threshold must be non-negative, got {slope_threshold}")
 
-    logger.info(f"Identifying water by slope (threshold: {slope_threshold}°)")
+    logger.info(f"Identifying water by slope (threshold: {slope_threshold})")
 
     # Create a working copy, handling NaN values
     dem_work = np.array(dem_data, dtype=np.float32)
@@ -85,30 +86,57 @@ def identify_water_by_slope(dem_data, slope_threshold=0.5, fill_holes=True):
 
 def _calculate_slope(dem_data):
     """
-    Calculate slope magnitude in degrees from elevation data.
+    Calculate slope magnitude using Horn's method.
 
-    Uses Sobel operators to compute gradient (dx, dy) and converts to slope angle.
-    Slope = arctan(sqrt(dx^2 + dy^2)) * 180/π (converted to degrees)
+    Uses Horn's method with proper convolution kernels for more accurate slope
+    computation on downsampled DEM data. This is more robust than Sobel for
+    terrain slope analysis.
 
     Args:
         dem_data (np.ndarray): 2D elevation data
 
     Returns:
-        np.ndarray: Slope magnitude in degrees, same shape as input
+        np.ndarray: Slope magnitude (gradient magnitude), same shape as input
     """
-    # Compute gradients using Sobel operators
-    # These approximate dx/dy at each pixel
-    sobel_x = ndimage.sobel(dem_data, axis=1)  # Gradient in x direction
-    sobel_y = ndimage.sobel(dem_data, axis=0)  # Gradient in y direction
+    # Save the original NaN mask
+    nan_mask = np.isnan(dem_data)
 
-    # Gradient magnitude
-    gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+    # Fill NaN values with interpolation
+    dem_filled = dem_data.copy()
+    mask = np.isnan(dem_filled)
+    if np.any(mask) and np.any(~mask):
+        # Use linear interpolation for NaN values
+        dem_filled[mask] = np.interp(
+            np.flatnonzero(mask),
+            np.flatnonzero(~mask),
+            dem_filled[~mask]
+        )
+    elif np.all(mask):
+        # All NaN - return all zeros
+        return np.zeros_like(dem_data)
 
-    # Convert to slope angle in degrees
-    # slope_angle = arctan(gradient_magnitude) converted to degrees
-    slope_degrees = np.arctan(gradient_magnitude) * (180 / np.pi)
+    # Calculate gradients using Horn's method
+    # These kernels weight central differences more heavily
+    dx = ndimage.convolve(
+        dem_filled,
+        np.array([[-1, 0, 1],
+                  [-2, 0, 2],
+                  [-1, 0, 1]]) / 8.0
+    )
+    dy = ndimage.convolve(
+        dem_filled,
+        np.array([[-1, -2, -1],
+                  [0, 0, 0],
+                  [1, 2, 1]]) / 8.0
+    )
 
-    return slope_degrees
+    # Calculate slope magnitude (gradient magnitude)
+    slope = np.hypot(dx, dy)
+
+    # Restore NaN values to their original locations
+    slope[nan_mask] = np.nan
+
+    return slope
 
 
 def _smooth_water_mask(water_mask, structure_size=3):

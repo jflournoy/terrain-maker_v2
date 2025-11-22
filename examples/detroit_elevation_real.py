@@ -272,7 +272,7 @@ def main():
             center_model=True,
             boundary_extension=True,
             detect_water=True,              # Enable water body detection
-            water_slope_threshold=0.5       # Identify flat areas as water
+            water_slope_threshold=0.1       # Identify flat areas as water (slope magnitude)
         )
 
         if mesh_obj is None:

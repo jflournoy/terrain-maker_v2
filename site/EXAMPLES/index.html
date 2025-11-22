@@ -1378,34 +1378,42 @@
 <p><em>Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data</em></p>
 <h3 id="multiple-views-with-intelligent-camera-positioning">Multiple Views with Intelligent Camera Positioning<a class="headerlink" href="#multiple-views-with-intelligent-camera-positioning" title="Permanent link">&para;</a></h3>
 <p>The example demonstrates the power of <code>position_camera_relative()</code> by generating professional renders from different camera angles - each with optimal framing for its view direction:</p>
-<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 20px 0;">
-  <div style="text-align: center;">
-    <strong>North View</strong><br/>
-    <small>(looking south)</small><br/>
-    ![Detroit North View](images/detroit_elevation_north.png)
-  </div>
-  <div style="text-align: center;">
-    <strong>East View</strong><br/>
-    <small>(looking west)</small><br/>
-    ![Detroit East View](images/detroit_elevation_east.png)
-  </div>
-  <div style="text-align: center;">
-    <strong>South View</strong><br/>
-    <small>(looking north)</small><br/>
-    ![Detroit South View](images/detroit_elevation_south.png)
-  </div>
-  <div style="text-align: center; grid-column: 1;">
-    <strong>West View</strong><br/>
-    <small>(looking east)</small><br/>
-    ![Detroit West View](images/detroit_elevation_west.png)
-  </div>
-  <div style="text-align: center; grid-column: 2 / span 2;">
-    <strong>Overhead View</strong><br/>
-    <small>(90° down, zero rotation)</small><br/>
-    ![Detroit Above View](images/detroit_elevation_above.png)
-  </div>
-</div>
-
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">North View</th>
+<th style="text-align: center;">East View</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><em>(looking south)</em></td>
+<td style="text-align: center;"><em>(looking west)</em></td>
+</tr>
+<tr>
+<td style="text-align: center;"><img alt="Detroit North View" src="../images/detroit_elevation_north.png" /></td>
+<td style="text-align: center;"><img alt="Detroit East View" src="../images/detroit_elevation_east.png" /></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">West View</th>
+<th style="text-align: center;">Overhead View</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><em>(looking east)</em></td>
+<td style="text-align: center;"><em>(90° down, zero rotation)</em></td>
+</tr>
+<tr>
+<td style="text-align: center;"><img alt="Detroit West View" src="../images/detroit_elevation_west.png" /></td>
+<td style="text-align: center;"><img alt="Detroit Above View" src="../images/detroit_elevation_above.png" /></td>
+</tr>
+</tbody>
+</table>
 <p><strong>Generate these views yourself:</strong></p>
 <div class="codehilite"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">     </span><span class="c1"># or any of: south, east, west, above</span>
 </code></pre></div>
@@ -1443,7 +1451,7 @@
     <span class="n">scale_factor</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
     <span class="n">height_scale</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
     <span class="n">detect_water</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>              <span class="c1"># Enable water body detection</span>
-    <span class="n">water_slope_threshold</span><span class="o">=</span><span class="mf">0.5</span>       <span class="c1"># Flat areas (slope &lt; 0.5°) are water</span>
+    <span class="n">water_slope_threshold</span><span class="o">=</span><span class="mf">0.1</span>       <span class="c1"># Flat areas (slope &lt; 0.1) are water</span>
 <span class="p">)</span>
 <span class="n">camera</span> <span class="o">=</span> <span class="n">position_camera_relative</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;south&#39;</span><span class="p">,</span> <span class="n">distance</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
 <span class="n">render_scene_to_file</span><span class="p">(</span><span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;detroit.png&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">960</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">720</span><span class="p">)</span>
@@ -1491,13 +1499,13 @@
     <span class="n">scale_factor</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
     <span class="n">height_scale</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
     <span class="n">detect_water</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>              <span class="c1"># Enable water body detection</span>
-    <span class="n">water_slope_threshold</span><span class="o">=</span><span class="mf">0.5</span>       <span class="c1"># Flat areas (slope &lt; 0.5°) are water</span>
+    <span class="n">water_slope_threshold</span><span class="o">=</span><span class="mf">0.1</span>       <span class="c1"># Flat areas (slope &lt; 0.1) are water</span>
 <span class="p">)</span>
 </code></pre></div>
 
 <p><strong>How it works:</strong></p>
 <p><strong>Detection Phase:</strong>
-- Uses Sobel operators to compute terrain slope from elevation data
+- Uses Horn's method to compute terrain slope from the downsampled elevation data
 - Identifies pixels with slope below threshold as potential water bodies
 - Applies morphological operations to smooth water boundaries and fill gaps</p>
 <p><strong>Coloring Phase:</strong>
@@ -1507,8 +1515,8 @@
 - Water is colored during mesh creation, no shader configuration needed</p>
 <p><strong>Customization:</strong>
 - Adjust <code>water_slope_threshold</code> to find more or fewer water bodies (higher = more sensitive)
-- The default threshold of 0.5° works well for most real-world elevation data
-- For noisy terrain, increase threshold; for detailed water features, decrease it</p>
+- The default threshold of 0.1 works well for most real-world elevation data
+- For noisy terrain, increase threshold (e.g., 0.15-0.2); for detailed water features, decrease it (e.g., 0.05-0.08)</p>
 <h3 id="running-this-example">Running This Example<a class="headerlink" href="#running-this-example" title="Permanent link">&para;</a></h3>
 <h4 id="basic-render">Basic Render<a class="headerlink" href="#basic-render" title="Permanent link">&para;</a></h4>
 <div class="codehilite"><pre><span></span><code>python<span class="w"> </span>examples/detroit_elevation_real.py

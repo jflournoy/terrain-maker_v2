@@ -69,7 +69,7 @@ mesh = terrain.create_mesh(
     scale_factor=100.0,
     height_scale=4.0,
     detect_water=True,              # Enable water body detection
-    water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
+    water_slope_threshold=0.1       # Flat areas (slope < 0.1) are water
 )
 camera = position_camera_relative(mesh, direction='south', distance=1.5)
 render_scene_to_file(output_path="detroit.png", width=960, height=720)
@@ -128,14 +128,14 @@ mesh = terrain.create_mesh(
     scale_factor=100.0,
     height_scale=4.0,
     detect_water=True,              # Enable water body detection
-    water_slope_threshold=0.5       # Flat areas (slope < 0.5°) are water
+    water_slope_threshold=0.1       # Flat areas (slope < 0.1) are water
 )
 ```
 
 **How it works:**
 
 **Detection Phase:**
-- Uses Sobel operators to compute terrain slope from elevation data
+- Uses Horn's method to compute terrain slope from the downsampled elevation data
 - Identifies pixels with slope below threshold as potential water bodies
 - Applies morphological operations to smooth water boundaries and fill gaps
 
@@ -147,8 +147,8 @@ mesh = terrain.create_mesh(
 
 **Customization:**
 - Adjust `water_slope_threshold` to find more or fewer water bodies (higher = more sensitive)
-- The default threshold of 0.5° works well for most real-world elevation data
-- For noisy terrain, increase threshold; for detailed water features, decrease it
+- The default threshold of 0.1 works well for most real-world elevation data
+- For noisy terrain, increase threshold (e.g., 0.15-0.2); for detailed water features, decrease it (e.g., 0.05-0.08)
 
 ### Running This Example
 
