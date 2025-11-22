@@ -225,10 +225,11 @@ Summary:
   ✓ Created Terrain object with real elevation data
   ✓ Applied transforms (reproject + flip + scale)
   ✓ Configured beautiful Mako elevation-based color mapping
+  ✓ Detected and applied water bodies (slope-based identification)
   ✓ Generated Blender mesh with 1370951 vertices
   ✓ Rendered to PNG: /path/to/detroit_elevation_real.png
 
-That's it! Professional terrain visualization in just a few lines of Python!
+That's it! Professional terrain visualization with water detection in just a few lines of Python!
 ```
 
 The entire process takes about 30-40 seconds on modern hardware. You'll see progress bars for DEM loading and processing, with detailed logging of each transformation step.
