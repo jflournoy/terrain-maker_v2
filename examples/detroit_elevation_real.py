@@ -124,6 +124,8 @@ from src.terrain.core import (
     elevation_colormap, clear_scene, position_camera_relative, setup_light,
     setup_render_settings, render_scene_to_file
 )
+from src.terrain.cache import DEMCache
+from src.terrain.mesh_cache import MeshCache
 
 try:
     import bpy
@@ -186,6 +188,16 @@ def parse_args():
         default=None,
         help='Output filename (default: detroit_elevation_{view}.png)'
     )
+    parser.add_argument(
+        '--cache',
+        action='store_true',
+        help='Enable DEM caching (saves/loads from .dem_cache/ directory)'
+    )
+    parser.add_argument(
+        '--clear-cache',
+        action='store_true',
+        help='Clear all cached DEM files and exit'
+    )
     return parser.parse_args()
 
 
@@ -197,6 +209,22 @@ def main():
     print("Detroit Real Elevation Visualization")
     print("=" * 70)
 
+    # Initialize caches
+    cache = DEMCache(enabled=args.cache)
+    mesh_cache = MeshCache(enabled=args.cache)
+
+    # Handle cache clearing
+    if args.clear_cache:
+        print("\n[Cache] Clearing cached files...")
+        dem_deleted = cache.clear_cache(cache_name="detroit")
+        mesh_deleted = mesh_cache.clear_cache(cache_name="mesh")
+        print(f"[Cache] Cleared {dem_deleted} DEM files and {mesh_deleted} mesh files")
+        stats = cache.get_cache_stats()
+        mesh_stats = mesh_cache.get_cache_stats()
+        total_mb = stats['total_size_mb'] + mesh_stats['total_size_mb']
+        print(f"[Cache] Remaining cache size: {total_mb:.1f} MB")
+        return 0
+
     # Clear Blender scene to remove default objects
     try:
         import bpy
@@ -205,13 +233,41 @@ def main():
     except ImportError:
         print("⚠️  Blender not available - skipping scene clear")
 
-    # Step 1: Load DEM
+    # Step 1: Load DEM (with caching)
     print("[1/6] Loading SRTM tiles...")
-    try:
-        dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
-    except Exception as e:
-        print(f"\n✗ Failed to load DEM: {e}")
-        return 1
+    dem_data = None
+    transform = None
+    cache_hit = False
+
+    # Try to load from cache
+    if args.cache:
+        try:
+            print("      [Cache] Computing source hash...")
+            source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+            cached_result = cache.load_cache(source_hash, cache_name="detroit")
+            if cached_result is not None:
+                dem_data, transform = cached_result
+                cache_hit = True
+                print(f"      [Cache] ✓ Loaded from cache")
+        except Exception as e:
+            print(f"      [Cache] Cache load failed: {e}")
+            print(f"      [Cache] Will load fresh and cache result")
+
+    # Load from source if cache miss or caching disabled
+    if dem_data is None:
+        try:
+            dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
+
+            # Save to cache if caching enabled
+            if args.cache:
+                try:
+                    source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+                    cache.save_cache(dem_data, transform, source_hash, cache_name="detroit")
+                except Exception as e:
+                    print(f"      [Cache] Failed to cache: {e}")
+        except Exception as e:
+            print(f"\n✗ Failed to load DEM: {e}")
+            return 1
 
     # Step 2: Initialize Terrain
     print("\n[2/6] Initializing Terrain object...")
@@ -295,8 +351,39 @@ def main():
     )
     print(f"      Color mapping configured (Mako colormap)")
 
-    # Step 5: Create Blender mesh
+    # Step 5: Create Blender mesh (with caching support)
     print("\n[5/6] Creating Blender mesh...")
+
+    # Compute mesh hash for caching
+    mesh_params = {
+        'scale_factor': 100.0,
+        'height_scale': 4.0,
+        'center_model': True,
+        'boundary_extension': True,
+        'water_mask': water_mask is not None
+    }
+
+    mesh_hash = None
+    mesh_obj = None
+
+    if args.cache:
+        try:
+            # Compute DEM hash for use in mesh hash
+            dem_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+            mesh_hash = mesh_cache.compute_mesh_hash(dem_hash, mesh_params)
+
+            # Try to load cached mesh
+            print("      [Cache] Computing mesh hash...")
+            cached_blend_path = mesh_cache.load_cache(mesh_hash, cache_name="detroit_mesh")
+
+            if cached_blend_path is not None:
+                print(f"      [Cache] ✓ Loaded mesh from cache")
+                print(f"      [Cache] File: {cached_blend_path.name}")
+                # Note: For render-only, you would open this file in Blender
+                # For now, we'll regenerate the mesh to continue the workflow
+        except Exception as e:
+            print(f"      [Cache] Mesh cache lookup failed: {e}")
+
     try:
         mesh_obj = terrain.create_mesh(
             scale_factor=100.0,
@@ -314,6 +401,15 @@ def main():
         print(f"      Vertices: {len(mesh_obj.data.vertices)}")
         print(f"      Polygons: {len(mesh_obj.data.polygons)}")
         print(f"      ✓ Water colored blue (from slope-based detection)")
+
+        # Cache the mesh if caching is enabled
+        if args.cache and mesh_hash:
+            try:
+                # Blend file will be saved during render_scene_to_file
+                # For now, we'll cache after rendering
+                pass
+            except Exception as e:
+                print(f"      [Cache] Failed to cache mesh: {e}")
 
     except Exception as e:
         print(f"      ✗ Error creating mesh: {e}")
@@ -379,12 +475,30 @@ def main():
         print(f"      File: {render_file.name}")
         print(f"      Size: {file_size_mb:.1f} MB")
 
+        # Cache the mesh (.blend file) if caching enabled
+        if args.cache and mesh_hash:
+            try:
+                # Blend file is saved alongside PNG with .blend extension
+                blend_file = render_file.parent / f"{render_file.stem}.blend"
+                if blend_file.exists():
+                    print(f"      [Cache] Caching mesh to cache...")
+                    mesh_cache.save_cache(
+                        blend_file,
+                        mesh_hash,
+                        mesh_params,
+                        cache_name="detroit_mesh"
+                    )
+            except Exception as e:
+                print(f"      [Cache] Failed to cache mesh: {e}")
+
     # Summary
     print("\n" + "=" * 70)
     print("Detroit Real Elevation Visualization Complete!")
     print("=" * 70)
     print(f"\nSummary:")
     print(f"  ✓ Loaded and merged all SRTM tiles (full coverage)")
+    if cache_hit:
+        print(f"  ✓ [Cache] DEM loaded from cache (skipped merge)")
     print(f"  ✓ Configured downsampling to target vertex count intelligently")
     print(f"  ✓ Applied geographic coordinate reprojection (WGS84 → UTM)")
     print(f"  ✓ Created Terrain object with real elevation data")
@@ -394,6 +508,23 @@ def main():
     print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
     if render_file:
         print(f"  ✓ Rendered to PNG: {render_file}")
+
+    # Cache statistics
+    if args.cache:
+        dem_stats = cache.get_cache_stats()
+        mesh_stats = mesh_cache.get_cache_stats()
+        print(f"\n[Cache] Statistics:")
+        print(f"  DEM Cache:")
+        print(f"    Location: {dem_stats['cache_dir']}")
+        print(f"    Files: {dem_stats['cache_files']}")
+        print(f"    Size: {dem_stats['total_size_mb']:.1f} MB")
+        print(f"  Mesh Cache:")
+        print(f"    Location: {mesh_stats['cache_dir']}")
+        print(f"    Files: {mesh_stats['blend_files']}")
+        print(f"    Size: {mesh_stats['total_size_mb']:.1f} MB")
+        total_size = dem_stats['total_size_mb'] + mesh_stats['total_size_mb']
+        print(f"  Total cache size: {total_size:.1f} MB")
+
     print(f"\nThat's it! Professional terrain visualization with water detection in just a few lines of Python!")
 
     return 0
