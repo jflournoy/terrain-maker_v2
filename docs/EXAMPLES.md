@@ -333,6 +333,38 @@ done
 
 This creates 5 renders showing the terrain from different perspectives, with consistent framing and optimal camera positioning for each angle.
 
+### Regenerating Example Images
+
+When you update the example code or want to refresh the documentation images with the latest rendering, use these npm commands:
+
+```bash
+# Generate the main example image (south view - default)
+npm run py:example:detroit-elevation
+
+# Generate specific views
+npm run py:example:detroit-south      # South view (recommended for main image)
+npm run py:example:detroit-north      # North view
+npm run py:example:detroit-east       # East view
+npm run py:example:detroit-west       # West view
+npm run py:example:detroit-above      # Overhead view
+
+# Generate all views at once
+for view in south north east west above; do
+  npm run py:example:detroit-$view
+done
+```
+
+**Output locations:**
+- Main image: `examples/detroit_elevation_real.png`
+- View-specific: `examples/detroit_elevation_{north,south,east,west,above}.png`
+- Blender files: `examples/detroit_elevation_{view}.blend`
+
+**Each render takes 30-40 seconds on modern hardware.** The images are then automatically included in the documentation gallery when you run:
+
+```bash
+npm run docs:build
+```
+
 ---
 
 **Want to try it yourself?** See [Quick Reference](QUICK_REFERENCE.md) for API documentation and [API Reference](API_REFERENCE.md) for detailed function signatures.

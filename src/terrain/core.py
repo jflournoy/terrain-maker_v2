@@ -2571,6 +2571,11 @@ class Terrain:
                     if colors_normalized.max() > 1.0:
                         colors_normalized = colors_normalized / 255.0
 
+                    # Ensure colors are RGBA (add alpha channel if needed)
+                    if colors_normalized.shape[-1] == 3:
+                        alpha = np.ones((colors_normalized.shape[0], colors_normalized.shape[1], 1), dtype=np.float32)
+                        colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
+
                     # For each polygon loop, get vertex and set color
                     for poly in mesh.polygons:
                         for loop_idx in poly.loop_indices:
