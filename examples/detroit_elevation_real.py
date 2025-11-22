@@ -365,6 +365,7 @@ def main():
 
     mesh_hash = None
     mesh_obj = None
+    cached_mesh_loaded = False
 
     if args.cache:
         try:
@@ -379,43 +380,64 @@ def main():
             if cached_blend_path is not None:
                 print(f"      [Cache] ✓ Loaded mesh from cache")
                 print(f"      [Cache] File: {cached_blend_path.name}")
-                # Note: For render-only, you would open this file in Blender
-                # For now, we'll regenerate the mesh to continue the workflow
+
+                # Load the cached blend file into Blender
+                try:
+                    import bpy
+                    bpy.ops.wm.open_mainfile(filepath=str(cached_blend_path))
+
+                    # Get the mesh object from the loaded blend file
+                    # Find the terrain mesh (usually named "Terrain" or similar)
+                    for obj in bpy.context.scene.objects:
+                        if obj.type == 'MESH':
+                            mesh_obj = obj
+                            cached_mesh_loaded = True
+                            print(f"      ✓ Mesh loaded from cache!")
+                            print(f"      Vertices: {len(mesh_obj.data.vertices)}")
+                            print(f"      Polygons: {len(mesh_obj.data.polygons)}")
+                            break
+
+                    if not cached_mesh_loaded:
+                        print(f"      [Cache] No mesh object found in cached blend file, will recreate")
+                except Exception as e:
+                    print(f"      [Cache] Failed to load mesh from blend file: {e}")
         except Exception as e:
             print(f"      [Cache] Mesh cache lookup failed: {e}")
 
-    try:
-        mesh_obj = terrain.create_mesh(
-            scale_factor=100.0,
-            height_scale=4.0,
-            center_model=True,
-            boundary_extension=True,
-            water_mask=water_mask              # Use pre-computed water mask from unscaled DEM
-        )
+    # Only create mesh if not loaded from cache
+    if not cached_mesh_loaded:
+        try:
+            mesh_obj = terrain.create_mesh(
+                scale_factor=100.0,
+                height_scale=4.0,
+                center_model=True,
+                boundary_extension=True,
+                water_mask=water_mask              # Use pre-computed water mask from unscaled DEM
+            )
 
-        if mesh_obj is None:
-            print(f"      ✗ Mesh creation failed!")
+            if mesh_obj is None:
+                print(f"      ✗ Mesh creation failed!")
+                return 1
+
+            print(f"      ✓ Mesh created successfully!")
+            print(f"      Vertices: {len(mesh_obj.data.vertices)}")
+            print(f"      Polygons: {len(mesh_obj.data.polygons)}")
+            print(f"      ✓ Water colored blue (from slope-based detection)")
+
+        except Exception as e:
+            print(f"      ✗ Error creating mesh: {e}")
+            import traceback
+            traceback.print_exc()
             return 1
 
-        print(f"      ✓ Mesh created successfully!")
-        print(f"      Vertices: {len(mesh_obj.data.vertices)}")
-        print(f"      Polygons: {len(mesh_obj.data.polygons)}")
-        print(f"      ✓ Water colored blue (from slope-based detection)")
-
-        # Cache the mesh if caching is enabled
-        if args.cache and mesh_hash:
-            try:
-                # Blend file will be saved during render_scene_to_file
-                # For now, we'll cache after rendering
-                pass
-            except Exception as e:
-                print(f"      [Cache] Failed to cache mesh: {e}")
-
-    except Exception as e:
-        print(f"      ✗ Error creating mesh: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+    # Cache the mesh after rendering if not already cached
+    if args.cache and mesh_hash and not cached_mesh_loaded:
+        try:
+            # Blend file will be saved during render_scene_to_file
+            # Flag will be checked after render
+            pass
+        except Exception as e:
+            print(f"      [Cache] Failed to cache mesh: {e}")
 
     # Step 6: Render to PNG
     print("\n[6/6] Setting up camera and rendering to PNG...")
