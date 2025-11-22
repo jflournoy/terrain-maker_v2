@@ -16,10 +16,10 @@ A complete example showing how to create stunning 3D terrain visualizations from
 
 The example demonstrates the power of `position_camera_relative()` by generating professional renders from different camera angles - each with optimal framing for its view direction:
 
-| North View | East View | South View |
-|:---:|:---:|:---:|
-| *(looking south)* | *(looking west)* | *(looking north)* |
-| ![Detroit North View](images/detroit_elevation_north.png) | ![Detroit East View](images/detroit_elevation_east.png) | ![Detroit South View](images/detroit_elevation_south.png) |
+| North View | East View |
+|:---:|:---:|
+| *(looking south)* | *(looking west)* |
+| ![Detroit North View](images/detroit_elevation_north.png) | ![Detroit East View](images/detroit_elevation_east.png) |
 
 | West View | Overhead View |
 |:---:|:---:|
