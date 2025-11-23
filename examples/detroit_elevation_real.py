@@ -233,186 +233,177 @@ def main():
     except ImportError:
         print("⚠️  Blender not available - skipping scene clear")
 
-    # Step 1: Load DEM (with caching)
-    print("[1/6] Loading SRTM tiles...")
-    dem_data = None
-    transform = None
-    cache_hit = False
-
-    # Try to load from cache
-    if args.cache:
-        try:
-            print("      [Cache] Computing source hash...")
-            source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
-            cached_result = cache.load_cache(source_hash, cache_name="detroit")
-            if cached_result is not None:
-                dem_data, transform = cached_result
-                cache_hit = True
-                print(f"      [Cache] ✓ Loaded from cache")
-        except Exception as e:
-            print(f"      [Cache] Cache load failed: {e}")
-            print(f"      [Cache] Will load fresh and cache result")
-
-    # Load from source if cache miss or caching disabled
-    if dem_data is None:
-        try:
-            dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
-
-            # Save to cache if caching enabled
-            if args.cache:
-                try:
-                    source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
-                    cache.save_cache(dem_data, transform, source_hash, cache_name="detroit")
-                except Exception as e:
-                    print(f"      [Cache] Failed to cache: {e}")
-        except Exception as e:
-            print(f"\n✗ Failed to load DEM: {e}")
-            return 1
-
-    # Step 2: Initialize Terrain
-    print("\n[2/6] Initializing Terrain object...")
-    terrain = Terrain(dem_data, transform)
-    print(f"      Terrain initialized")
-    print(f"      DEM shape: {terrain.dem_shape}")
-
-    # Step 3: Apply transforms (downsample to reduce mesh complexity)
-    print("\n[3/6] Applying transforms...")
-
-    print(f"      Original DEM shape: {terrain.dem_shape}")
-
+    # Output dimensions (used for rendering)
     WIDTH = 960
     HEIGHT = 720
 
-    # Configure downsampling to target approximately 500,000 vertices
-    # This automatically calculates the optimal zoom_factor
-    target_vertices = WIDTH*HEIGHT*2
-    zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
-    print(f"      Configured for {target_vertices:,} target vertices")
-    print(f"      Calculated zoom_factor: {zoom:.6f}")
+    # ==========================================================================
+    # EARLY CACHE CHECK: Check mesh cache BEFORE loading any data
+    # This is the key optimization - we can compute the mesh hash from just
+    # file paths + mtimes + params, without loading actual DEM data.
+    # ==========================================================================
+    mesh_obj = None
+    cached_mesh_loaded = False
+    mesh_hash = None
 
-    # Reproject from WGS84 to UTM Zone 17N for proper geographic scaling
-    utm_reproject = reproject_raster(
-        src_crs='EPSG:4326',      # WGS84 (source: SRTM data)
-        dst_crs='EPSG:32617',     # UTM Zone 17N (Detroit area)
-        num_threads=4
-    )
-    terrain.transforms.append(utm_reproject)
-    # Flip DEM data to correct north-south orientation
-    terrain.transforms.append(flip_raster(axis='horizontal'))
-
-    # IMPORTANT: We will detect water BEFORE elevation scaling is applied
-    # Water detection must operate on unscaled elevation data to get meaningful slope magnitudes
-    # (if we use scaled elevation, all slopes become too small to differentiate water from land)
-
-    # Add elevation scaling to enhance height features (applied after water detection)
-    terrain.transforms.append(scale_elevation(scale_factor=0.0001))
-    terrain.apply_transforms()
-
-    # Detect water on the UNSCALED DEM (before elevation scaling transform)
-    # The key insight: elevation scaling makes slopes tiny (0.0-0.027), so we must detect
-    # water on the unscaled DEM where slopes are larger and the threshold makes sense
-    print(f"      Detecting water bodies (on unscaled DEM)...")
-    try:
-        from src.terrain.water import identify_water_by_slope
-        import numpy as np
-
-        transformed_dem = terrain.data_layers['dem']['transformed_data']
-
-        # The transformed_dem has been scaled by 0.0001
-        # Unscale it to get the values BEFORE elevation scaling
-        unscaled_dem = transformed_dem / 0.0001
-
-        # Now detect water on this unscaled (but still downsampled) DEM
-        # Water bodies are essentially flat (slope ~0), while terrain has measurable slopes
-        # Using an extremely low threshold to catch only true flat water areas
-        water_mask = identify_water_by_slope(
-            unscaled_dem,
-            slope_threshold=0.01,  # Extremely low threshold for nearly-flat water (slope magnitude)
-            fill_holes=True
-        )
-        print(f"      Water detected: {np.sum(water_mask)} water pixels ({100*np.sum(water_mask)/water_mask.size:.1f}% of terrain)")
-    except Exception as e:
-        print(f"      ⚠️  Water detection failed: {e}")
-        print(f"      Falling back to scaled-DEM detection (may be inaccurate)...")
-        water_mask = None
-
-    # Check downsampled size
-    print(f"      Downsampled DEM shape: {transformed_dem.shape}")
-    print(f"      Actual vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]:,}")
-    print(f"      Transforms applied successfully")
-
-    # Step 4: Set up color mapping
-    print("\n[4/6] Setting up color mapping...")
-    # Use beautiful Mako colormap for elevation visualization
-    # (Mako = perceptually uniform, great for elevation data)
-    terrain.set_color_mapping(
-        lambda dem: elevation_colormap(dem, cmap_name='mako'),
-        source_layers=['dem']
-    )
-    print(f"      Color mapping configured (Mako colormap)")
-
-    # Step 5: Create Blender mesh (with caching support)
-    print("\n[5/6] Creating Blender mesh...")
-
-    # Compute mesh hash for caching
+    # Mesh parameters that affect the cached geometry
     mesh_params = {
         'scale_factor': 100.0,
         'height_scale': 4.0,
         'center_model': True,
         'boundary_extension': True,
-        'water_mask': water_mask is not None
+        'water_mask': True  # We always use water detection
     }
 
-    mesh_hash = None
-    mesh_obj = None
-    cached_mesh_loaded = False
-
     if args.cache:
+        print("\n[0/6] Checking mesh cache (before loading data)...")
         try:
-            # Compute DEM hash for use in mesh hash
+            # Compute mesh hash from source files + params (NO DATA LOADING)
             dem_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
             mesh_hash = mesh_cache.compute_mesh_hash(dem_hash, mesh_params)
+            print(f"      Mesh hash: {mesh_hash[:16]}...")
 
-            # Try to load cached mesh
-            print("      [Cache] Computing mesh hash...")
+            # Check if mesh exists in cache
             cached_blend_path = mesh_cache.load_cache(mesh_hash, cache_name="detroit_mesh")
 
             if cached_blend_path is not None:
-                print(f"      [Cache] ✓ Loaded mesh from cache")
+                print(f"      [Cache] ✓ Found cached mesh!")
                 print(f"      [Cache] File: {cached_blend_path.name}")
+                print(f"      [Cache] Skipping DEM load, transforms, water detection...")
 
-                # Load the cached blend file into Blender
-                try:
-                    import bpy
-                    bpy.ops.wm.open_mainfile(filepath=str(cached_blend_path))
+                # Load the cached blend file directly
+                bpy.ops.wm.open_mainfile(filepath=str(cached_blend_path))
 
-                    # Get the mesh object from the loaded blend file
-                    # Find the terrain mesh (usually named "Terrain" or similar)
-                    for obj in bpy.context.scene.objects:
-                        if obj.type == 'MESH':
-                            mesh_obj = obj
-                            cached_mesh_loaded = True
-                            print(f"      ✓ Mesh loaded from cache!")
-                            print(f"      Vertices: {len(mesh_obj.data.vertices)}")
-                            print(f"      Polygons: {len(mesh_obj.data.polygons)}")
-                            break
+                # Get the mesh object from the loaded blend file
+                for obj in bpy.context.scene.objects:
+                    if obj.type == 'MESH':
+                        mesh_obj = obj
+                        cached_mesh_loaded = True
+                        print(f"      ✓ Mesh loaded from cache!")
+                        print(f"      Vertices: {len(mesh_obj.data.vertices)}")
+                        print(f"      Polygons: {len(mesh_obj.data.polygons)}")
+                        break
 
-                    if not cached_mesh_loaded:
-                        print(f"      [Cache] No mesh object found in cached blend file, will recreate")
-                except Exception as e:
-                    print(f"      [Cache] Failed to load mesh from blend file: {e}")
+                if not cached_mesh_loaded:
+                    print(f"      [Cache] No mesh object in blend file, will rebuild")
         except Exception as e:
-            print(f"      [Cache] Mesh cache lookup failed: {e}")
+            print(f"      [Cache] Cache check failed: {e}")
+            print(f"      Will run full pipeline...")
 
-    # Only create mesh if not loaded from cache
+    # ==========================================================================
+    # If mesh was loaded from cache, skip directly to rendering
+    # Otherwise, run the full pipeline
+    # ==========================================================================
+    cache_hit = False
+    water_mask = None
+    terrain = None
+
     if not cached_mesh_loaded:
+        # Run full pipeline: Load DEM → Transform → Water detect → Create mesh
+
+        # Step 1: Load DEM (with caching)
+        print("\n[1/6] Loading SRTM tiles...")
+        dem_data = None
+        transform = None
+
+        # Try to load from cache
+        if args.cache:
+            try:
+                print("      [Cache] Computing source hash...")
+                source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+                cached_result = cache.load_cache(source_hash, cache_name="detroit")
+                if cached_result is not None:
+                    dem_data, transform = cached_result
+                    cache_hit = True
+                    print(f"      [Cache] ✓ Loaded from cache")
+            except Exception as e:
+                print(f"      [Cache] Cache load failed: {e}")
+                print(f"      [Cache] Will load fresh and cache result")
+
+        # Load from source if cache miss or caching disabled
+        if dem_data is None:
+            try:
+                dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
+
+                # Save to cache if caching enabled
+                if args.cache:
+                    try:
+                        source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+                        cache.save_cache(dem_data, transform, source_hash, cache_name="detroit")
+                    except Exception as e:
+                        print(f"      [Cache] Failed to cache: {e}")
+            except Exception as e:
+                print(f"\n✗ Failed to load DEM: {e}")
+                return 1
+
+        # Step 2: Initialize Terrain
+        print("\n[2/6] Initializing Terrain object...")
+        terrain = Terrain(dem_data, transform)
+        print(f"      Terrain initialized")
+        print(f"      DEM shape: {terrain.dem_shape}")
+
+        # Step 3: Apply transforms (downsample to reduce mesh complexity)
+        print("\n[3/6] Applying transforms...")
+
+        print(f"      Original DEM shape: {terrain.dem_shape}")
+
+        # Configure downsampling to target approximately 500,000 vertices
+        target_vertices = WIDTH*HEIGHT*2
+        zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
+        print(f"      Configured for {target_vertices:,} target vertices")
+        print(f"      Calculated zoom_factor: {zoom:.6f}")
+
+        # Reproject from WGS84 to UTM Zone 17N for proper geographic scaling
+        utm_reproject = reproject_raster(
+            src_crs='EPSG:4326',
+            dst_crs='EPSG:32617',
+            num_threads=4
+        )
+        terrain.transforms.append(utm_reproject)
+        terrain.transforms.append(flip_raster(axis='horizontal'))
+        terrain.transforms.append(scale_elevation(scale_factor=0.0001))
+        terrain.apply_transforms()
+
+        # Detect water on the UNSCALED DEM
+        print(f"      Detecting water bodies (on unscaled DEM)...")
+        try:
+            from src.terrain.water import identify_water_by_slope
+            import numpy as np
+
+            transformed_dem = terrain.data_layers['dem']['transformed_data']
+            unscaled_dem = transformed_dem / 0.0001
+
+            water_mask = identify_water_by_slope(
+                unscaled_dem,
+                slope_threshold=0.01,
+                fill_holes=True
+            )
+            print(f"      Water detected: {np.sum(water_mask)} water pixels ({100*np.sum(water_mask)/water_mask.size:.1f}% of terrain)")
+        except Exception as e:
+            print(f"      ⚠️  Water detection failed: {e}")
+            water_mask = None
+
+        print(f"      Downsampled DEM shape: {transformed_dem.shape}")
+        print(f"      Actual vertices: {transformed_dem.shape[0] * transformed_dem.shape[1]:,}")
+        print(f"      Transforms applied successfully")
+
+        # Step 4: Set up color mapping
+        print("\n[4/6] Setting up color mapping...")
+        terrain.set_color_mapping(
+            lambda dem: elevation_colormap(dem, cmap_name='mako'),
+            source_layers=['dem']
+        )
+        print(f"      Color mapping configured (Mako colormap)")
+
+        # Step 5: Create Blender mesh
+        print("\n[5/6] Creating Blender mesh...")
         try:
             mesh_obj = terrain.create_mesh(
                 scale_factor=100.0,
                 height_scale=4.0,
                 center_model=True,
                 boundary_extension=True,
-                water_mask=water_mask              # Use pre-computed water mask from unscaled DEM
+                water_mask=water_mask
             )
 
             if mesh_obj is None:
@@ -429,6 +420,9 @@ def main():
             import traceback
             traceback.print_exc()
             return 1
+    else:
+        # Mesh was loaded from cache - skip steps 1-5
+        print("\n[1-5/6] Skipped (mesh loaded from cache)")
 
     # Cache the mesh after rendering if not already cached
     if args.cache and mesh_hash and not cached_mesh_loaded:
@@ -518,16 +512,19 @@ def main():
     print("Detroit Real Elevation Visualization Complete!")
     print("=" * 70)
     print(f"\nSummary:")
-    print(f"  ✓ Loaded and merged all SRTM tiles (full coverage)")
-    if cache_hit:
-        print(f"  ✓ [Cache] DEM loaded from cache (skipped merge)")
-    print(f"  ✓ Configured downsampling to target vertex count intelligently")
-    print(f"  ✓ Applied geographic coordinate reprojection (WGS84 → UTM)")
-    print(f"  ✓ Created Terrain object with real elevation data")
-    print(f"  ✓ Applied transforms (reproject + flip + scale)")
-    print(f"  ✓ Configured beautiful Mako elevation-based color mapping")
-    print(f"  ✓ Detected and applied water bodies (slope-based identification)")
-    print(f"  ✓ Generated Blender mesh with {len(mesh_obj.data.vertices)} vertices")
+    if cached_mesh_loaded:
+        print(f"  ✓ [Cache] Loaded mesh directly from cache (skipped all upstream steps!)")
+    else:
+        print(f"  ✓ Loaded and merged all SRTM tiles (full coverage)")
+        if cache_hit:
+            print(f"  ✓ [Cache] DEM loaded from cache (skipped merge)")
+        print(f"  ✓ Configured downsampling to target vertex count intelligently")
+        print(f"  ✓ Applied geographic coordinate reprojection (WGS84 → UTM)")
+        print(f"  ✓ Created Terrain object with real elevation data")
+        print(f"  ✓ Applied transforms (reproject + flip + scale)")
+        print(f"  ✓ Configured beautiful Mako elevation-based color mapping")
+        print(f"  ✓ Detected and applied water bodies (slope-based identification)")
+    print(f"  ✓ Mesh with {len(mesh_obj.data.vertices)} vertices")
     if render_file:
         print(f"  ✓ Rendered to PNG: {render_file}")
 
