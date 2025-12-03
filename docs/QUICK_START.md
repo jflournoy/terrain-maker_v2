@@ -157,6 +157,34 @@ def color_by_slope(dem):
 terrain.set_color_mapping(color_by_slope, source_layers=['dem'])
 ```
 
+### Detect and color water bodies
+```python
+from src.terrain.water import identify_water_by_slope
+
+# Get unscaled DEM for meaningful slope calculations
+# (important: detect BEFORE scaling elevation)
+transformed_dem = terrain.data_layers['dem']['transformed_data']
+scale_factor = 0.0001  # Must match your scale_elevation transform
+unscaled_dem = transformed_dem / scale_factor
+
+# Detect water using slope-based analysis
+water_mask = identify_water_by_slope(
+    unscaled_dem,
+    slope_threshold=0.01,  # Adjust for your terrain (lower = more sensitive)
+    fill_holes=True        # Smooth water mask
+)
+
+# Create mesh with water detection
+# Water pixels will be colored blue, land by elevation
+mesh = terrain.create_mesh(
+    scale_factor=100,
+    height_scale=1,
+    water_mask=water_mask
+)
+```
+
+See the [Water Body Detection section](API_REFERENCE.md#terrainwater) in the API Reference for details and threshold guidelines.
+
 ## 6. Next Steps
 
 - **See it in action**: Check [Examples](EXAMPLES.md) for a complete Detroit example

@@ -7,6 +7,7 @@ Comprehensive documentation of all classes and functions in the terrain-maker li
 ## Table of Contents
 
 - [terrain.core](#terrain-core)
+- [terrain.water](#terrain-water)
 
 ---
 
@@ -655,3 +656,206 @@ Args:
 
 Returns:
     Tuple of (transformed_data, transform, [crs]) where CRS is optional
+
+---
+
+## terrain.water
+
+Water body detection and identification from elevation data.
+
+Provides functions to identify water bodies from Digital Elevation Model (DEM) data using slope-based analysis. Water bodies are characterized by flat surfaces with very low slope values, while terrain typically exhibits higher slope magnitudes.
+
+### Functions
+
+#### `identify_water_by_slope(dem_data, slope_threshold=0.1, fill_holes=True)`
+
+Identify water bodies by detecting flat areas (low slope) using Horn's method.
+
+Water bodies typically have very flat surfaces with near-zero slope, while terrain has measurable slopes. This function calculates local slope magnitude using Horn's method and identifies pixels below the threshold as potential water. Optionally applies morphological operations to fill small gaps and smooth the water mask.
+
+**Args:**
+- `dem_data` (np.ndarray): Digital elevation model as 2D array (height values)
+- `slope_threshold` (float): Maximum slope magnitude to classify as water. Default: 0.1
+  - Typical range: 0.05 to 0.5 depending on DEM resolution and terrain characteristics
+  - Values represent gradient magnitude from Horn's method (not degrees)
+  - Lower thresholds identify only the flattest areas as water
+  - Higher thresholds are more lenient and identify more pixels as water
+- `fill_holes` (bool): Apply morphological operations to fill small gaps in water mask and smooth boundaries. Default: True
+
+**Returns:**
+- `np.ndarray`: Boolean mask (dtype=bool) where True = water, False = land. Same shape as dem_data.
+
+**Raises:**
+- `ValueError`: If dem_data is not 2D or slope_threshold is negative
+
+**Examples:**
+
+```python
+# Basic usage: detect water on unscaled DEM
+import numpy as np
+from src.terrain.water import identify_water_by_slope
+
+dem = np.array([
+    [100, 100, 100, 200, 300],
+    [100, 100, 100, 200, 300],
+    [100, 100, 100, 200, 300],
+])
+water_mask = identify_water_by_slope(dem, slope_threshold=0.5)
+
+# With Detroit elevation data (recommended workflow)
+# 1. Load and process DEM
+terrain = Terrain(dem_data, transform)
+terrain.configure_for_target_vertices(target_vertices=1_000_000)
+terrain.transforms.append(reproject_raster('EPSG:4326', 'EPSG:32617'))
+terrain.transforms.append(flip_raster(axis='horizontal'))
+terrain.transforms.append(scale_elevation(scale_factor=0.0001))
+terrain.apply_transforms()
+
+# 2. Get transformed DEM and unscale it for water detection
+transformed_dem = terrain.data_layers['dem']['transformed_data']
+unscaled_dem = transformed_dem / 0.0001  # Undo elevation scaling
+
+# 3. Detect water on the unscaled DEM (where slopes are meaningful)
+water_mask = identify_water_by_slope(
+    unscaled_dem,
+    slope_threshold=0.01,  # Very low threshold for nearly-flat water
+    fill_holes=True
+)
+
+# 4. Use water mask when creating mesh
+mesh = terrain.create_mesh(
+    scale_factor=100.0,
+    height_scale=4.0,
+    water_mask=water_mask
+)
+```
+
+**Important Implementation Details:**
+
+**Why use unscaled DEM?**
+When elevation data is scaled (e.g., by 0.0001) to fit visualization requirements, the slope magnitudes become very small. For example:
+- Original DEM: elevations 50-1400 meters, slopes ~0-100 magnitude
+- Scaled DEM (0.0001): elevations 0.005-0.14 meters, slopes ~0-0.027 magnitude
+
+If you detect water on scaled elevation, a threshold of 0.1 would catch ~90% of terrain as "water" because most slopes are below 0.027. Therefore, **always detect water on unscaled DEM** before applying elevation scaling.
+
+**Horn's Method:**
+The function uses Horn's method to compute terrain slope, which provides more accurate slope estimates than simple Sobel operators:
+- Weights central differences more heavily than edge differences
+- More robust for noisy terrain data
+- Produces gradient magnitude (not angle in degrees)
+
+**Morphological Smoothing:**
+When `fill_holes=True`, the function applies:
+1. Binary closing (dilation followed by erosion) to fill small gaps
+2. Preserves overall water extent while smoothing boundaries
+3. Removes isolated noisy pixels
+
+**Threshold Selection Guidelines:**
+- For mostly flat water (lakes, reservoirs): 0.01 - 0.05
+- For mixed terrain with some water: 0.1 - 0.2
+- For detecting all flat-ish areas: 0.5+
+- Start low and increase threshold if missing water features
+
+---
+
+### Internal Functions
+
+#### `_calculate_slope(dem_data)`
+
+Calculate slope magnitude using Horn's method with proper convolution kernels.
+
+Uses Horn's method with weighted convolution kernels for more accurate slope computation on downsampled DEM data. This is more robust than Sobel for terrain slope analysis.
+
+**Args:**
+- `dem_data` (np.ndarray): 2D elevation data
+
+**Returns:**
+- `np.ndarray`: Slope magnitude (gradient magnitude), same shape as input
+
+**Implementation:**
+```python
+# Horn's method kernels (weights central differences heavily)
+dx = convolve(dem, [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]] / 8.0)
+dy = convolve(dem, [[-1, -2, -1], [0, 0, 0], [1, 2, 1]] / 8.0)
+
+# Slope magnitude is the gradient magnitude
+slope = sqrt(dx^2 + dy^2)
+```
+
+---
+
+#### `_smooth_water_mask(water_mask, structure_size=3)`
+
+Smooth water mask using morphological operations.
+
+Applies binary closing (dilation followed by erosion) to fill small holes within water bodies and smooth boundaries while preserving water regions.
+
+**Args:**
+- `water_mask` (np.ndarray): Boolean water mask
+- `structure_size` (int): Size of morphological structuring element (default: 3)
+
+**Returns:**
+- `np.ndarray`: Smoothed boolean water mask
+
+---
+
+### Best Practices
+
+**1. Always use unscaled DEM for water detection**
+```python
+# Wrong - will detect too much as water
+water = identify_water_by_slope(scaled_dem, threshold=0.1)
+
+# Correct - detect on meaningful slope values
+unscaled = scaled_dem / scale_factor
+water = identify_water_by_slope(unscaled, threshold=0.01)
+```
+
+**2. Call water detection BEFORE applying elevation scaling**
+```python
+# Apply all transforms except scaling
+terrain.transforms.append(reproject_raster(...))
+terrain.transforms.append(flip_raster(...))
+terrain.transforms.append(scale_elevation(...))  # Last transform
+terrain.apply_transforms()
+
+# Get unscaled data and detect water
+transformed = terrain.data_layers['dem']['transformed_data']
+unscaled = transformed / scale_factor
+water_mask = identify_water_by_slope(unscaled, slope_threshold=0.01)
+
+# Pass to mesh creation
+terrain.create_mesh(water_mask=water_mask)
+```
+
+**3. Handle NaN values properly**
+The function automatically handles NaN values in DEM data:
+- Interpolates NaN values for slope calculation
+- Preserves original NaN locations in output
+- Treats NaN locations as non-water by default
+
+**4. Tune threshold for your terrain**
+```python
+# Debug: see what different thresholds detect
+dem = ... # Your DEM data
+for threshold in [0.01, 0.05, 0.1, 0.5, 1.0]:
+    water = identify_water_by_slope(dem, threshold=threshold, fill_holes=False)
+    print(f"Threshold {threshold}: {np.sum(water)} water pixels")
+```
+
+**5. Visualization of detected water**
+```python
+# Visualize detected water mask
+import matplotlib.pyplot as plt
+
+dem = ... # Your DEM
+water_mask = identify_water_by_slope(dem, slope_threshold=0.01)
+
+fig, (ax1, ax2) = plt.subplots(1, 2)
+ax1.imshow(dem, cmap='gray')
+ax1.set_title('DEM')
+ax2.imshow(water_mask, cmap='Blues')
+ax2.set_title('Water Mask')
+plt.show()
+```

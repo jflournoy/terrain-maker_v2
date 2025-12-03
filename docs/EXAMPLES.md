@@ -49,11 +49,20 @@ Each view is automatically framed with intelligent target offset adjustments. No
 dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
 terrain = Terrain(dem_data, transform)
 
-# 2. Configure mesh for target vertices (intelligent downsampling)
-terrain.configure_for_target_vertices(target_vertices=1_000_000)
+# 2. Define output image dimensions and compute target mesh vertices
+# Target vertices = WIDTH × HEIGHT × 2
+# This ensures ~2 vertices per output pixel for optimal mesh density
+WIDTH = 960
+HEIGHT = 720
+target_vertices = WIDTH * HEIGHT * 2  # ~1.4 million vertices
+terrain.configure_for_target_vertices(target_vertices, order=4)
 
 # 3. Apply geographic transforms
-terrain.transforms.append(reproject_raster('EPSG:4326', 'EPSG:32617'))
+terrain.transforms.append(reproject_raster(
+    src_crs='EPSG:4326',      # WGS84 (from SRTM data)
+    dst_crs='EPSG:32617',     # UTM Zone 17N (Detroit area)
+    num_threads=4
+))
 terrain.transforms.append(flip_raster(axis='horizontal'))
 terrain.transforms.append(scale_elevation(scale_factor=0.0001))
 terrain.apply_transforms()
@@ -64,25 +73,47 @@ terrain.set_color_mapping(
     source_layers=['dem']
 )
 
-# 5. Create mesh with water detection and render
+# 5. Detect water bodies on unscaled DEM (critical!)
+from src.terrain.water import identify_water_by_slope
+transformed_dem = terrain.data_layers['dem']['transformed_data']
+unscaled_dem = transformed_dem / 0.0001  # Undo elevation scaling
+water_mask = identify_water_by_slope(unscaled_dem, slope_threshold=0.01, fill_holes=True)
+
+# 6. Create mesh with water detection and render
 mesh = terrain.create_mesh(
     scale_factor=100.0,
     height_scale=4.0,
-    detect_water=True,              # Enable water body detection
-    water_slope_threshold=0.1       # Flat areas (slope < 0.1) are water
+    center_model=True,           # Center mesh at origin
+    boundary_extension=True,     # Extend boundaries for clean edges
+    water_mask=water_mask        # Use pre-computed water mask
 )
 camera = position_camera_relative(mesh, direction='south', distance=1.5)
-render_scene_to_file(output_path="detroit.png", width=960, height=720)
+render_scene_to_file(output_path="detroit.png", width=WIDTH, height=HEIGHT)
 ```
 
 ### Key Features in Action
 
 #### Intelligent Downsampling
-Instead of guessing downsampling factors, just tell Terrain Maker how many vertices you want:
+Instead of guessing downsampling factors, compute target vertices based on your output image dimensions:
 
 ```python
-terrain.configure_for_target_vertices(1_000_000)  # Automatically calculates optimal zoom
+# Match mesh density to output resolution: ~2 vertices per pixel
+WIDTH = 960
+HEIGHT = 720
+target_vertices = WIDTH * HEIGHT * 2  # 1,382,400 vertices
+
+# Terrain Maker automatically calculates the optimal downsampling factor
+terrain.configure_for_target_vertices(target_vertices)
+
+# This ensures your mesh has perfect detail for the output size
+# (no wasted vertices, no under-sampling)
 ```
+
+**The Math:**
+- Output image: 960 × 720 = 691,200 pixels
+- Target vertices: 691,200 × 2 = 1,382,400
+- This gives approximately 2 vertices per output pixel, providing optimal detail without over-sampling
+- Adjust the multiplier (×2, ×3, etc.) based on your quality needs and performance budget
 
 #### Cardinal Direction Camera Positioning
 No more confusing coordinate calculations. Position your camera intuitively with intelligent view-specific targeting:
@@ -122,22 +153,42 @@ terrain.transforms.append(reproject_raster(
 Automatic water body identification using slope-based analysis with direct blue coloring:
 
 ```python
-# Create mesh with water detection enabled
-# Water pixels are automatically colored blue, land shows elevation colors
+# IMPORTANT: Detect water on the UNSCALED DEM (before elevation scaling)
+# This ensures slope calculations are meaningful (scaled elevation produces tiny slopes)
+
+# 1. Apply all transforms including elevation scaling
+terrain.transforms.append(reproject_raster('EPSG:4326', 'EPSG:32617'))
+terrain.transforms.append(flip_raster(axis='horizontal'))
+terrain.transforms.append(scale_elevation(scale_factor=0.0001))
+terrain.apply_transforms()
+
+# 2. Get transformed DEM and unscale it
+transformed_dem = terrain.data_layers['dem']['transformed_data']
+unscaled_dem = transformed_dem / 0.0001  # Undo elevation scaling
+
+# 3. Detect water on unscaled DEM with very low threshold
+from src.terrain.water import identify_water_by_slope
+water_mask = identify_water_by_slope(
+    unscaled_dem,
+    slope_threshold=0.01,  # Extremely low threshold for nearly-flat water
+    fill_holes=True
+)
+
+# 4. Create mesh with pre-computed water mask
 mesh = terrain.create_mesh(
     scale_factor=100.0,
     height_scale=4.0,
-    detect_water=True,              # Enable water body detection
-    water_slope_threshold=0.1       # Flat areas (slope < 0.1) are water
+    water_mask=water_mask  # Use pre-computed water mask
 )
 ```
 
 **How it works:**
 
 **Detection Phase:**
-- Uses Horn's method to compute terrain slope from the downsampled elevation data
+- Uses Horn's method to compute terrain slope magnitude from elevation data
 - Identifies pixels with slope below threshold as potential water bodies
-- Applies morphological operations to smooth water boundaries and fill gaps
+- Applies morphological operations (closing: dilation then erosion) to smooth water boundaries and fill gaps
+- Water is nearly flat (slope ~0), while terrain has measurable slopes
 
 **Coloring Phase:**
 - Directly colors detected water pixels blue (RGB: 26, 102, 204)
@@ -145,24 +196,38 @@ mesh = terrain.create_mesh(
 - Results in clear visual distinction between water and terrain
 - Water is colored during mesh creation, no shader configuration needed
 
-**Customization:**
-- Adjust `water_slope_threshold` to find more or fewer water bodies (higher = more sensitive)
-- The default threshold of 0.1 works well for most real-world elevation data
-- For noisy terrain, increase threshold (e.g., 0.15-0.2); for detailed water features, decrease it (e.g., 0.05-0.08)
+**Critical Implementation Detail - Why Use Unscaled DEM?**
+
+When elevation data is scaled (e.g., by 0.0001) for visualization:
+- Original DEM: elevations 50-1400 meters → slopes ~0-100 magnitude
+- Scaled DEM: elevations 0.005-0.14 meters → slopes ~0-0.027 magnitude
+
+Using a threshold of 0.1 on scaled data would catch 90% of terrain as "water" because most slopes are below 0.027. **Always detect water on unscaled DEM before applying elevation scaling.**
+
+**Threshold Selection:**
+- For mostly flat water (lakes, reservoirs): `0.01 - 0.05` (very sensitive)
+- For mixed terrain with some water: `0.1 - 0.2` (moderate)
+- For all flat-ish areas: `0.5+` (lenient)
+- **Default for Detroit**: `0.01` produces realistic 13-15% water coverage
+
+**For More Details:**
+See [Water Body Detection in API Reference](API_REFERENCE.md#identify_water_by_slope) for complete documentation including examples, threshold guidelines, and best practices.
 
 ### Running This Example
 
-#### Basic Render
+#### Basic Render (South View - Default)
 ```bash
 python examples/detroit_elevation_real.py
 ```
 
 This will:
-1. Load SRTM elevation tiles from `data/dem/detroit/`
-2. Process the data with intelligent downsampling
-3. Generate a ~1.4 million vertex Blender mesh
-4. Render a publication-quality PNG with blue water coloring from the south
-5. Save a Blender file for further editing
+1. Load SRTM elevation tiles from `data/dem/detroit/` (110 tiles)
+2. Compute target vertices from output image dimensions: WIDTH × HEIGHT × 2 = 960 × 720 × 2 = 1,382,400
+3. Process the data with intelligent downsampling to match target vertex count
+4. Generate a ~1.4 million vertex Blender mesh (exact count varies by interpolation)
+5. Detect water bodies on the unscaled DEM and color them blue
+6. Render a publication-quality PNG (960×720) with elevation colors + water rendering
+7. Save the Blender file for further editing
 
 #### Generate Multiple Views
 The example supports command-line arguments to easily create renders from different camera angles:
@@ -249,19 +314,21 @@ The entire process takes about 30-40 seconds on modern hardware. You'll see prog
 ### Why Terrain Maker Makes This Easy
 
 Traditional terrain visualization typically requires:
-- Manual downsampling factor calculation
+- Manually guessing optimal mesh density (under-sample → blurry, over-sample → slow)
 - Complex coordinate reprojection setup
 - Blender scripting knowledge
 - Camera positioning through trial-and-error
+- Manual water body identification and coloring
 
 With Terrain Maker, you get:
-- **Automatic mesh optimization** by target vertex count
+- **Smart mesh density calculation**: `target_vertices = WIDTH × HEIGHT × 2` ensures perfect detail for your output resolution
+- **Automatic mesh optimization** - calculates the exact downsampling needed
 - **Built-in geographic transforms** with sensible defaults
-- **Water body detection** using slope-based analysis
-- **Intuitive cardinal direction camera positioning**
+- **Water body detection** using slope-based analysis on unscaled DEM
+- **Automatic water coloring** - flat areas colored blue during mesh creation
+- **Intuitive cardinal direction camera positioning** (north, south, above, etc.)
 - **Professional Blender integration** out of the box
 - **Color mapping from elevation data** in one line
-- **Water shader rendering** for realistic water visualization
 
 ### Customization
 
@@ -347,6 +414,109 @@ done
 ```bash
 npm run docs:build
 ```
+
+### Accelerating Renders with Caching
+
+The example supports intelligent caching to dramatically speed up iterative development. Instead of reprocessing elevation data and regenerating meshes for every render, the system caches:
+
+- **DEM Cache**: Loaded and merged elevation tiles (.npz format with hash validation)
+- **Mesh Cache**: Generated Blender mesh files (.blend with parameter-based hashing)
+
+#### How It Works
+
+```
+First Run (Full Pipeline):
+├─ Load SRTM tiles → .dem_cache/dem_[hash].npz
+├─ Merge & transform
+├─ Create mesh → .mesh_cache/mesh_[hash].blend
+└─ Render to PNG
+
+Second Run (Same DEM):
+├─ Load from .dem_cache/ (skip 10-15 seconds of file merging)
+├─ Create mesh → .mesh_cache/mesh_[hash].blend
+└─ Render to PNG
+
+Subsequent Renders (Same view):
+├─ Load from .dem_cache/
+├─ Load from .mesh_cache/ (skip 20-30 seconds of mesh generation!)
+└─ Render only to PNG
+```
+
+#### Using Caching
+
+Enable caching by adding the `--cache` flag:
+
+```bash
+# First run: caches DEM and mesh
+npm run detroit-build        # South view with caching
+npm run detroit-build-north  # North view with caching
+npm run detroit-build-east   # East view with caching
+npm run detroit-build-west   # West view with caching
+npm run detroit-build-above  # Overhead view with caching
+
+# Generate all views with caching (faster on subsequent runs)
+npm run detroit-build:all
+```
+
+Or run the Python script directly with caching:
+
+```bash
+# Enable caching for full pipeline
+uv run examples/detroit_elevation_real.py --cache
+
+# With specific view
+uv run examples/detroit_elevation_real.py --cache --view north
+
+# Generate multiple views with caching
+for view in south north east west above; do
+  uv run examples/detroit_elevation_real.py --cache --view $view
+done
+```
+
+#### Cache Management
+
+```bash
+# Clear all cached DEM and mesh files
+npm run detroit-cache-clear
+uv run examples/detroit_elevation_real.py --cache --clear-cache
+
+# View cache statistics
+npm run detroit-cache-stats
+```
+
+#### Cache File Locations
+
+```
+.dem_cache/           # DEM files (.npz format)
+  dem_[hash].npz      # Merged elevation data
+  dem_[hash]_meta.json  # Metadata and statistics
+
+.mesh_cache/          # Mesh files (.blend format)
+  mesh_[hash].blend   # Blender scene with terrain mesh
+  [hash]_meta.json    # Mesh parameters and hash
+```
+
+#### Cache Invalidation
+
+The cache automatically invalidates when:
+
+- **DEM files change** (file modification time or count changes)
+- **Mesh parameters change** (scale_factor, height_scale, center_model, boundary_extension, water_mask)
+- **Manual clear** via `--clear-cache` flag
+
+This ensures you always have current data without manual cache management.
+
+#### Performance Impact
+
+**Time savings by caching DEM:**
+- First render: Full merge (10-15 seconds) + mesh generation (20-30 seconds) + render (5-10 seconds) = ~35-55 seconds
+- Cached DEM: Skip merge + mesh generation (20-30 seconds) + render (5-10 seconds) = ~25-40 seconds
+- **Savings: 10-15 seconds per render**
+
+**Time savings by caching mesh:**
+- After first full pipeline, subsequent renders skip mesh generation entirely
+- Render-only pass: Load cached mesh + render (5-10 seconds) = ~5-10 seconds
+- **Savings: 20-30 seconds per render**
 
 ---
 
