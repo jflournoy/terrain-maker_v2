@@ -61,13 +61,13 @@ function listIssues(filter = 'open') {
 
 function createIssue(title, body = '', labels = []) {
   console.log(`\n➕ Creating issue: "${title}"`);
-  
+
   const labelFlag = labels.length > 0 ? `--label "${labels.join(',')}"` : '';
-  const bodyFlag = body ? `--body "${body}"` : '';
-  
-  const command = `gh issue create --title "${title}" ${bodyFlag} ${labelFlag}`;
+  const bodyText = body || 'No description provided';
+
+  const command = `gh issue create --title "${title}" --body "${bodyText}" ${labelFlag}`;
   const result = exec(command);
-  
+
   console.log(`✅ Issue created: ${result}`);
   return result;
 }
