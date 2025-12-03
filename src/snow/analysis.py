@@ -23,7 +23,12 @@ from datetime import datetime, timedelta
 from tqdm.auto import tqdm
 
 # For optional terrain feature calculations
-import richdem as rd
+try:
+    import richdem as rd
+    HAS_RICHDEM = True
+except ImportError:
+    HAS_RICHDEM = False
+    rd = None
 from scipy import ndimage
 from matplotlib.colors import SymLogNorm
 
@@ -254,15 +259,22 @@ def _read_snodas_header(header_path):
 
         meta['width'] = meta['number_of_columns']
         meta['height'] = meta['number_of_rows']
-        # Build transform
-        meta['transform'] = rasterio.transform.from_bounds(
-            meta['minimum_x-axis_coordinate'],
-            meta['minimum_y-axis_coordinate'],
-            meta['maximum_x-axis_coordinate'],
-            meta['maximum_y-axis_coordinate'],
-            meta['width'],
-            meta['height']
-        )
+        # Build transform only if coordinate fields are present
+        required_coords = [
+            'minimum_x-axis_coordinate',
+            'minimum_y-axis_coordinate',
+            'maximum_x-axis_coordinate',
+            'maximum_y-axis_coordinate'
+        ]
+        if all(coord in meta for coord in required_coords):
+            meta['transform'] = rasterio.transform.from_bounds(
+                meta['minimum_x-axis_coordinate'],
+                meta['minimum_y-axis_coordinate'],
+                meta['maximum_x-axis_coordinate'],
+                meta['maximum_y-axis_coordinate'],
+                meta['width'],
+                meta['height']
+            )
         meta['crs'] = 'EPSG:4326'
         return meta
     except Exception as e:
