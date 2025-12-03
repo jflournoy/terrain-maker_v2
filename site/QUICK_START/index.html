@@ -535,6 +535,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#detect-and-color-water-bodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detect and color water bodies
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1122,6 +1133,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#detect-and-color-water-bodies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detect and color water bodies
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1347,6 +1369,32 @@ python<span class="w"> </span>examples/detroit_elevation_real.py
 <span class="n">terrain</span><span class="o">.</span><span class="n">set_color_mapping</span><span class="p">(</span><span class="n">color_by_slope</span><span class="p">,</span> <span class="n">source_layers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;dem&#39;</span><span class="p">])</span>
 </code></pre></div>
 
+<h3 id="detect-and-color-water-bodies">Detect and color water bodies<a class="headerlink" href="#detect-and-color-water-bodies" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.water</span><span class="w"> </span><span class="kn">import</span> <span class="n">identify_water_by_slope</span>
+
+<span class="c1"># Get unscaled DEM for meaningful slope calculations</span>
+<span class="c1"># (important: detect BEFORE scaling elevation)</span>
+<span class="n">transformed_dem</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;dem&#39;</span><span class="p">][</span><span class="s1">&#39;transformed_data&#39;</span><span class="p">]</span>
+<span class="n">scale_factor</span> <span class="o">=</span> <span class="mf">0.0001</span>  <span class="c1"># Must match your scale_elevation transform</span>
+<span class="n">unscaled_dem</span> <span class="o">=</span> <span class="n">transformed_dem</span> <span class="o">/</span> <span class="n">scale_factor</span>
+
+<span class="c1"># Detect water using slope-based analysis</span>
+<span class="n">water_mask</span> <span class="o">=</span> <span class="n">identify_water_by_slope</span><span class="p">(</span>
+    <span class="n">unscaled_dem</span><span class="p">,</span>
+    <span class="n">slope_threshold</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>  <span class="c1"># Adjust for your terrain (lower = more sensitive)</span>
+    <span class="n">fill_holes</span><span class="o">=</span><span class="kc">True</span>        <span class="c1"># Smooth water mask</span>
+<span class="p">)</span>
+
+<span class="c1"># Create mesh with water detection</span>
+<span class="c1"># Water pixels will be colored blue, land by elevation</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">create_mesh</span><span class="p">(</span>
+    <span class="n">scale_factor</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">height_scale</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">water_mask</span><span class="o">=</span><span class="n">water_mask</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>See the <a href="../API_REFERENCE/#terrainwater">Water Body Detection section</a> in the API Reference for details and threshold guidelines.</p>
 <h2 id="6-next-steps">6. Next Steps<a class="headerlink" href="#6-next-steps" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>See it in action</strong>: Check <a href="../EXAMPLES/">Examples</a> for a complete Detroit example</li>
