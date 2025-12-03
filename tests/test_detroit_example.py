@@ -17,6 +17,7 @@ from src.terrain.core import Terrain, load_dem_files, clear_scene
 # Check if Blender is available
 try:
     import bpy
+
     HAS_BLENDER = True
 except ImportError:
     HAS_BLENDER = False
@@ -37,8 +38,8 @@ class TestDetroitEndToEnd:
         # Verify DEM is loaded and available
         assert terrain is not None
         assert terrain.dem_shape == (100, 100)
-        assert 'dem' in terrain.data_layers
-        assert terrain.data_layers['dem']['data'] is not None
+        assert "dem" in terrain.data_layers
+        assert terrain.data_layers["dem"]["data"] is not None
 
     def test_detroit_example_applies_transform(self, tmp_path):
         """Detroit example should apply coordinate transforms."""
@@ -57,8 +58,8 @@ class TestDetroitEndToEnd:
 
         # Verify transforms were applied
         assert result is None  # apply_transforms returns None on success
-        assert terrain.data_layers['dem']['transformed'] is True
-        assert 'transformed_data' in terrain.data_layers['dem']
+        assert terrain.data_layers["dem"]["transformed"] is True
+        assert "transformed_data" in terrain.data_layers["dem"]
 
     def test_detroit_example_sets_color_mapping(self, tmp_path):
         """Detroit example should apply color mapping for visualization."""
@@ -81,12 +82,12 @@ class TestDetroitEndToEnd:
             rgb = np.stack([normalized, normalized, normalized], axis=-1)
             return (rgb * 255).astype(np.uint8)
 
-        terrain.set_color_mapping(color_func, source_layers=['dem'])
+        terrain.set_color_mapping(color_func, source_layers=["dem"])
 
         # Verify color mapping is configured
-        assert hasattr(terrain, 'color_mapping')
+        assert hasattr(terrain, "color_mapping")
         assert terrain.color_mapping is not None
-        assert terrain.color_sources == ['dem']
+        assert terrain.color_sources == ["dem"]
 
     def test_detroit_example_creates_mesh(self, tmp_path):
         """Detroit example should create Blender mesh successfully."""
@@ -106,7 +107,7 @@ class TestDetroitEndToEnd:
 
         # Verify mesh was created
         assert mesh_obj is not None
-        assert hasattr(mesh_obj, 'data')
+        assert hasattr(mesh_obj, "data")
         assert len(mesh_obj.data.vertices) > 0
         assert len(mesh_obj.data.polygons) > 0
 
@@ -132,15 +133,15 @@ class TestDetroitEndToEnd:
             rgb = np.stack([normalized, normalized, normalized], axis=-1)
             return (rgb * 255).astype(np.uint8)
 
-        terrain.set_color_mapping(color_func, source_layers=['dem'])
+        terrain.set_color_mapping(color_func, source_layers=["dem"])
 
         # Create mesh with boundary extension
         mesh_obj = terrain.create_mesh(boundary_extension=True)
 
         # Verify complete workflow succeeded
         assert mesh_obj is not None
-        assert terrain.data_layers['dem']['transformed'] is True
-        assert hasattr(mesh_obj, 'data')
+        assert terrain.data_layers["dem"]["transformed"] is True
+        assert hasattr(mesh_obj, "data")
         assert len(mesh_obj.data.vertices) > 0
         assert len(mesh_obj.data.polygons) > 0
 
@@ -153,11 +154,11 @@ class TestDetroitEndToEnd:
 
         # Add synthetic snow depth layer
         snow_data = np.random.uniform(0, 50, size=(50, 50)).astype(np.float32)
-        terrain.add_data_layer('snow_depth', snow_data, transform, 'EPSG:4326')
+        terrain.add_data_layer("snow_depth", snow_data, transform, "EPSG:4326")
 
         # Verify both layers exist
-        assert 'dem' in terrain.data_layers
-        assert 'snow_depth' in terrain.data_layers
+        assert "dem" in terrain.data_layers
+        assert "snow_depth" in terrain.data_layers
         assert len(terrain.data_layers) == 2
 
     def test_detroit_example_produces_deterministic_output(self, tmp_path):
@@ -167,11 +168,13 @@ class TestDetroitEndToEnd:
 
         # First run
         terrain1 = Terrain(dem_data.copy(), transform)
+
         def identity_transform(data, trans):
             return data, trans, None
+
         terrain1.transforms.append(identity_transform)
         terrain1.apply_transforms()
-        terrain1.set_color_mapping(lambda x: x, source_layers=['dem'])
+        terrain1.set_color_mapping(lambda x: x, source_layers=["dem"])
         mesh1 = terrain1.create_mesh()
         verts1 = len(mesh1.data.vertices)
         faces1 = len(mesh1.data.polygons)
@@ -180,7 +183,7 @@ class TestDetroitEndToEnd:
         terrain2 = Terrain(dem_data.copy(), transform)
         terrain2.transforms.append(identity_transform)
         terrain2.apply_transforms()
-        terrain2.set_color_mapping(lambda x: x, source_layers=['dem'])
+        terrain2.set_color_mapping(lambda x: x, source_layers=["dem"])
         mesh2 = terrain2.create_mesh()
         verts2 = len(mesh2.data.vertices)
         faces2 = len(mesh2.data.polygons)
@@ -188,7 +191,6 @@ class TestDetroitEndToEnd:
         # Both runs should produce identical geometry
         assert verts1 == verts2
         assert faces1 == faces2
-
 
     def test_detroit_example_can_render_png(self, tmp_path):
         """Detroit example should be able to render to PNG."""
@@ -212,12 +214,12 @@ class TestDetroitEndToEnd:
             rgb = np.stack([normalized, normalized, normalized], axis=-1)
             return (rgb * 255).astype(np.uint8)
 
-        terrain.set_color_mapping(color_func, source_layers=['dem'])
+        terrain.set_color_mapping(color_func, source_layers=["dem"])
         mesh_obj = terrain.create_mesh()
 
         # Verify mesh was created and can be rendered
         assert mesh_obj is not None
-        assert hasattr(bpy, 'context')
+        assert hasattr(bpy, "context")
         assert bpy.context.scene is not None
 
 
@@ -237,36 +239,38 @@ class TestSceneClearing:
 
         # Check that objects are gone
         final_count = len(bpy.context.scene.objects)
-        assert final_count == 0, f"Scene should be empty after clear_scene(), but has {final_count} objects"
+        assert (
+            final_count == 0
+        ), f"Scene should be empty after clear_scene(), but has {final_count} objects"
 
     @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
     def test_clear_scene_removes_cameras(self):
         """clear_scene() should remove all cameras from scene."""
         # Create a camera
         bpy.ops.object.camera_add()
-        initial_cameras = [obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA']
+        initial_cameras = [obj for obj in bpy.context.scene.objects if obj.type == "CAMERA"]
         assert len(initial_cameras) > 0, "Should have created a camera"
 
         # Clear the scene
         clear_scene()
 
         # Check that cameras are gone
-        final_cameras = [obj for obj in bpy.context.scene.objects if obj.type == 'CAMERA']
+        final_cameras = [obj for obj in bpy.context.scene.objects if obj.type == "CAMERA"]
         assert len(final_cameras) == 0, "Scene should have no cameras after clear_scene()"
 
     @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
     def test_clear_scene_removes_lights(self):
         """clear_scene() should remove all lights from scene."""
         # Create a light
-        bpy.ops.object.light_add(type='SUN')
-        initial_lights = [obj for obj in bpy.context.scene.objects if obj.type == 'LIGHT']
+        bpy.ops.object.light_add(type="SUN")
+        initial_lights = [obj for obj in bpy.context.scene.objects if obj.type == "LIGHT"]
         assert len(initial_lights) > 0, "Should have created a light"
 
         # Clear the scene
         clear_scene()
 
         # Check that lights are gone
-        final_lights = [obj for obj in bpy.context.scene.objects if obj.type == 'LIGHT']
+        final_lights = [obj for obj in bpy.context.scene.objects if obj.type == "LIGHT"]
         assert len(final_lights) == 0, "Scene should have no lights after clear_scene()"
 
     @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender")
@@ -299,7 +303,7 @@ class TestSceneClearing:
         assert mesh_obj is not None
 
         # Only the terrain mesh should exist
-        mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+        mesh_objects = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
         assert len(mesh_objects) == 1
 
 
@@ -310,18 +314,18 @@ class TestDetroitDataIntegration:
         """Detroit coordinates should be valid."""
         # Detroit bounding box: ~42.3N, 83.0W to 42.4N, 82.9W
         detroit_bounds = {
-            'north': 42.4,
-            'south': 42.3,
-            'east': -82.9,
-            'west': -83.0,
+            "north": 42.4,
+            "south": 42.3,
+            "east": -82.9,
+            "west": -83.0,
         }
 
-        assert detroit_bounds['north'] > detroit_bounds['south']
-        assert detroit_bounds['east'] > detroit_bounds['west']
+        assert detroit_bounds["north"] > detroit_bounds["south"]
+        assert detroit_bounds["east"] > detroit_bounds["west"]
         # Detroit is in Northern Hemisphere
-        assert detroit_bounds['north'] > 0
+        assert detroit_bounds["north"] > 0
         # Detroit is in Western Hemisphere
-        assert detroit_bounds['west'] < 0
+        assert detroit_bounds["west"] < 0
 
     def test_detroit_dem_elevation_range(self):
         """Detroit DEM should have realistic elevation range."""

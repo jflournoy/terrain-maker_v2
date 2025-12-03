@@ -34,7 +34,7 @@ class TestDEMCacheHashComputation(unittest.TestCase):
         Path(self.test_dir, "dem2.hgt").touch()
 
         cache = DEMCache(cache_dir=Path(self.cache_dir))
-        hash_val = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash_val = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         self.assertIsInstance(hash_val, str)
         self.assertEqual(len(hash_val), 64)  # SHA256 hash is 64 hex chars
@@ -45,8 +45,8 @@ class TestDEMCacheHashComputation(unittest.TestCase):
         Path(self.test_dir, "dem2.hgt").touch()
 
         cache = DEMCache(cache_dir=Path(self.cache_dir))
-        hash1 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
-        hash2 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash1 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
+        hash2 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         self.assertEqual(hash1, hash2)
 
@@ -55,11 +55,11 @@ class TestDEMCacheHashComputation(unittest.TestCase):
         Path(self.test_dir, "dem1.hgt").touch()
 
         cache = DEMCache(cache_dir=Path(self.cache_dir))
-        hash1 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash1 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         # Add another file
         Path(self.test_dir, "dem2.hgt").touch()
-        hash2 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash2 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         self.assertNotEqual(hash1, hash2)
 
@@ -68,7 +68,7 @@ class TestDEMCacheHashComputation(unittest.TestCase):
         cache = DEMCache(cache_dir=Path(self.cache_dir))
 
         with self.assertRaises(ValueError):
-            cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+            cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
     def test_compute_source_hash_raises_on_no_matches(self):
         """Test that no matching files raises ValueError."""
@@ -77,7 +77,7 @@ class TestDEMCacheHashComputation(unittest.TestCase):
         cache = DEMCache(cache_dir=Path(self.cache_dir))
 
         with self.assertRaises(ValueError):
-            cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+            cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
 
 class TestDEMCacheSaveLoad(unittest.TestCase):
@@ -215,10 +215,10 @@ class TestDEMCacheStats(unittest.TestCase):
         stats = cache.get_cache_stats()
 
         self.assertIsInstance(stats, dict)
-        self.assertIn('cache_dir', stats)
-        self.assertIn('enabled', stats)
-        self.assertIn('cache_files', stats)
-        self.assertIn('total_size_mb', stats)
+        self.assertIn("cache_dir", stats)
+        self.assertIn("enabled", stats)
+        self.assertIn("cache_files", stats)
+        self.assertIn("total_size_mb", stats)
 
     def test_get_cache_stats_empty_cache(self):
         """Test stats for empty cache."""
@@ -226,8 +226,8 @@ class TestDEMCacheStats(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertEqual(stats['cache_files'], 0)
-        self.assertEqual(stats['total_size_mb'], 0)
+        self.assertEqual(stats["cache_files"], 0)
+        self.assertEqual(stats["total_size_mb"], 0)
 
     def test_get_cache_stats_with_files(self):
         """Test stats with cached files."""
@@ -239,8 +239,8 @@ class TestDEMCacheStats(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertGreater(stats['cache_files'], 0)
-        self.assertGreater(stats['total_size_mb'], 0)
+        self.assertGreater(stats["cache_files"], 0)
+        self.assertGreater(stats["total_size_mb"], 0)
 
 
 class TestDEMCacheIntegration(unittest.TestCase):
@@ -265,7 +265,7 @@ class TestDEMCacheIntegration(unittest.TestCase):
         cache = DEMCache(cache_dir=Path(self.cache_dir), enabled=True)
 
         # Compute hash
-        source_hash = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        source_hash = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         # Create and save DEM
         dem_orig = np.random.randn(100, 100).astype(np.float32)
@@ -284,14 +284,15 @@ class TestDEMCacheIntegration(unittest.TestCase):
         Path(self.test_dir, "dem.hgt").touch()
 
         cache = DEMCache(cache_dir=Path(self.cache_dir))
-        hash1 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash1 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         # Simulate file modification by updating mtime
         import time
+
         time.sleep(0.1)
         Path(self.test_dir, "dem.hgt").touch()
 
-        hash2 = cache.compute_source_hash(self.test_dir, pattern='*.hgt')
+        hash2 = cache.compute_source_hash(self.test_dir, pattern="*.hgt")
 
         self.assertNotEqual(hash1, hash2)
 
@@ -324,8 +325,9 @@ class TestDEMCacheEdgeCases(unittest.TestCase):
         # Check that NaN locations match
         np.testing.assert_array_equal(np.isnan(dem_loaded), np.isnan(dem_orig))
         # Check that non-NaN values match
-        np.testing.assert_array_equal(dem_loaded[~np.isnan(dem_loaded)],
-                                      dem_orig[~np.isnan(dem_orig)])
+        np.testing.assert_array_equal(
+            dem_loaded[~np.isnan(dem_loaded)], dem_orig[~np.isnan(dem_orig)]
+        )
 
     def test_save_load_large_dem(self):
         """Test caching of larger DEM array."""
@@ -353,12 +355,12 @@ class TestDEMCacheEdgeCases(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertIn('files', stats)
+        self.assertIn("files", stats)
         # We save both .npz and .json files
-        self.assertEqual(len(stats['files']), 2)
-        for file_info in stats['files']:
-            self.assertIn('name', file_info)
-            self.assertIn('size_mb', file_info)
+        self.assertEqual(len(stats["files"]), 2)
+        for file_info in stats["files"]:
+            self.assertIn("name", file_info)
+            self.assertIn("size_mb", file_info)
 
     def test_get_cache_stats_empty_cache_dir(self):
         """Test get_cache_stats when cache directory is empty."""
@@ -367,9 +369,9 @@ class TestDEMCacheEdgeCases(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertEqual(stats['cache_files'], 0)
-        self.assertEqual(stats['total_size_mb'], 0)
-        self.assertEqual(len(stats['files']), 0)
+        self.assertEqual(stats["cache_files"], 0)
+        self.assertEqual(stats["total_size_mb"], 0)
+        self.assertEqual(len(stats["files"]), 0)
 
     def test_clear_cache_deletes_matching_files(self):
         """Test that clear_cache removes files matching pattern."""
@@ -391,5 +393,5 @@ class TestDEMCacheEdgeCases(unittest.TestCase):
         self.assertEqual(len(test_files_after), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -49,11 +49,11 @@ class TestPipelineInitialization(unittest.TestCase):
         """Test that pipeline defines task dependencies."""
         pipeline = TerrainPipeline(cache_enabled=False)
 
-        self.assertIn('load_dem', pipeline._task_graph)
-        self.assertIn('apply_transforms', pipeline._task_graph)
-        self.assertIn('detect_water', pipeline._task_graph)
-        self.assertIn('create_mesh', pipeline._task_graph)
-        self.assertIn('render_view', pipeline._task_graph)
+        self.assertIn("load_dem", pipeline._task_graph)
+        self.assertIn("apply_transforms", pipeline._task_graph)
+        self.assertIn("detect_water", pipeline._task_graph)
+        self.assertIn("create_mesh", pipeline._task_graph)
+        self.assertIn("render_view", pipeline._task_graph)
 
 
 class TestPipelineHashComputation(unittest.TestCase):
@@ -105,7 +105,7 @@ class TestPipelineHashComputation(unittest.TestCase):
 
     def test_compute_hash_handles_dicts(self):
         """Test that dictionaries are hashed correctly."""
-        params = {'scale_factor': 100.0, 'height_scale': 4.0}
+        params = {"scale_factor": 100.0, "height_scale": 4.0}
 
         hash1 = self.pipeline._compute_hash(params)
         hash2 = self.pipeline._compute_hash(params)
@@ -128,49 +128,52 @@ class TestPipelineDependencyResolution(unittest.TestCase):
 
     def test_execution_order_load_dem(self):
         """Test execution order for load_dem (no dependencies)."""
-        order = self.pipeline._compute_execution_order('load_dem')
+        order = self.pipeline._compute_execution_order("load_dem")
 
-        self.assertEqual(order, ['load_dem'])
+        self.assertEqual(order, ["load_dem"])
 
     def test_execution_order_apply_transforms(self):
         """Test execution order for apply_transforms (depends on load_dem)."""
-        order = self.pipeline._compute_execution_order('apply_transforms')
+        order = self.pipeline._compute_execution_order("apply_transforms")
 
-        self.assertEqual(order, ['load_dem', 'apply_transforms'])
+        self.assertEqual(order, ["load_dem", "apply_transforms"])
 
     def test_execution_order_detect_water(self):
         """Test execution order for detect_water."""
-        order = self.pipeline._compute_execution_order('detect_water')
+        order = self.pipeline._compute_execution_order("detect_water")
 
         # detect_water -> apply_transforms -> load_dem
-        self.assertEqual(order[0], 'load_dem')
-        self.assertEqual(order[1], 'apply_transforms')
-        self.assertEqual(order[2], 'detect_water')
+        self.assertEqual(order[0], "load_dem")
+        self.assertEqual(order[1], "apply_transforms")
+        self.assertEqual(order[2], "detect_water")
 
     def test_execution_order_create_mesh(self):
         """Test execution order for create_mesh (multiple dependencies)."""
-        order = self.pipeline._compute_execution_order('create_mesh')
+        order = self.pipeline._compute_execution_order("create_mesh")
 
         # Must have load_dem and detect_water before create_mesh
-        self.assertIn('load_dem', order)
-        self.assertIn('detect_water', order)
-        self.assertEqual(order[-1], 'create_mesh')
+        self.assertIn("load_dem", order)
+        self.assertIn("detect_water", order)
+        self.assertEqual(order[-1], "create_mesh")
 
     def test_execution_order_render_view(self):
         """Test execution order for render_view (full pipeline)."""
-        order = self.pipeline._compute_execution_order('render_view')
+        order = self.pipeline._compute_execution_order("render_view")
 
         # Should include all tasks
-        self.assertEqual(order[0], 'load_dem')
-        self.assertEqual(order[-1], 'render_view')
+        self.assertEqual(order[0], "load_dem")
+        self.assertEqual(order[-1], "render_view")
         self.assertEqual(len(order), 5)  # All 5 tasks
 
     def test_task_graph_consistency(self):
         """Test that task graph references are valid."""
         for task_name, task_info in self.pipeline._task_graph.items():
-            for dep in task_info['depends_on']:
-                self.assertIn(dep, self.pipeline._task_graph,
-                             f"Task {task_name} depends on {dep} which doesn't exist")
+            for dep in task_info["depends_on"]:
+                self.assertIn(
+                    dep,
+                    self.pipeline._task_graph,
+                    f"Task {task_name} depends on {dep} which doesn't exist",
+                )
 
 
 class TestTaskState(unittest.TestCase):
@@ -178,21 +181,17 @@ class TestTaskState(unittest.TestCase):
 
     def test_task_state_creation(self):
         """Test creating TaskState."""
-        state = TaskState(
-            name='test',
-            depends_on=['dep1', 'dep2'],
-            params={'key': 'value'}
-        )
+        state = TaskState(name="test", depends_on=["dep1", "dep2"], params={"key": "value"})
 
-        self.assertEqual(state.name, 'test')
-        self.assertEqual(state.depends_on, ['dep1', 'dep2'])
-        self.assertEqual(state.params, {'key': 'value'})
+        self.assertEqual(state.name, "test")
+        self.assertEqual(state.depends_on, ["dep1", "dep2"])
+        self.assertEqual(state.params, {"key": "value"})
         self.assertFalse(state.cached)
         self.assertFalse(state.computed)
 
     def test_task_state_result_tracking(self):
         """Test that TaskState tracks results."""
-        state = TaskState(name='test')
+        state = TaskState(name="test")
         self.assertIsNone(state.result)
 
         state.result = "some_result"
@@ -200,7 +199,7 @@ class TestTaskState(unittest.TestCase):
 
     def test_task_state_cache_flag(self):
         """Test cache hit tracking."""
-        state = TaskState(name='test')
+        state = TaskState(name="test")
         self.assertFalse(state.cached)
 
         state.cached = True
@@ -208,7 +207,7 @@ class TestTaskState(unittest.TestCase):
 
     def test_task_state_computed_flag(self):
         """Test computed flag tracking."""
-        state = TaskState(name='test')
+        state = TaskState(name="test")
         self.assertFalse(state.computed)
 
         state.computed = True
@@ -226,7 +225,7 @@ class TestPipelineExplanation(unittest.TestCase):
         """Test explaining a valid task (should not raise)."""
         # Should print without raising
         try:
-            self.pipeline.explain('render_view')
+            self.pipeline.explain("render_view")
         except Exception as e:
             self.fail(f"explain() raised {type(e).__name__}: {e}")
 
@@ -234,7 +233,7 @@ class TestPipelineExplanation(unittest.TestCase):
         """Test explaining an invalid task."""
         # Should handle gracefully
         try:
-            self.pipeline.explain('nonexistent_task')
+            self.pipeline.explain("nonexistent_task")
         except Exception as e:
             self.fail(f"explain() raised {type(e).__name__}: {e}")
 
@@ -246,9 +245,7 @@ class TestPipelineCacheManagement(unittest.TestCase):
         """Create temporary cache directory and pipeline."""
         self.cache_dir = tempfile.mkdtemp()
         self.pipeline = TerrainPipeline(
-            cache_enabled=True,
-            dem_cache_dir=self.cache_dir,
-            verbose=False
+            cache_enabled=True, dem_cache_dir=self.cache_dir, verbose=False
         )
 
     def tearDown(self):
@@ -259,22 +256,22 @@ class TestPipelineCacheManagement(unittest.TestCase):
         """Test that cache stats can be retrieved."""
         stats = self.pipeline.cache_stats()
 
-        self.assertIn('dem', stats)
-        self.assertIn('mesh', stats)
-        self.assertIn('total_mb', stats)
-        self.assertIn('total_files', stats)
+        self.assertIn("dem", stats)
+        self.assertIn("mesh", stats)
+        self.assertIn("total_mb", stats)
+        self.assertIn("total_files", stats)
 
     def test_cache_stats_structure(self):
         """Test cache stats have required fields."""
         stats = self.pipeline.cache_stats()
 
         # DEM stats
-        self.assertIn('cache_files', stats['dem'])
-        self.assertIn('total_size_mb', stats['dem'])
+        self.assertIn("cache_files", stats["dem"])
+        self.assertIn("total_size_mb", stats["dem"])
 
         # Mesh stats
-        self.assertIn('blend_files', stats['mesh'])
-        self.assertIn('total_size_mb', stats['mesh'])
+        self.assertIn("blend_files", stats["mesh"])
+        self.assertIn("total_size_mb", stats["mesh"])
 
     def test_clear_cache_returns_count(self):
         """Test that clear_cache returns file count."""
@@ -293,47 +290,47 @@ class TestPipelineDependencyTree(unittest.TestCase):
 
     def test_create_mesh_depends_on_load_dem(self):
         """Test that create_mesh depends on load_dem."""
-        task_info = self.pipeline._task_graph['create_mesh']
-        self.assertIn('load_dem', task_info['depends_on'])
+        task_info = self.pipeline._task_graph["create_mesh"]
+        self.assertIn("load_dem", task_info["depends_on"])
 
     def test_create_mesh_depends_on_detect_water(self):
         """Test that create_mesh depends on detect_water."""
-        task_info = self.pipeline._task_graph['create_mesh']
-        self.assertIn('detect_water', task_info['depends_on'])
+        task_info = self.pipeline._task_graph["create_mesh"]
+        self.assertIn("detect_water", task_info["depends_on"])
 
     def test_render_view_depends_on_create_mesh(self):
         """Test that render_view depends on create_mesh."""
-        task_info = self.pipeline._task_graph['render_view']
-        self.assertIn('create_mesh', task_info['depends_on'])
+        task_info = self.pipeline._task_graph["render_view"]
+        self.assertIn("create_mesh", task_info["depends_on"])
 
     def test_detect_water_depends_on_apply_transforms(self):
         """Test that detect_water depends on apply_transforms."""
-        task_info = self.pipeline._task_graph['detect_water']
-        self.assertIn('apply_transforms', task_info['depends_on'])
+        task_info = self.pipeline._task_graph["detect_water"]
+        self.assertIn("apply_transforms", task_info["depends_on"])
 
     def test_apply_transforms_depends_on_load_dem(self):
         """Test that apply_transforms depends on load_dem."""
-        task_info = self.pipeline._task_graph['apply_transforms']
-        self.assertIn('load_dem', task_info['depends_on'])
+        task_info = self.pipeline._task_graph["apply_transforms"]
+        self.assertIn("load_dem", task_info["depends_on"])
 
     def test_load_dem_has_no_dependencies(self):
         """Test that load_dem has no dependencies (root task)."""
-        task_info = self.pipeline._task_graph['load_dem']
-        self.assertEqual(task_info['depends_on'], [])
+        task_info = self.pipeline._task_graph["load_dem"]
+        self.assertEqual(task_info["depends_on"], [])
 
     def test_full_pipeline_has_correct_depth(self):
         """Test that full pipeline execution order has correct depth."""
-        order = self.pipeline._compute_execution_order('render_view')
+        order = self.pipeline._compute_execution_order("render_view")
 
         # Check that all tasks are included
         self.assertEqual(len(order), 5)
 
         # Check critical ordering constraints
-        load_dem_idx = order.index('load_dem')
-        apply_transforms_idx = order.index('apply_transforms')
-        detect_water_idx = order.index('detect_water')
-        create_mesh_idx = order.index('create_mesh')
-        render_view_idx = order.index('render_view')
+        load_dem_idx = order.index("load_dem")
+        apply_transforms_idx = order.index("apply_transforms")
+        detect_water_idx = order.index("detect_water")
+        create_mesh_idx = order.index("create_mesh")
+        render_view_idx = order.index("render_view")
 
         # load_dem must come before apply_transforms
         self.assertLess(load_dem_idx, apply_transforms_idx)
@@ -368,46 +365,26 @@ class TestMeshCacheHashComputation(unittest.TestCase):
 
     def test_mesh_hash_changes_with_parameters(self):
         """Test that different mesh parameters produce different hashes."""
-        hash1 = self.pipeline._compute_hash(
-            "dem_hash_abc",
-            scale_factor=100.0,
-            height_scale=4.0
-        )
+        hash1 = self.pipeline._compute_hash("dem_hash_abc", scale_factor=100.0, height_scale=4.0)
         hash2 = self.pipeline._compute_hash(
-            "dem_hash_abc",
-            scale_factor=100.0,
-            height_scale=5.0  # Different height_scale
+            "dem_hash_abc", scale_factor=100.0, height_scale=5.0  # Different height_scale
         )
 
         self.assertNotEqual(hash1, hash2)
 
     def test_mesh_hash_changes_with_dem_source(self):
         """Test that different DEM sources produce different hashes."""
-        hash1 = self.pipeline._compute_hash(
-            "dem_hash_abc",
-            scale_factor=100.0,
-            height_scale=4.0
-        )
+        hash1 = self.pipeline._compute_hash("dem_hash_abc", scale_factor=100.0, height_scale=4.0)
         hash2 = self.pipeline._compute_hash(
-            "dem_hash_def",  # Different DEM source
-            scale_factor=100.0,
-            height_scale=4.0
+            "dem_hash_def", scale_factor=100.0, height_scale=4.0  # Different DEM source
         )
 
         self.assertNotEqual(hash1, hash2)
 
     def test_mesh_hash_same_for_same_inputs(self):
         """Test that same inputs produce same hash (deterministic)."""
-        hash1 = self.pipeline._compute_hash(
-            "dem_hash_abc",
-            scale_factor=100.0,
-            height_scale=4.0
-        )
-        hash2 = self.pipeline._compute_hash(
-            "dem_hash_abc",
-            scale_factor=100.0,
-            height_scale=4.0
-        )
+        hash1 = self.pipeline._compute_hash("dem_hash_abc", scale_factor=100.0, height_scale=4.0)
+        hash2 = self.pipeline._compute_hash("dem_hash_abc", scale_factor=100.0, height_scale=4.0)
 
         self.assertEqual(hash1, hash2)
 
@@ -416,8 +393,8 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         # Mesh geometry should be the same regardless of camera angle
         # So the hash should not include view-specific parameters
         base_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
         }
 
         hash1 = self.pipeline._compute_hash("dem_hash", **base_params)
@@ -433,23 +410,25 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
         """Create mesh cache."""
         from src.terrain.mesh_cache import MeshCache
         import tempfile
+
         self.cache_dir = tempfile.mkdtemp()
         self.mesh_cache = MeshCache(cache_dir=self.cache_dir)
 
     def tearDown(self):
         """Clean up."""
         import shutil
+
         shutil.rmtree(self.cache_dir)
 
     def test_mesh_hash_changes_with_transform_target_vertices(self):
         """Test mesh hash changes when transform target_vertices changes."""
         params1 = {
-            'scale_factor': 100.0,
-            'transform_target_vertices': 1382400,
+            "scale_factor": 100.0,
+            "transform_target_vertices": 1382400,
         }
         params2 = {
-            'scale_factor': 100.0,
-            'transform_target_vertices': 500000,  # Different target
+            "scale_factor": 100.0,
+            "transform_target_vertices": 500000,  # Different target
         }
 
         hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
@@ -460,12 +439,12 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
     def test_mesh_hash_changes_with_water_slope_threshold(self):
         """Test mesh hash changes when water slope_threshold changes."""
         params1 = {
-            'scale_factor': 100.0,
-            'water_slope_threshold': 0.01,
+            "scale_factor": 100.0,
+            "water_slope_threshold": 0.01,
         }
         params2 = {
-            'scale_factor': 100.0,
-            'water_slope_threshold': 0.05,  # Different threshold
+            "scale_factor": 100.0,
+            "water_slope_threshold": 0.05,  # Different threshold
         }
 
         hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
@@ -476,12 +455,12 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
     def test_mesh_hash_changes_with_water_fill_holes(self):
         """Test mesh hash changes when water fill_holes changes."""
         params1 = {
-            'scale_factor': 100.0,
-            'water_fill_holes': True,
+            "scale_factor": 100.0,
+            "water_fill_holes": True,
         }
         params2 = {
-            'scale_factor': 100.0,
-            'water_fill_holes': False,  # Different setting
+            "scale_factor": 100.0,
+            "water_fill_holes": False,  # Different setting
         }
 
         hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
@@ -492,12 +471,12 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
     def test_mesh_hash_changes_with_transform_crs(self):
         """Test mesh hash changes when transform reproject_crs changes."""
         params1 = {
-            'scale_factor': 100.0,
-            'transform_reproject_crs': 'EPSG:32617',
+            "scale_factor": 100.0,
+            "transform_reproject_crs": "EPSG:32617",
         }
         params2 = {
-            'scale_factor': 100.0,
-            'transform_reproject_crs': 'EPSG:32618',  # Different CRS
+            "scale_factor": 100.0,
+            "transform_reproject_crs": "EPSG:32618",  # Different CRS
         }
 
         hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
@@ -509,17 +488,17 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
         """Test that full mesh params with all upstream deps produce consistent hash."""
         full_params = {
             # Mesh params
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True,
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
             # Upstream: transform params
-            'transform_target_vertices': 1382400,
-            'transform_reproject_crs': 'EPSG:32617',
-            'transform_elevation_scale': 0.0001,
+            "transform_target_vertices": 1382400,
+            "transform_reproject_crs": "EPSG:32617",
+            "transform_elevation_scale": 0.0001,
             # Upstream: water params
-            'water_slope_threshold': 0.01,
-            'water_fill_holes': True,
+            "water_slope_threshold": 0.01,
+            "water_fill_holes": True,
         }
 
         hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", full_params)
@@ -528,5 +507,5 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
         self.assertEqual(hash1, hash2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

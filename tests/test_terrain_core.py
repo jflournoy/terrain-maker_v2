@@ -3,6 +3,7 @@ Tests for terrain core functionality - DEM loading and Terrain initialization.
 
 Following TDD RED-GREEN-REFACTOR cycle.
 """
+
 import pytest
 import numpy as np
 import rasterio
@@ -14,6 +15,7 @@ from src.terrain.core import load_dem_files, Terrain, scale_elevation, elevation
 # Check if Blender is available
 try:
     import bpy
+
     HAS_BLENDER = True
 except ImportError:
     HAS_BLENDER = False
@@ -63,14 +65,10 @@ class TestLoadDEMFiles:
         """load_dem_files should merge multiple DEM files into single array."""
         # Create two adjacent DEM tiles
         file1 = create_sample_geotiff(
-            tmp_path / "tile1.tif",
-            data=np.ones((10, 10)) * 100,
-            bounds=(-120, 40, -119.5, 40.5)
+            tmp_path / "tile1.tif", data=np.ones((10, 10)) * 100, bounds=(-120, 40, -119.5, 40.5)
         )
         file2 = create_sample_geotiff(
-            tmp_path / "tile2.tif",
-            data=np.ones((10, 10)) * 200,
-            bounds=(-119.5, 40, -119, 40.5)
+            tmp_path / "tile2.tif", data=np.ones((10, 10)) * 200, bounds=(-119.5, 40, -119, 40.5)
         )
 
         dem_data, transform = load_dem_files(str(tmp_path), pattern="*.tif")
@@ -114,7 +112,7 @@ class TestTerrainInitialization:
         terrain = Terrain(dem_data, transform)
 
         # Should store the data (converted to float)
-        assert terrain.data_layers['dem']['data'].dtype in [np.float32, np.float64]
+        assert terrain.data_layers["dem"]["data"].dtype in [np.float32, np.float64]
 
     def test_terrain_accepts_float_dem_data(self):
         """Terrain.__init__ should accept float DEM data."""
@@ -123,8 +121,8 @@ class TestTerrainInitialization:
 
         terrain = Terrain(dem_data, transform)
 
-        assert 'dem' in terrain.data_layers
-        assert terrain.data_layers['dem']['data'].dtype == np.float32
+        assert "dem" in terrain.data_layers
+        assert terrain.data_layers["dem"]["data"].dtype == np.float32
 
     def test_terrain_stores_dem_shape(self):
         """Terrain should store original DEM shape."""
@@ -151,7 +149,7 @@ class TestTerrainInitialization:
 
         terrain = Terrain(dem_data, transform)
 
-        assert hasattr(terrain, 'cache')
+        assert hasattr(terrain, "cache")
         assert terrain.cache is not None
 
     def test_terrain_adds_dem_to_data_layers(self):
@@ -161,9 +159,9 @@ class TestTerrainInitialization:
 
         terrain = Terrain(dem_data, transform)
 
-        assert 'dem' in terrain.data_layers
-        assert terrain.data_layers['dem']['data'] is not None
-        assert terrain.data_layers['dem']['transform'] == transform
+        assert "dem" in terrain.data_layers
+        assert terrain.data_layers["dem"]["data"] is not None
+        assert terrain.data_layers["dem"]["transform"] == transform
 
     def test_terrain_calculates_resolution(self):
         """Terrain should calculate pixel resolution in meters."""
@@ -173,7 +171,7 @@ class TestTerrainInitialization:
 
         terrain = Terrain(dem_data, transform)
 
-        assert hasattr(terrain, 'resolution')
+        assert hasattr(terrain, "resolution")
         assert isinstance(terrain.resolution, tuple)
         assert len(terrain.resolution) == 2
         # Resolution should be approximately 111 meters
@@ -201,7 +199,7 @@ class TestMeshGeneration:
         terrain = Terrain(dem_data, transform)
 
         # Mark as transformed but don't provide transformed_data
-        terrain.data_layers['dem']['transformed'] = True
+        terrain.data_layers["dem"]["transformed"] = True
         # Don't add transformed_data - this should cause an error
 
         with pytest.raises((ValueError, KeyError)):
@@ -225,7 +223,7 @@ class TestMeshGeneration:
             result = terrain.create_mesh()
             # If bpy is not available, this will raise ImportError
             # But we test that the method is callable and reaches the mesh creation point
-            assert result is None or hasattr(result, 'name')  # Blender object or None
+            assert result is None or hasattr(result, "name")  # Blender object or None
         except ImportError:
             # Expected if Blender is not installed
             pass
@@ -247,10 +245,10 @@ class TestMeshGeneration:
             terrain.create_mesh(scale_factor=50.0, height_scale=2.0, center_model=True)
 
             # Check that model parameters are stored
-            assert hasattr(terrain, 'model_params')
-            assert terrain.model_params['scale_factor'] == 50.0
-            assert terrain.model_params['height_scale'] == 2.0
-            assert terrain.model_params['centered'] is True
+            assert hasattr(terrain, "model_params")
+            assert terrain.model_params["scale_factor"] == 50.0
+            assert terrain.model_params["height_scale"] == 2.0
+            assert terrain.model_params["centered"] is True
         except ImportError:
             # Skip if Blender not available
             pass
@@ -272,7 +270,7 @@ class TestMeshGeneration:
             terrain.create_mesh(center_model=True)
 
             # Check that offset is stored
-            assert hasattr(terrain, 'model_offset')
+            assert hasattr(terrain, "model_offset")
             assert isinstance(terrain.model_offset, np.ndarray)
             assert len(terrain.model_offset) == 3
         except ImportError:
@@ -296,7 +294,7 @@ class TestMeshGeneration:
             terrain.create_mesh(center_model=False)
 
             # Offset should be zero
-            assert hasattr(terrain, 'model_offset')
+            assert hasattr(terrain, "model_offset")
             np.testing.assert_array_equal(terrain.model_offset, [0, 0, 0])
         except ImportError:
             # Skip if Blender not available
@@ -342,7 +340,7 @@ class TestMeshGeneration:
         for scale in [10.0, 50.0, 100.0, 200.0]:
             try:
                 terrain.create_mesh(scale_factor=scale)
-                assert terrain.model_params['scale_factor'] == scale
+                assert terrain.model_params["scale_factor"] == scale
             except ImportError:
                 # Skip if Blender not available
                 pass
@@ -362,8 +360,8 @@ class TestTerrainTransforms:
 
         assert result is None
         # Data layers should be unchanged
-        assert 'dem' in terrain.data_layers
-        assert 'transformed_data' not in terrain.data_layers['dem']
+        assert "dem" in terrain.data_layers
+        assert "transformed_data" not in terrain.data_layers["dem"]
 
     def test_apply_transforms_applies_single_transform(self):
         """apply_transforms should apply a single registered transform to all layers."""
@@ -379,8 +377,8 @@ class TestTerrainTransforms:
         terrain.apply_transforms()
 
         # DEM layer should have transformed data
-        assert 'transformed_data' in terrain.data_layers['dem']
-        transformed = terrain.data_layers['dem']['transformed_data']
+        assert "transformed_data" in terrain.data_layers["dem"]
+        transformed = terrain.data_layers["dem"]["transformed_data"]
         np.testing.assert_array_almost_equal(transformed, dem_data * 2)
 
     def test_apply_transforms_applies_multiple_transforms_in_sequence(self):
@@ -400,7 +398,7 @@ class TestTerrainTransforms:
         terrain.apply_transforms()
 
         # Should have: (10 * 2) + 10 = 30
-        transformed = terrain.data_layers['dem']['transformed_data']
+        transformed = terrain.data_layers["dem"]["transformed_data"]
         np.testing.assert_array_almost_equal(transformed, np.ones((10, 10)) * 30)
 
     def test_apply_transforms_marks_layer_as_transformed(self):
@@ -415,7 +413,7 @@ class TestTerrainTransforms:
         terrain.transforms.append(identity_transform)
         terrain.apply_transforms()
 
-        assert terrain.data_layers['dem']['transformed'] is True
+        assert terrain.data_layers["dem"]["transformed"] is True
 
     def test_apply_transforms_skips_already_transformed_layers(self):
         """apply_transforms should skip layers that are already transformed."""
@@ -423,21 +421,21 @@ class TestTerrainTransforms:
         transform = Affine.identity()
         terrain = Terrain(dem_data, transform)
 
-        call_count = {'count': 0}
+        call_count = {"count": 0}
 
         def counting_transform(data, trans):
-            call_count['count'] += 1
+            call_count["count"] += 1
             return data, trans, None
 
         terrain.transforms.append(counting_transform)
 
         # First application
         terrain.apply_transforms()
-        assert call_count['count'] == 1
+        assert call_count["count"] == 1
 
         # Second application should skip already-transformed layer
         terrain.apply_transforms()
-        assert call_count['count'] == 1  # Should not increase
+        assert call_count["count"] == 1  # Should not increase
 
     def test_apply_transforms_stores_metadata(self):
         """apply_transforms should store transform metadata in layer."""
@@ -448,15 +446,15 @@ class TestTerrainTransforms:
         def my_transform(data, trans):
             return data, trans, None
 
-        my_transform.__name__ = 'my_transform'
+        my_transform.__name__ = "my_transform"
         terrain.transforms.append(my_transform)
         terrain.apply_transforms()
 
-        metadata = terrain.data_layers['dem']['transform_metadata']
-        assert 'transforms' in metadata
-        assert 'my_transform' in metadata['transforms']
-        assert 'original_shape' in metadata
-        assert 'transformed_shape' in metadata
+        metadata = terrain.data_layers["dem"]["transform_metadata"]
+        assert "transforms" in metadata
+        assert "my_transform" in metadata["transforms"]
+        assert "original_shape" in metadata
+        assert "transformed_shape" in metadata
 
     def test_apply_transforms_handles_crs_changes(self):
         """apply_transforms should update CRS if transform provides new one."""
@@ -465,13 +463,13 @@ class TestTerrainTransforms:
         terrain = Terrain(dem_data, transform)
 
         def transform_with_crs_change(data, trans):
-            new_crs = 'EPSG:3857'  # Web Mercator
+            new_crs = "EPSG:3857"  # Web Mercator
             return data, trans, new_crs
 
         terrain.transforms.append(transform_with_crs_change)
         terrain.apply_transforms()
 
-        assert terrain.data_layers['dem']['transformed_crs'] == 'EPSG:3857'
+        assert terrain.data_layers["dem"]["transformed_crs"] == "EPSG:3857"
 
     def test_apply_transforms_raises_on_transform_error(self):
         """apply_transforms should raise exception if transform fails."""
@@ -491,7 +489,7 @@ class TestTerrainTransforms:
         """apply_transforms should preserve transform and CRS metadata."""
         dem_data = np.ones((10, 10), dtype=np.float32)
         original_transform = Affine.scale(2.0, -2.0)
-        original_crs = 'EPSG:4326'
+        original_crs = "EPSG:4326"
 
         terrain = Terrain(dem_data, original_transform, dem_crs=original_crs)
 
@@ -502,8 +500,8 @@ class TestTerrainTransforms:
         terrain.apply_transforms()
 
         # Transform and CRS should be preserved
-        assert terrain.data_layers['dem']['transformed_transform'] == original_transform
-        assert terrain.data_layers['dem']['transformed_crs'] == original_crs
+        assert terrain.data_layers["dem"]["transformed_transform"] == original_transform
+        assert terrain.data_layers["dem"]["transformed_crs"] == original_crs
 
 
 @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender (import bpy)")
@@ -530,9 +528,9 @@ class TestBlenderMeshCreation:
 
         # Verify result is a Blender object
         assert result is not None
-        assert hasattr(result, 'name')
-        assert hasattr(result, 'data')
-        assert hasattr(result.data, 'vertices')
+        assert hasattr(result, "name")
+        assert hasattr(result, "data")
+        assert hasattr(result.data, "vertices")
 
     def test_blender_mesh_has_geometry(self):
         """Created mesh should have vertices and faces."""
@@ -565,10 +563,7 @@ class TestBlenderMeshCreation:
         terrain.apply_transforms()
 
         result = terrain.create_mesh(
-            scale_factor=50.0,
-            height_scale=2.0,
-            center_model=True,
-            boundary_extension=True
+            scale_factor=50.0, height_scale=2.0, center_model=True, boundary_extension=True
         )
 
         assert result is not None
@@ -667,7 +662,7 @@ class TestElevationColormap:
         """elevation_colormap should return RGB array with shape (H, W, 3)."""
         dem_data = np.random.uniform(100, 200, size=(50, 50)).astype(np.float32)
 
-        colors = elevation_colormap(dem_data, cmap_name='viridis')
+        colors = elevation_colormap(dem_data, cmap_name="viridis")
 
         assert isinstance(colors, np.ndarray)
         assert colors.shape == (50, 50, 3)
@@ -678,7 +673,7 @@ class TestElevationColormap:
         # Create simple gradient (low to high elevation)
         dem_data = np.linspace(0, 100, 100).reshape(10, 10).astype(np.float32)
 
-        colors = elevation_colormap(dem_data, cmap_name='viridis')
+        colors = elevation_colormap(dem_data, cmap_name="viridis")
 
         # First row should be purple (low elevation)
         # Last row should be yellow (high elevation)
@@ -690,7 +685,7 @@ class TestElevationColormap:
         dem_data = np.array([[100, 150], [200, 250]], dtype=np.float32)
 
         # Without explicit min/max, should use data range
-        colors = elevation_colormap(dem_data, cmap_name='viridis')
+        colors = elevation_colormap(dem_data, cmap_name="viridis")
 
         assert colors.shape == (2, 2, 3)
         assert colors.dtype == np.uint8
@@ -699,7 +694,7 @@ class TestElevationColormap:
         """elevation_colormap should respect explicit min/max."""
         dem_data = np.array([[100, 150], [200, 250]], dtype=np.float32)
 
-        colors = elevation_colormap(dem_data, cmap_name='viridis', min_elev=0, max_elev=500)
+        colors = elevation_colormap(dem_data, cmap_name="viridis", min_elev=0, max_elev=500)
 
         assert colors.shape == (2, 2, 3)
         assert colors.dtype == np.uint8
@@ -708,7 +703,7 @@ class TestElevationColormap:
         """elevation_colormap should handle NaN values gracefully."""
         dem_data = np.array([[100, np.nan], [200, 250]], dtype=np.float32)
 
-        colors = elevation_colormap(dem_data, cmap_name='viridis')
+        colors = elevation_colormap(dem_data, cmap_name="viridis")
 
         assert colors.shape == (2, 2, 3)
         # NaN values should map to dark gray or similar
@@ -718,7 +713,7 @@ class TestElevationColormap:
         """elevation_colormap should return values in uint8 range (0-255)."""
         dem_data = np.random.uniform(100, 200, size=(20, 20)).astype(np.float32)
 
-        colors = elevation_colormap(dem_data, cmap_name='viridis')
+        colors = elevation_colormap(dem_data, cmap_name="viridis")
 
         assert colors.min() >= 0
         assert colors.max() <= 255
@@ -762,7 +757,7 @@ class TestConfigureForTargetVertices:
 
         assert len(terrain.transforms) == initial_count + 1
         # Last transform should be downsampling
-        assert hasattr(terrain.transforms[-1], '__name__')
+        assert hasattr(terrain.transforms[-1], "__name__")
 
     def test_configure_for_target_vertices_handles_small_targets(self):
         """configure_for_target_vertices should handle very small targets."""
@@ -823,13 +818,10 @@ class TestCameraSetup:
         from src.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
-            camera_angle=(0, 0, 0),
-            camera_location=(0, 0, 0),
-            scale=10.0,
-            focal_length=50
+            camera_angle=(0, 0, 0), camera_location=(0, 0, 0), scale=10.0, focal_length=50
         )
 
-        assert camera.data.type == 'PERSP', "Should default to perspective camera"
+        assert camera.data.type == "PERSP", "Should default to perspective camera"
 
     def test_setup_camera_and_light_accepts_camera_type_perspective(self):
         """setup_camera_and_light should accept camera_type='PERSP'."""
@@ -839,11 +831,11 @@ class TestCameraSetup:
             camera_angle=(0, 0, 0),
             camera_location=(0, 0, 0),
             scale=10.0,
-            camera_type='PERSP',
-            focal_length=50
+            camera_type="PERSP",
+            focal_length=50,
         )
 
-        assert camera.data.type == 'PERSP'
+        assert camera.data.type == "PERSP"
         assert camera.data.lens == 50  # focal_length should be set
 
     def test_setup_camera_and_light_accepts_camera_type_ortho(self):
@@ -851,13 +843,10 @@ class TestCameraSetup:
         from src.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
-            camera_angle=(0, 0, 0),
-            camera_location=(0, 0, 0),
-            scale=20.0,
-            camera_type='ORTHO'
+            camera_angle=(0, 0, 0), camera_location=(0, 0, 0), scale=20.0, camera_type="ORTHO"
         )
 
-        assert camera.data.type == 'ORTHO', "Should create orthographic camera"
+        assert camera.data.type == "ORTHO", "Should create orthographic camera"
         assert camera.data.ortho_scale == 20.0, "ortho_scale should be set from scale parameter"
 
     def test_setup_camera_and_light_ortho_ignores_focal_length(self):
@@ -868,11 +857,11 @@ class TestCameraSetup:
             camera_angle=(0, 0, 0),
             camera_location=(0, 0, 0),
             scale=20.0,
-            camera_type='ORTHO',
-            focal_length=100  # Should be ignored
+            camera_type="ORTHO",
+            focal_length=100,  # Should be ignored
         )
 
-        assert camera.data.type == 'ORTHO'
+        assert camera.data.type == "ORTHO"
         assert camera.data.ortho_scale == 20.0
 
     def test_setup_camera_and_light_invalid_camera_type_raises_error(self):
@@ -881,10 +870,7 @@ class TestCameraSetup:
 
         with pytest.raises(ValueError, match="camera_type must be 'PERSP' or 'ORTHO'"):
             setup_camera_and_light(
-                camera_angle=(0, 0, 0),
-                camera_location=(0, 0, 0),
-                scale=10.0,
-                camera_type='INVALID'
+                camera_angle=(0, 0, 0), camera_location=(0, 0, 0), scale=10.0, camera_type="INVALID"
             )
 
     def test_setup_camera_and_light_perspective_uses_focal_length(self):
@@ -895,15 +881,16 @@ class TestCameraSetup:
             camera_angle=(0, 0, 0),
             camera_location=(0, 0, 0),
             scale=10.0,
-            camera_type='PERSP',
-            focal_length=75
+            camera_type="PERSP",
+            focal_length=75,
         )
 
-        assert camera.data.type == 'PERSP'
+        assert camera.data.type == "PERSP"
         assert camera.data.lens == 75
 
 
 # Fixtures
+
 
 @pytest.fixture
 def sample_dem_file(tmp_path):
@@ -911,7 +898,7 @@ def sample_dem_file(tmp_path):
     return create_sample_geotiff(
         tmp_path / "test_dem.tif",
         data=np.random.rand(50, 50) * 1000 + 500,
-        bounds=(-120, 40, -119, 41)
+        bounds=(-120, 40, -119, 41),
     )
 
 
@@ -937,13 +924,13 @@ def create_sample_geotiff(filepath: Path, data: np.ndarray, bounds: tuple) -> Pa
     # Create GeoTIFF
     with rasterio.open(
         filepath,
-        'w',
-        driver='GTiff',
+        "w",
+        driver="GTiff",
         height=height,
         width=width,
         count=1,
         dtype=data.dtype,
-        crs='EPSG:4326',
+        crs="EPSG:4326",
         transform=transform,
     ) as dst:
         dst.write(data, 1)

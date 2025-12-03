@@ -29,10 +29,10 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
         }
         dem_hash = "dem_hash_value"
 
@@ -46,10 +46,10 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
         }
         dem_hash = "dem_hash_123"
 
@@ -65,17 +65,17 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         dem_hash = "dem_hash_123"
 
         mesh_params1 = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
         }
 
         mesh_params2 = {
-            'scale_factor': 100.0,
-            'height_scale': 5.0,  # Different
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 5.0,  # Different
+            "center_model": True,
+            "boundary_extension": True,
         }
 
         hash1 = cache.compute_mesh_hash(dem_hash, mesh_params1)
@@ -88,10 +88,10 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
         }
 
         hash1 = cache.compute_mesh_hash("dem_hash_1", mesh_params)
@@ -104,9 +104,9 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'water_mask': np.array([True, False, True])
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "water_mask": np.array([True, False, True]),
         }
 
         # Should not raise an error
@@ -133,7 +133,7 @@ class TestMeshCachePaths(unittest.TestCase):
         path = cache.get_cache_path("test_hash")
 
         self.assertIsInstance(path, Path)
-        self.assertTrue(str(path).endswith('.blend'))
+        self.assertTrue(str(path).endswith(".blend"))
 
     def test_get_cache_path_contains_hash(self):
         """Test that cache path contains the hash."""
@@ -151,7 +151,7 @@ class TestMeshCachePaths(unittest.TestCase):
         path = cache.get_metadata_path("test_hash")
 
         self.assertIsInstance(path, Path)
-        self.assertTrue(str(path).endswith('.json'))
+        self.assertTrue(str(path).endswith(".json"))
 
     def test_get_metadata_path_contains_hash(self):
         """Test that metadata path contains the hash."""
@@ -185,18 +185,14 @@ class TestMeshCacheSaveLoad(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=True)
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True,
-            'boundary_extension': True
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "center_model": True,
+            "boundary_extension": True,
         }
         mesh_hash = "mesh_hash_123"
 
-        cache_path, metadata_path = cache.save_cache(
-            blend_file,
-            mesh_hash,
-            mesh_params
-        )
+        cache_path, metadata_path = cache.save_cache(blend_file, mesh_hash, mesh_params)
 
         self.assertIsNotNone(cache_path)
         self.assertIsNotNone(metadata_path)
@@ -210,12 +206,8 @@ class TestMeshCacheSaveLoad(unittest.TestCase):
 
         cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=False)
 
-        mesh_params = {'scale_factor': 100.0}
-        cache_path, metadata_path = cache.save_cache(
-            blend_file,
-            "hash",
-            mesh_params
-        )
+        mesh_params = {"scale_factor": 100.0}
+        cache_path, metadata_path = cache.save_cache(blend_file, "hash", mesh_params)
 
         self.assertIsNone(cache_path)
         self.assertIsNone(metadata_path)
@@ -227,7 +219,7 @@ class TestMeshCacheSaveLoad(unittest.TestCase):
         blend_file.write_text("mock blend content")
 
         cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=True)
-        mesh_params = {'scale_factor': 100.0}
+        mesh_params = {"scale_factor": 100.0}
         mesh_hash = "mesh_hash_load"
 
         cache.save_cache(blend_file, mesh_hash, mesh_params)
@@ -279,7 +271,7 @@ class TestMeshCacheClear(unittest.TestCase):
         blend_file1.write_text("mock")
         blend_file2.write_text("mock")
 
-        mesh_params = {'scale_factor': 100.0}
+        mesh_params = {"scale_factor": 100.0}
         cache.save_cache(blend_file1, "hash1", mesh_params)
         cache.save_cache(blend_file2, "hash2", mesh_params)
 
@@ -323,10 +315,10 @@ class TestMeshCacheStats(unittest.TestCase):
         stats = cache.get_cache_stats()
 
         self.assertIsInstance(stats, dict)
-        self.assertIn('cache_dir', stats)
-        self.assertIn('enabled', stats)
-        self.assertIn('blend_files', stats)
-        self.assertIn('total_size_mb', stats)
+        self.assertIn("cache_dir", stats)
+        self.assertIn("enabled", stats)
+        self.assertIn("blend_files", stats)
+        self.assertIn("total_size_mb", stats)
 
     def test_get_cache_stats_empty_cache(self):
         """Test stats for empty cache."""
@@ -334,8 +326,8 @@ class TestMeshCacheStats(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertEqual(stats['blend_files'], 0)
-        self.assertEqual(stats['total_size_mb'], 0)
+        self.assertEqual(stats["blend_files"], 0)
+        self.assertEqual(stats["total_size_mb"], 0)
 
     def test_get_cache_stats_with_files(self):
         """Test stats with cached blend files."""
@@ -345,13 +337,13 @@ class TestMeshCacheStats(unittest.TestCase):
         blend_file = Path(self.blend_dir) / "test.blend"
         blend_file.write_text("mock blend content with some data")
 
-        mesh_params = {'scale_factor': 100.0}
+        mesh_params = {"scale_factor": 100.0}
         cache.save_cache(blend_file, "hash1", mesh_params)
 
         stats = cache.get_cache_stats()
 
-        self.assertGreater(stats['blend_files'], 0)
-        self.assertGreater(stats['total_size_mb'], 0)
+        self.assertGreater(stats["blend_files"], 0)
+        self.assertGreater(stats["total_size_mb"], 0)
 
 
 class TestMeshCacheIntegration(unittest.TestCase):
@@ -376,11 +368,7 @@ class TestMeshCacheIntegration(unittest.TestCase):
         blend_file.write_text("mock blend content")
 
         # Compute hash and save
-        mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'center_model': True
-        }
+        mesh_params = {"scale_factor": 100.0, "height_scale": 4.0, "center_model": True}
         dem_hash = "dem_hash_workflow"
         mesh_hash = cache.compute_mesh_hash(dem_hash, mesh_params)
 
@@ -405,8 +393,8 @@ class TestMeshCacheIntegration(unittest.TestCase):
         dem_hash = "dem_hash"
 
         # Create two different mesh variants
-        params1 = {'scale_factor': 100.0, 'height_scale': 4.0}
-        params2 = {'scale_factor': 100.0, 'height_scale': 5.0}
+        params1 = {"scale_factor": 100.0, "height_scale": 4.0}
+        params2 = {"scale_factor": 100.0, "height_scale": 5.0}
 
         hash1 = cache.compute_mesh_hash(dem_hash, params1)
         hash2 = cache.compute_mesh_hash(dem_hash, params2)
@@ -441,9 +429,9 @@ class TestMeshCacheEdgeCases(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
         mesh_params = {
-            'scale_factor': 100.0,
-            'height_scale': 4.0,
-            'color_values': [0.1, 0.2, 0.3, 0.4, 0.5]
+            "scale_factor": 100.0,
+            "height_scale": 4.0,
+            "color_values": [0.1, 0.2, 0.3, 0.4, 0.5],
         }
 
         hash_val = cache.compute_mesh_hash("dem_hash", mesh_params)
@@ -455,14 +443,8 @@ class TestMeshCacheEdgeCases(unittest.TestCase):
         """Test that list and array parameters produce different hashes."""
         cache = MeshCache(cache_dir=Path(self.cache_dir))
 
-        params_list = {
-            'scale_factor': 100.0,
-            'values': [1, 2, 3]
-        }
-        params_array = {
-            'scale_factor': 100.0,
-            'values': np.array([1, 2, 3])
-        }
+        params_list = {"scale_factor": 100.0, "values": [1, 2, 3]}
+        params_array = {"scale_factor": 100.0, "values": np.array([1, 2, 3])}
 
         hash_list = cache.compute_mesh_hash("dem_hash", params_list)
         hash_array = cache.compute_mesh_hash("dem_hash", params_array)
@@ -477,13 +459,9 @@ class TestMeshCacheEdgeCases(unittest.TestCase):
         cache = MeshCache(cache_dir=Path(self.cache_dir), enabled=True)
 
         nonexistent_file = Path(self.blend_dir) / "doesnt_exist.blend"
-        mesh_params = {'scale_factor': 100.0}
+        mesh_params = {"scale_factor": 100.0}
 
-        cache_path, meta_path = cache.save_cache(
-            nonexistent_file,
-            "hash123",
-            mesh_params
-        )
+        cache_path, meta_path = cache.save_cache(nonexistent_file, "hash123", mesh_params)
 
         self.assertIsNone(cache_path)
         self.assertIsNone(meta_path)
@@ -496,9 +474,9 @@ class TestMeshCacheEdgeCases(unittest.TestCase):
 
         stats = cache.get_cache_stats()
 
-        self.assertEqual(stats['blend_files'], 0)
-        self.assertEqual(stats['total_size_mb'], 0)
-        self.assertEqual(len(stats['files']), 0)
+        self.assertEqual(stats["blend_files"], 0)
+        self.assertEqual(stats["total_size_mb"], 0)
+        self.assertEqual(len(stats["files"]), 0)
 
     def test_clear_cache_handles_empty_directory(self):
         """Test clear_cache works on empty cache directory."""
@@ -510,5 +488,5 @@ class TestMeshCacheEdgeCases(unittest.TestCase):
         self.assertEqual(deleted, 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

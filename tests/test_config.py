@@ -1,4 +1,5 @@
 """Tests for configuration module."""
+
 import pytest
 from pathlib import Path
 from src import config

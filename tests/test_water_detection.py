@@ -11,6 +11,7 @@ from pathlib import Path
 # Add project root to path
 project_root = Path(__file__).parent.parent
 import sys
+
 sys.path.insert(0, str(project_root))
 
 from src.terrain.water import identify_water_by_slope
@@ -26,13 +27,16 @@ class TestWaterDetection(unittest.TestCase):
     def test_returns_boolean_mask(self):
         """Test that function returns a boolean numpy array."""
         # Create simple DEM: flat areas (water) and sloped areas (land)
-        dem = np.array([
-            [100, 100, 100, 110, 120],
-            [100, 100, 100, 110, 120],
-            [100, 100, 100, 110, 120],
-            [110, 110, 110, 120, 130],
-            [120, 120, 120, 130, 140],
-        ], dtype=np.float32)
+        dem = np.array(
+            [
+                [100, 100, 100, 110, 120],
+                [100, 100, 100, 110, 120],
+                [100, 100, 100, 110, 120],
+                [110, 110, 110, 120, 130],
+                [120, 120, 120, 130, 140],
+            ],
+            dtype=np.float32,
+        )
 
         water_mask = identify_water_by_slope(dem, slope_threshold=0.5)
 
@@ -44,13 +48,16 @@ class TestWaterDetection(unittest.TestCase):
         """Test that flat areas (low slope) are identified as water."""
         # Create DEM with flat lake in top-left, sharply sloped terrain on right
         # Using Horn's method which computes slope magnitude from convolution
-        dem = np.array([
-            [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
-            [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
-            [1000.0, 1000.0, 1000.0, 2500.0, 7500.0],
-            [1000.0, 1000.0, 1000.0, 4000.0, 9000.0],
-            [1000.0, 1000.0, 1000.0, 5500.0, 10000.0],
-        ], dtype=np.float32)
+        dem = np.array(
+            [
+                [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
+                [1000.0, 1000.0, 1000.0, 1000.0, 5000.0],
+                [1000.0, 1000.0, 1000.0, 2500.0, 7500.0],
+                [1000.0, 1000.0, 1000.0, 4000.0, 9000.0],
+                [1000.0, 1000.0, 1000.0, 5500.0, 10000.0],
+            ],
+            dtype=np.float32,
+        )
 
         # Use a threshold appropriate for Horn's slope magnitude (not degrees)
         water_mask = identify_water_by_slope(dem, slope_threshold=100.0)
@@ -60,8 +67,11 @@ class TestWaterDetection(unittest.TestCase):
         flat_area_water_count = np.sum(water_mask[:3, :3])
         sloped_area_water_count = np.sum(water_mask[:, 4])
 
-        self.assertGreater(flat_area_water_count, sloped_area_water_count,
-                          "Flat areas should have more water pixels than sloped areas")
+        self.assertGreater(
+            flat_area_water_count,
+            sloped_area_water_count,
+            "Flat areas should have more water pixels than sloped areas",
+        )
 
     def test_slope_threshold_effect(self):
         """Test that threshold parameter affects water detection."""
@@ -83,18 +93,24 @@ class TestWaterDetection(unittest.TestCase):
 
         # Higher threshold should identify more water pixels
         # (less strict about slopes)
-        self.assertGreaterEqual(lenient_count, very_strict_count,
-                               "Lenient threshold should identify at least as many water pixels as strict")
+        self.assertGreaterEqual(
+            lenient_count,
+            very_strict_count,
+            "Lenient threshold should identify at least as many water pixels as strict",
+        )
 
     def test_handles_nan_values(self):
         """Test that NaN values (nodata) don't cause errors."""
-        dem = np.array([
-            [100, 100, np.nan, 110, 120],
-            [100, 100, 100, 110, 120],
-            [np.nan, 100, 100, 110, 120],
-            [110, 110, 110, 120, 130],
-            [120, 120, 120, 130, 140],
-        ], dtype=np.float32)
+        dem = np.array(
+            [
+                [100, 100, np.nan, 110, 120],
+                [100, 100, 100, 110, 120],
+                [np.nan, 100, 100, 110, 120],
+                [110, 110, 110, 120, 130],
+                [120, 120, 120, 130, 140],
+            ],
+            dtype=np.float32,
+        )
 
         # Should not raise an error with Horn's slope magnitude threshold
         water_mask = identify_water_by_slope(dem, slope_threshold=10.0)
@@ -105,13 +121,16 @@ class TestWaterDetection(unittest.TestCase):
     def test_fills_holes_option(self):
         """Test that fill_holes option produces smoothed water mask."""
         # Create a flat water body with some noise/isolated pixels
-        dem = np.array([
-            [1000, 1000, 1000, 1000, 1000],
-            [1000, 1005, 1000, 1000, 1000],  # Isolated noisy pixel
-            [1000, 1000, 1000, 1000, 1000],
-            [1000, 1000, 1000, 1005, 1000],  # Another isolated noisy pixel
-            [1000, 1000, 1000, 1000, 1000],
-        ], dtype=np.float32)
+        dem = np.array(
+            [
+                [1000, 1000, 1000, 1000, 1000],
+                [1000, 1005, 1000, 1000, 1000],  # Isolated noisy pixel
+                [1000, 1000, 1000, 1000, 1000],
+                [1000, 1000, 1000, 1005, 1000],  # Another isolated noisy pixel
+                [1000, 1000, 1000, 1000, 1000],
+            ],
+            dtype=np.float32,
+        )
 
         # Without filling: noise creates inconsistent patterns
         without_fill = identify_water_by_slope(dem, slope_threshold=5.0, fill_holes=False)
@@ -125,8 +144,10 @@ class TestWaterDetection(unittest.TestCase):
 
         # Verify that fill_holes option actually processes the mask
         # (they may differ due to morphological operations)
-        self.assertFalse(np.array_equal(without_fill, with_fill),
-                        "Fill and no-fill should produce different results")
+        self.assertFalse(
+            np.array_equal(without_fill, with_fill),
+            "Fill and no-fill should produce different results",
+        )
 
     def test_real_world_dem_shape(self):
         """Test with realistic DEM size."""
@@ -144,8 +165,7 @@ class TestWaterDetection(unittest.TestCase):
         lake1_water = np.sum(water_mask[20:30, 20:30])
         lake2_water = np.sum(water_mask[70:80, 70:80])
 
-        self.assertGreater(lake1_water + lake2_water, 0,
-                          "Flat lake areas should have water pixels")
+        self.assertGreater(lake1_water + lake2_water, 0, "Flat lake areas should have water pixels")
 
 
 class TestWaterDetectionValidation(unittest.TestCase):
@@ -206,14 +226,18 @@ class TestWaterIntegrationWithTerrain(unittest.TestCase):
         from src.terrain.core import Terrain
 
         # Create simple test terrain
-        dem = np.array([
-            [100, 100, 100],
-            [100, 100, 100],
-            [100, 100, 100],
-        ], dtype=np.float32)
+        dem = np.array(
+            [
+                [100, 100, 100],
+                [100, 100, 100],
+                [100, 100, 100],
+            ],
+            dtype=np.float32,
+        )
 
         # Mock transform
         import rasterio
+
         transform = rasterio.Affine.translation(0, 0)
 
         terrain = Terrain(dem, transform)
@@ -230,11 +254,14 @@ class TestWaterIntegrationWithTerrain(unittest.TestCase):
     def test_water_mask_sets_vertex_alpha(self):
         """Test that water mask properly sets vertex alpha channel."""
         # This test verifies the alpha channel logic
-        water_mask = np.array([
-            [True, True, False],
-            [True, False, False],
-            [False, False, False],
-        ], dtype=np.bool_)
+        water_mask = np.array(
+            [
+                [True, True, False],
+                [True, False, False],
+                [False, False, False],
+            ],
+            dtype=np.bool_,
+        )
 
         # Water pixels should have alpha=1.0, land pixels alpha=0.0
         alpha_channel = water_mask.astype(np.float32)
@@ -244,5 +271,5 @@ class TestWaterIntegrationWithTerrain(unittest.TestCase):
         self.assertEqual(alpha_channel[1, 1], 0.0)  # Land
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

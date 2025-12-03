@@ -1,4 +1,5 @@
 """Pytest configuration and fixtures for terrain-maker tests."""
+
 import sys
 from pathlib import Path
 

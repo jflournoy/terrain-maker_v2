@@ -50,7 +50,7 @@ class TestSnowAnalysisInit:
     def test_set_terrain(self):
         """set_terrain() updates the terrain reference."""
         analyzer = SnowAnalysis()
-        mock_terrain = type('MockTerrain', (), {'dem_bounds': (0, 0, 1, 1)})()
+        mock_terrain = type("MockTerrain", (), {"dem_bounds": (0, 0, 1, 1)})()
         analyzer.set_terrain(mock_terrain)
         assert analyzer.terrain == mock_terrain
 
@@ -153,7 +153,7 @@ class TestGunzipSnodasFile:
         # Create a test .gz file
         test_data = b"Test SNODAS data content"
         gz_file = tmp_path / "test_file.dat.gz"
-        with gzip.open(gz_file, 'wb') as f:
+        with gzip.open(gz_file, "wb") as f:
             f.write(test_data)
 
         # Decompress
@@ -162,7 +162,7 @@ class TestGunzipSnodasFile:
         # Verify output exists and has correct content
         assert output_file.exists()
         assert output_file == tmp_path / "test_file.dat"
-        with open(output_file, 'rb') as f:
+        with open(output_file, "rb") as f:
             assert f.read() == test_data
         # Original should still exist
         assert gz_file.exists()
@@ -171,7 +171,7 @@ class TestGunzipSnodasFile:
         """_gunzip_snodas_file removes original if keep_original=False."""
         test_data = b"Test data"
         gz_file = tmp_path / "test_file.dat.gz"
-        with gzip.open(gz_file, 'wb') as f:
+        with gzip.open(gz_file, "wb") as f:
             f.write(test_data)
 
         output_file = _gunzip_snodas_file(gz_file, keep_original=False)
@@ -183,7 +183,7 @@ class TestGunzipSnodasFile:
         """_gunzip_snodas_file raises exception for corrupted .gz file."""
         # Create invalid .gz file
         gz_file = tmp_path / "corrupted.dat.gz"
-        with open(gz_file, 'wb') as f:
+        with open(gz_file, "wb") as f:
             f.write(b"Not actually gzipped data")
 
         # Should raise an exception
@@ -235,15 +235,15 @@ Start second: 0
         meta = _read_snodas_header(header_file)
 
         # Check basic fields
-        assert meta['data_units'] == 'meters'
-        assert meta['data_slope'] == 0.001
-        assert meta['data_intercept'] == 0.0
-        assert meta['no_data_value'] == -9999.0
-        assert meta['width'] == 6935
-        assert meta['height'] == 3351
-        assert meta['crs'] == 'EPSG:4326'
+        assert meta["data_units"] == "meters"
+        assert meta["data_slope"] == 0.001
+        assert meta["data_intercept"] == 0.0
+        assert meta["no_data_value"] == -9999.0
+        assert meta["width"] == 6935
+        assert meta["height"] == 3351
+        assert meta["crs"] == "EPSG:4326"
         # Check transform exists
-        assert 'transform' in meta
+        assert "transform" in meta
 
     def test_read_header_creates_transform(self, tmp_path):
         """_read_snodas_header creates valid Affine transform."""
@@ -261,7 +261,8 @@ Maximum y-axis coordinate: 45.5
 
         # Transform should be an Affine object
         from affine import Affine
-        assert isinstance(meta['transform'], Affine)
+
+        assert isinstance(meta["transform"], Affine)
 
     def test_read_header_handles_not_applicable_values(self, tmp_path):
         """_read_snodas_header skips 'Not applicable' values."""
@@ -275,8 +276,8 @@ Number of rows: 50
 
         meta = _read_snodas_header(header_file)
 
-        assert 'some_field' not in meta
-        assert meta['data_units'] == 'meters'
+        assert "some_field" not in meta
+        assert meta["data_units"] == "meters"
 
 
 class TestReadSnodasBinary:
@@ -285,14 +286,14 @@ class TestReadSnodasBinary:
     def test_read_binary_basic(self, tmp_path):
         """_read_snodas_binary reads big-endian 16-bit data."""
         # Create simple binary data (5x5 grid)
-        data = np.arange(25, dtype='>i2').reshape(5, 5)
+        data = np.arange(25, dtype=">i2").reshape(5, 5)
         binary_file = tmp_path / "test.dat"
         data.tofile(binary_file)
 
         meta = {
-            'height': 5,
-            'width': 5,
-            'no_data_value': -9999,
+            "height": 5,
+            "width": 5,
+            "no_data_value": -9999,
         }
 
         result = _read_snodas_binary(binary_file, meta)
@@ -303,16 +304,16 @@ class TestReadSnodasBinary:
     def test_read_binary_applies_slope_and_intercept(self, tmp_path):
         """_read_snodas_binary applies slope and intercept transformations."""
         # Raw data: [0, 1, 2, 3, 4]
-        raw_data = np.arange(5, dtype='>i2')
+        raw_data = np.arange(5, dtype=">i2")
         binary_file = tmp_path / "test.dat"
         raw_data.tofile(binary_file)
 
         meta = {
-            'height': 1,
-            'width': 5,
-            'data_slope': 0.1,
-            'data_intercept': 10.0,
-            'no_data_value': -9999,
+            "height": 1,
+            "width": 5,
+            "data_slope": 0.1,
+            "data_intercept": 10.0,
+            "no_data_value": -9999,
         }
 
         result = _read_snodas_binary(binary_file, meta)
@@ -324,14 +325,14 @@ class TestReadSnodasBinary:
     def test_read_binary_masks_no_data_values(self, tmp_path):
         """_read_snodas_binary masks no_data values."""
         # Data with no_data value (-9999)
-        data = np.array([0, 100, -9999, 200, -9999], dtype='>i2')
+        data = np.array([0, 100, -9999, 200, -9999], dtype=">i2")
         binary_file = tmp_path / "test.dat"
         data.tofile(binary_file)
 
         meta = {
-            'height': 1,
-            'width': 5,
-            'no_data_value': -9999,
+            "height": 1,
+            "width": 5,
+            "no_data_value": -9999,
         }
 
         result = _read_snodas_binary(binary_file, meta)
@@ -363,10 +364,10 @@ class TestSleddingScore:
 
         # Mock stats with known values
         stats = {
-            'median_max_depth': np.ones((10, 10)) * 300,  # 300mm depth
-            'mean_snow_day_ratio': np.ones((10, 10)) * 0.5,  # 50% snow coverage
-            'interseason_cv': np.ones((10, 10)) * 0.1,  # Low variability
-            'mean_intraseason_cv': np.ones((10, 10)) * 0.1,
+            "median_max_depth": np.ones((10, 10)) * 300,  # 300mm depth
+            "mean_snow_day_ratio": np.ones((10, 10)) * 0.5,  # 50% snow coverage
+            "interseason_cv": np.ones((10, 10)) * 0.1,  # Low variability
+            "mean_intraseason_cv": np.ones((10, 10)) * 0.1,
         }
         analyzer.stats = stats
 
@@ -383,10 +384,10 @@ class TestSleddingScore:
         analyzer = SnowAnalysis()
 
         stats = {
-            'median_max_depth': np.zeros((10, 10)),  # No snow
-            'mean_snow_day_ratio': np.zeros((10, 10)),
-            'interseason_cv': np.ones((10, 10)) * 0.5,
-            'mean_intraseason_cv': np.ones((10, 10)) * 0.5,
+            "median_max_depth": np.zeros((10, 10)),  # No snow
+            "mean_snow_day_ratio": np.zeros((10, 10)),
+            "interseason_cv": np.ones((10, 10)) * 0.5,
+            "mean_intraseason_cv": np.ones((10, 10)) * 0.5,
         }
         analyzer.stats = stats
 
@@ -416,13 +417,13 @@ Minimum y-axis coordinate: 45.0
 Maximum y-axis coordinate: 45.5
 """
         header_file = tmp_path / "test_header.txt.gz"
-        with gzip.open(header_file, 'wt') as f:
+        with gzip.open(header_file, "wt") as f:
             f.write(header_content)
 
         # Create test binary data (3x5 = 15 values)
-        data = np.arange(15, dtype='>i2').reshape(3, 5)
+        data = np.arange(15, dtype=">i2").reshape(3, 5)
         binary_file = tmp_path / "test_data.dat.gz"
-        with gzip.open(binary_file, 'wb') as f:
+        with gzip.open(binary_file, "wb") as f:
             f.write(data.tobytes())
 
         result_data, meta = _load_snodas_data(binary_file, header_file)
@@ -430,10 +431,10 @@ Maximum y-axis coordinate: 45.5
         # Check data
         assert result_data.shape == (3, 5)
         # Check metadata
-        assert 'width' in meta
-        assert 'height' in meta
-        assert meta['width'] == 5
-        assert meta['height'] == 3
+        assert "width" in meta
+        assert "height" in meta
+        assert meta["width"] == 5
+        assert meta["height"] == 3
 
     def test_load_snodas_data_uses_existing_uncompressed(self, tmp_path):
         """_load_snodas_data uses existing uncompressed files."""
@@ -453,24 +454,24 @@ Maximum y-axis coordinate: 45.5
 
         # Create compressed version
         header_gz = tmp_path / "test_header.txt.gz"
-        with gzip.open(header_gz, 'wt') as f:
+        with gzip.open(header_gz, "wt") as f:
             f.write("WRONG CONTENT")  # This shouldn't be used
 
         # Create uncompressed binary
-        data = np.array([[1, 2], [3, 4]], dtype='>i2')
+        data = np.array([[1, 2], [3, 4]], dtype=">i2")
         binary_file = tmp_path / "test_data.dat"
         data.tofile(binary_file)
 
         # Create compressed version
         binary_gz = tmp_path / "test_data.dat.gz"
-        with gzip.open(binary_gz, 'wb') as f:
+        with gzip.open(binary_gz, "wb") as f:
             f.write(b"WRONG")  # This shouldn't be used
 
         result_data, meta = _load_snodas_data(binary_gz, header_gz)
 
         # Should use the uncompressed files
         assert result_data.shape == (2, 2)
-        assert meta['width'] == 2
+        assert meta["width"] == 2
 
 
 class TestLoadProcessedSnodas:
@@ -495,16 +496,16 @@ class TestLoadProcessedSnodas:
             crs=np.string_("EPSG:4326"),
             height=np.int32(10),
             width=np.int32(10),
-            no_data_value=np.float32(-9999)
+            no_data_value=np.float32(-9999),
         )
 
         data, meta = analyzer._load_processed_snodas(npz_file)
 
         assert data.shape == (10, 10)
-        assert 'transform' in meta
-        assert 'crs' in meta
-        assert meta['height'] == 10
-        assert meta['width'] == 10
+        assert "transform" in meta
+        assert "crs" in meta
+        assert meta["height"] == 10
+        assert meta["width"] == 10
 
     def test_load_processed_snodas_masks_no_data(self, tmp_path):
         """_load_processed_snodas masks no_data values."""
@@ -516,11 +517,7 @@ class TestLoadProcessedSnodas:
         test_data = np.array([[1.0, 2.0, -9999.0], [4.0, -9999.0, 6.0]], dtype=np.float32)
         npz_file = tmp_path / "test.npz"
 
-        np.savez_compressed(
-            npz_file,
-            data=test_data,
-            no_data_value=np.float32(-9999.0)
-        )
+        np.savez_compressed(npz_file, data=test_data, no_data_value=np.float32(-9999.0))
 
         data, meta = analyzer._load_processed_snodas(npz_file)
 
@@ -565,9 +562,7 @@ class TestProcessSnowDataWorkflow:
         analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path / "nonexistent"))
 
         # Mock terrain
-        mock_terrain = type('MockTerrain', (), {
-            'dem_bounds': (-120.0, 45.0, -119.0, 45.5)
-        })()
+        mock_terrain = type("MockTerrain", (), {"dem_bounds": (-120.0, 45.0, -119.0, 45.5)})()
         analyzer.set_terrain(mock_terrain)
 
         with pytest.raises(ValueError, match="SNODAS directory not found"):
@@ -604,19 +599,20 @@ class TestVisualization:
         analyzer = SnowAnalysis()
 
         with pytest.raises((ValueError, AttributeError)):
-            analyzer.visualize_snow_data(data_type='sledding_score')
+            analyzer.visualize_snow_data(data_type="sledding_score")
 
     def test_visualize_with_sledding_score(self):
         """visualize_snow_data works with sledding_score data."""
         import matplotlib
-        matplotlib.use('Agg')  # Non-interactive backend for testing
+
+        matplotlib.use("Agg")  # Non-interactive backend for testing
 
         analyzer = SnowAnalysis()
         analyzer.sledding_score = np.random.rand(10, 10)
 
         # Should not raise exception (won't show plot in test)
         try:
-            analyzer.visualize_snow_data(data_type='sledding_score')
+            analyzer.visualize_snow_data(data_type="sledding_score")
         except Exception as e:
             # plt.show() might fail in test environment, that's okay
             if "display" not in str(e).lower():
@@ -629,8 +625,8 @@ class TestStoreSnowStatsInTerrain:
     def test_store_stats_skips_without_terrain(self):
         """_store_snow_stats_in_terrain does nothing without terrain."""
         analyzer = SnowAnalysis()
-        stats = {'median_max_depth': np.ones((10, 10))}
-        metadata = {'transform': None, 'crs': 'EPSG:4326'}
+        stats = {"median_max_depth": np.ones((10, 10))}
+        metadata = {"transform": None, "crs": "EPSG:4326"}
 
         # Should not raise exception
         analyzer._store_snow_stats_in_terrain(stats, metadata)
@@ -645,6 +641,7 @@ class TestStoreSnowStatsInTerrain:
 
         class MockTerrain:
             dem_transform = Affine.identity()
+
             def add_data_layer(self, name, data, transform, crs, target_layer=None):
                 added_layers.append(name)
 
@@ -653,21 +650,18 @@ class TestStoreSnowStatsInTerrain:
         analyzer.terrain = mock_terrain
 
         stats = {
-            'median_max_depth': np.ones((10, 10)),
-            'mean_snow_day_ratio': np.ones((10, 10)),
-            'some_scalar': 42  # Should be skipped (not an array)
+            "median_max_depth": np.ones((10, 10)),
+            "mean_snow_day_ratio": np.ones((10, 10)),
+            "some_scalar": 42,  # Should be skipped (not an array)
         }
-        metadata = {
-            'transform': Affine.identity(),
-            'crs': 'EPSG:4326'
-        }
+        metadata = {"transform": Affine.identity(), "crs": "EPSG:4326"}
 
         analyzer._store_snow_stats_in_terrain(stats, metadata)
 
         # Should have added 2 array layers (not the scalar)
         assert len(added_layers) == 2
-        assert 'snodas_median_max_depth' in added_layers
-        assert 'snodas_mean_snow_day_ratio' in added_layers
+        assert "snodas_median_max_depth" in added_layers
+        assert "snodas_mean_snow_day_ratio" in added_layers
 
 
 # 🔴 TDD RED PHASE COMPLETE - Round 2

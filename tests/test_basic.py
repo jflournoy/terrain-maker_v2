@@ -1,4 +1,5 @@
 """Basic tests to verify project setup."""
+
 import sys
 from pathlib import Path
 import pytest
@@ -14,6 +15,7 @@ def test_src_modules_importable():
     # Test basic imports
     try:
         from src import config
+
         assert config.PROJECT_ROOT is not None
     except ImportError as e:
         pytest.fail(f"Failed to import src.config: {e}")
