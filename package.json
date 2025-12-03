@@ -101,6 +101,15 @@
     "py:example:detroit-west": "uv run examples/detroit_elevation_real.py --view west",
     "py:example:detroit-above": "uv run examples/detroit_elevation_real.py --view above --elevation 0.5",
     "py:examples:list": "ls -1 examples/*.py | xargs -I {} basename {}",
+    "// Detroit Example with Caching": "=== Detroit terrain example with caching workflow ===",
+    "detroit-build": "uv run examples/detroit_elevation_real.py --cache --view south",
+    "detroit-build:all": "npm run detroit-build && npm run detroit-build-north && npm run detroit-build-east && npm run detroit-build-west && npm run detroit-build-above",
+    "detroit-build-north": "uv run examples/detroit_elevation_real.py --cache --view north",
+    "detroit-build-east": "uv run examples/detroit_elevation_real.py --cache --view east",
+    "detroit-build-west": "uv run examples/detroit_elevation_real.py --cache --view west",
+    "detroit-build-above": "uv run examples/detroit_elevation_real.py --cache --view above",
+    "detroit-cache-stats": "node -e \"console.log('DEM Cache: .dem_cache/\\nMesh Cache: .mesh_cache/')\"",
+    "detroit-cache-clear": "uv run examples/detroit_elevation_real.py --cache --clear-cache",
     "prepare": "husky"
   },
   "keywords": [
