@@ -50,10 +50,7 @@ class DEMCache:
             logger.debug(f"DEM cache initialized at: {self.cache_dir}")
 
     def compute_source_hash(
-        self,
-        directory_path: str,
-        pattern: str,
-        recursive: bool = False
+        self, directory_path: str, pattern: str, recursive: bool = False
     ) -> str:
         """
         Compute hash of source DEM files based on paths and modification times.
@@ -127,11 +124,7 @@ class DEMCache:
         return self.cache_dir / f"{cache_name}_{source_hash}_meta.json"
 
     def save_cache(
-        self,
-        dem_array: np.ndarray,
-        transform: Affine,
-        source_hash: str,
-        cache_name: str = "dem"
+        self, dem_array: np.ndarray, transform: Affine, source_hash: str, cache_name: str = "dem"
     ) -> Tuple[Path, Path]:
         """
         Save DEM array and transform to cache.
@@ -154,11 +147,16 @@ class DEMCache:
         start_time = time.time()
 
         # Save DEM array with transform as list (Affine constructor: a, b, c, d, e, f)
-        transform_list = [transform.a, transform.b, transform.c, transform.d, transform.e, transform.f]
+        transform_list = [
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.e,
+            transform.f,
+        ]
         np.savez_compressed(
-            cache_path,
-            dem=dem_array,
-            transform_data=np.array(transform_list, dtype=np.float64)
+            cache_path, dem=dem_array, transform_data=np.array(transform_list, dtype=np.float64)
         )
 
         # Save metadata
@@ -169,7 +167,7 @@ class DEMCache:
             "dem_min": float(np.nanmin(dem_array)),
             "dem_max": float(np.nanmax(dem_array)),
             "cache_time": time.time(),
-            "transform": transform_list
+            "transform": transform_list,
         }
 
         with open(metadata_path, "w") as f:
@@ -182,9 +180,7 @@ class DEMCache:
         return cache_path, metadata_path
 
     def load_cache(
-        self,
-        source_hash: str,
-        cache_name: str = "dem"
+        self, source_hash: str, cache_name: str = "dem"
     ) -> Optional[Tuple[np.ndarray, Affine]]:
         """
         Load cached DEM data.
@@ -272,7 +268,7 @@ class DEMCache:
             "enabled": self.enabled,
             "cache_files": 0,
             "total_size_mb": 0,
-            "files": []
+            "files": [],
         }
 
         if not self.cache_dir.exists():
@@ -283,10 +279,12 @@ class DEMCache:
                 size_bytes = cache_file.stat().st_size
                 stats["cache_files"] += 1
                 stats["total_size_mb"] += size_bytes / (1024 * 1024)
-                stats["files"].append({
-                    "name": cache_file.name,
-                    "size_mb": size_bytes / (1024 * 1024),
-                    "mtime": cache_file.stat().st_mtime
-                })
+                stats["files"].append(
+                    {
+                        "name": cache_file.name,
+                        "size_mb": size_bytes / (1024 * 1024),
+                        "mtime": cache_file.stat().st_mtime,
+                    }
+                )
 
         return stats

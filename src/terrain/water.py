@@ -106,29 +106,15 @@ def _calculate_slope(dem_data):
     mask = np.isnan(dem_filled)
     if np.any(mask) and np.any(~mask):
         # Use linear interpolation for NaN values
-        dem_filled[mask] = np.interp(
-            np.flatnonzero(mask),
-            np.flatnonzero(~mask),
-            dem_filled[~mask]
-        )
+        dem_filled[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), dem_filled[~mask])
     elif np.all(mask):
         # All NaN - return all zeros
         return np.zeros_like(dem_data)
 
     # Calculate gradients using Horn's method
     # These kernels weight central differences more heavily
-    dx = ndimage.convolve(
-        dem_filled,
-        np.array([[-1, 0, 1],
-                  [-2, 0, 2],
-                  [-1, 0, 1]]) / 8.0
-    )
-    dy = ndimage.convolve(
-        dem_filled,
-        np.array([[-1, -2, -1],
-                  [0, 0, 0],
-                  [1, 2, 1]]) / 8.0
-    )
+    dx = ndimage.convolve(dem_filled, np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8.0)
+    dy = ndimage.convolve(dem_filled, np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]) / 8.0)
 
     # Calculate slope magnitude (gradient magnitude)
     slope = np.hypot(dx, dy)

@@ -2,6 +2,7 @@
 
 Centralizes data paths and configuration settings.
 """
+
 from pathlib import Path
 
 # Project root
