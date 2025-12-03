@@ -426,5 +426,107 @@ class TestMeshCacheHashComputation(unittest.TestCase):
         self.assertEqual(hash1, hash2)
 
 
+class TestMeshCacheUpstreamDependencies(unittest.TestCase):
+    """Test that mesh cache key includes ALL upstream parameters per dependency graph."""
+
+    def setUp(self):
+        """Create mesh cache."""
+        from src.terrain.mesh_cache import MeshCache
+        import tempfile
+        self.cache_dir = tempfile.mkdtemp()
+        self.mesh_cache = MeshCache(cache_dir=self.cache_dir)
+
+    def tearDown(self):
+        """Clean up."""
+        import shutil
+        shutil.rmtree(self.cache_dir)
+
+    def test_mesh_hash_changes_with_transform_target_vertices(self):
+        """Test mesh hash changes when transform target_vertices changes."""
+        params1 = {
+            'scale_factor': 100.0,
+            'transform_target_vertices': 1382400,
+        }
+        params2 = {
+            'scale_factor': 100.0,
+            'transform_target_vertices': 500000,  # Different target
+        }
+
+        hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
+        hash2 = self.mesh_cache.compute_mesh_hash("dem_hash", params2)
+
+        self.assertNotEqual(hash1, hash2)
+
+    def test_mesh_hash_changes_with_water_slope_threshold(self):
+        """Test mesh hash changes when water slope_threshold changes."""
+        params1 = {
+            'scale_factor': 100.0,
+            'water_slope_threshold': 0.01,
+        }
+        params2 = {
+            'scale_factor': 100.0,
+            'water_slope_threshold': 0.05,  # Different threshold
+        }
+
+        hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
+        hash2 = self.mesh_cache.compute_mesh_hash("dem_hash", params2)
+
+        self.assertNotEqual(hash1, hash2)
+
+    def test_mesh_hash_changes_with_water_fill_holes(self):
+        """Test mesh hash changes when water fill_holes changes."""
+        params1 = {
+            'scale_factor': 100.0,
+            'water_fill_holes': True,
+        }
+        params2 = {
+            'scale_factor': 100.0,
+            'water_fill_holes': False,  # Different setting
+        }
+
+        hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
+        hash2 = self.mesh_cache.compute_mesh_hash("dem_hash", params2)
+
+        self.assertNotEqual(hash1, hash2)
+
+    def test_mesh_hash_changes_with_transform_crs(self):
+        """Test mesh hash changes when transform reproject_crs changes."""
+        params1 = {
+            'scale_factor': 100.0,
+            'transform_reproject_crs': 'EPSG:32617',
+        }
+        params2 = {
+            'scale_factor': 100.0,
+            'transform_reproject_crs': 'EPSG:32618',  # Different CRS
+        }
+
+        hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", params1)
+        hash2 = self.mesh_cache.compute_mesh_hash("dem_hash", params2)
+
+        self.assertNotEqual(hash1, hash2)
+
+    def test_full_mesh_params_produce_consistent_hash(self):
+        """Test that full mesh params with all upstream deps produce consistent hash."""
+        full_params = {
+            # Mesh params
+            'scale_factor': 100.0,
+            'height_scale': 4.0,
+            'center_model': True,
+            'boundary_extension': True,
+            # Upstream: transform params
+            'transform_target_vertices': 1382400,
+            'transform_reproject_crs': 'EPSG:32617',
+            'transform_elevation_scale': 0.0001,
+            # Upstream: water params
+            'water_slope_threshold': 0.01,
+            'water_fill_holes': True,
+        }
+
+        hash1 = self.mesh_cache.compute_mesh_hash("dem_hash", full_params)
+        hash2 = self.mesh_cache.compute_mesh_hash("dem_hash", full_params)
+
+        self.assertEqual(hash1, hash2)
+
+
 if __name__ == '__main__':
     unittest.main()
