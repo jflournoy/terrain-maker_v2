@@ -19,6 +19,7 @@ build/
 coverage/
 .nyc_output
 *.lcov
+.coverage
 
 # Environment and local settings
 .env
@@ -89,6 +90,10 @@ data/snodas_data
 !data/samples/
 !data/samples/*.tif
 !data/samples/*.geojson
+
+# Terrain-maker cache directories
+.dem_cache/
+.mesh_cache/
 
 # Blender files
 *.blend
