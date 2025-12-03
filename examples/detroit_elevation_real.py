@@ -120,9 +120,17 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, load_dem_files, scale_elevation, flip_raster, reproject_raster,
-    elevation_colormap, clear_scene, position_camera_relative, setup_light,
-    setup_render_settings, render_scene_to_file
+    Terrain,
+    load_dem_files,
+    scale_elevation,
+    flip_raster,
+    reproject_raster,
+    elevation_colormap,
+    clear_scene,
+    position_camera_relative,
+    setup_light,
+    setup_render_settings,
+    render_scene_to_file,
 )
 from src.terrain.cache import DEMCache
 from src.terrain.mesh_cache import MeshCache
@@ -138,65 +146,78 @@ SRTM_TILES_DIR = Path(__file__).parent.parent / "data" / "dem" / "detroit"
 # View-specific camera target offsets for better framing
 # Adjusts the focus point based on view direction to keep terrain centered
 VIEW_TARGET_OFFSETS = {
-    'north': (0, 2, 0),
-    'south': (0, -1.5, 0),
-    'east': (1.5, 0, 0),
-    'west': (-1.5, 0, 0),
-    'above': (0, 0, 0),  # Overhead view - center is natural target
+    "north": (0, 2, 0),
+    "south": (0, -1.5, 0),
+    "east": (1.5, 0, 0),
+    "west": (-1.5, 0, 0),
+    "above": (0, 0, 0),  # Overhead view - center is natural target
 }
 
 
 def parse_args():
     """Parse command line arguments for camera view configuration."""
     parser = argparse.ArgumentParser(
-        description='Detroit Real Elevation Visualization with configurable camera views'
+        description="Detroit Real Elevation Visualization with configurable camera views"
     )
     parser.add_argument(
-        '--view', '-v',
-        choices=['north', 'south', 'east', 'west',
-                 'northeast', 'northwest', 'southeast', 'southwest', 'above'],
-        default='south',
-        help='Camera direction/view (default: south)'
+        "--view",
+        "-v",
+        choices=[
+            "north",
+            "south",
+            "east",
+            "west",
+            "northeast",
+            "northwest",
+            "southeast",
+            "southwest",
+            "above",
+        ],
+        default="south",
+        help="Camera direction/view (default: south)",
     )
     parser.add_argument(
-        '--distance', '-d',
+        "--distance",
+        "-d",
         type=float,
         default=0.264,  # .33/1.25
-        help='Distance multiplier from mesh diagonal (default: 0.264)'
+        help="Distance multiplier from mesh diagonal (default: 0.264)",
     )
     parser.add_argument(
-        '--elevation', '-e',
+        "--elevation",
+        "-e",
         type=float,
         default=0.396,  # .33/1.25*1.5
-        help='Camera elevation as fraction of mesh diagonal (default: 0.396)'
+        help="Camera elevation as fraction of mesh diagonal (default: 0.396)",
     )
     parser.add_argument(
-        '--camera-type', '-c',
-        choices=['PERSP', 'ORTHO'],
-        default='PERSP',
-        help='Camera type: PERSP (perspective) or ORTHO (orthographic) (default: PERSP)'
+        "--camera-type",
+        "-c",
+        choices=["PERSP", "ORTHO"],
+        default="PERSP",
+        help="Camera type: PERSP (perspective) or ORTHO (orthographic) (default: PERSP)",
     )
     parser.add_argument(
-        '--focal-length', '-f',
+        "--focal-length",
+        "-f",
         type=float,
         default=15,
-        help='Focal length in mm for perspective camera (default: 15)'
+        help="Focal length in mm for perspective camera (default: 15)",
     )
     parser.add_argument(
-        '--output', '-o',
+        "--output",
+        "-o",
         type=str,
         default=None,
-        help='Output filename (default: detroit_elevation_{view}.png)'
+        help="Output filename (default: detroit_elevation_{view}.png)",
     )
     parser.add_argument(
-        '--cache',
-        action='store_true',
-        help='Enable DEM caching (saves/loads from .dem_cache/ directory)'
+        "--cache",
+        action="store_true",
+        help="Enable DEM caching (saves/loads from .dem_cache/ directory)",
     )
     parser.add_argument(
-        '--clear-cache',
-        action='store_true',
-        help='Clear all cached DEM files and exit'
+        "--clear-cache", action="store_true", help="Clear all cached DEM files and exit"
     )
     return parser.parse_args()
 
@@ -221,13 +242,14 @@ def main():
         print(f"[Cache] Cleared {dem_deleted} DEM files and {mesh_deleted} mesh files")
         stats = cache.get_cache_stats()
         mesh_stats = mesh_cache.get_cache_stats()
-        total_mb = stats['total_size_mb'] + mesh_stats['total_size_mb']
+        total_mb = stats["total_size_mb"] + mesh_stats["total_size_mb"]
         print(f"[Cache] Remaining cache size: {total_mb:.1f} MB")
         return 0
 
     # Clear Blender scene to remove default objects
     try:
         import bpy
+
         clear_scene()
         print("✓ Blender scene cleared")
     except ImportError:
@@ -248,18 +270,18 @@ def main():
 
     # Mesh parameters that affect the cached geometry
     mesh_params = {
-        'scale_factor': 100.0,
-        'height_scale': 4.0,
-        'center_model': True,
-        'boundary_extension': True,
-        'water_mask': True  # We always use water detection
+        "scale_factor": 100.0,
+        "height_scale": 4.0,
+        "center_model": True,
+        "boundary_extension": True,
+        "water_mask": True,  # We always use water detection
     }
 
     if args.cache:
         print("\n[0/6] Checking mesh cache (before loading data)...")
         try:
             # Compute mesh hash from source files + params (NO DATA LOADING)
-            dem_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+            dem_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern="*.hgt")
             mesh_hash = mesh_cache.compute_mesh_hash(dem_hash, mesh_params)
             print(f"      Mesh hash: {mesh_hash[:16]}...")
 
@@ -276,7 +298,7 @@ def main():
 
                 # Get the mesh object from the loaded blend file
                 for obj in bpy.context.scene.objects:
-                    if obj.type == 'MESH':
+                    if obj.type == "MESH":
                         mesh_obj = obj
                         cached_mesh_loaded = True
                         print(f"      ✓ Mesh loaded from cache!")
@@ -310,7 +332,7 @@ def main():
         if args.cache:
             try:
                 print("      [Cache] Computing source hash...")
-                source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+                source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern="*.hgt")
                 cached_result = cache.load_cache(source_hash, cache_name="detroit")
                 if cached_result is not None:
                     dem_data, transform = cached_result
@@ -323,12 +345,12 @@ def main():
         # Load from source if cache miss or caching disabled
         if dem_data is None:
             try:
-                dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
+                dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern="*.hgt")
 
                 # Save to cache if caching enabled
                 if args.cache:
                     try:
-                        source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern='*.hgt')
+                        source_hash = cache.compute_source_hash(SRTM_TILES_DIR, pattern="*.hgt")
                         cache.save_cache(dem_data, transform, source_hash, cache_name="detroit")
                     except Exception as e:
                         print(f"      [Cache] Failed to cache: {e}")
@@ -348,19 +370,15 @@ def main():
         print(f"      Original DEM shape: {terrain.dem_shape}")
 
         # Configure downsampling to target approximately 500,000 vertices
-        target_vertices = WIDTH*HEIGHT*2
+        target_vertices = WIDTH * HEIGHT * 2
         zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
         print(f"      Configured for {target_vertices:,} target vertices")
         print(f"      Calculated zoom_factor: {zoom:.6f}")
 
         # Reproject from WGS84 to UTM Zone 17N for proper geographic scaling
-        utm_reproject = reproject_raster(
-            src_crs='EPSG:4326',
-            dst_crs='EPSG:32617',
-            num_threads=4
-        )
+        utm_reproject = reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", num_threads=4)
         terrain.transforms.append(utm_reproject)
-        terrain.transforms.append(flip_raster(axis='horizontal'))
+        terrain.transforms.append(flip_raster(axis="horizontal"))
         terrain.transforms.append(scale_elevation(scale_factor=0.0001))
         terrain.apply_transforms()
 
@@ -370,15 +388,15 @@ def main():
             from src.terrain.water import identify_water_by_slope
             import numpy as np
 
-            transformed_dem = terrain.data_layers['dem']['transformed_data']
+            transformed_dem = terrain.data_layers["dem"]["transformed_data"]
             unscaled_dem = transformed_dem / 0.0001
 
             water_mask = identify_water_by_slope(
-                unscaled_dem,
-                slope_threshold=0.01,
-                fill_holes=True
+                unscaled_dem, slope_threshold=0.01, fill_holes=True
             )
-            print(f"      Water detected: {np.sum(water_mask)} water pixels ({100*np.sum(water_mask)/water_mask.size:.1f}% of terrain)")
+            print(
+                f"      Water detected: {np.sum(water_mask)} water pixels ({100*np.sum(water_mask)/water_mask.size:.1f}% of terrain)"
+            )
         except Exception as e:
             print(f"      ⚠️  Water detection failed: {e}")
             water_mask = None
@@ -390,8 +408,7 @@ def main():
         # Step 4: Set up color mapping
         print("\n[4/6] Setting up color mapping...")
         terrain.set_color_mapping(
-            lambda dem: elevation_colormap(dem, cmap_name='mako'),
-            source_layers=['dem']
+            lambda dem: elevation_colormap(dem, cmap_name="mako"), source_layers=["dem"]
         )
         print(f"      Color mapping configured (Mako colormap)")
 
@@ -403,7 +420,7 @@ def main():
                 height_scale=4.0,
                 center_model=True,
                 boundary_extension=True,
-                water_mask=water_mask
+                water_mask=water_mask,
             )
 
             if mesh_obj is None:
@@ -418,6 +435,7 @@ def main():
         except Exception as e:
             print(f"      ✗ Error creating mesh: {e}")
             import traceback
+
             traceback.print_exc()
             return 1
     else:
@@ -452,20 +470,15 @@ def main():
     )
 
     # Create sun light for terrain illumination
-    light = setup_light(
-        angle=2,            # Narrow light cone
-        energy=3            # Brightness
-    )
+    light = setup_light(angle=2, energy=3)  # Narrow light cone  # Brightness
 
     # Configure render settings using class method
-    setup_render_settings(
-        use_gpu=True,
-        samples=2048,
-        use_denoising=False
-    )
+    setup_render_settings(use_gpu=True, samples=2048, use_denoising=False)
 
     print(f"      Camera: {args.view.title()}-facing cardinal view")
-    print(f"      Direction: {args.view}, distance: {args.distance:.3f}x, elevation: {args.elevation:.3f}x")
+    print(
+        f"      Direction: {args.view}, distance: {args.distance:.3f}x, elevation: {args.elevation:.3f}x"
+    )
     print(f"      Type: {args.camera_type}")
     print(f"      Samples: 2048")
     print(f"      Rendering...")
@@ -479,10 +492,10 @@ def main():
         output_path=output_path,
         width=WIDTH,
         height=HEIGHT,
-        file_format='PNG',
-        color_mode='RGBA',
+        file_format="PNG",
+        color_mode="RGBA",
         compression=90,
-        save_blend_file=True
+        save_blend_file=True,
     )
 
     if render_file:
@@ -499,10 +512,7 @@ def main():
                 if blend_file.exists():
                     print(f"      [Cache] Caching mesh to cache...")
                     mesh_cache.save_cache(
-                        blend_file,
-                        mesh_hash,
-                        mesh_params,
-                        cache_name="detroit_mesh"
+                        blend_file, mesh_hash, mesh_params, cache_name="detroit_mesh"
                     )
             except Exception as e:
                 print(f"      [Cache] Failed to cache mesh: {e}")
@@ -541,13 +551,15 @@ def main():
         print(f"    Location: {mesh_stats['cache_dir']}")
         print(f"    Files: {mesh_stats['blend_files']}")
         print(f"    Size: {mesh_stats['total_size_mb']:.1f} MB")
-        total_size = dem_stats['total_size_mb'] + mesh_stats['total_size_mb']
+        total_size = dem_stats["total_size_mb"] + mesh_stats["total_size_mb"]
         print(f"  Total cache size: {total_size:.1f} MB")
 
-    print(f"\nThat's it! Professional terrain visualization with water detection in just a few lines of Python!")
+    print(
+        f"\nThat's it! Professional terrain visualization with water detection in just a few lines of Python!"
+    )
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

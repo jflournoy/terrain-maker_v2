@@ -13,7 +13,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.terrain.core import (
-    Terrain, load_dem_files, scale_elevation, flip_raster, reproject_raster,
+    Terrain,
+    load_dem_files,
+    scale_elevation,
+    flip_raster,
+    reproject_raster,
 )
 from src.terrain.water import _calculate_slope
 
@@ -26,7 +30,7 @@ print("=" * 70)
 
 # Load and transform DEM
 print("\n[1/3] Loading and transforming DEM...")
-dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')
+dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern="*.hgt")
 terrain = Terrain(dem_data, transform)
 
 # Configure downsampling
@@ -34,13 +38,13 @@ target_vertices = 960 * 720 * 2
 terrain.configure_for_target_vertices(target_vertices, order=4)
 
 # Apply transforms
-terrain.transforms.append(reproject_raster('EPSG:4326', 'EPSG:32617', num_threads=4))
-terrain.transforms.append(flip_raster(axis='horizontal'))
+terrain.transforms.append(reproject_raster("EPSG:4326", "EPSG:32617", num_threads=4))
+terrain.transforms.append(flip_raster(axis="horizontal"))
 terrain.transforms.append(scale_elevation(scale_factor=0.0001))
 terrain.apply_transforms()
 
 # Get transformed DEM
-transformed_dem = terrain.data_layers['dem']['transformed_data']
+transformed_dem = terrain.data_layers["dem"]["transformed_data"]
 print(f"Transformed DEM shape: {transformed_dem.shape}")
 print(f"DEM value range: {np.nanmin(transformed_dem):.4f} to {np.nanmax(transformed_dem):.4f}")
 
