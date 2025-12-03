@@ -396,6 +396,279 @@ class TestSleddingScore:
         assert np.mean(score) < 0.3
 
 
-# 🔴 TDD RED PHASE COMPLETE
-# These tests should fail because the implementation may have bugs
-# or the functions don't exist yet.
+class TestLoadSnodasData:
+    """Test _load_snodas_data function."""
+
+    def test_load_snodas_data_returns_data_and_metadata(self, tmp_path):
+        """_load_snodas_data returns both data array and metadata dict."""
+        from src.snow.analysis import _load_snodas_data
+
+        # Create test header
+        header_content = """Data units: meters
+Data slope: 0.001
+Data intercept: 0.0
+No data value: -9999.0
+Number of columns: 5
+Number of rows: 3
+Minimum x-axis coordinate: -120.0
+Maximum x-axis coordinate: -119.0
+Minimum y-axis coordinate: 45.0
+Maximum y-axis coordinate: 45.5
+"""
+        header_file = tmp_path / "test_header.txt.gz"
+        with gzip.open(header_file, 'wt') as f:
+            f.write(header_content)
+
+        # Create test binary data (3x5 = 15 values)
+        data = np.arange(15, dtype='>i2').reshape(3, 5)
+        binary_file = tmp_path / "test_data.dat.gz"
+        with gzip.open(binary_file, 'wb') as f:
+            f.write(data.tobytes())
+
+        result_data, meta = _load_snodas_data(binary_file, header_file)
+
+        # Check data
+        assert result_data.shape == (3, 5)
+        # Check metadata
+        assert 'width' in meta
+        assert 'height' in meta
+        assert meta['width'] == 5
+        assert meta['height'] == 3
+
+    def test_load_snodas_data_uses_existing_uncompressed(self, tmp_path):
+        """_load_snodas_data uses existing uncompressed files."""
+        from src.snow.analysis import _load_snodas_data
+
+        # Create uncompressed header
+        header_content = """Number of columns: 2
+Number of rows: 2
+No data value: -9999
+Minimum x-axis coordinate: -120.0
+Maximum x-axis coordinate: -119.0
+Minimum y-axis coordinate: 45.0
+Maximum y-axis coordinate: 45.5
+"""
+        header_file = tmp_path / "test_header.txt"
+        header_file.write_text(header_content)
+
+        # Create compressed version
+        header_gz = tmp_path / "test_header.txt.gz"
+        with gzip.open(header_gz, 'wt') as f:
+            f.write("WRONG CONTENT")  # This shouldn't be used
+
+        # Create uncompressed binary
+        data = np.array([[1, 2], [3, 4]], dtype='>i2')
+        binary_file = tmp_path / "test_data.dat"
+        data.tofile(binary_file)
+
+        # Create compressed version
+        binary_gz = tmp_path / "test_data.dat.gz"
+        with gzip.open(binary_gz, 'wb') as f:
+            f.write(b"WRONG")  # This shouldn't be used
+
+        result_data, meta = _load_snodas_data(binary_gz, header_gz)
+
+        # Should use the uncompressed files
+        assert result_data.shape == (2, 2)
+        assert meta['width'] == 2
+
+
+class TestLoadProcessedSnodas:
+    """Test _load_processed_snodas function."""
+
+    def test_load_processed_snodas_reads_npz(self, tmp_path):
+        """_load_processed_snodas reads .npz files correctly."""
+        from src.snow.analysis import SnowAnalysis
+        from affine import Affine
+
+        analyzer = SnowAnalysis()
+
+        # Create test .npz file
+        test_data = np.random.rand(10, 10).astype(np.float32)
+        test_transform = Affine(0.1, 0, -120, 0, -0.1, 45)
+        npz_file = tmp_path / "test.npz"
+
+        np.savez_compressed(
+            npz_file,
+            data=test_data,
+            transform=np.array(list(test_transform), dtype=np.float64),
+            crs=np.string_("EPSG:4326"),
+            height=np.int32(10),
+            width=np.int32(10),
+            no_data_value=np.float32(-9999)
+        )
+
+        data, meta = analyzer._load_processed_snodas(npz_file)
+
+        assert data.shape == (10, 10)
+        assert 'transform' in meta
+        assert 'crs' in meta
+        assert meta['height'] == 10
+        assert meta['width'] == 10
+
+    def test_load_processed_snodas_masks_no_data(self, tmp_path):
+        """_load_processed_snodas masks no_data values."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+
+        # Create data with no_data values
+        test_data = np.array([[1.0, 2.0, -9999.0], [4.0, -9999.0, 6.0]], dtype=np.float32)
+        npz_file = tmp_path / "test.npz"
+
+        np.savez_compressed(
+            npz_file,
+            data=test_data,
+            no_data_value=np.float32(-9999.0)
+        )
+
+        data, meta = analyzer._load_processed_snodas(npz_file)
+
+        # Should be masked array
+        assert isinstance(data, ma.MaskedArray)
+        # Check that -9999 values are masked
+        assert data.mask[0, 2]
+        assert data.mask[1, 1]
+        assert not data.mask[0, 0]
+
+    def test_load_processed_snodas_handles_missing_fields(self, tmp_path):
+        """_load_processed_snodas handles .npz with minimal fields."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+
+        # Create minimal .npz file
+        test_data = np.random.rand(5, 5).astype(np.float32)
+        npz_file = tmp_path / "test.npz"
+        np.savez_compressed(npz_file, data=test_data)
+
+        data, meta = analyzer._load_processed_snodas(npz_file)
+
+        # Should still load data
+        assert data.shape == (5, 5)
+        # Metadata might be minimal
+        assert isinstance(meta, dict)
+
+
+class TestProcessSnowDataWorkflow:
+    """Test process_snow_data high-level workflow."""
+
+    def test_process_snow_data_requires_terrain(self):
+        """process_snow_data raises error without terrain."""
+        analyzer = SnowAnalysis()
+
+        with pytest.raises(ValueError, match="No terrain provided"):
+            analyzer.process_snow_data()
+
+    def test_process_snow_data_requires_valid_snodas_dir(self, tmp_path):
+        """process_snow_data raises error with invalid SNODAS directory."""
+        analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path / "nonexistent"))
+
+        # Mock terrain
+        mock_terrain = type('MockTerrain', (), {
+            'dem_bounds': (-120.0, 45.0, -119.0, 45.5)
+        })()
+        analyzer.set_terrain(mock_terrain)
+
+        with pytest.raises(ValueError, match="SNODAS directory not found"):
+            analyzer.process_snow_data()
+
+
+class TestBatchProcessSnodas:
+    """Test batch_process_snodas_data function."""
+
+    def test_batch_process_returns_empty_without_files(self, tmp_path):
+        """batch_process_snodas_data returns empty dict without files."""
+        analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path))
+        extent = (-120.0, 45.0, -119.0, 45.5)
+
+        result = analyzer.batch_process_snodas_data(extent)
+
+        assert result == {}
+
+    def test_batch_process_returns_empty_without_root_dir(self):
+        """batch_process_snodas_data returns empty dict without root dir."""
+        analyzer = SnowAnalysis()  # No root dir
+        extent = (-120.0, 45.0, -119.0, 45.5)
+
+        result = analyzer.batch_process_snodas_data(extent)
+
+        assert result == {}
+
+
+class TestVisualization:
+    """Test visualization functions."""
+
+    def test_visualize_requires_data(self):
+        """visualize_snow_data raises error without data."""
+        analyzer = SnowAnalysis()
+
+        with pytest.raises((ValueError, AttributeError)):
+            analyzer.visualize_snow_data(data_type='sledding_score')
+
+    def test_visualize_with_sledding_score(self):
+        """visualize_snow_data works with sledding_score data."""
+        import matplotlib
+        matplotlib.use('Agg')  # Non-interactive backend for testing
+
+        analyzer = SnowAnalysis()
+        analyzer.sledding_score = np.random.rand(10, 10)
+
+        # Should not raise exception (won't show plot in test)
+        try:
+            analyzer.visualize_snow_data(data_type='sledding_score')
+        except Exception as e:
+            # plt.show() might fail in test environment, that's okay
+            if "display" not in str(e).lower():
+                raise
+
+
+class TestStoreSnowStatsInTerrain:
+    """Test _store_snow_stats_in_terrain function."""
+
+    def test_store_stats_skips_without_terrain(self):
+        """_store_snow_stats_in_terrain does nothing without terrain."""
+        analyzer = SnowAnalysis()
+        stats = {'median_max_depth': np.ones((10, 10))}
+        metadata = {'transform': None, 'crs': 'EPSG:4326'}
+
+        # Should not raise exception
+        analyzer._store_snow_stats_in_terrain(stats, metadata)
+        assert analyzer.terrain is None
+
+    def test_store_stats_adds_arrays_to_terrain(self):
+        """_store_snow_stats_in_terrain adds array stats to terrain."""
+        from affine import Affine
+
+        # Mock terrain with add_data_layer method
+        added_layers = []
+
+        class MockTerrain:
+            dem_transform = Affine.identity()
+            def add_data_layer(self, name, data, transform, crs, target_layer=None):
+                added_layers.append(name)
+
+        mock_terrain = MockTerrain()
+        analyzer = SnowAnalysis()
+        analyzer.terrain = mock_terrain
+
+        stats = {
+            'median_max_depth': np.ones((10, 10)),
+            'mean_snow_day_ratio': np.ones((10, 10)),
+            'some_scalar': 42  # Should be skipped (not an array)
+        }
+        metadata = {
+            'transform': Affine.identity(),
+            'crs': 'EPSG:4326'
+        }
+
+        analyzer._store_snow_stats_in_terrain(stats, metadata)
+
+        # Should have added 2 array layers (not the scalar)
+        assert len(added_layers) == 2
+        assert 'snodas_median_max_depth' in added_layers
+        assert 'snodas_mean_snow_day_ratio' in added_layers
+
+
+# 🔴 TDD RED PHASE COMPLETE - Round 2
+# Additional tests for coverage improvement
