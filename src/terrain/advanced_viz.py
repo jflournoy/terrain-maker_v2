@@ -23,7 +23,7 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
-def horn_slope(dem, window_size=3):
+def horn_slope(dem, window_size=3):  # pylint: disable=unused-argument
     """
     Calculate slope using Horn's method with NaN handling.
 
@@ -33,7 +33,7 @@ def horn_slope(dem, window_size=3):
 
     Args:
         dem (np.ndarray): Input DEM array (2D)
-        window_size (int): Size of calculation window (currently fixed at 3)
+        window_size (int): Reserved for future use (currently fixed at 3)
 
     Returns:
         np.ndarray: Slope magnitude array (same shape as input)
@@ -43,9 +43,9 @@ def horn_slope(dem, window_size=3):
         >>> slopes = horn_slope(dem)
         >>> print(f"Slope range: {slopes.min():.2f} to {slopes.max():.2f}")
     """
-    logger.info(f"Computing Horn slope for DEM shape: {dem.shape}")
-    logger.info(f"Input DEM value range: {np.nanmin(dem):.2f} to {np.nanmax(dem):.2f}")
-    logger.info(f"Input NaN count: {np.sum(np.isnan(dem))}")
+    logger.info("Computing Horn slope for DEM shape: %s", dem.shape)
+    logger.info("Input DEM value range: %.2f to %.2f", np.nanmin(dem), np.nanmax(dem))
+    logger.info("Input NaN count: %d", np.sum(np.isnan(dem)))
 
     # Save the original NaN mask
     nan_mask = np.isnan(dem)
@@ -54,24 +54,20 @@ def horn_slope(dem, window_size=3):
     dem_filled = dem.copy()
     mask = np.isnan(dem_filled)
     if np.any(mask):
-        dem_filled[mask] = np.interp(
-            np.flatnonzero(mask),
-            np.flatnonzero(~mask),
-            dem_filled[~mask]
-        )
+        dem_filled[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), dem_filled[~mask])
 
-    logger.debug(f"After filling NaNs - value range: {np.nanmin(dem_filled):.2f} to {np.nanmax(dem_filled):.2f}")
+    logger.debug(
+        "After filling NaNs - value range: %.2f to %.2f",
+        np.nanmin(dem_filled),
+        np.nanmax(dem_filled),
+    )
 
     # Calculate gradients using Horn's method (3x3 Sobel-like kernels)
-    dx = ndimage.convolve(dem_filled, np.array([[-1, 0, 1],
-                                               [-2, 0, 2],
-                                               [-1, 0, 1]]) / 8.0)
-    dy = ndimage.convolve(dem_filled, np.array([[-1, -2, -1],
-                                               [0, 0, 0],
-                                               [1, 2, 1]]) / 8.0)
+    dx = ndimage.convolve(dem_filled, np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]) / 8.0)
+    dy = ndimage.convolve(dem_filled, np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]) / 8.0)
 
-    logger.debug(f"Gradient ranges - dx: {np.nanmin(dx):.2f} to {np.nanmax(dx):.2f}")
-    logger.debug(f"Gradient ranges - dy: {np.nanmin(dy):.2f} to {np.nanmax(dy):.2f}")
+    logger.debug("Gradient ranges - dx: %.2f to %.2f", np.nanmin(dx), np.nanmax(dx))
+    logger.debug("Gradient ranges - dy: %.2f to %.2f", np.nanmin(dy), np.nanmax(dy))
 
     # Calculate slope magnitude
     slope = np.hypot(dx, dy)
@@ -79,13 +75,15 @@ def horn_slope(dem, window_size=3):
     # Restore NaN values to their original locations
     slope[nan_mask] = np.nan
 
-    logger.info(f"Output slope value range: {np.nanmin(slope):.2f} to {np.nanmax(slope):.2f}")
-    logger.info(f"Output NaN count: {np.sum(np.isnan(slope))}")
+    logger.info("Output slope value range: %.2f to %.2f", np.nanmin(slope), np.nanmax(slope))
+    logger.info("Output NaN count: %d", np.sum(np.isnan(slope)))
 
     return slope
 
 
-def load_drive_time_data(dem_data, utm_transform, meters_per_pixel, buffer_size, simplify_tolerance):
+def load_drive_time_data(
+    dem_data, utm_transform, meters_per_pixel, buffer_size, simplify_tolerance
+):
     """
     Load and process drive-time polygon data for terrain visualization.
 
@@ -118,7 +116,7 @@ def load_drive_time_data(dem_data, utm_transform, meters_per_pixel, buffer_size,
 
     # Fix any invalid geometries
     logger.info("Validating geometries...")
-    drive_time['geometry'] = drive_time.geometry.apply(make_valid)
+    drive_time["geometry"] = drive_time.geometry.apply(make_valid)
 
     # Project to UTM Zone 17N to match DEM
     logger.info("Projecting to UTM...")
@@ -126,7 +124,7 @@ def load_drive_time_data(dem_data, utm_transform, meters_per_pixel, buffer_size,
 
     # Transform from UTM coordinates to pixel coordinates using the affine transform
     def transform_to_pixels(geom):
-        if geom.geom_type == 'MultiPolygon':
+        if geom.geom_type == "MultiPolygon":
             polygons = [transform_to_pixels(poly) for poly in geom.geoms]
             return shapely.geometry.MultiPolygon(polygons)
 
@@ -141,29 +139,30 @@ def load_drive_time_data(dem_data, utm_transform, meters_per_pixel, buffer_size,
         return shapely.geometry.Polygon(zip(pixel_x, pixel_y))
 
     # Apply the transformation
-    drive_time['geometry'] = drive_time.geometry.apply(transform_to_pixels)
+    drive_time["geometry"] = drive_time.geometry.apply(transform_to_pixels)
 
     # Smooth the geometries
     buffer_px = meters_per_pixel * buffer_size / 100
     simplify_px = meters_per_pixel * simplify_tolerance / 100
 
     logger.info("Smoothing geometries...")
-    drive_time['geometry'] = (
-        drive_time.geometry
-        .simplify(tolerance=simplify_px, preserve_topology=True)
+    drive_time["geometry"] = (
+        drive_time.geometry.simplify(tolerance=simplify_px, preserve_topology=True)
         .buffer(buffer_px, join_style=2, cap_style=3)
         .buffer(-buffer_px, join_style=2, cap_style=3)
-        .buffer(buffer_px/2, join_style=1, cap_style=3)
-        .buffer(-buffer_px/2, join_style=1, cap_style=3)
+        .buffer(buffer_px / 2, join_style=1, cap_style=3)
+        .buffer(-buffer_px / 2, join_style=1, cap_style=3)
     )
 
-    logger.info(f"Processed {len(drive_time)} drive time polygons")
-    logger.debug(f"Drive time bounds: {drive_time.total_bounds}")
+    logger.info("Processed %d drive time polygons", len(drive_time))
+    logger.debug("Drive time bounds: %s", drive_time.total_bounds)
 
     return drive_time
 
 
-def create_drive_time_curves(drive_time, terrain_obj, processed_dem, height_offset=1.0, bevel_depth=0.02):
+def create_drive_time_curves(  # pylint: disable=unused-argument
+    drive_time, terrain_obj, processed_dem, height_offset=1.0, bevel_depth=0.02
+):
     """
     Create 3D glowing curves in Blender representing drive-time isochrones.
 
@@ -196,19 +195,19 @@ def create_drive_time_curves(drive_time, terrain_obj, processed_dem, height_offs
 
     mean_x = processed_dem.shape[1] / 2
     mean_y = processed_dem.shape[0] / 2
-    logger.info(f"DEM coordinate means x,y: {mean_x}, {mean_y}")
+    logger.info("DEM coordinate means x,y: %s, %s", mean_x, mean_y)
 
     curves = []
 
     # Create inferno colormap for the number of unique polygons
     n_polygons = len(drive_time)
-    cmap = plt.colormaps.get_cmap('inferno')
+    cmap = plt.colormaps.get_cmap("inferno")
 
     start = 0.8
     end = 0.1
     colors = cmap(np.linspace(start, end, n_polygons))
 
-    logger.info(f"Created {n_polygons} colors from inferno colormap")
+    logger.info("Created %d colors from inferno colormap", n_polygons)
 
     for idx, zone in enumerate(tqdm(drive_time.geometry, desc="Processing drive time zones")):
         # Get color for this polygon
@@ -222,43 +221,43 @@ def create_drive_time_curves(drive_time, terrain_obj, processed_dem, height_offs
         nodes.clear()
 
         # Create shader nodes for edge-emission effect
-        principled = nodes.new('ShaderNodeBsdfPrincipled')
-        geometry = nodes.new('ShaderNodeNewGeometry')
-        vector_math = nodes.new('ShaderNodeVectorMath')
-        vector_math.operation = 'CROSS_PRODUCT'
+        principled = nodes.new("ShaderNodeBsdfPrincipled")
+        geometry = nodes.new("ShaderNodeNewGeometry")
+        vector_math = nodes.new("ShaderNodeVectorMath")
+        vector_math.operation = "CROSS_PRODUCT"
 
         # Create vector for UP
-        combine_xyz = nodes.new('ShaderNodeCombineXYZ')
+        combine_xyz = nodes.new("ShaderNodeCombineXYZ")
         combine_xyz.inputs[2].default_value = 1.0  # Z=1 for UP vector
 
         # Set up principled shader
-        principled.inputs['Base Color'].default_value = (*color[:3], 1.0)
-        principled.inputs['Metallic'].default_value = 0.0
-        principled.inputs['Roughness'].default_value = 1.0
-        principled.inputs['Emission Color'].default_value = (*color[:3], 1.0)
-        principled.inputs['Emission Strength'].default_value = 0
+        principled.inputs["Base Color"].default_value = (*color[:3], 1.0)
+        principled.inputs["Metallic"].default_value = 0.0
+        principled.inputs["Roughness"].default_value = 1.0
+        principled.inputs["Emission Color"].default_value = (*color[:3], 1.0)
+        principled.inputs["Emission Strength"].default_value = 0
 
         # Calculate right-hand direction using cross product of tangent and UP
-        links.new(geometry.outputs['Tangent'], vector_math.inputs[0])
+        links.new(geometry.outputs["Tangent"], vector_math.inputs[0])
         links.new(combine_xyz.outputs[0], vector_math.inputs[1])
 
         # Compare with normal using dot product for directional emission
-        dot = nodes.new('ShaderNodeVectorMath')
-        dot.operation = 'DOT_PRODUCT'
+        dot = nodes.new("ShaderNodeVectorMath")
+        dot.operation = "DOT_PRODUCT"
         links.new(vector_math.outputs[0], dot.inputs[0])
-        links.new(geometry.outputs['Normal'], dot.inputs[1])
+        links.new(geometry.outputs["Normal"], dot.inputs[1])
 
-        map_range = nodes.new('ShaderNodeMapRange')
-        map_range.inputs['From Min'].default_value = -1.0
-        map_range.inputs['From Max'].default_value = 1.0
-        map_range.inputs['To Min'].default_value = 0.0
-        map_range.inputs['To Max'].default_value = 1.0
+        map_range = nodes.new("ShaderNodeMapRange")
+        map_range.inputs["From Min"].default_value = -1.0
+        map_range.inputs["From Max"].default_value = 1.0
+        map_range.inputs["To Min"].default_value = 0.0
+        map_range.inputs["To Max"].default_value = 1.0
 
         emit = (350.0, 350.0, 350.0, 1.0)
         no_emit = (0.0, 0.0, 0.0, 0.0)
 
         # Use color ramp to control emission based on viewing angle
-        color_ramp = nodes.new('ShaderNodeValToRGB')
+        color_ramp = nodes.new("ShaderNodeValToRGB")
         color_ramp.color_ramp.elements.new(0.7)
         color_ramp.color_ramp.elements.new(0.8)
         color_ramp.color_ramp.elements.new(0.9)
@@ -276,34 +275,40 @@ def create_drive_time_curves(drive_time, terrain_obj, processed_dem, height_offs
         color_ramp.color_ramp.elements[5].position = 1
         color_ramp.color_ramp.elements[5].color = no_emit
 
-        links.new(dot.outputs['Value'], map_range.inputs['Value'])
-        links.new(map_range.outputs['Result'], color_ramp.inputs[0])
-        links.new(color_ramp.outputs['Color'], principled.inputs['Emission Strength'])
+        links.new(dot.outputs["Value"], map_range.inputs["Value"])
+        links.new(map_range.outputs["Result"], color_ramp.inputs[0])
+        links.new(color_ramp.outputs["Color"], principled.inputs["Emission Strength"])
 
-        output = nodes.new('ShaderNodeOutputMaterial')
-        links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+        output = nodes.new("ShaderNodeOutputMaterial")
+        links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
         # Handle both Polygon and MultiPolygon geometries
-        boundaries = [zone.exterior.coords] if zone.geom_type == 'Polygon' else [poly.exterior.coords for poly in zone.geoms]
+        boundaries = (
+            [zone.exterior.coords]
+            if zone.geom_type == "Polygon"
+            else [poly.exterior.coords for poly in zone.geoms]
+        )
 
         for boundary_idx, boundary in enumerate(boundaries):
             # Create the curve data
-            curve_data = bpy.data.curves.new(f'DriveTimeCurve_{idx}_{boundary_idx}', 'CURVE')
-            curve_data.dimensions = '3D'
+            curve_data = bpy.data.curves.new(f"DriveTimeCurve_{idx}_{boundary_idx}", "CURVE")
+            curve_data.dimensions = "3D"
             curve_data.resolution_u = 12
             curve_data.bevel_depth = bevel_depth
 
             # Create the curve object
-            curve_obj = bpy.data.objects.new(f'DriveTime_{idx}_{boundary_idx}', curve_data)
+            curve_obj = bpy.data.objects.new(f"DriveTime_{idx}_{boundary_idx}", curve_data)
 
             # Create a new spline in the curve
-            spline = curve_data.splines.new('POLY')
+            spline = curve_data.splines.new("POLY")
 
             # Get coordinates and scale/center them
-            coords = [((x-mean_x)/100, (y-mean_y)/100, height_offset) for x, y in list(boundary)]
+            coords = [
+                ((x - mean_x) / 100, (y - mean_y) / 100, height_offset) for x, y in list(boundary)
+            ]
 
             # Set the number of points
-            spline.points.add(len(coords)-1)  # -1 because one point is created by default
+            spline.points.add(len(coords) - 1)  # -1 because one point is created by default
 
             # Assign the coordinates
             for point, coord in zip(spline.points, coords):
@@ -316,12 +321,22 @@ def create_drive_time_curves(drive_time, terrain_obj, processed_dem, height_offs
             bpy.context.scene.collection.objects.link(curve_obj)
             curves.append(curve_obj)
 
-    logger.info(f"Created {len(curves)} drive time curve objects")
+    logger.info("Created %d drive time curve objects", len(curves))
     return curves
 
 
-def create_values_legend(terrain_obj, values, mpp=30, colormap_name='mako_r', n_samples=10,
-                        label='Value', units='', scale=0.2, position_offset=(5, 0, 0)):
+def create_values_legend(  # pylint: disable=unused-argument
+    terrain_obj,
+    values,
+    mpp=30,
+    *,
+    colormap_name="mako_r",
+    n_samples=10,
+    label="Value",
+    units="",
+    scale=0.2,
+    position_offset=(5, 0, 0),
+):
     """
     Create a 3D legend bar in the Blender scene.
 
@@ -349,7 +364,7 @@ def create_values_legend(terrain_obj, values, mpp=30, colormap_name='mako_r', n_
         ... )
         >>> print(f"Created legend with {len(labels)} labels")
     """
-    logger.info(f"Creating legend for {label} with {n_samples} samples")
+    logger.info("Creating legend for %s with %d samples", label, n_samples)
 
     # Get value samples for labels
     valid_values = values[~np.isnan(values)]
@@ -369,9 +384,9 @@ def create_values_legend(terrain_obj, values, mpp=30, colormap_name='mako_r', n_
     terrain_width = max(b[0] for b in bounds) - min(b[0] for b in bounds)
 
     legend_obj.location = (
-        terrain_obj.location.x + terrain_width/2 + position_offset[0],
+        terrain_obj.location.x + terrain_width / 2 + position_offset[0],
         terrain_obj.location.y + position_offset[1],
-        terrain_obj.location.z + position_offset[2]
+        terrain_obj.location.z + position_offset[2],
     )
 
     # Apply colormap material
@@ -381,11 +396,11 @@ def create_values_legend(terrain_obj, values, mpp=30, colormap_name='mako_r', n_
     nodes.clear()
 
     # Create nodes for vertical gradient
-    texture_coord = nodes.new('ShaderNodeTexCoord')
-    separate_xyz = nodes.new('ShaderNodeSeparateXYZ')
-    color_ramp = nodes.new('ShaderNodeValToRGB')
-    principled = nodes.new('ShaderNodeBsdfPrincipled')
-    output = nodes.new('ShaderNodeOutputMaterial')
+    texture_coord = nodes.new("ShaderNodeTexCoord")
+    separate_xyz = nodes.new("ShaderNodeSeparateXYZ")
+    color_ramp = nodes.new("ShaderNodeValToRGB")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+    output = nodes.new("ShaderNodeOutputMaterial")
 
     # Set up gradient colors from colormap
     cmap = plt.colormaps.get_cmap(colormap_name)
@@ -400,33 +415,35 @@ def create_values_legend(terrain_obj, values, mpp=30, colormap_name='mako_r', n_
             elem.color = (*color[:3], 1.0)
 
     # Connect nodes
-    mat.node_tree.links.new(texture_coord.outputs['Object'], separate_xyz.inputs[0])
-    mat.node_tree.links.new(separate_xyz.outputs['Z'], color_ramp.inputs[0])
-    mat.node_tree.links.new(color_ramp.outputs['Color'], principled.inputs['Base Color'])
-    mat.node_tree.links.new(principled.outputs['BSDF'], output.inputs['Surface'])
+    mat.node_tree.links.new(texture_coord.outputs["Object"], separate_xyz.inputs[0])
+    mat.node_tree.links.new(separate_xyz.outputs["Z"], color_ramp.inputs[0])
+    mat.node_tree.links.new(color_ramp.outputs["Color"], principled.inputs["Base Color"])
+    mat.node_tree.links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
     # Assign material
     legend_obj.data.materials.append(mat)
 
     # Create text labels
     text_objects = []
-    for i, (sample, percentile) in enumerate(zip(samples, percentiles)):
+    for i, sample in enumerate(samples):
         z_pos = (i / (len(samples) - 1) - 0.5) * scale * 10
 
-        bpy.ops.object.text_add(location=(
-            legend_obj.location.x + scale * 1.5,
-            legend_obj.location.y,
-            legend_obj.location.z + z_pos
-        ))
+        bpy.ops.object.text_add(
+            location=(
+                legend_obj.location.x + scale * 1.5,
+                legend_obj.location.y,
+                legend_obj.location.z + z_pos,
+            )
+        )
         text_obj = bpy.context.active_object
         text_obj.name = f"{label}_Label_{i}"
 
         # Set text content
         text_obj.data.body = f"{sample:.1f} {units}"
         text_obj.data.size = scale * 0.5
-        text_obj.data.align_x = 'LEFT'
+        text_obj.data.align_x = "LEFT"
 
         text_objects.append(text_obj)
 
-    logger.info(f"Created legend with {len(text_objects)} labels")
+    logger.info("Created legend with %d labels", len(text_objects))
     return legend_obj, text_objects

@@ -9,10 +9,12 @@ waiting for mesh generation.
 import hashlib
 import json
 import logging
+import shutil
+import time
 from pathlib import Path
 from typing import Optional, Tuple
+
 import numpy as np
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +48,9 @@ class MeshCache:
 
         if self.enabled:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            logger.debug(f"Mesh cache initialized at: {self.cache_dir}")
+            logger.debug("Mesh cache initialized at: %s", self.cache_dir)
 
-    def compute_mesh_hash(
-        self,
-        dem_hash: str,
-        mesh_params: dict
-    ) -> str:
+    def compute_mesh_hash(self, dem_hash: str, mesh_params: dict) -> str:
         """
         Compute hash of mesh generation parameters.
 
@@ -111,14 +109,10 @@ class MeshCache:
         Returns:
             Path to metadata file
         """
-        return self.cache_dir / f"{mesh_hash}_meta.json"
+        return self.cache_dir / f"{cache_name}_{mesh_hash}_meta.json"
 
     def save_cache(
-        self,
-        blend_file: Path,
-        mesh_hash: str,
-        mesh_params: dict,
-        cache_name: str = "mesh"
+        self, blend_file: Path, mesh_hash: str, mesh_params: dict, cache_name: str = "mesh"
     ) -> Tuple[Path, Path]:
         """
         Cache a generated mesh by copying the .blend file.
@@ -136,7 +130,7 @@ class MeshCache:
             return None, None
 
         if not blend_file.exists():
-            logger.warning(f"Blend file not found: {blend_file}")
+            logger.warning("Blend file not found: %s", blend_file)
             return None, None
 
         cache_path = self.get_cache_path(mesh_hash, cache_name)
@@ -146,10 +140,9 @@ class MeshCache:
 
         # Copy blend file to cache
         try:
-            import shutil
             shutil.copy2(blend_file, cache_path)
-        except Exception as e:
-            logger.warning(f"Failed to copy blend file: {e}")
+        except (OSError, IOError) as e:
+            logger.warning("Failed to copy blend file: %s", e)
             return None, None
 
         # Save metadata
@@ -158,23 +151,21 @@ class MeshCache:
             "mesh_params": mesh_params,
             "cache_time": time.time(),
             "source_file": str(blend_file),
-            "cache_file": str(cache_path)
+            "cache_file": str(cache_path),
         }
 
-        with open(metadata_path, "w") as f:
+        with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         elapsed = time.time() - start_time
         cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
-        logger.info(f"Cached mesh to {cache_path.name} ({cache_size_mb:.1f} MB, {elapsed:.2f}s)")
+        logger.info(
+            "Cached mesh to %s (%.1f MB, %.2fs)", cache_path.name, cache_size_mb, elapsed
+        )
 
         return cache_path, metadata_path
 
-    def load_cache(
-        self,
-        mesh_hash: str,
-        cache_name: str = "mesh"
-    ) -> Optional[Path]:
+    def load_cache(self, mesh_hash: str, cache_name: str = "mesh") -> Optional[Path]:
         """
         Load cached mesh .blend file.
 
@@ -191,7 +182,7 @@ class MeshCache:
         cache_path = self.get_cache_path(mesh_hash, cache_name)
 
         if not cache_path.exists():
-            logger.debug(f"Mesh cache miss: {cache_path.name}")
+            logger.debug("Mesh cache miss: %s", cache_path.name)
             return None
 
         try:
@@ -199,21 +190,21 @@ class MeshCache:
             elapsed = time.time() - start_time
 
             cache_size_mb = cache_path.stat().st_size / (1024 * 1024)
-            logger.info(f"Loaded mesh from cache ({cache_size_mb:.1f} MB, {elapsed:.2f}s)")
-            logger.debug(f"Cache file: {cache_path.name}")
+            logger.info("Loaded mesh from cache (%.1f MB, %.2fs)", cache_size_mb, elapsed)
+            logger.debug("Cache file: %s", cache_path.name)
 
             return cache_path
 
-        except Exception as e:
-            logger.warning(f"Failed to load mesh cache {cache_path.name}: {e}")
+        except (OSError, IOError) as e:
+            logger.warning("Failed to load mesh cache %s: %s", cache_path.name, e)
             return None
 
     def clear_cache(self, cache_name: str = "mesh") -> int:
         """
-        Clear all cached mesh files.
+        Clear cached mesh files for a specific cache name.
 
         Args:
-            cache_name: Name of cache item to clear
+            cache_name: Name of cache item to clear (default: "mesh")
 
         Returns:
             Number of files deleted
@@ -223,25 +214,27 @@ class MeshCache:
 
         deleted_count = 0
 
-        # Find all .blend files in cache
-        for blend_file in self.cache_dir.glob("*.blend"):
+        # Find .blend files matching the cache_name
+        pattern = f"{cache_name}_*.blend"
+        for blend_file in self.cache_dir.glob(pattern):
             try:
                 blend_file.unlink()
                 deleted_count += 1
-                logger.debug(f"Deleted: {blend_file.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete {blend_file.name}: {e}")
+                logger.debug("Deleted: %s", blend_file.name)
+            except (OSError, IOError) as e:
+                logger.warning("Failed to delete %s: %s", blend_file.name, e)
 
         # Also delete associated metadata files
-        for meta_file in self.cache_dir.glob("*_meta.json"):
+        meta_pattern = f"{cache_name}_*_meta.json"
+        for meta_file in self.cache_dir.glob(meta_pattern):
             try:
                 meta_file.unlink()
                 deleted_count += 1
-                logger.debug(f"Deleted: {meta_file.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete {meta_file.name}: {e}")
+                logger.debug("Deleted: %s", meta_file.name)
+            except (OSError, IOError) as e:
+                logger.warning("Failed to delete %s: %s", meta_file.name, e)
 
-        logger.info(f"Cleared {deleted_count} mesh cache files")
+        logger.info("Cleared %d mesh cache files for %s", deleted_count, cache_name)
         return deleted_count
 
     def get_cache_stats(self) -> dict:
@@ -256,7 +249,7 @@ class MeshCache:
             "enabled": self.enabled,
             "blend_files": 0,
             "total_size_mb": 0,
-            "files": []
+            "files": [],
         }
 
         if not self.cache_dir.exists():
@@ -267,10 +260,12 @@ class MeshCache:
                 size_bytes = blend_file.stat().st_size
                 stats["blend_files"] += 1
                 stats["total_size_mb"] += size_bytes / (1024 * 1024)
-                stats["files"].append({
-                    "name": blend_file.name,
-                    "size_mb": size_bytes / (1024 * 1024),
-                    "mtime": blend_file.stat().st_mtime
-                })
+                stats["files"].append(
+                    {
+                        "name": blend_file.name,
+                        "size_mb": size_bytes / (1024 * 1024),
+                        "mtime": blend_file.stat().st_mtime,
+                    }
+                )
 
         return stats
