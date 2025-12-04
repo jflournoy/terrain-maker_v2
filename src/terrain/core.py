@@ -2501,19 +2501,12 @@ class Terrain:
         # Create valid points mask (non-NaN values)
         valid_mask = ~np.isnan(dem_data)
 
-        # Use NumPy for coordinate generation
-        y_indices, x_indices = np.mgrid[0:height, 0:width]
-        y_valid = y_indices[valid_mask]
-        x_valid = x_indices[valid_mask]
-
         # Generate vertex positions with scaling
         self.logger.info("Generating vertex positions...")
-        positions = np.column_stack(
-            [
-                x_valid / scale_factor,  # x position
-                y_valid / scale_factor,  # y position
-                dem_data[valid_mask] * height_scale,  # z position with height scaling
-            ]
+        from src.terrain.mesh_operations import generate_vertex_positions
+
+        positions, y_valid, x_valid = generate_vertex_positions(
+            dem_data, valid_mask, scale_factor, height_scale
         )
 
         # Center the model if requested
@@ -2545,16 +2538,9 @@ class Terrain:
 
         # OPTIMIZATION: Find boundary points using morphological operations
         self.logger.info("Finding boundary points with optimized algorithm...")
-        # Interior points have 4 neighbors in a 4-connected neighborhood
-        from scipy import ndimage
+        from src.terrain.mesh_operations import find_boundary_points
 
-        struct = ndimage.generate_binary_structure(2, 1)  # 4-connected structure
-        eroded = ndimage.binary_erosion(valid_mask, struct)
-        boundary_mask = valid_mask & ~eroded
-
-        # Get boundary coords as (y,x) tuples
-        boundary_indices = np.where(boundary_mask)
-        boundary_coords = list(zip(boundary_indices[0], boundary_indices[1]))
+        boundary_coords = find_boundary_points(valid_mask)
 
         # Only sort boundary points if needed (they're used for side faces)
         if boundary_extension:
