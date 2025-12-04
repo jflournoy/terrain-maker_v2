@@ -76,6 +76,7 @@ class TerrainPipeline:
         dem_dir: Path | str = None,
         *,
         cache_enabled: bool = True,
+        force_rebuild: bool = False,
         dem_cache_dir: Path | str = None,
         mesh_cache_dir: Path | str = None,
         verbose: bool = True,
@@ -86,6 +87,7 @@ class TerrainPipeline:
         Args:
             dem_dir: Directory containing SRTM .hgt files
             cache_enabled: Enable caching at all stages
+            force_rebuild: Force rebuild even if cache exists (bypasses cache checks)
             dem_cache_dir: Custom DEM cache directory
             mesh_cache_dir: Custom mesh cache directory
             verbose: Print execution details
@@ -96,6 +98,7 @@ class TerrainPipeline:
             else Path(__file__).parent.parent.parent / "data" / "dem" / "detroit"
         )
         self.cache_enabled = cache_enabled
+        self.force_rebuild = force_rebuild
         self.verbose = verbose
 
         # Initialize caches
@@ -132,6 +135,15 @@ class TerrainPipeline:
                 "description": "Render to PNG output",
             },
         }
+
+    def _should_use_cache(self) -> bool:
+        """
+        Determine if cache should be used.
+
+        Returns False if force_rebuild is True or cache_enabled is False.
+        Returns True only if cache_enabled is True and force_rebuild is False.
+        """
+        return self.cache_enabled and not self.force_rebuild
 
     def _log(self, msg: str, *args, level: str = "info"):
         """Log message if verbose with lazy formatting."""

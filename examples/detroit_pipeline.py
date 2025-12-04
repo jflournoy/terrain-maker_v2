@@ -23,6 +23,9 @@ Usage:
     # Clear cache and rebuild
     python examples/detroit_pipeline.py --clear
 
+    # Force rebuild even if cache exists (without clearing other cache)
+    python examples/detroit_pipeline.py --view south --force
+
     # With caching disabled
     python examples/detroit_pipeline.py --no-cache --view south
 
@@ -83,6 +86,12 @@ def parse_args():
     )
     parser.add_argument("--no-cache", action="store_false", dest="cache", help="Disable caching")
     parser.add_argument("--clear", action="store_true", help="Clear cache and rebuild from scratch")
+    parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force rebuild even if cache exists (keeps other cached data)",
+    )
 
     # Pipeline parameters
     parser.add_argument(
@@ -131,7 +140,9 @@ def main():
 
     # Initialize pipeline
     dem_dir = Path(__file__).parent.parent / "data" / "dem" / "detroit"
-    pipeline = TerrainPipeline(dem_dir=dem_dir, cache_enabled=args.cache, verbose=True)
+    pipeline = TerrainPipeline(
+        dem_dir=dem_dir, cache_enabled=args.cache, force_rebuild=args.force, verbose=True
+    )
 
     # Handle cache clearing
     if args.clear:
@@ -150,7 +161,12 @@ def main():
         print(f"  View: {args.view}")
         print(f"  Resolution: {args.width}×{args.height}")
         print(f"  Samples: {args.samples}")
-        print(f"  Cache: {'enabled' if args.cache else 'disabled'}\n")
+        cache_status = "enabled"
+        if not args.cache:
+            cache_status = "disabled"
+        elif args.force:
+            cache_status = "enabled (force rebuild)"
+        print(f"  Cache: {cache_status}\n")
 
         # Build the render task
         # In a real implementation, this would call pipeline.build('render_view')

@@ -507,5 +507,67 @@ class TestMeshCacheUpstreamDependencies(unittest.TestCase):
         self.assertEqual(hash1, hash2)
 
 
+class TestPipelineForceRebuild(unittest.TestCase):
+    """Test force rebuild functionality that bypasses cache."""
+
+    def setUp(self):
+        """Create pipeline."""
+        self.cache_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up."""
+        shutil.rmtree(self.cache_dir)
+
+    def test_pipeline_accepts_force_rebuild_parameter(self):
+        """Test that pipeline accepts force_rebuild parameter."""
+        pipeline = TerrainPipeline(cache_enabled=True, force_rebuild=True, verbose=False)
+
+        self.assertTrue(pipeline.force_rebuild)
+
+    def test_pipeline_force_rebuild_defaults_to_false(self):
+        """Test that force_rebuild defaults to False."""
+        pipeline = TerrainPipeline(cache_enabled=True, verbose=False)
+
+        self.assertFalse(pipeline.force_rebuild)
+
+    def test_force_rebuild_bypasses_cache_check(self):
+        """Test that force_rebuild bypasses cache even when cache_enabled=True."""
+        pipeline = TerrainPipeline(
+            cache_enabled=True, force_rebuild=True, mesh_cache_dir=self.cache_dir, verbose=False
+        )
+
+        # Even with cache enabled, should_use_cache should return False when force_rebuild=True
+        self.assertFalse(pipeline._should_use_cache())
+
+    def test_force_rebuild_false_respects_cache_enabled(self):
+        """Test that force_rebuild=False respects cache_enabled setting."""
+        # With cache enabled and no force rebuild
+        pipeline_cached = TerrainPipeline(
+            cache_enabled=True,
+            force_rebuild=False,
+            mesh_cache_dir=self.cache_dir,
+            verbose=False,
+        )
+        self.assertTrue(pipeline_cached._should_use_cache())
+
+        # With cache disabled
+        pipeline_no_cache = TerrainPipeline(
+            cache_enabled=False,
+            force_rebuild=False,
+            mesh_cache_dir=self.cache_dir,
+            verbose=False,
+        )
+        self.assertFalse(pipeline_no_cache._should_use_cache())
+
+    def test_force_rebuild_with_cache_disabled(self):
+        """Test that force_rebuild works even when cache is disabled."""
+        pipeline = TerrainPipeline(
+            cache_enabled=False, force_rebuild=True, mesh_cache_dir=self.cache_dir, verbose=False
+        )
+
+        # Should still not use cache
+        self.assertFalse(pipeline._should_use_cache())
+
+
 if __name__ == "__main__":
     unittest.main()
