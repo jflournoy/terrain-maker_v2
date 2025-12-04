@@ -2557,47 +2557,11 @@ class Terrain:
         # Handle boundary extension if needed
         if boundary_extension:
             self.logger.info("Creating optimized boundary extension...")
+            from src.terrain.mesh_operations import create_boundary_extension
 
-            # Preallocate arrays for better performance
-            n_boundary = len(boundary_points)
-            boundary_vertices = np.zeros((n_boundary, 3), dtype=float)
-            boundary_faces = []
-
-            # Create bottom vertices for each boundary point
-            for i, (y, x) in enumerate(boundary_points):
-                # Get the original position
-                original_idx = coord_to_index.get((y, x))
-                if original_idx is None:
-                    continue
-
-                # Copy position but set z to base_depth
-                pos = positions[original_idx].copy()
-                pos[2] = base_depth
-                boundary_vertices[i] = pos
-
-            # Create side faces efficiently
-            boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
-            base_indices = list(range(len(positions), len(positions) + len(boundary_points)))
-
-            for i in range(n_boundary):
-                # Skip invalid indices
-                if boundary_indices[i] is None:
-                    continue
-
-                next_i = (i + 1) % n_boundary
-                # Skip if next boundary point is invalid
-                if boundary_indices[next_i] is None:
-                    continue
-
-                # Create quad connecting top boundary to bottom
-                boundary_faces.append(
-                    (
-                        boundary_indices[i],
-                        boundary_indices[next_i],
-                        base_indices[next_i],
-                        base_indices[i],
-                    )
-                )
+            boundary_vertices, boundary_faces = create_boundary_extension(
+                positions, boundary_points, coord_to_index, base_depth
+            )
 
             # Extend vertices with boundary vertices
             vertices = np.vstack([positions, boundary_vertices])

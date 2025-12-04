@@ -263,6 +263,87 @@ class TestFaceGeneration:
         assert all(isinstance(face, tuple) for face in faces)
 
 
+class TestBoundaryExtension:
+    """Tests for create_boundary_extension function."""
+
+    def test_create_boundary_extension_imports(self):
+        """Test that create_boundary_extension can be imported."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        assert callable(create_boundary_extension)
+
+    def test_create_boundary_extension_simple_square(self):
+        """Test boundary extension for simple square perimeter."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        # Simple 2x2 grid positions
+        positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
+
+        # Boundary points in order
+        boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
+        coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
+
+        boundary_vertices, boundary_faces = create_boundary_extension(
+            positions, boundary_points, coord_to_index, base_depth=-0.5
+        )
+
+        # Should create 4 bottom vertices (one per boundary point)
+        assert boundary_vertices.shape == (4, 3)
+
+        # Bottom vertices should have base_depth as z-coordinate
+        assert all(v[2] == -0.5 for v in boundary_vertices)
+
+        # Should create 4 side faces (one per boundary segment)
+        assert len(boundary_faces) == 4
+
+        # Each face should be a quad (4 vertices)
+        assert all(len(face) == 4 for face in boundary_faces)
+
+    def test_create_boundary_extension_preserves_xy(self):
+        """Test that boundary vertices preserve x,y coordinates."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array([[2.5, 3.7, 10.0], [5.1, 6.2, 15.0]], dtype=float)
+
+        boundary_points = [(0, 0), (0, 1)]
+        coord_to_index = {(0, 0): 0, (0, 1): 1}
+
+        boundary_vertices, boundary_faces = create_boundary_extension(
+            positions, boundary_points, coord_to_index, base_depth=-1.0
+        )
+
+        # X,Y should match original positions, only Z changes
+        assert np.allclose(boundary_vertices[0, :2], positions[0, :2])
+        assert np.allclose(boundary_vertices[1, :2], positions[1, :2])
+
+        # Z should be base_depth
+        assert boundary_vertices[0, 2] == -1.0
+        assert boundary_vertices[1, 2] == -1.0
+
+    def test_create_boundary_extension_face_indices(self):
+        """Test that side faces correctly reference top and bottom vertices."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array([[0, 0, 5], [1, 0, 6]], dtype=float)
+        boundary_points = [(0, 0), (1, 0)]
+        coord_to_index = {(0, 0): 0, (1, 0): 1}
+
+        boundary_vertices, boundary_faces = create_boundary_extension(
+            positions, boundary_points, coord_to_index, base_depth=-2.0
+        )
+
+        # Should create 1 face connecting the 2 boundary points (wraps around)
+        assert len(boundary_faces) == 2  # Each point to next (including wrap)
+
+        # Faces should reference indices 0,1 (top) and 2,3 (bottom)
+        # Bottom indices start after original positions
+        n_positions = len(positions)
+        for face in boundary_faces:
+            # Face should have mix of top indices (<n_positions) and bottom (>=n_positions)
+            assert any(idx < n_positions for idx in face)
+            assert any(idx >= n_positions for idx in face)
+
+
 class TestBoundaryPointSorting:
     """Tests for sort_boundary_points function."""
 
