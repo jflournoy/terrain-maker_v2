@@ -164,6 +164,105 @@ class TestFindBoundaryPoints:
         assert all(len(coord) == 2 for coord in boundary_coords)
 
 
+class TestFaceGeneration:
+    """Tests for generate_faces function."""
+
+    def test_generate_faces_imports(self):
+        """Test that generate_faces can be imported."""
+        from src.terrain.mesh_operations import generate_faces
+
+        assert callable(generate_faces)
+
+    def test_generate_faces_simple_grid(self):
+        """Test face generation for simple 2x2 grid (1 quad)."""
+        from src.terrain.mesh_operations import generate_faces
+
+        # 2x2 grid has all valid points
+        height, width = 2, 2
+        coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
+
+        faces = generate_faces(height, width, coord_to_index)
+
+        # Should generate 1 face for the single quad
+        assert len(faces) == 1
+
+        # Face should have 4 vertices (quad corners)
+        assert len(faces[0]) == 4
+
+        # Face should reference all 4 vertices
+        assert set(faces[0]) == {0, 1, 2, 3}
+
+    def test_generate_faces_3x3_grid(self):
+        """Test face generation for 3x3 grid (4 quads)."""
+        from src.terrain.mesh_operations import generate_faces
+
+        # 3x3 grid, all valid
+        height, width = 3, 3
+        coord_to_index = {
+            (0, 0): 0,
+            (0, 1): 1,
+            (0, 2): 2,
+            (1, 0): 3,
+            (1, 1): 4,
+            (1, 2): 5,
+            (2, 0): 6,
+            (2, 1): 7,
+            (2, 2): 8,
+        }
+
+        faces = generate_faces(height, width, coord_to_index)
+
+        # 3x3 grid has 4 quads: (0,0), (0,1), (1,0), (1,1)
+        assert len(faces) == 4
+
+        # All faces should be quads (4 vertices)
+        assert all(len(face) == 4 for face in faces)
+
+    def test_generate_faces_with_missing_point(self):
+        """Test that missing points create triangular faces."""
+        from src.terrain.mesh_operations import generate_faces
+
+        # 2x2 grid with one missing corner
+        height, width = 2, 2
+        coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2}
+        # Missing: (1, 1)
+
+        faces = generate_faces(height, width, coord_to_index)
+
+        # Should still create 1 face (triangle with 3 vertices)
+        assert len(faces) == 1
+
+        # Face should have 3 vertices (triangle)
+        assert len(faces[0]) == 3
+
+    def test_generate_faces_skips_insufficient_points(self):
+        """Test that quads with <3 valid points are skipped."""
+        from src.terrain.mesh_operations import generate_faces
+
+        # 2x2 grid with only 2 points
+        height, width = 2, 2
+        coord_to_index = {(0, 0): 0, (1, 1): 1}
+        # Missing: (0, 1) and (1, 0)
+
+        faces = generate_faces(height, width, coord_to_index)
+
+        # Should not create any faces (only 2 points, need at least 3)
+        assert len(faces) == 0
+
+    def test_generate_faces_returns_tuples(self):
+        """Test that faces are returned as tuples of vertex indices."""
+        from src.terrain.mesh_operations import generate_faces
+
+        height, width = 2, 2
+        coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
+
+        faces = generate_faces(height, width, coord_to_index)
+
+        # Faces should be list of tuples
+        assert isinstance(faces, list)
+        assert all(isinstance(face, tuple) for face in faces)
+
+
 class TestBoundaryPointSorting:
     """Tests for sort_boundary_points function."""
 

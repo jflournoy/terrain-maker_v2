@@ -2550,38 +2550,9 @@ class Terrain:
 
         # OPTIMIZATION: Vectorized face generation using NumPy operations
         self.logger.info("Generating faces with vectorized operations...")
+        from src.terrain.mesh_operations import generate_faces
 
-        # Generate all potential quad faces
-        y_quads, x_quads = np.mgrid[0 : height - 1, 0 : width - 1]
-        y_quads = y_quads.flatten()
-        x_quads = x_quads.flatten()
-
-        # Collect faces efficiently
-        faces = []
-
-        # Use batch processing to reduce Python loop overhead
-        batch_size = 10000
-        n_quads = len(y_quads)
-
-        for batch_start in range(0, n_quads, batch_size):
-            batch_end = min(batch_start + batch_size, n_quads)
-            batch_y = y_quads[batch_start:batch_end]
-            batch_x = x_quads[batch_start:batch_end]
-
-            # For each quad, check if corners exist in valid points
-            for i in range(batch_end - batch_start):
-                y, x = batch_y[i], batch_x[i]
-                quad_points = [(y, x), (y, x + 1), (y + 1, x + 1), (y + 1, x)]
-
-                # Get indices for each corner that exists
-                valid_indices = []
-                for point in quad_points:
-                    if point in coord_to_index:
-                        valid_indices.append(coord_to_index[point])
-
-                # Only create faces with at least 3 points
-                if len(valid_indices) >= 3:
-                    faces.append(tuple(valid_indices))
+        faces = generate_faces(height, width, coord_to_index)
 
         # Handle boundary extension if needed
         if boundary_extension:

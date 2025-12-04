@@ -77,6 +77,58 @@ def generate_vertex_positions(dem_data, valid_mask, scale_factor=100.0, height_s
     return positions, y_valid, x_valid
 
 
+def generate_faces(height, width, coord_to_index, batch_size=10000):
+    """
+    Generate mesh faces from a grid of valid points.
+
+    Creates quad faces for the mesh by checking each potential quad position
+    and verifying that its corners exist in the coordinate-to-index mapping.
+    If a quad has all 4 corners, creates a quad face. If it has 3 corners,
+    creates a triangle face. Skips quads with fewer than 3 corners.
+
+    Args:
+        height (int): Height of the DEM grid
+        width (int): Width of the DEM grid
+        coord_to_index (dict): Mapping from (y, x) coordinates to vertex indices
+        batch_size (int): Number of quads to process in each batch (default: 10000)
+
+    Returns:
+        list: List of face tuples, where each tuple contains vertex indices
+    """
+    # Generate all potential quad faces
+    y_quads, x_quads = np.mgrid[0 : height - 1, 0 : width - 1]
+    y_quads = y_quads.flatten()
+    x_quads = x_quads.flatten()
+
+    # Collect faces efficiently
+    faces = []
+
+    # Use batch processing to reduce Python loop overhead
+    n_quads = len(y_quads)
+
+    for batch_start in range(0, n_quads, batch_size):
+        batch_end = min(batch_start + batch_size, n_quads)
+        batch_y = y_quads[batch_start:batch_end]
+        batch_x = x_quads[batch_start:batch_end]
+
+        # For each quad, check if corners exist in valid points
+        for i in range(batch_end - batch_start):
+            y, x = batch_y[i], batch_x[i]
+            quad_points = [(y, x), (y, x + 1), (y + 1, x + 1), (y + 1, x)]
+
+            # Get indices for each corner that exists
+            valid_indices = []
+            for point in quad_points:
+                if point in coord_to_index:
+                    valid_indices.append(coord_to_index[point])
+
+            # Only create faces with at least 3 points
+            if len(valid_indices) >= 3:
+                faces.append(tuple(valid_indices))
+
+    return faces
+
+
 def sort_boundary_points(boundary_coords):
     """
     Sort boundary points efficiently using spatial relationships.
