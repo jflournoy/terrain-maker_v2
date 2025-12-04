@@ -341,82 +341,9 @@ def load_dem_files(
         OSError: If directory access fails or file reading fails
         rasterio.errors.RasterioIOError: If there are issues reading the DEM files
     """
-    logger.info(f"Searching for DEM files matching '{pattern}' in: {directory_path}")
+    from src.terrain.data_loading import load_dem_files as _load_dem_files
 
-    try:
-        directory = Path(directory_path)
-
-        if not directory.exists():
-            raise ValueError(f"Directory does not exist: {directory}")
-
-        if not directory.is_dir():
-            raise ValueError(f"Path is not a directory: {directory}")
-
-        # Find all matching files
-        glob_func = directory.rglob if recursive else directory.glob
-        dem_files = sorted(glob_func(pattern))
-
-        if not dem_files:
-            raise ValueError(f"No files matching '{pattern}' found in {directory}")
-
-        # Validate and open files
-        dem_datasets = []
-        with tqdm(dem_files, desc="Opening DEM files") as pbar:
-            for file in pbar:
-                try:
-                    ds = rasterio.open(file)
-
-                    # Basic validation
-                    if ds.count == 0:
-                        logger.warning(f"No raster bands found in {file}")
-                        ds.close()
-                        continue
-
-                    if ds.dtypes[0] not in ("int16", "int32", "float32", "float64"):
-                        logger.warning(f"Unexpected data type in {file}: {ds.dtypes[0]}")
-                        ds.close()
-                        continue
-
-                    dem_datasets.append(ds)
-                    pbar.set_postfix({"opened": len(dem_datasets)})
-
-                except rasterio.errors.RasterioIOError as e:
-                    logger.warning(f"Failed to open {file}: {str(e)}")
-                    continue
-                except Exception as e:
-                    logger.error(f"Unexpected error with {file}: {str(e)}")
-                    continue
-
-        if not dem_datasets:
-            raise ValueError("No valid DEM files could be opened")
-
-        logger.info(f"Successfully opened {len(dem_datasets)} DEM files")
-
-        # Merge datasets
-        try:
-            with rasterio.Env():
-                merged_dem, transform = merge(dem_datasets)
-
-                # Extract first band - merge() returns 3D array (bands, height, width)
-                merged_dem = merged_dem[0]
-
-                logger.info(f"Successfully merged DEMs:")
-                logger.info(f"  Output shape: {merged_dem.shape}")
-                logger.info(
-                    f"  Value range: {np.nanmin(merged_dem):.2f} to {np.nanmax(merged_dem):.2f}"
-                )
-                logger.info(f"  Transform: {transform}")
-
-                return merged_dem, transform
-
-        finally:
-            # Clean up
-            for ds in dem_datasets:
-                ds.close()
-
-    except Exception as e:
-        logger.error(f"Error processing DEM files: {str(e)}")
-        raise
+    return _load_dem_files(directory_path, pattern, recursive)
 
 
 def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.nan, num_threads=4):
