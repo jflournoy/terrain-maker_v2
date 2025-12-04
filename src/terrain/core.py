@@ -2571,73 +2571,21 @@ class Terrain:
             vertices = positions
 
         # Create the Blender mesh
-        self.logger.info(
-            f"Creating Blender mesh with {len(vertices)} vertices and {len(faces)} faces..."
-        )
-
         try:
-            # Create mesh datablock
-            mesh = bpy.data.meshes.new("TerrainMesh")
-            mesh.from_pydata(vertices.tolist(), [], faces)
-            mesh.update(calc_edges=True)
+            from src.terrain.blender_integration import create_blender_mesh
 
-            # OPTIMIZATION: Apply colors efficiently if available
-            if hasattr(self, "colors") and self.colors is not None:
-                self.logger.info("Applying vertex colors with optimized method...")
-                color_layer = mesh.vertex_colors.new(name="TerrainColors")
+            # Prepare colors if available
+            colors = self.colors if hasattr(self, "colors") else None
 
-                # OPTIMIZATION: Use numpy operations where possible
-                if len(color_layer.data) > 0:
-                    # Create color data array (Blender expects normalized 0-1 floats)
-                    color_data = np.zeros((len(color_layer.data), 4), dtype=np.float32)
-
-                    # Normalize colors to 0-1 range if they're uint8
-                    colors_normalized = self.colors.astype(np.float32)
-                    if colors_normalized.max() > 1.0:
-                        colors_normalized = colors_normalized / 255.0
-
-                    # Ensure colors are RGBA (add alpha channel if needed)
-                    if colors_normalized.shape[-1] == 3:
-                        alpha = np.ones(
-                            (colors_normalized.shape[0], colors_normalized.shape[1], 1),
-                            dtype=np.float32,
-                        )
-                        colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
-
-                    # For each polygon loop, get vertex and set color
-                    for poly in mesh.polygons:
-                        for loop_idx in poly.loop_indices:
-                            vertex_idx = mesh.loops[loop_idx].vertex_index
-
-                            # Only apply colors to top vertices
-                            if vertex_idx < len(positions):
-                                y, x = y_valid[vertex_idx], x_valid[vertex_idx]
-
-                                # Check bounds
-                                if (
-                                    0 <= y < colors_normalized.shape[0]
-                                    and 0 <= x < colors_normalized.shape[1]
-                                ):
-                                    color_data[loop_idx] = colors_normalized[y, x]
-
-                    # Batch assign all colors at once
-                    try:
-                        color_layer.data.foreach_set("color", color_data.flatten())
-                    except Exception as e:
-                        self.logger.warning(f"Batch color assignment failed: {e}")
-                        # Fallback to slower per-loop assignment
-                        for i, color in enumerate(color_data):
-                            color_layer.data[i].color = color
-
-            # Create object and link to scene
-            obj = bpy.data.objects.new("Terrain", mesh)
-            bpy.context.scene.collection.objects.link(obj)
-
-            # Create and assign material
-            mat = bpy.data.materials.new(name="TerrainMaterial")
-            mat.use_nodes = True
-            obj.data.materials.append(mat)
-            apply_colormap_material(mat)
+            obj = create_blender_mesh(
+                vertices,
+                faces,
+                colors=colors,
+                y_valid=y_valid,
+                x_valid=x_valid,
+                name="TerrainMesh",
+                logger=self.logger,
+            )
 
             elapsed = time.time() - start_time
             self.logger.info(f"Terrain mesh created successfully in {elapsed:.2f} seconds")
