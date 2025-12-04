@@ -66,19 +66,9 @@ def clear_scene():
     Raises:
         RuntimeError: If Blender module (bpy) is not available.
     """
-    logger.info("Clearing Blender scene...")
+    from src.terrain.scene_setup import clear_scene as _clear_scene
 
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-
-    # Count objects to be removed
-    n_objects = len(bpy.data.objects)
-    logger.debug(f"Removing {n_objects} objects")
-
-    for obj in bpy.data.objects:
-        logger.debug(f"Removing object: {obj.name}")
-        bpy.data.objects.remove(obj, do_unlink=True)
-
-    logger.info("Scene cleared successfully")
+    return _clear_scene()
 
 
 def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_type="PERSP"):
@@ -97,33 +87,9 @@ def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_t
     Raises:
         ValueError: If camera_type is not 'PERSP' or 'ORTHO'
     """
-    # Validate camera_type
-    if camera_type not in ("PERSP", "ORTHO"):
-        raise ValueError("camera_type must be 'PERSP' or 'ORTHO'")
+    from src.terrain.scene_setup import setup_camera as _setup_camera
 
-    logger.debug(f"Creating {camera_type} camera...")
-    cam_data = bpy.data.cameras.new("Camera")
-    cam_obj = bpy.data.objects.new("Camera", cam_data)
-    bpy.context.scene.collection.objects.link(cam_obj)
-
-    cam_obj.location = camera_location
-    cam_obj.rotation_euler = camera_angle
-
-    # Set camera type and type-specific parameters
-    cam_data.type = camera_type
-
-    if camera_type == "PERSP":
-        cam_data.lens = focal_length
-        logger.debug(
-            f"Perspective camera configured at {camera_location} with {focal_length}mm lens"
-        )
-    else:  # ORTHO
-        cam_data.ortho_scale = scale
-        logger.debug(f"Orthographic camera configured at {camera_location} with scale {scale}")
-
-    bpy.context.scene.camera = cam_obj
-
-    return cam_obj
+    return _setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
 
 
 def setup_light(location=(1, 1, 2), angle=2, energy=3, rotation_euler=(0, radians(315), 0)):
@@ -138,19 +104,9 @@ def setup_light(location=(1, 1, 2), angle=2, energy=3, rotation_euler=(0, radian
     Returns:
         Sun light object
     """
-    logger.debug("Creating sun light...")
-    sun = bpy.data.lights.new(name="Sun", type="SUN")
-    sun_obj = bpy.data.objects.new("Sun", sun)
-    bpy.context.scene.collection.objects.link(sun_obj)
+    from src.terrain.scene_setup import setup_light as _setup_light
 
-    sun_obj.location = location
-    sun_obj.rotation_euler = rotation_euler
-    sun.angle = angle
-    sun.energy = energy
-
-    logger.debug(f"Sun light configured with angle {angle}° and energy {energy}")
-
-    return sun_obj
+    return _setup_light(location, angle, energy, rotation_euler)
 
 
 def setup_camera_and_light(
@@ -178,11 +134,11 @@ def setup_camera_and_light(
     Returns:
         tuple: (camera object, sun light object)
     """
-    logger.info("Setting up camera and lighting...")
-    camera = setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
-    light = setup_light(angle=sun_angle, energy=sun_energy)
-    logger.info("Camera and lighting setup complete")
-    return camera, light
+    from src.terrain.scene_setup import setup_camera_and_light as _setup_camera_and_light
+
+    return _setup_camera_and_light(
+        camera_angle, camera_location, scale, sun_angle, sun_energy, focal_length, camera_type
+    )
 
 
 def position_camera_relative(
@@ -226,93 +182,11 @@ def position_camera_relative(
     Raises:
         ValueError: If direction is not recognized or camera_type is invalid
     """
-    # Direction vector mappings (Blender Z-up coordinate system)
-    DIRECTIONS = {
-        "north": (0, 1, 0),  # +Y
-        "south": (0, -1, 0),  # -Y
-        "east": (1, 0, 0),  # +X
-        "west": (-1, 0, 0),  # -X
-        "above": (0, 0, 1),  # +Z (straight up)
-        "northeast": (0.7071, 0.7071, 0),
-        "northwest": (-0.7071, 0.7071, 0),
-        "southeast": (0.7071, -0.7071, 0),
-        "southwest": (-0.7071, -0.7071, 0),
-    }
+    from src.terrain.scene_setup import position_camera_relative as _position_camera_relative
 
-    if direction not in DIRECTIONS:
-        raise ValueError(
-            f"Invalid direction '{direction}'. Must be one of: {', '.join(DIRECTIONS.keys())}"
-        )
-
-    logger.info(f"Positioning camera {direction} of mesh with {camera_type} camera")
-
-    # Get mesh bounds
-    bbox = mesh_obj.bound_box
-    xs = [v[0] for v in bbox]
-    ys = [v[1] for v in bbox]
-    zs = [v[2] for v in bbox]
-
-    center = np.array([(min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (min(zs) + max(zs)) / 2])
-
-    # Calculate mesh diagonal for scaling
-    mesh_size = np.array([max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs)])
-    mesh_diagonal = np.linalg.norm(mesh_size)
-
-    # Get direction vector and calculate camera position
-    dir_vector = np.array(DIRECTIONS[direction])
-
-    # For 'above', position directly overhead; for others, position offset from center
-    if direction == "above":
-        camera_pos = center.copy()
-    else:
-        camera_pos = center + dir_vector * distance * mesh_diagonal
-
-    # Add elevation (height above ground)
-    camera_pos[2] = center[2] + elevation * mesh_diagonal
-
-    # Determine look-at target
-    if look_at == "center":
-        target_pos = center
-    else:
-        target_pos = np.array(look_at)
-
-    # Calculate rotation to point at target
-    # Special case: for overhead (above) view, use zero rotation
-    # This avoids gimbal lock ambiguity when looking straight down
-    if direction == "above":
-        from mathutils import Euler
-
-        camera_angle = Euler((0, 0, 0), "XYZ")
-    else:
-        # In Blender, camera's local -Z axis is forward, +Y is up
-        from mathutils import Vector
-
-        cam_to_target = Vector(target_pos - camera_pos).normalized()
-
-        # Use to_track_quat to calculate rotation
-        # Arguments: (forward_axis, up_axis) where -Z is camera forward, Y is world up
-        track_quat = cam_to_target.to_track_quat("-Z", "Y")
-        camera_angle = track_quat.to_euler()
-
-    logger.debug(f"Camera position: {camera_pos}, angle: {camera_angle}")
-
-    # Set ortho scale based on mesh size if orthographic
-    ortho_scale = mesh_diagonal * 1.2 if camera_type == "ORTHO" else distance * mesh_diagonal
-
-    # Create camera directly, optionally with light
-    camera = setup_camera(
-        camera_angle=camera_angle,
-        camera_location=tuple(camera_pos),
-        scale=ortho_scale,
-        focal_length=focal_length,
-        camera_type=camera_type,
+    return _position_camera_relative(
+        mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length
     )
-
-    # Create light if sun parameters are provided
-    if sun_angle > 0 or sun_energy > 0:
-        setup_light(angle=sun_angle, energy=sun_energy)
-
-    return camera
 
 
 def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=0.0):
@@ -326,42 +200,9 @@ def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=
     Returns:
         bpy.types.World: The configured world object
     """
-    logger.info("Setting up world atmosphere...")
+    from src.terrain.scene_setup import setup_world_atmosphere as _setup_world_atmosphere
 
-    try:
-        world = bpy.context.scene.world
-        if world is None:
-            world = bpy.data.worlds.new("World")
-            bpy.context.scene.world = world
-
-        world.use_nodes = True
-        nodes = world.node_tree.nodes
-        links = world.node_tree.links
-
-        logger.debug("Clearing existing world nodes...")
-        nodes.clear()
-
-        # Create node network
-        logger.debug("Creating atmosphere node network...")
-        output = nodes.new("ShaderNodeOutputWorld")
-        background = nodes.new("ShaderNodeBackground")
-        volume = nodes.new("ShaderNodeVolumePrincipled")
-
-        # Configure volume properties
-        volume.inputs["Density"].default_value = density
-        volume.inputs["Anisotropy"].default_value = anisotropy
-        volume.inputs["Color"].default_value = scatter_color
-
-        # Connect nodes
-        links.new(background.outputs["Background"], output.inputs["Surface"])
-        links.new(volume.outputs["Volume"], output.inputs["Volume"])
-
-        logger.info(f"World atmosphere configured with density {density}")
-        return world
-
-    except Exception as e:
-        logger.error(f"Failed to setup world atmosphere: {str(e)}")
-        raise
+    return _setup_world_atmosphere(density, scatter_color, anisotropy)
 
 
 def setup_render_settings(
