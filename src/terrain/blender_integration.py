@@ -105,7 +105,7 @@ def create_blender_mesh(
                         color_layer.data[i].color = color
 
         # Create object and link to scene
-        obj = bpy.data.objects.new(name.replace("Mesh", ""), mesh)
+        obj = bpy.data.objects.new(name, mesh)
         bpy.context.scene.collection.objects.link(obj)
 
         # Create and assign material

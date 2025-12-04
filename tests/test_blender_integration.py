@@ -40,9 +40,10 @@ class TestBlenderMeshCreation:
         assert len(obj.data.vertices) == 3
         assert len(obj.data.polygons) == 1
 
-        # Cleanup
+        # Cleanup (save mesh reference before removing object)
+        mesh_data = obj.data
         bpy.data.objects.remove(obj)
-        bpy.data.meshes.remove(obj.data)
+        bpy.data.meshes.remove(mesh_data)
 
     def test_create_blender_mesh_with_colors(self):
         """Test mesh creation with vertex colors."""
@@ -64,9 +65,10 @@ class TestBlenderMeshCreation:
         # Should have vertex color layer
         assert len(obj.data.vertex_colors) > 0
 
-        # Cleanup
+        # Cleanup (save mesh reference before removing object)
+        mesh_data = obj.data
         bpy.data.objects.remove(obj)
-        bpy.data.meshes.remove(obj.data)
+        bpy.data.meshes.remove(mesh_data)
 
     def test_create_blender_mesh_returns_object(self):
         """Test that function returns bpy Object."""
@@ -80,6 +82,7 @@ class TestBlenderMeshCreation:
 
         assert isinstance(obj, bpy.types.Object)
 
-        # Cleanup
+        # Cleanup (save mesh reference before removing object)
+        mesh_data = obj.data
         bpy.data.objects.remove(obj)
-        bpy.data.meshes.remove(obj.data)
+        bpy.data.meshes.remove(mesh_data)
