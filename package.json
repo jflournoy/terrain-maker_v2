@@ -110,6 +110,14 @@
     "detroit-build-above": "uv run examples/detroit_elevation_real.py --cache --view above",
     "detroit-cache-stats": "node -e \"console.log('DEM Cache: .dem_cache/\\nMesh Cache: .mesh_cache/')\"",
     "detroit-cache-clear": "uv run examples/detroit_elevation_real.py --cache --clear-cache",
+    "// Detroit Pipeline with Force Rebuild": "=== Detroit pipeline with force rebuild ===",
+    "detroit:rebuild": "uv run python examples/detroit_pipeline.py --view south --force",
+    "detroit:rebuild:all": "uv run python examples/detroit_pipeline.py --all --force",
+    "detroit:rebuild:north": "uv run python examples/detroit_pipeline.py --view north --force",
+    "detroit:rebuild:south": "uv run python examples/detroit_pipeline.py --view south --force",
+    "detroit:rebuild:east": "uv run python examples/detroit_pipeline.py --view east --force",
+    "detroit:rebuild:west": "uv run python examples/detroit_pipeline.py --view west --force",
+    "detroit:rebuild:above": "uv run python examples/detroit_pipeline.py --view above --force",
     "prepare": "husky"
   },
   "keywords": [
