@@ -154,6 +154,8 @@ class TerrainPipeline:
                 logger.debug(msg, *args)
             elif level == "warn":
                 logger.warning(msg, *args)
+            elif level == "error":
+                logger.error(msg, *args)
 
     def _compute_hash(self, *args, **kwargs) -> str:
         """Compute SHA256 hash of arguments."""
@@ -387,13 +389,47 @@ class TerrainPipeline:
 
         # Cache miss - run full pipeline with matching params
         dem, transform = self.load_dem()
+
+        # pylint: disable=import-outside-toplevel
+        from src.terrain.core import (
+            Terrain,
+            reproject_raster,
+            flip_raster,
+            scale_elevation,
+        )
+
+        # Create Terrain with raw DEM
+        terrain = Terrain(dem, transform)
+
+        # Configure downsampling based on target vertices
+        zoom = terrain.configure_for_target_vertices(transform_params["target_vertices"], order=4)
+        self._log("      Configured downsampling: zoom_factor=%.6f", zoom)
+
+        # Add transforms in the correct order
+        terrain.transforms.append(
+            reproject_raster(
+                src_crs="EPSG:4326",
+                dst_crs=transform_params["reproject_crs"],
+                num_threads=4,
+            )
+        )
+        terrain.transforms.append(flip_raster(axis="horizontal"))
+        terrain.transforms.append(scale_elevation(scale_factor=transform_params["elevation_scale"]))
+
+        # Apply transforms to the terrain object
+        terrain.apply_transforms()
+
+        # Set up elevation color mapping with mako colormap
+        from src.terrain.core import elevation_colormap
+
+        terrain.set_color_mapping(
+            lambda dem: elevation_colormap(dem, cmap_name="mako"), source_layers=["dem"]
+        )
+
+        # Detect water on the transformed but unscaled DEM
         water_mask = self.detect_water(
             slope_threshold=water_params["slope_threshold"], fill_holes=water_params["fill_holes"]
         )
-
-        from src.terrain.core import Terrain  # pylint: disable=import-outside-toplevel
-
-        terrain = Terrain(dem, transform)
 
         mesh_obj = terrain.create_mesh(
             scale_factor=scale_factor,
@@ -438,15 +474,23 @@ class TerrainPipeline:
         """
         self._log("[5/5] Rendering %s view", view)
 
-        mesh_obj = self.create_mesh()
-
         # pylint: disable=import-outside-toplevel
         from src.terrain.core import (
+            clear_scene,
             position_camera_relative,
             setup_light,
             setup_render_settings,
             render_scene_to_file,
         )
+
+        # Clear Blender scene before rendering
+        try:
+            clear_scene()
+            self._log("      Cleared Blender scene")
+        except ImportError:
+            self._log("      Blender not available - skipping scene clear", level="warn")
+
+        mesh_obj = self.create_mesh()
 
         # View-specific camera targets
         view_offsets = {
@@ -473,8 +517,10 @@ class TerrainPipeline:
         setup_light(angle=2, energy=3)
         setup_render_settings(use_gpu=True, samples=samples, use_denoising=False)
 
-        # Render
-        output_path = Path(__file__).parent.parent / "examples" / f"detroit_elevation_{view}.png"
+        # Render - output to examples/ directory next to detroit_pipeline.py
+        output_path = (
+            Path(__file__).parent.parent.parent / "examples" / f"detroit_elevation_{view}.png"
+        )
         render_file = render_scene_to_file(
             output_path=output_path,
             width=width,
@@ -567,13 +613,25 @@ class TerrainPipeline:
 
         results = {}
         for i, view in enumerate(views, 1):
+            print(f"\n[{i}/{len(views)}] Rendering {view} view...")
             self._log("\n[%d/%d] Rendering %s view...", i, len(views), view)
             try:
                 output = self.render_view(view=view)
                 if output:
                     results[view] = output
+                    print(f"      ✓ Added {view} to results: {output}")
+                    self._log("      ✓ Added %s to results", view)
+                else:
+                    print(f"      ✗ render_view returned None for {view}")
+                    self._log("      ✗ render_view returned None for %s", view, "warn")
             except (OSError, IOError, ValueError, RuntimeError) as e:
+                print(f"[✗] Failed to render {view}: {e}")
                 self._log("[✗] Failed to render %s: %s", view, e, "warn")
+            except Exception as e:
+                print(f"[✗] Unexpected error rendering {view}: {e}")
+                self._log("[✗] Unexpected error rendering %s: %s", view, e, "error")
+                import traceback
+                traceback.print_exc()
 
         return results
 
