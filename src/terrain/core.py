@@ -1547,17 +1547,22 @@ class Terrain:
         # Apply water detection if requested
         if detect_water or water_mask is not None:
             if water_mask is None:
+                # Get transformed DEM data (needed for both water detection and coloring)
+                dem_data = self.data_layers["dem"]["transformed_data"]
+
                 # Compute water mask from transformed DEM (if no pre-computed mask provided)
                 self.logger.info(
                     f"Detecting water bodies (slope threshold: {water_slope_threshold})..."
                 )
                 from src.terrain.water import identify_water_by_slope
 
-                dem_data = self.data_layers["dem"]["transformed_data"]
                 water_mask = identify_water_by_slope(
                     dem_data, slope_threshold=water_slope_threshold, fill_holes=True
                 )
             else:
+                # Get transformed DEM data for coloring
+                dem_data = self.data_layers["dem"]["transformed_data"]
+
                 self.logger.info(
                     f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
                 )
