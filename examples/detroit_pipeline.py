@@ -197,7 +197,7 @@ def main():
         print("  This efficiently reuses the mesh across all views\n")
 
         views = ["north", "south", "east", "west", "above"]
-        results = pipeline.render_all_views(views=views, use_cache=args.cache)
+        results = pipeline.render_all_views(views=views)
 
         print(f"\n[✓] Rendered {len(results)} views:")
         for view, path in results.items():
