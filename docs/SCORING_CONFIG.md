@@ -122,15 +122,30 @@ Score
 }
 ```
 
-### 4. Terrain Consistency
+### 4. Snow Consistency
 
-Combined metric for roughness + slope variability using RMS.
+Combined metric for snow reliability using RMS of inter-season and intra-season CVs.
+
+**Use for:** Snow reliability scoring (additive component)
+
+**Parameters:**
+- `interseason_cv`: Year-to-year coefficient of variation
+- `intraseason_cv`: Within-winter coefficient of variation
+- `interseason_threshold`: CV that maps to full inconsistency (default: 1.5)
+- `intraseason_threshold`: CV that maps to full inconsistency (default: 1.0)
+
+### 5. Terrain Consistency
+
+Combined metric for roughness + slope variability using RMS. Only penalizes EXTREME inconsistency.
+
+**Use for:** Multiplicative penalty for very rough terrain
 
 **Parameters:**
 - `roughness`: elevation std dev in meters
 - `slope_std`: slope std dev in degrees
 - `roughness_threshold`: meters (default: 30)
 - `slope_std_threshold`: degrees (default: 10)
+- `soft_start`: normalized inconsistency where penalty begins (default: 0.5)
 
 ## Component Roles
 
@@ -179,11 +194,11 @@ Located at: `src/scoring/configs/sledding_default.json`
 
 | Component | Transform | Weight | Description |
 |-----------|-----------|--------|-------------|
-| `slope_mean` | trapezoidal | 25% | Ideal: 5-15°, usable: 3-25° |
-| `snow_depth` | trapezoidal | 25% | Ideal: 150-500mm (~6-20") |
-| `snow_coverage` | linear (√) | 20% | Fraction of days with snow |
-| `snow_consistency` | linear (inv) | 15% | Year-to-year reliability |
-| `aspect_bonus` | linear | 10% | North-facing snow retention |
+| `slope_mean` | trapezoidal | 30% | Ideal: 5-15°, usable: 3-25° |
+| `snow_depth` | trapezoidal | 15% | Ideal: 150-500mm (~6-20") |
+| `snow_coverage` | linear (√) | 25% | Fraction of days with snow |
+| `snow_consistency` | snow_consistency | 20% | RMS of inter/intra-season CVs |
+| `aspect_bonus` | linear | 5% | North-facing snow retention |
 | `runout_bonus` | linear | 5% | Safe stopping area |
 
 ### Multiplicative Components (penalties)
@@ -191,7 +206,7 @@ Located at: `src/scoring/configs/sledding_default.json`
 | Component | Transform | Description |
 |-----------|-----------|-------------|
 | `slope_p95` | dealbreaker | Cliff detection (25° threshold) |
-| `terrain_consistency` | linear | Combined roughness + slope_std |
+| `terrain_consistency` | terrain_consistency | Extreme roughness penalty (soft at 50%) |
 
 ## Customizing the Config
 
