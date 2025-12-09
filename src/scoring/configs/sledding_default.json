@@ -1,0 +1,109 @@
+{
+  "name": "sledding_suitability",
+  "components": [
+    {
+      "name": "slope_mean",
+      "transform": "trapezoidal",
+      "transform_params": {
+        "sweet_range": [
+          5,
+          15
+        ],
+        "ramp_range": [
+          3,
+          25
+        ]
+      },
+      "role": "additive",
+      "weight": 0.25
+    },
+    {
+      "name": "snow_depth",
+      "transform": "trapezoidal",
+      "transform_params": {
+        "sweet_range": [
+          150,
+          500
+        ],
+        "ramp_range": [
+          50,
+          1000
+        ]
+      },
+      "role": "additive",
+      "weight": 0.25
+    },
+    {
+      "name": "snow_coverage",
+      "transform": "linear",
+      "transform_params": {
+        "value_range": [
+          0,
+          1
+        ],
+        "power": 0.5
+      },
+      "role": "additive",
+      "weight": 0.2
+    },
+    {
+      "name": "snow_consistency",
+      "transform": "linear",
+      "transform_params": {
+        "value_range": [
+          0,
+          1.5
+        ],
+        "invert": true
+      },
+      "role": "additive",
+      "weight": 0.15
+    },
+    {
+      "name": "aspect_bonus",
+      "transform": "linear",
+      "transform_params": {
+        "value_range": [
+          -0.05,
+          0.05
+        ]
+      },
+      "role": "additive",
+      "weight": 0.1
+    },
+    {
+      "name": "runout_bonus",
+      "transform": "linear",
+      "transform_params": {
+        "value_range": [
+          0,
+          1
+        ]
+      },
+      "role": "additive",
+      "weight": 0.05
+    },
+    {
+      "name": "slope_p95",
+      "transform": "dealbreaker",
+      "transform_params": {
+        "threshold": 25,
+        "falloff": 10
+      },
+      "role": "multiplicative",
+      "weight": null
+    },
+    {
+      "name": "terrain_consistency",
+      "transform": "linear",
+      "transform_params": {
+        "value_range": [
+          0,
+          1
+        ]
+      },
+      "role": "multiplicative",
+      "weight": null
+    }
+  ]
+}
