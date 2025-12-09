@@ -520,4 +520,351 @@ This ensures you always have current data without manual cache management.
 
 ---
 
+## Snow Integration: Sledding Location Analysis
+
+A complete example showing how to combine elevation data with SNODAS snow statistics to identify optimal sledding locations. This demonstrates the power of multi-layer terrain analysis with visual outputs at each pipeline stage.
+
+### What This Example Shows
+
+✓ **Multi-Layer Analysis**: Combine terrain elevation with snow depth/coverage data
+✓ **SNODAS Integration**: Process real National Snow and Ice Data Center snow grids
+✓ **Pipeline Visualization**: Generate visual outputs at each analysis step
+✓ **Sledding Score Calculation**: Identify optimal locations based on snow depth, coverage, and consistency
+✓ **Mock Data Support**: Fast testing with realistic synthetic snow data
+✓ **Step-by-Step Execution**: Run individual pipeline steps or the entire workflow
+
+### The Pipeline
+
+The snow integration example demonstrates a multi-stage analysis pipeline:
+
+```
+DEM → Snow Depth → Sledding Score → 3D Render (optional)
+```
+
+Each stage produces a visual artifact:
+- **DEM Visualization**: Terrain elevation heatmap
+- **Snow Depth Visualization**: Median maximum snow depth across the season
+- **Sledding Score Visualization**: Combined suitability score (0-1 scale)
+- **3D Render**: Optional Blender visualization with snow overlay
+
+### The Code
+
+```python
+from pathlib import Path
+from src.terrain.io import load_dem_files
+from src.terrain.core import Terrain
+from src.snow.analysis import SnowAnalysis
+
+# 1. Load elevation data
+dem_dir = Path("data/dem/detroit")
+dem, transform = load_dem_files(dem_dir, pattern="*.tif")
+
+# 2. Create terrain
+terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+
+# 3. Process SNODAS snow data
+snodas_dir = Path("data/snodas_data")
+snow = SnowAnalysis(terrain=terrain, snodas_root_dir=snodas_dir)
+stats, metadata, failed = snow.process_snow_data()
+
+# 4. Calculate sledding suitability score
+# This combines:
+# - Snow depth (deeper is better)
+# - Coverage (consistent coverage is better)
+# - Consistency (low variability is better)
+sledding_score = snow.calculate_sledding_score()
+
+# The score is automatically added to terrain.data_layers
+# Access it via: terrain.data_layers['sledding_score']['data']
+```
+
+### Running This Example
+
+#### Quick Start with Mock Data
+
+Test the pipeline quickly with synthetic data:
+
+```bash
+# Generate all visualizations with mock data
+npm run py:example:snow-demo
+
+# Or run individual steps
+npm run py:example:snow-dem        # DEM visualization only
+npm run py:example:snow-analysis   # Sledding score calculation
+```
+
+#### Using Real SNODAS Data
+
+Process real snow data from the National Snow and Ice Data Center:
+
+```bash
+# Full pipeline with real SNODAS data
+npm run py:example:snow-real
+
+# Just the sledding score analysis
+npm run py:example:snow-real-score
+```
+
+Or run the Python script directly:
+
+```bash
+# With mock data for testing
+uv run examples/detroit_snow_sledding.py --mock-data --all-steps
+
+# With real SNODAS data
+uv run examples/detroit_snow_sledding.py --snodas-dir data/snodas_data --all-steps
+
+# Run individual steps
+uv run examples/detroit_snow_sledding.py --step dem
+uv run examples/detroit_snow_sledding.py --step snow
+uv run examples/detroit_snow_sledding.py --step score
+```
+
+### Pipeline Steps Explained
+
+#### Step 1: DEM Visualization
+
+Generates a terrain elevation heatmap using the 'terrain' colormap:
+
+```python
+def visualize_dem(dem: np.ndarray, output_path: Path):
+    """Create DEM visualization with terrain colormap."""
+    plt.figure(figsize=(12, 8))
+    plt.imshow(dem, cmap="terrain", aspect="auto")
+    plt.colorbar(label="Elevation (meters)")
+    plt.title("Detroit Area - Digital Elevation Model")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+```
+
+**Output**: `detroit_dem.png` - Elevation heatmap showing terrain features
+
+#### Step 2: Snow Depth Visualization
+
+Displays median maximum snow depth across the season using a blue-white gradient:
+
+```python
+def visualize_snow_depth(snow_depth: np.ndarray, output_path: Path):
+    """Create snow depth visualization with blue-white colormap."""
+    # Custom blue-white gradient for snow
+    colors = ["#08519c", "#3182bd", "#6baed6", "#bdd7e7", "#eff3ff", "white"]
+    cmap = LinearSegmentedColormap.from_list("snow", colors)
+
+    plt.figure(figsize=(12, 8))
+    plt.imshow(snow_depth, cmap=cmap, aspect="auto")
+    plt.colorbar(label="Snow Depth (cm)")
+    plt.title("Detroit Area - Median Maximum Snow Depth")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+```
+
+**Output**: `detroit_snow_depth.png` - Snow depth heatmap from SNODAS data
+
+**Data Source**: SNODAS (Snow Data Assimilation System) provides daily snow depth grids at 1km resolution. The visualization shows the median of the maximum daily snow depth for each pixel across the analysis period.
+
+#### Step 3: Sledding Score Calculation
+
+Combines multiple snow metrics to identify optimal sledding locations:
+
+```python
+def visualize_sledding_score(score: np.ndarray, output_path: Path):
+    """Create sledding score visualization with RdYlGn colormap."""
+    plt.figure(figsize=(12, 8))
+    plt.imshow(score, cmap=plt.cm.RdYlGn, vmin=0, vmax=1, aspect="auto")
+    plt.colorbar(label="Sledding Suitability Score")
+    plt.title("Detroit Area - Sledding Location Score")
+
+    # Add interpretation guide
+    plt.text(0.02, 0.98, "Green = Excellent | Yellow = Moderate | Red = Poor",
+             transform=plt.gca().transAxes, fontsize=10,
+             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+```
+
+**Output**: `detroit_sledding_score.png` - Suitability score heatmap (0-1 scale)
+
+**Scoring Algorithm**:
+- **Snow Depth Component** (40% weight): Normalized median max depth (deeper is better)
+- **Coverage Component** (30% weight): Snow day ratio (more consistent coverage is better)
+- **Consistency Component** (30% weight): 1 - CV (lower variability is better)
+
+The final score ranges from 0 (poor sledding) to 1 (excellent sledding).
+
+### Mock Data for Testing
+
+The example includes realistic mock data generation for fast iteration:
+
+```python
+def create_mock_snow_data(shape: tuple) -> dict:
+    """Create mock snow data with realistic distributions."""
+    return {
+        "median_max_depth": np.random.gamma(2, 30, shape),      # 0-300cm
+        "mean_snow_day_ratio": np.random.beta(8, 2, shape),     # 0-1
+        "interseason_cv": np.random.beta(2, 8, shape) * 0.5,    # 0-0.5
+        "mean_intraseason_cv": np.random.beta(2, 8, shape) * 0.3 # 0-0.3
+    }
+```
+
+Mock data uses statistical distributions that mimic real SNODAS patterns:
+- **Gamma distribution** for snow depth (right-skewed, realistic accumulation)
+- **Beta distribution** for ratios and coefficients (bounded 0-1)
+
+This enables:
+- ✓ Fast testing without downloading SNODAS data
+- ✓ Reproducible test cases
+- ✓ TDD-friendly development workflow
+
+### Example Output
+
+When you run the full pipeline with mock data:
+
+```
+======================================================================
+Detroit Snow Sledding Analysis
+======================================================================
+
+[1/3] Generating DEM visualization...
+      ✓ Saved: examples/detroit_dem.png
+
+[2/3] Generating snow depth visualization...
+      ✓ Mock snow data created (500x500)
+      ✓ Saved: examples/detroit_snow_depth.png
+
+[3/3] Calculating sledding scores...
+      ✓ Sledding score calculated
+      ✓ Score range: 0.00 - 1.00
+      ✓ Mean score: 0.54
+      ✓ Saved: examples/detroit_sledding_score.png
+
+======================================================================
+Pipeline Complete!
+======================================================================
+
+Generated outputs:
+  ✓ examples/detroit_dem.png
+  ✓ examples/detroit_snow_depth.png
+  ✓ examples/detroit_sledding_score.png
+```
+
+### SNODAS Data Structure
+
+The example expects SNODAS data organized by date:
+
+```
+data/snodas_data/
+├── 2024-01-01/
+│   └── us_ssmv11034tS__T0001TTNATS2024010105HP001.dat
+├── 2024-01-02/
+│   └── us_ssmv11034tS__T0001TTNATS2024010205HP001.dat
+└── ...
+```
+
+**SNODAS Grid Details**:
+- Resolution: 1 km × 1 km
+- Coverage: Continental United States
+- Temporal: Daily snapshots
+- Variables: Snow depth, SWE, melt, and more
+
+The `SnowAnalysis` class automatically:
+- Discovers all daily grids in the directory
+- Reprojects to match the terrain DEM coordinate system
+- Calculates seasonal statistics (median, max, CV, coverage ratio)
+- Caches results for fast subsequent runs
+
+### Integration with Terrain Layers
+
+The snow data integrates seamlessly with the terrain system via `add_data_layer()`:
+
+```python
+# Snow statistics are automatically reprojected to match terrain CRS
+snow = SnowAnalysis(terrain=terrain, snodas_root_dir=snodas_dir)
+stats, metadata, failed = snow.process_snow_data()
+
+# Calculate score - this adds a new layer to terrain
+sledding_score = snow.calculate_sledding_score()
+
+# Access the score via data_layers
+score_data = terrain.data_layers['sledding_score']['data']
+score_crs = terrain.data_layers['sledding_score']['crs']
+score_transform = terrain.data_layers['sledding_score']['transform']
+```
+
+This architecture enables:
+- **Automatic reprojection** between different coordinate systems
+- **Metadata preservation** (CRS, transform, units)
+- **Multi-layer visualization** (combine elevation, snow, and score)
+- **Modular analysis** (keep terrain and snow analysis separate)
+
+### Customization
+
+#### Adjust Sledding Score Weights
+
+Modify the weighting of different snow characteristics:
+
+```python
+# Default weights
+sledding_score = snow.calculate_sledding_score()
+
+# Custom weights (must sum to 1.0)
+sledding_score = snow.calculate_sledding_score(
+    depth_weight=0.5,        # Prioritize depth
+    coverage_weight=0.3,     # Medium importance for coverage
+    consistency_weight=0.2   # Less emphasis on consistency
+)
+```
+
+#### Filter by Score Threshold
+
+Identify only the best locations:
+
+```python
+# Get high-scoring areas (score > 0.7)
+excellent_spots = sledding_score > 0.7
+
+# Visualize only excellent locations
+visualize_sledding_score(
+    np.where(excellent_spots, sledding_score, 0),
+    output_path="excellent_sledding.png"
+)
+```
+
+#### Use Different Time Periods
+
+Process SNODAS data from specific date ranges:
+
+```python
+# Filter SNODAS files by date
+snow = SnowAnalysis(terrain=terrain, snodas_root_dir=snodas_dir)
+
+# Process only December-February (peak sledding season)
+stats, metadata, failed = snow.process_snow_data(
+    start_date="2024-12-01",
+    end_date="2025-02-28"
+)
+```
+
+### Why This Example Matters
+
+**Traditional snow analysis workflow**:
+1. Manually download SNODAS grids
+2. Write custom reprojection code
+3. Manually align snow data with terrain
+4. Implement scoring algorithms
+5. Handle coordinate system mismatches
+6. Generate visualizations separately
+
+**With Terrain Maker + SnowAnalysis**:
+1. Point to SNODAS directory
+2. Call `process_snow_data()`
+3. Call `calculate_sledding_score()`
+4. Visual outputs generated automatically
+
+The example demonstrates:
+- ✓ **Modular design**: Snow analysis is separate from core terrain functionality
+- ✓ **Data layer system**: Automatic reprojection and metadata preservation
+- ✓ **Multi-stage pipeline**: Visual feedback at each step
+- ✓ **Testing-friendly**: Mock data enables fast TDD iteration
+- ✓ **Production-ready**: Real SNODAS integration with caching
+
+---
+
 **Want to try it yourself?** See [Quick Reference](QUICK_REFERENCE.md) for API documentation and [API Reference](API_REFERENCE.md) for detailed function signatures.
