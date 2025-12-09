@@ -341,16 +341,18 @@ def visualize_slope_statistics(
     ax = axes[panel_idx]
     aspect_deg = slope_stats.dominant_aspect
 
-    # Shift aspect so north (0°) maps to the dark center of twilight
+    # Create a shifted twilight colormap so North (0°) maps to dark center
     # twilight: dark at 0.5, light at 0 and 1
-    # We want: North (0°) → 0.5 (dark), South (180°) → 0 or 1 (light)
-    aspect_shifted = (aspect_deg + 180) % 360  # Now South=0, North=180
+    # We shift the colormap by 0.5 so that input 0 → twilight(0.5) = dark
+    from matplotlib.colors import Normalize, ListedColormap
+    base_cmap = plt.cm.twilight
+    n_colors = 256
+    shifted_colors = [base_cmap((i / n_colors + 0.5) % 1.0) for i in range(n_colors)]
+    twilight_north_dark = ListedColormap(shifted_colors)
 
-    # Get RGBA colors from colormap
-    from matplotlib.colors import Normalize
-    cmap = plt.cm.twilight
+    # Use original aspect values (N=0, E=90, S=180, W=270)
     norm = Normalize(vmin=0, vmax=360)
-    aspect_colors = cmap(norm(aspect_shifted))
+    aspect_colors = twilight_north_dark(norm(aspect_deg))
 
     # Fade to gray for low slopes (below ~3°, aspect is meaningless)
     slope_fade_threshold = 3.0  # degrees
@@ -364,10 +366,10 @@ def visualize_slope_statistics(
     im = ax.imshow(aspect_colors, aspect="equal", interpolation="nearest")
     ax.set_title(f"Dominant Aspect (°)\nN=dark, S=light | Faded where flat", fontweight="bold")
 
-    # Custom colorbar for the shifted aspect
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=Normalize(vmin=0, vmax=360))
+    # Colorbar with standard compass labels (N=0, E=90, S=180, W=270)
+    sm = plt.cm.ScalarMappable(cmap=twilight_north_dark, norm=norm)
     cbar = plt.colorbar(sm, ax=ax, shrink=0.8, ticks=[0, 90, 180, 270, 360])
-    cbar.ax.set_yticklabels(['S', 'W', 'N', 'E', 'S'])  # Shifted labels
+    cbar.ax.set_yticklabels(['N', 'E', 'S', 'W', 'N'])
     panel_idx += 1
 
     # Panel 8: Aspect Strength (consistency)
@@ -518,14 +520,16 @@ def visualize_all_score_components(
     component_scores: dict,
     final_score: np.ndarray,
     output_path: Path,
+    scorer=None,
 ):
     """
-    Comprehensive visualization showing raw → transformed for every scoring component.
+    Comprehensive visualization showing scoring components with equation.
 
-    Creates a multi-row figure:
-    - Row 1: Raw inputs (slope, snow depth, coverage, CV, etc.)
-    - Row 2: Transformed scores (after applying transforms)
-    - Row 3: Combination steps (additive sum, multiplicative penalties, final)
+    Creates a 4x4 grid with larger, more readable panels:
+    - Row 1: Additive components (slope, depth, coverage, consistency)
+    - Row 2: More additive + multiplicative (aspect, runout, cliff, terrain)
+    - Row 3: Raw inputs for context
+    - Row 4: Combination steps + equation
 
     Args:
         slope_stats: SlopeStatistics object
@@ -533,85 +537,30 @@ def visualize_all_score_components(
         component_scores: Dict from scorer.get_component_scores()
         final_score: Final sledding score array
         output_path: Where to save the visualization
+        scorer: Optional ScoreCombiner to generate formula from config
     """
-    from src.scoring import trapezoidal, dealbreaker, linear, terrain_consistency
+    from src.scoring import trapezoidal, dealbreaker, linear, snow_consistency, terrain_consistency
+    from src.scoring.configs import DEFAULT_SLEDDING_SCORER
+    from matplotlib.gridspec import GridSpec
+    from matplotlib.colors import Normalize, ListedColormap
 
     logger.info(f"Creating comprehensive score components visualization: {output_path}")
 
-    # We'll create a 3-row layout:
-    # Row 1: Raw inputs (8 panels)
-    # Row 2: Transformed scores (8 panels)
-    # Row 3: Combination (4 panels)
+    # Use provided scorer or default
+    if scorer is None:
+        scorer = DEFAULT_SLEDDING_SCORER
 
-    fig = plt.figure(figsize=(28, 18))
-
-    # Define grid: 3 rows, different number of columns
-    # Use GridSpec for flexible layout
-    from matplotlib.gridspec import GridSpec
-    gs = GridSpec(3, 8, figure=fig, height_ratios=[1, 1, 0.8], hspace=0.3, wspace=0.3)
-
-    # =========================================================================
-    # ROW 1: RAW INPUTS
-    # =========================================================================
-    row1_data = [
-        ("slope_mean", slope_stats.slope_mean, "Slope Mean (°)", "cividis", None),
-        ("slope_p95", slope_stats.slope_p95, "Slope P95 (°)", "inferno", None),
-        ("roughness", slope_stats.roughness, "Roughness (m)", "magma", None),
-        ("slope_std", slope_stats.slope_std, "Slope Std (°)", "magma", None),
-        ("snow_depth", snow_stats["median_max_depth"], "Snow Depth (mm)", "viridis", None),
-        ("snow_coverage", snow_stats["mean_snow_day_ratio"], "Snow Coverage", "plasma", (0, 1)),
-        ("snow_cv", snow_stats["interseason_cv"], "Interseason CV", "magma", None),
-        ("aspect", None, "Aspect (°)", None, None),  # Special handling below
-    ]
-
-    from matplotlib.colors import Normalize
-
-    for i, (name, data, title, cmap, vlim) in enumerate(row1_data):
-        ax = fig.add_subplot(gs[0, i])
-
-        if name == "aspect":
-            # Special aspect visualization: twilight with slope-based fading
-            # twilight: dark at 0.5, light at 0 and 1
-            aspect_deg = slope_stats.dominant_aspect
-            aspect_shifted = (aspect_deg + 180) % 360  # North→180 (dark center)
-            cmap_aspect = plt.cm.twilight
-            norm = Normalize(vmin=0, vmax=360)
-            aspect_colors = cmap_aspect(norm(aspect_shifted))
-
-            # Fade to gray for low slopes (aspect meaningless when flat)
-            slope_fade_threshold = 3.0
-            slope_fade = np.clip(slope_stats.slope_mean / slope_fade_threshold, 0, 1)
-            gray = 0.5
-            for ch in range(3):
-                aspect_colors[:, :, ch] = gray + slope_fade * (aspect_colors[:, :, ch] - gray)
-
-            im = ax.imshow(aspect_colors, aspect="equal", interpolation="nearest")
-            ax.set_title(f"RAW: {title}\n(N=dark, faded if flat)", fontsize=10, fontweight="bold")
-
-            # Custom colorbar with direction labels
-            sm = plt.cm.ScalarMappable(cmap=cmap_aspect, norm=Normalize(vmin=0, vmax=360))
-            cbar = plt.colorbar(sm, ax=ax, shrink=0.7, ticks=[0, 90, 180, 270, 360])
-            cbar.ax.set_yticklabels(['S', 'W', 'N', 'E', 'S'])
-        else:
-            vmin, vmax = vlim if vlim else (np.nanmin(data), np.nanmax(data))
-            im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=vmin, vmax=vmax)
-            ax.set_title(f"RAW: {title}", fontsize=10, fontweight="bold")
-            plt.colorbar(im, ax=ax, shrink=0.7)
-
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    # =========================================================================
-    # ROW 2: TRANSFORMED SCORES (0-1)
-    # =========================================================================
     # Compute all transformations
     slope_score = trapezoidal(slope_stats.slope_mean, sweet_range=(5, 15), ramp_range=(3, 25))
     cliff_penalty = dealbreaker(slope_stats.slope_p95, threshold=25, falloff=10)
     terrain_cons = terrain_consistency(slope_stats.roughness, slope_stats.slope_std)
-
     depth_score = trapezoidal(snow_stats["median_max_depth"], sweet_range=(150, 500), ramp_range=(50, 1000))
     coverage_score = linear(snow_stats["mean_snow_day_ratio"], value_range=(0, 1), power=0.5)
-    consistency_score = linear(snow_stats["interseason_cv"], value_range=(0, 1.5), invert=True)
+    # Combined snow consistency using RMS of inter/intra-season CVs
+    consistency_score = snow_consistency(
+        snow_stats["interseason_cv"],
+        snow_stats["mean_intraseason_cv"],
+    )
 
     # Aspect bonus: northness × strength
     northness = np.cos(np.radians(slope_stats.dominant_aspect))
@@ -621,68 +570,203 @@ def visualize_all_score_components(
     # Runout bonus
     runout_bonus = np.where(slope_stats.slope_min < 5, 1.0, 0.0)
 
-    row2_data = [
-        ("slope_score", slope_score, "Slope Score\n(trapezoidal 5-15°)", "viridis"),
-        ("cliff_penalty", cliff_penalty, "Cliff Penalty\n(dealbreaker p95>25°)", "plasma"),
-        ("terrain_cons", terrain_cons, "Terrain Consistency\n(RMS rough+std)", "plasma"),
-        ("runout", runout_bonus, "Runout Bonus\n(min<5° = 1)", "viridis"),
-        ("depth_score", depth_score, "Depth Score\n(trap 150-500mm)", "viridis"),
-        ("coverage_score", coverage_score, "Coverage Score\n(linear √)", "viridis"),
-        ("consistency", consistency_score, "Snow Consistency\n(1 - CV)", "viridis"),
-        ("aspect_score", aspect_score, "Aspect Score\n(north bonus)", "viridis"),
-    ]
+    # Get weights from scorer config
+    weights = {comp.name: comp.weight for comp in scorer.components if comp.role == "additive"}
+    w_slope = weights.get("slope_mean", 0.30)
+    w_depth = weights.get("snow_depth", 0.15)
+    w_coverage = weights.get("snow_coverage", 0.25)
+    w_consistency = weights.get("snow_consistency", 0.20)
+    w_aspect = weights.get("aspect_bonus", 0.05)
+    w_runout = weights.get("runout_bonus", 0.05)
 
-    for i, (name, data, title, cmap) in enumerate(row2_data):
-        ax = fig.add_subplot(gs[1, i])
-        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-        ax.set_title(f"SCORE: {title}", fontsize=10, fontweight="bold")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.colorbar(im, ax=ax, shrink=0.7)
-
-    # =========================================================================
-    # ROW 3: COMBINATION STEPS
-    # =========================================================================
-    # Additive components (weighted sum)
+    # Combination using config weights
     additive_sum = (
-        0.25 * slope_score +
-        0.25 * depth_score +
-        0.20 * coverage_score +
-        0.15 * consistency_score +
-        0.10 * aspect_score +
-        0.05 * runout_bonus
+        w_slope * slope_score +
+        w_depth * depth_score +
+        w_coverage * coverage_score +
+        w_consistency * consistency_score +
+        w_aspect * aspect_score +
+        w_runout * runout_bonus
     )
-
-    # Multiplicative penalties
     multiplicative = cliff_penalty * terrain_cons
-
-    # Final score
     combined_final = additive_sum * multiplicative
 
-    row3_data = [
-        ("additive", additive_sum, "Additive Sum\n(weighted components)", "viridis"),
-        ("multiplicative", multiplicative, "Multiplicative\n(cliff × consistency)", "inferno"),
-        ("final", combined_final, "Final Score\n(additive × mult)", "viridis"),
-        ("reduction", additive_sum - combined_final, "Score Reduction\n(lost to penalties)", "magma"),
+    # Compute percentiles for the final score
+    percentiles = [25, 50, 75, 90, 95]
+    pct_values = {p: np.nanpercentile(combined_final, p) for p in percentiles}
+
+    # Create figure with 5 rows (equation row + 4 data rows)
+    fig = plt.figure(figsize=(20, 28))
+    gs = GridSpec(5, 4, figure=fig, height_ratios=[0.4, 1, 1, 1, 1], hspace=0.35, wspace=0.25)
+
+    # =========================================================================
+    # ROW 0: EQUATION (generated from scorer config)
+    # =========================================================================
+    ax_eq = fig.add_subplot(gs[0, :])
+    ax_eq.axis('off')
+
+    # Generate formula from scorer configuration
+    additive_parts = []
+    multiplicative_parts = []
+    for comp in scorer.components:
+        name = comp.name.replace("_", " ").title()
+        if comp.role == "additive":
+            weight_pct = int(comp.weight * 100)
+            additive_parts.append(f"{comp.weight:.2f} × {name}")
+        else:
+            multiplicative_parts.append(name)
+
+    additive_formula = "  +  ".join(additive_parts)
+    multiplicative_formula = "  ×  ".join(multiplicative_parts)
+
+    # Build compact formula for final line
+    additive_compact = " + ".join(
+        f"{comp.weight:.2f}×{comp.name.replace('_', '').title()[:6]}"
+        for comp in scorer.components if comp.role == "additive"
+    )
+    mult_compact = " × ".join(
+        comp.name.replace("_", "").title()[:8]
+        for comp in scorer.components if comp.role == "multiplicative"
+    )
+
+    equation_text = (
+        f"SLEDDING SCORE FORMULA (from {scorer.name})\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"ADDITIVE (weighted sum = base score):\n"
+        f"    {additive_formula}\n\n"
+        f"MULTIPLICATIVE (penalties applied to base score):\n"
+        f"    × {multiplicative_formula}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"FINAL = ({additive_compact}) × {mult_compact}"
+    )
+    ax_eq.text(0.5, 0.5, equation_text, transform=ax_eq.transAxes,
+               fontsize=11, fontfamily='monospace', ha='center', va='center',
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', edgecolor='gray', alpha=0.9))
+
+    # =========================================================================
+    # ROW 1: ADDITIVE COMPONENTS (main 4)
+    # =========================================================================
+    row1_data = [
+        (slope_score, f"Slope Score ({int(w_slope*100)}%)\ntrapezoidal 5-15°", "viridis"),
+        (depth_score, f"Depth Score ({int(w_depth*100)}%)\ntrapezoidal 150-500mm", "viridis"),
+        (coverage_score, f"Coverage Score ({int(w_coverage*100)}%)\nlinear √(ratio)", "viridis"),
+        (consistency_score, f"Snow Reliability ({int(w_consistency*100)}%)\nRMS(inter+intra CV)", "viridis"),
     ]
 
-    # Center the 4 panels in row 3
-    for i, (name, data, title, cmap) in enumerate(row3_data):
-        ax = fig.add_subplot(gs[2, i*2:(i*2)+2])
-        vmin = 0
-        vmax = 1 if name != "reduction" else np.nanmax(data)
-        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=vmin, vmax=vmax)
-        ax.set_title(f"COMBINE: {title}", fontsize=11, fontweight="bold")
+    for i, (data, title, cmap) in enumerate(row1_data):
+        ax = fig.add_subplot(gs[1, i])
+        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=0, vmax=1)
+        ax.set_title(title, fontsize=11, fontweight="bold", color="darkgreen")
         ax.set_xticks([])
         ax.set_yticks([])
-        plt.colorbar(im, ax=ax, shrink=0.7)
+        plt.colorbar(im, ax=ax, shrink=0.8)
+
+    # =========================================================================
+    # ROW 2: ADDITIVE (remaining) + MULTIPLICATIVE
+    # =========================================================================
+    row2_data = [
+        (aspect_score, f"Aspect Score ({int(w_aspect*100)}%)\nnorth bonus", "viridis", "darkgreen"),
+        (runout_bonus, f"Runout Bonus ({int(w_runout*100)}%)\nmin slope < 5°", "viridis", "darkgreen"),
+        (cliff_penalty, "Cliff Penalty (×)\ndealbreaker p95 > 25°", "plasma", "darkred"),
+        (terrain_cons, "Terrain Consistency (×)\nextreme roughness only", "plasma", "darkred"),
+    ]
+
+    for i, (data, title, cmap, color) in enumerate(row2_data):
+        ax = fig.add_subplot(gs[2, i])
+        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=0, vmax=1)
+        ax.set_title(title, fontsize=11, fontweight="bold", color=color)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.colorbar(im, ax=ax, shrink=0.8)
+
+    # =========================================================================
+    # ROW 3: KEY RAW INPUTS
+    # =========================================================================
+    row3_data = [
+        (slope_stats.slope_mean, "Raw: Slope Mean (°)", "cividis", None),
+        (snow_stats["median_max_depth"], "Raw: Snow Depth (mm)", "viridis", None),
+        (snow_stats["interseason_cv"], "Raw: Interseason CV\n(year-to-year)", "magma", None),
+        (snow_stats["mean_intraseason_cv"], "Raw: Intraseason CV\n(within-winter)", "magma", None),
+    ]
+
+    for i, (data, title, cmap, vlim) in enumerate(row3_data):
+        ax = fig.add_subplot(gs[3, i])
+        vmin, vmax = vlim if vlim else (np.nanmin(data), np.nanmax(data))
+        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=vmin, vmax=vmax)
+        ax.set_title(title, fontsize=11, fontweight="bold", color="gray")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.colorbar(im, ax=ax, shrink=0.8)
+
+    # =========================================================================
+    # ROW 4: COMBINATION STEPS
+    # =========================================================================
+    from matplotlib.colors import TwoSlopeNorm
+
+    # For final score, use TwoSlopeNorm centered at 0.7 to emphasize good scores
+    # This gives more color resolution to scores > 0.7 (the excellent sledding range)
+    final_norm = TwoSlopeNorm(vmin=0, vcenter=0.7, vmax=1)
+
+    row4_data = [
+        (additive_sum, "Additive Sum\n(weighted components)", "viridis", None),
+        (multiplicative, "Multiplicative Product\n(cliff × terrain)", "inferno", None),
+        (combined_final, "FINAL SCORE\n(additive × mult)", "viridis", final_norm),
+        (additive_sum - combined_final, "Score Reduction\n(lost to penalties)", "magma", None),
+    ]
+
+    for i, (data, title, cmap, norm) in enumerate(row4_data):
+        ax = fig.add_subplot(gs[4, i])
+        if norm is None:
+            # Default 0-1 for most panels
+            if "Reduction" in title:
+                im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest",
+                               vmin=0, vmax=max(0.01, np.nanmax(data)))
+            else:
+                im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest",
+                               vmin=0, vmax=1)
+        else:
+            # Use custom norm for final score
+            im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", norm=norm)
+        color = "darkblue" if "FINAL" in title else "black"
+        ax.set_title(title, fontsize=11, fontweight="bold", color=color)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+        if "FINAL" in title:
+            # Add percentile tick marks on colorbar
+            # Use actual percentile values as custom ticks
+            pct_ticks = [pct_values[p] for p in percentiles]
+
+            # Set colorbar ticks to show both standard values and percentiles
+            all_ticks = sorted(set([0, 0.7, 1] + pct_ticks))
+            cbar.set_ticks(all_ticks)
+            tick_labels = []
+            for t in all_ticks:
+                if t == 0.7:
+                    tick_labels.append("0.7 ←")
+                elif t in pct_ticks:
+                    p_idx = pct_ticks.index(t)
+                    tick_labels.append(f"{t:.2f} (P{percentiles[p_idx]})")
+                else:
+                    tick_labels.append(f"{t:.1f}")
+            cbar.set_ticklabels(tick_labels)
+            cbar.ax.tick_params(labelsize=8)
+
+    # Add row labels on the left side
+    fig.text(0.02, 0.78, "ADDITIVE\n(+)", fontsize=12, fontweight="bold", color="darkgreen",
+             rotation=90, va='center', ha='center')
+    fig.text(0.02, 0.58, "ADDITIVE/MULT\n(+ / ×)", fontsize=12, fontweight="bold", color="purple",
+             rotation=90, va='center', ha='center')
+    fig.text(0.02, 0.38, "RAW\nINPUTS", fontsize=12, fontweight="bold", color="gray",
+             rotation=90, va='center', ha='center')
+    fig.text(0.02, 0.15, "FINAL\nCOMBINE", fontsize=12, fontweight="bold", color="darkblue",
+             rotation=90, va='center', ha='center')
 
     fig.suptitle(
-        "Sledding Score: Raw Inputs → Transformations → Combination\n"
-        "Row 1: Raw statistics | Row 2: Transformed scores (0-1) | Row 3: Combination steps",
-        fontsize=14,
+        "Sledding Suitability Score: Component Breakdown",
+        fontsize=16,
         fontweight="bold",
-        y=0.98,
+        y=0.995,
     )
 
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
