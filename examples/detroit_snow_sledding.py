@@ -501,9 +501,10 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     fig, ax = plt.subplots(figsize=(10, 8))
     aspect_deg = slope_stats.dominant_aspect
 
-    # Use reversed twilight colormap: North (0°) = light, South (180°) = dark
+    # Use twilight colormap with 180° offset: North (0°) = light, South (180°) = dark
+    # Add 180° to flip the coordinate system so North appears light and South appears dark
     norm = Normalize(vmin=0, vmax=360)
-    aspect_colors = plt.cm.twilight_r(norm(aspect_deg))
+    aspect_colors = plt.cm.twilight(norm((aspect_deg + 180) % 360))
 
     # Fade to gray for low slopes
     slope_fade_threshold = 3.0
@@ -516,7 +517,7 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     ax.set_title("Dominant Aspect (°) - N=light, S=dark", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
-    sm = plt.cm.ScalarMappable(cmap=plt.cm.twilight_r, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap=plt.cm.twilight, norm=norm)
     cbar = plt.colorbar(sm, ax=ax, shrink=0.8, ticks=[0, 90, 180, 270, 360])
     cbar.ax.set_yticklabels(['N', 'E', 'S', 'W', 'N'])
     plt.tight_layout()
@@ -680,7 +681,6 @@ def save_score_component_panels(
     """
     from src.scoring import trapezoidal, dealbreaker, linear, snow_consistency, terrain_consistency
     from src.scoring.configs import DEFAULT_SLEDDING_SCORER
-    from matplotlib.colors import TwoSlopeNorm
 
     logger.info(f"Saving individual score component panels to {output_dir}")
 
@@ -810,10 +810,9 @@ def save_score_component_panels(
     save_single_panel(additive_sum, "additive_sum.png", "Additive Sum", "viridis")
     save_single_panel(multiplicative, "multiplicative.png", "Multiplicative Product", "inferno")
 
-    # Final score with special norm
-    final_norm = TwoSlopeNorm(vmin=0, vcenter=0.7, vmax=1)
+    # Final score with linear color gradient
     fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(combined_final, cmap="viridis", aspect="equal", interpolation="nearest", norm=final_norm)
+    im = ax.imshow(combined_final, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
     ax.set_title("Final Score", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
