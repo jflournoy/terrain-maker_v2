@@ -565,9 +565,11 @@ See `docs/images/04_score_components/equation.md` for the exact formula.
 
 #### Stage 6: Final Result
 
-The final sledding score combines all factors into a single suitability map (0-1 scale):
+The final sledding score combines all factors into a single suitability map (0-1 scale). This is the primary output of the pipeline - a comprehensive assessment of sledding suitability across the entire region:
 
 ![Final Sledding Suitability Score](images/05_final/sledding_score.png)
+
+This map shows where sledding conditions are best. The colors represent suitability scores from 0 (poor) to 1 (excellent).
 
 **Score Interpretation:**
 - **0.7-1.0 (Dark Yellow)**: Excellent sledding locations
@@ -577,11 +579,13 @@ The final sledding score combines all factors into a single suitability map (0-1
 
 **Additional Analysis Visualizations:**
 
+Understanding the score distribution helps identify optimal locations and assess regional variation:
+
 ![Sledding Score Distribution](images/05_final/sledding_score_histogram.png)
 *Histogram showing the distribution of sledding scores across all pixels, with quartile markers (25th, 50th, 75th percentiles)*
 
 ![Sledding Score Percentiles](images/05_final/sledding_score_percentiles.png)
-*Spatial distribution of score percentiles: bottom 25% (red), 25-50% (orange), 50-75% (yellow), top 25% (green/blue)*
+*Spatial distribution of score percentiles: shows which pixels fall into bottom 25% (red), 25-50% (orange), 50-75% (yellow), or top 25% (turquoise/blue) of scores*
 
 ![Excellent Sledding Locations](images/05_final/sledding_score_excellent.png)
 *Filtered map highlighting only the excellent sledding locations (score > 0.7) - the most promising areas for sledding*

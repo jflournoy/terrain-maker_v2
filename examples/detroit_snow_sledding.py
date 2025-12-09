@@ -340,21 +340,15 @@ def save_sledding_score_percentiles(score: np.ndarray, output_path: Path):
     )
     percentile_map[~valid_mask] = np.nan
 
-    # Custom colormap for percentiles: 0-25 (red), 25-50 (orange), 50-75 (yellow), 75-100 (green)
-    from matplotlib.colors import ListedColormap, BoundaryNorm
-    colors = ["#d73027", "#fc8d59", "#fee090", "#91bfdb", "#4575b4"]
-    percentile_cmap = ListedColormap(colors)
-    bounds = [0, 25, 50, 75, 100]
-    norm = BoundaryNorm(bounds, percentile_cmap.N)
-
-    im = ax.imshow(percentile_map, cmap=percentile_cmap, aspect="equal", norm=norm, interpolation="nearest")
+    # Use turbo colormap for percentiles (0=red, 100=blue)
+    im = ax.imshow(percentile_map, cmap="turbo", aspect="equal", interpolation="nearest", vmin=0, vmax=100)
     ax.set_title("Sledding Score Percentiles", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
 
     # Add colorbar with percentile labels
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, ticks=[12.5, 37.5, 62.5, 87.5])
-    cbar.ax.set_yticklabels(["0-25%", "25-50%", "50-75%", "75-100%"])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8, ticks=[0, 25, 50, 75, 100])
+    cbar.ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
     cbar.set_label("Percentile Rank", rotation=270, labelpad=20)
 
     plt.tight_layout()
@@ -503,21 +497,13 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     logger.info(f"✓ Saved: {output_dir / 'roughness.png'}")
 
     # Panel 7: Aspect (dominant slope direction)
-    from matplotlib.colors import Normalize, ListedColormap
+    from matplotlib.colors import Normalize
     fig, ax = plt.subplots(figsize=(10, 8))
     aspect_deg = slope_stats.dominant_aspect
 
-    # Create shifted twilight colormap (North = dark)
-    base_cmap = plt.cm.twilight
-    n_colors = 256
-    shifted_colors = [base_cmap((i / n_colors + 0.5) % 1.0) for i in range(n_colors)]
-    twilight_north_dark = ListedColormap(shifted_colors)
-
-    # Flip aspect so North (0°) = dark and South (180°) = light
-    # Negate aspect: North (0°) → 0°, South (180°) → -180° which wraps to near 180°
-    aspect_flipped = (360 - aspect_deg) % 360
+    # Use standard twilight colormap: North (0°) = dark, South (180°) = light
     norm = Normalize(vmin=0, vmax=360)
-    aspect_colors = twilight_north_dark(norm(aspect_flipped))
+    aspect_colors = plt.cm.twilight(norm(aspect_deg))
 
     # Fade to gray for low slopes
     slope_fade_threshold = 3.0
@@ -530,7 +516,7 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     ax.set_title("Dominant Aspect (°) - N=dark, S=light", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
-    sm = plt.cm.ScalarMappable(cmap=twilight_north_dark, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap=plt.cm.twilight, norm=norm)
     cbar = plt.colorbar(sm, ax=ax, shrink=0.8, ticks=[0, 90, 180, 270, 360])
     cbar.ax.set_yticklabels(['N', 'E', 'S', 'W', 'N'])
     plt.tight_layout()
