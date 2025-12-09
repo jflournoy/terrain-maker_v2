@@ -274,158 +274,164 @@ def visualize_sledding_score(score: np.ndarray, output_path: Path):
     logger.info(f"✓ Sledding score visualization saved: {output_path}")
 
 
-def visualize_slope_statistics(
-    slope_stats,
-    output_path: Path,
-):
+def save_slope_stat_panels(slope_stats, output_dir: Path):
     """
-    Create multi-panel visualization of all slope statistics.
-
-    Shows: mean, max, min, std, p95, roughness, aspect, and derived penalties.
+    Save individual slope statistics panels to separate PNG files.
 
     Args:
         slope_stats: SlopeStatistics object from compute_tiled_slope_statistics()
-        output_path: Where to save the visualization
+        output_dir: Directory to save individual panel PNG files
     """
-    logger.info(f"Creating slope statistics visualization: {output_path}")
+    logger.info(f"Saving individual slope statistics panels to {output_dir}")
 
-    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
-    axes = axes.flatten()
-
-    panel_idx = 0
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Panel 1: Slope Mean
-    ax = axes[panel_idx]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.slope_mean, cmap="viridis", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Slope Mean (°)\nrange: {np.nanmin(slope_stats.slope_mean):.1f}-{np.nanmax(slope_stats.slope_mean):.1f}°", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Slope Mean (°)", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.slope_mean):.1f}-{np.nanmax(slope_stats.slope_mean):.1f}°", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "mean.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'mean.png'}")
 
-    # Panel 2: Slope Max (cliff detection)
-    ax = axes[panel_idx]
+    # Panel 2: Slope Max
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.slope_max, cmap="inferno", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Slope Max (°)\nrange: {np.nanmin(slope_stats.slope_max):.1f}-{np.nanmax(slope_stats.slope_max):.1f}°", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Slope Max (°) - Cliff Detection", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.slope_max):.1f}-{np.nanmax(slope_stats.slope_max):.1f}°", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "max.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'max.png'}")
 
     # Panel 3: Slope Min
-    ax = axes[panel_idx]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.slope_min, cmap="cividis", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Slope Min (°)\nrange: {np.nanmin(slope_stats.slope_min):.1f}-{np.nanmax(slope_stats.slope_min):.1f}°", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Slope Min (°) - Flat Spots", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.slope_min):.1f}-{np.nanmax(slope_stats.slope_min):.1f}°", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "min.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'min.png'}")
 
     # Panel 4: Slope Std Dev
-    ax = axes[panel_idx]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.slope_std, cmap="magma", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Slope Std Dev (°)\nrange: {np.nanmin(slope_stats.slope_std):.1f}-{np.nanmax(slope_stats.slope_std):.1f}°", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Slope Std Dev (°) - Terrain Consistency", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.slope_std):.1f}-{np.nanmax(slope_stats.slope_std):.1f}°", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "std.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'std.png'}")
 
     # Panel 5: Slope P95
-    ax = axes[panel_idx]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.slope_p95, cmap="plasma", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Slope P95 (°)\nrange: {np.nanmin(slope_stats.slope_p95):.1f}-{np.nanmax(slope_stats.slope_p95):.1f}°", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Slope P95 (°) - 95th Percentile", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.slope_p95):.1f}-{np.nanmax(slope_stats.slope_p95):.1f}°", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "p95.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'p95.png'}")
 
     # Panel 6: Roughness
-    ax = axes[panel_idx]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_stats.roughness, cmap="inferno", aspect="equal", interpolation="nearest")
-    ax.set_title(f"Roughness (m elev std)\nrange: {np.nanmin(slope_stats.roughness):.1f}-{np.nanmax(slope_stats.roughness):.1f}m", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    panel_idx += 1
+    ax.set_title("Roughness (m elev std)", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(f"{np.nanmin(slope_stats.roughness):.1f}-{np.nanmax(slope_stats.roughness):.1f}m", rotation=270, labelpad=20)
+    plt.tight_layout()
+    plt.savefig(output_dir / "roughness.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'roughness.png'}")
 
     # Panel 7: Aspect (dominant slope direction)
-    # Custom visualization: fade to gray for low slopes (aspect doesn't matter when flat)
-    ax = axes[panel_idx]
+    from matplotlib.colors import Normalize, ListedColormap
+    fig, ax = plt.subplots(figsize=(10, 8))
     aspect_deg = slope_stats.dominant_aspect
 
-    # Create a shifted twilight colormap so North (0°) maps to dark center
-    # twilight: dark at 0.5, light at 0 and 1
-    # We shift the colormap by 0.5 so that input 0 → twilight(0.5) = dark
-    from matplotlib.colors import Normalize, ListedColormap
+    # Create shifted twilight colormap (North = dark)
     base_cmap = plt.cm.twilight
     n_colors = 256
     shifted_colors = [base_cmap((i / n_colors + 0.5) % 1.0) for i in range(n_colors)]
     twilight_north_dark = ListedColormap(shifted_colors)
 
-    # Use original aspect values (N=0, E=90, S=180, W=270)
     norm = Normalize(vmin=0, vmax=360)
     aspect_colors = twilight_north_dark(norm(aspect_deg))
 
-    # Fade to gray for low slopes (below ~3°, aspect is meaningless)
-    slope_fade_threshold = 3.0  # degrees
+    # Fade to gray for low slopes
+    slope_fade_threshold = 3.0
     slope_fade = np.clip(slope_stats.slope_mean / slope_fade_threshold, 0, 1)
-
-    # Blend with neutral gray based on slope
     gray = 0.5
-    for i in range(3):  # RGB channels only
+    for i in range(3):
         aspect_colors[:, :, i] = gray + slope_fade * (aspect_colors[:, :, i] - gray)
 
     im = ax.imshow(aspect_colors, aspect="equal", interpolation="nearest")
-    ax.set_title(f"Dominant Aspect (°)\nN=dark, S=light | Faded where flat", fontweight="bold")
-
-    # Colorbar with standard compass labels (N=0, E=90, S=180, W=270)
+    ax.set_title("Dominant Aspect (°) - N=dark, S=light", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     sm = plt.cm.ScalarMappable(cmap=twilight_north_dark, norm=norm)
     cbar = plt.colorbar(sm, ax=ax, shrink=0.8, ticks=[0, 90, 180, 270, 360])
     cbar.ax.set_yticklabels(['N', 'E', 'S', 'W', 'N'])
-    panel_idx += 1
-
-    # Panel 8: Aspect Strength (consistency)
-    ax = axes[panel_idx]
-    strength = slope_stats.aspect_strength
-    im = ax.imshow(strength, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title(f"Aspect Strength\n(0=varied, 1=uniform)", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # Remove axis ticks for cleaner look
-    for ax in axes:
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    fig.suptitle(
-        "Slope Statistics: Full-Resolution Analysis with Tiling\n"
-        "Max slope detects hidden cliffs; Min slope finds flat spots; Std/P95 measure terrain consistency",
-        fontsize=14,
-        fontweight="bold",
-        y=1.01,
-    )
-
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_dir / "aspect.png", dpi=150, bbox_inches="tight")
     plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'aspect.png'}")
 
-    logger.info(f"✓ Slope statistics visualization saved: {output_path}")
+    # Panel 8: Aspect Strength
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(slope_stats.aspect_strength, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
+    ax.set_title("Aspect Strength (0=varied, 1=uniform)", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.colorbar(im, ax=ax, shrink=0.8)
+    plt.tight_layout()
+    plt.savefig(output_dir / "aspect_strength.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'aspect_strength.png'}")
 
 
-def visualize_slope_penalties(
-    slope_stats,
-    output_path: Path,
-):
+def save_slope_penalty_panels(slope_stats, output_dir: Path):
     """
-    Create visualization showing how penalties affect the slope score.
-
-    Uses the scoring transforms from src.scoring to ensure consistency
-    with the actual scoring calculations.
+    Save individual slope penalty panels to separate PNG files.
 
     Args:
         slope_stats: SlopeStatistics object
-        output_path: Where to save the visualization
+        output_dir: Directory to save individual panel PNG files
     """
     from src.scoring import trapezoidal, dealbreaker, terrain_consistency
 
-    logger.info(f"Creating slope penalties visualization: {output_path}")
+    logger.info(f"Saving individual slope penalty panels to {output_dir}")
 
-    # Compute base trapezoidal score using the scoring transform
-    slope_deg = slope_stats.slope_mean
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Compute base trapezoidal score
     slope_score = trapezoidal(
-        slope_deg,
+        slope_stats.slope_mean,
         sweet_range=(5, 15),
         ramp_range=(3, 25),
     )
 
-    # Compute cliff penalty using dealbreaker on p95 (not max - max is noisy)
+    # Compute cliff penalty
     cliff_penalty = dealbreaker(
         slope_stats.slope_p95,
         threshold=25,
@@ -433,7 +439,7 @@ def visualize_slope_penalties(
     )
     cliff_mask = slope_stats.slope_p95 > 25
 
-    # Compute terrain consistency (combined roughness + slope_std)
+    # Compute terrain consistency
     consistency_penalty = terrain_consistency(
         slope_stats.roughness,
         slope_stats.slope_std,
@@ -444,107 +450,114 @@ def visualize_slope_penalties(
 
     # Final slope score
     final_score = slope_score * cliff_penalty * consistency_penalty
+    score_reduction = slope_score - final_score
 
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-    axes = axes.flatten()
-
-    # Panel 1: Base trapezoidal score
-    ax = axes[0]
+    # Panel 1: Base score
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(slope_score, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Base Trapezoidal Score\n(from slope mean)", fontweight="bold")
+    ax.set_title("Base Slope Score", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     plt.colorbar(im, ax=ax, shrink=0.8)
+    plt.tight_layout()
+    plt.savefig(output_dir / "base_score.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'base_score.png'}")
 
-    # Panel 2: Cliff penalty (based on p95, not max - less noise sensitive)
-    ax = axes[1]
+    # Panel 2: Cliff penalty
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(cliff_penalty, cmap="plasma", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title(f"Cliff Penalty\n(dealbreaker if p95 > 25°)", fontweight="bold")
+    ax.set_title("Cliff Penalty (p95 > 25°)", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     plt.colorbar(im, ax=ax, shrink=0.8)
-    # Add threshold line indication
     cliff_pixels = np.sum(cliff_mask)
-    ax.text(0.5, 0.05, f"{cliff_pixels} pixels penalized",
+    ax.text(0.5, -0.15, f"{cliff_pixels} pixels penalized",
             transform=ax.transAxes, ha='center', fontsize=10,
             bbox=dict(boxstyle="round", facecolor="yellow", alpha=0.7))
+    plt.tight_layout()
+    plt.savefig(output_dir / "cliff_penalty.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'cliff_penalty.png'}")
 
-    # Panel 3: Terrain consistency (combined roughness + slope_std)
-    ax = axes[2]
+    # Panel 3: Terrain consistency
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(consistency_penalty, cmap="plasma", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title(f"Terrain Consistency\n(RMS of roughness + slope_std)", fontweight="bold")
+    ax.set_title("Terrain Consistency", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     plt.colorbar(im, ax=ax, shrink=0.8)
     rough_pixels = np.sum(rough_mask)
-    ax.text(0.5, 0.05, f"{rough_pixels} pixels with variation",
+    ax.text(0.5, -0.15, f"{rough_pixels} pixels with variation",
             transform=ax.transAxes, ha='center', fontsize=10,
             bbox=dict(boxstyle="round", facecolor="yellow", alpha=0.7))
+    plt.tight_layout()
+    plt.savefig(output_dir / "terrain_consistency.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'terrain_consistency.png'}")
 
-    # Panel 4: Combined penalties
-    ax = axes[3]
+    # Panel 4: Combined penalty
     combined_penalty = cliff_penalty * consistency_penalty
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(combined_penalty, cmap="inferno", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Combined Penalties\n(cliff × consistency)", fontweight="bold")
+    ax.set_title("Combined Penalties", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     plt.colorbar(im, ax=ax, shrink=0.8)
+    plt.tight_layout()
+    plt.savefig(output_dir / "combined_penalty.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'combined_penalty.png'}")
 
     # Panel 5: Final score
-    ax = axes[4]
+    fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(final_score, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Final Slope Score\n(base × penalties)", fontweight="bold")
+    ax.set_title("Final Slope Score", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
     plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # Panel 6: Score reduction map
-    ax = axes[5]
-    score_reduction = slope_score - final_score
-    im = ax.imshow(score_reduction, cmap="magma", aspect="equal", interpolation="nearest", vmin=0)
-    ax.set_title("Score Reduction\n(points lost to penalties)", fontweight="bold")
-    plt.colorbar(im, ax=ax, shrink=0.8)
-
-    for ax in axes:
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-    fig.suptitle(
-        "Slope Score Penalties: How Terrain Hazards Reduce Sledding Suitability\n"
-        "Cliffs and rough terrain reduce the score even if average slope is ideal",
-        fontsize=14,
-        fontweight="bold",
-        y=1.00,
-    )
-
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_dir / "final_score.png", dpi=150, bbox_inches="tight")
     plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'final_score.png'}")
 
-    logger.info(f"✓ Slope penalties visualization saved: {output_path}")
+    # Panel 6: Score reduction
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(score_reduction, cmap="magma", aspect="equal", interpolation="nearest", vmin=0)
+    ax.set_title("Score Reduction", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.colorbar(im, ax=ax, shrink=0.8)
+    plt.tight_layout()
+    plt.savefig(output_dir / "score_reduction.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'score_reduction.png'}")
 
 
-def visualize_all_score_components(
+def save_score_component_panels(
     slope_stats,
     snow_stats: dict,
-    component_scores: dict,
     final_score: np.ndarray,
-    output_path: Path,
+    output_dir: Path,
     scorer=None,
 ):
     """
-    Comprehensive visualization showing scoring components with equation.
-
-    Creates a 4x4 grid with larger, more readable panels:
-    - Row 1: Additive components (slope, depth, coverage, consistency)
-    - Row 2: More additive + multiplicative (aspect, runout, cliff, terrain)
-    - Row 3: Raw inputs for context
-    - Row 4: Combination steps + equation
+    Save individual score component panels to separate PNG files.
 
     Args:
         slope_stats: SlopeStatistics object
         snow_stats: Dictionary with snow statistics
-        component_scores: Dict from scorer.get_component_scores()
         final_score: Final sledding score array
-        output_path: Where to save the visualization
+        output_dir: Directory to save individual panel PNG files
         scorer: Optional ScoreCombiner to generate formula from config
     """
     from src.scoring import trapezoidal, dealbreaker, linear, snow_consistency, terrain_consistency
     from src.scoring.configs import DEFAULT_SLEDDING_SCORER
-    from matplotlib.gridspec import GridSpec
-    from matplotlib.colors import Normalize, ListedColormap
+    from matplotlib.colors import TwoSlopeNorm
 
-    logger.info(f"Creating comprehensive score components visualization: {output_path}")
+    logger.info(f"Saving individual score component panels to {output_dir}")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Use provided scorer or default
     if scorer is None:
@@ -556,7 +569,6 @@ def visualize_all_score_components(
     terrain_cons = terrain_consistency(slope_stats.roughness, slope_stats.slope_std)
     depth_score = trapezoidal(snow_stats["median_max_depth"], sweet_range=(150, 500), ramp_range=(50, 1000))
     coverage_score = linear(snow_stats["mean_snow_day_ratio"], value_range=(0, 1), power=0.5)
-    # Combined snow consistency using RMS of inter/intra-season CVs
     consistency_score = snow_consistency(
         snow_stats["interseason_cv"],
         snow_stats["mean_intraseason_cv"],
@@ -591,27 +603,12 @@ def visualize_all_score_components(
     multiplicative = cliff_penalty * terrain_cons
     combined_final = additive_sum * multiplicative
 
-    # Compute percentiles for the final score
-    percentiles = [25, 50, 75, 90, 95]
-    pct_values = {p: np.nanpercentile(combined_final, p) for p in percentiles}
-
-    # Create figure with 5 rows (equation row + 4 data rows)
-    fig = plt.figure(figsize=(20, 28))
-    gs = GridSpec(5, 4, figure=fig, height_ratios=[0.4, 1, 1, 1, 1], hspace=0.35, wspace=0.25)
-
-    # =========================================================================
-    # ROW 0: EQUATION (generated from scorer config)
-    # =========================================================================
-    ax_eq = fig.add_subplot(gs[0, :])
-    ax_eq.axis('off')
-
-    # Generate formula from scorer configuration
+    # Save equation to markdown file
     additive_parts = []
     multiplicative_parts = []
     for comp in scorer.components:
         name = comp.name.replace("_", " ").title()
         if comp.role == "additive":
-            weight_pct = int(comp.weight * 100)
             additive_parts.append(f"{comp.weight:.2f} × {name}")
         else:
             multiplicative_parts.append(name)
@@ -619,7 +616,6 @@ def visualize_all_score_components(
     additive_formula = "  +  ".join(additive_parts)
     multiplicative_formula = "  ×  ".join(multiplicative_parts)
 
-    # Build compact formula for final line
     additive_compact = " + ".join(
         f"{comp.weight:.2f}×{comp.name.replace('_', '').title()[:6]}"
         for comp in scorer.components if comp.role == "additive"
@@ -630,149 +626,80 @@ def visualize_all_score_components(
     )
 
     equation_text = (
-        f"SLEDDING SCORE FORMULA (from {scorer.name})\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"ADDITIVE (weighted sum = base score):\n"
-        f"    {additive_formula}\n\n"
-        f"MULTIPLICATIVE (penalties applied to base score):\n"
-        f"    × {multiplicative_formula}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"FINAL = ({additive_compact}) × {mult_compact}"
+        f"# Sledding Score Formula\n\n"
+        f"**Scorer**: {scorer.name}\n\n"
+        f"## Additive Components (weighted sum = base score)\n\n"
+        f"```\n{additive_formula}\n```\n\n"
+        f"## Multiplicative Penalties\n\n"
+        f"```\n× {multiplicative_formula}\n```\n\n"
+        f"## Final Equation\n\n"
+        f"```\nFINAL = ({additive_compact}) × {mult_compact}\n```\n"
     )
-    ax_eq.text(0.5, 0.5, equation_text, transform=ax_eq.transAxes,
-               fontsize=11, fontfamily='monospace', ha='center', va='center',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightyellow', edgecolor='gray', alpha=0.9))
 
-    # =========================================================================
-    # ROW 1: ADDITIVE COMPONENTS (main 4)
-    # =========================================================================
-    row1_data = [
-        (slope_score, f"Slope Score ({int(w_slope*100)}%)\ntrapezoidal 5-15°", "viridis"),
-        (depth_score, f"Depth Score ({int(w_depth*100)}%)\ntrapezoidal 150-500mm", "viridis"),
-        (coverage_score, f"Coverage Score ({int(w_coverage*100)}%)\nlinear √(ratio)", "viridis"),
-        (consistency_score, f"Snow Reliability ({int(w_consistency*100)}%)\nRMS(inter+intra CV)", "viridis"),
-    ]
+    equation_path = output_dir / "equation.md"
+    with open(equation_path, 'w') as f:
+        f.write(equation_text)
+    logger.info(f"✓ Saved: {equation_path}")
 
-    for i, (data, title, cmap) in enumerate(row1_data):
-        ax = fig.add_subplot(gs[1, i])
-        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-        ax.set_title(title, fontsize=11, fontweight="bold", color="darkgreen")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # =========================================================================
-    # ROW 2: ADDITIVE (remaining) + MULTIPLICATIVE
-    # =========================================================================
-    row2_data = [
-        (aspect_score, f"Aspect Score ({int(w_aspect*100)}%)\nnorth bonus", "viridis", "darkgreen"),
-        (runout_bonus, f"Runout Bonus ({int(w_runout*100)}%)\nmin slope < 5°", "viridis", "darkgreen"),
-        (cliff_penalty, "Cliff Penalty (×)\ndealbreaker p95 > 25°", "plasma", "darkred"),
-        (terrain_cons, "Terrain Consistency (×)\nextreme roughness only", "plasma", "darkred"),
-    ]
-
-    for i, (data, title, cmap, color) in enumerate(row2_data):
-        ax = fig.add_subplot(gs[2, i])
-        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-        ax.set_title(title, fontsize=11, fontweight="bold", color=color)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # =========================================================================
-    # ROW 3: KEY RAW INPUTS
-    # =========================================================================
-    row3_data = [
-        (slope_stats.slope_mean, "Raw: Slope Mean (°)", "cividis", None),
-        (snow_stats["median_max_depth"], "Raw: Snow Depth (mm)", "viridis", None),
-        (snow_stats["interseason_cv"], "Raw: Interseason CV\n(year-to-year)", "magma", None),
-        (snow_stats["mean_intraseason_cv"], "Raw: Intraseason CV\n(within-winter)", "magma", None),
-    ]
-
-    for i, (data, title, cmap, vlim) in enumerate(row3_data):
-        ax = fig.add_subplot(gs[3, i])
-        vmin, vmax = vlim if vlim else (np.nanmin(data), np.nanmax(data))
-        im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=vmin, vmax=vmax)
-        ax.set_title(title, fontsize=11, fontweight="bold", color="gray")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # =========================================================================
-    # ROW 4: COMBINATION STEPS
-    # =========================================================================
-    from matplotlib.colors import TwoSlopeNorm
-
-    # For final score, use TwoSlopeNorm centered at 0.7 to emphasize good scores
-    # This gives more color resolution to scores > 0.7 (the excellent sledding range)
-    final_norm = TwoSlopeNorm(vmin=0, vcenter=0.7, vmax=1)
-
-    row4_data = [
-        (additive_sum, "Additive Sum\n(weighted components)", "viridis", None),
-        (multiplicative, "Multiplicative Product\n(cliff × terrain)", "inferno", None),
-        (combined_final, "FINAL SCORE\n(additive × mult)", "viridis", final_norm),
-        (additive_sum - combined_final, "Score Reduction\n(lost to penalties)", "magma", None),
-    ]
-
-    for i, (data, title, cmap, norm) in enumerate(row4_data):
-        ax = fig.add_subplot(gs[4, i])
-        if norm is None:
-            # Default 0-1 for most panels
-            if "Reduction" in title:
-                im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest",
-                               vmin=0, vmax=max(0.01, np.nanmax(data)))
-            else:
-                im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest",
-                               vmin=0, vmax=1)
-        else:
-            # Use custom norm for final score
+    # Helper function to save individual panels
+    def save_single_panel(data, filename, title, cmap, norm=None, vmin=0, vmax=1):
+        fig, ax = plt.subplots(figsize=(10, 8))
+        if norm:
             im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", norm=norm)
-        color = "darkblue" if "FINAL" in title else "black"
-        ax.set_title(title, fontsize=11, fontweight="bold", color=color)
+        else:
+            im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest", vmin=vmin, vmax=vmax)
+        ax.set_title(title, fontweight="bold", fontsize=14)
         ax.set_xticks([])
         ax.set_yticks([])
-        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-        if "FINAL" in title:
-            # Add percentile tick marks on colorbar
-            # Use actual percentile values as custom ticks
-            pct_ticks = [pct_values[p] for p in percentiles]
+        plt.colorbar(im, ax=ax, shrink=0.8)
+        plt.tight_layout()
+        plt.savefig(output_dir / filename, dpi=150, bbox_inches="tight")
+        plt.close()
+        logger.info(f"✓ Saved: {output_dir / filename}")
 
-            # Set colorbar ticks to show both standard values and percentiles
-            all_ticks = sorted(set([0, 0.7, 1] + pct_ticks))
-            cbar.set_ticks(all_ticks)
-            tick_labels = []
-            for t in all_ticks:
-                if t == 0.7:
-                    tick_labels.append("0.7 ←")
-                elif t in pct_ticks:
-                    p_idx = pct_ticks.index(t)
-                    tick_labels.append(f"{t:.2f} (P{percentiles[p_idx]})")
-                else:
-                    tick_labels.append(f"{t:.1f}")
-            cbar.set_ticklabels(tick_labels)
-            cbar.ax.tick_params(labelsize=8)
+    # Row 1: Additive components
+    save_single_panel(slope_score, "slope_score.png", "Slope Score", "viridis")
+    save_single_panel(depth_score, "depth_score.png", "Depth Score", "viridis")
+    save_single_panel(coverage_score, "coverage_score.png", "Coverage Score", "viridis")
+    save_single_panel(consistency_score, "consistency_score.png", "Consistency Score", "viridis")
 
-    # Add row labels on the left side
-    fig.text(0.02, 0.78, "ADDITIVE\n(+)", fontsize=12, fontweight="bold", color="darkgreen",
-             rotation=90, va='center', ha='center')
-    fig.text(0.02, 0.58, "ADDITIVE/MULT\n(+ / ×)", fontsize=12, fontweight="bold", color="purple",
-             rotation=90, va='center', ha='center')
-    fig.text(0.02, 0.38, "RAW\nINPUTS", fontsize=12, fontweight="bold", color="gray",
-             rotation=90, va='center', ha='center')
-    fig.text(0.02, 0.15, "FINAL\nCOMBINE", fontsize=12, fontweight="bold", color="darkblue",
-             rotation=90, va='center', ha='center')
+    # Row 2: Additional components + penalties
+    save_single_panel(aspect_score, "aspect_score.png", "Aspect Score", "viridis")
+    save_single_panel(runout_bonus, "runout_bonus.png", "Runout Bonus", "viridis")
+    save_single_panel(cliff_penalty, "cliff_penalty.png", "Cliff Penalty", "plasma")
+    save_single_panel(terrain_cons, "terrain_consistency.png", "Terrain Consistency", "plasma")
 
-    fig.suptitle(
-        "Sledding Suitability Score: Component Breakdown",
-        fontsize=16,
-        fontweight="bold",
-        y=0.995,
-    )
+    # Row 3: Raw inputs
+    save_single_panel(slope_stats.slope_mean, "raw_slope_mean.png", "Raw: Slope Mean", "cividis",
+                     vmin=np.nanmin(slope_stats.slope_mean), vmax=np.nanmax(slope_stats.slope_mean))
+    save_single_panel(snow_stats["median_max_depth"], "raw_snow_depth.png", "Raw: Snow Depth", "viridis",
+                     vmin=np.nanmin(snow_stats["median_max_depth"]), vmax=np.nanmax(snow_stats["median_max_depth"]))
+    save_single_panel(snow_stats["interseason_cv"], "raw_interseason_cv.png", "Raw: Interseason CV", "magma",
+                     vmin=np.nanmin(snow_stats["interseason_cv"]), vmax=np.nanmax(snow_stats["interseason_cv"]))
+    save_single_panel(snow_stats["mean_intraseason_cv"], "raw_intraseason_cv.png", "Raw: Intraseason CV", "magma",
+                     vmin=np.nanmin(snow_stats["mean_intraseason_cv"]), vmax=np.nanmax(snow_stats["mean_intraseason_cv"]))
 
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    # Row 4: Combination steps
+    save_single_panel(additive_sum, "additive_sum.png", "Additive Sum", "viridis")
+    save_single_panel(multiplicative, "multiplicative.png", "Multiplicative Product", "inferno")
+
+    # Final score with special norm
+    final_norm = TwoSlopeNorm(vmin=0, vcenter=0.7, vmax=1)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(combined_final, cmap="viridis", aspect="equal", interpolation="nearest", norm=final_norm)
+    ax.set_title("Final Score", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    plt.tight_layout()
+    plt.savefig(output_dir / "final_score.png", dpi=150, bbox_inches="tight")
     plt.close()
+    logger.info(f"✓ Saved: {output_dir / 'final_score.png'}")
 
-    logger.info(f"✓ Comprehensive score components visualization saved: {output_path}")
+    # Score reduction
+    score_reduction = additive_sum - combined_final
+    save_single_panel(score_reduction, "score_reduction.png", "Score Reduction", "magma",
+                     vmin=0, vmax=max(0.01, np.nanmax(score_reduction)))
 
 
 def visualize_sledding_factors(
@@ -1048,7 +975,8 @@ def run_step_dem(output_dir: Path, use_mock: bool):
     dem_viz, stride = downsample_for_viz(dem)
     if stride > 1:
         logger.info(f"Downsampling DEM for visualization: {dem.shape} -> {dem_viz.shape} (stride={stride})")
-    output_path = output_dir / "01_raw_dem.png"
+    (output_dir / "01_raw").mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "01_raw" / "dem.png"
     visualize_dem(dem_viz, output_path)
 
     return dem, transform
@@ -1096,7 +1024,8 @@ def run_step_snow(output_dir: Path, dem: np.ndarray, use_mock: bool, terrain=Non
     snow_viz, stride = downsample_for_viz(snow_data)
     if stride > 1:
         logger.info(f"Downsampling snow data for visualization: {snow_data.shape} -> {snow_viz.shape} (stride={stride})")
-    output_path = output_dir / "01_raw_snow_depth.png"
+    (output_dir / "01_raw").mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "01_raw" / "snow_depth.png"
     visualize_snow_depth(snow_viz, output_path)
 
     return snow_stats
@@ -1139,10 +1068,10 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     score_viz, stride = downsample_for_viz(sledding_score)
     if stride > 1:
         logger.info(f"Downsampling score for visualization: {sledding_score.shape} -> {score_viz.shape} (stride={stride})")
-    output_path = output_dir / "05_final_sledding.png"
+    (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "05_final" / "sledding_score.png"
     visualize_sledding_score(score_viz, output_path)
 
-    # Visualize all factors that go into the sledding score
     # Downsample snow_stats arrays to match
     if stride > 1:
         snow_stats_viz = {
@@ -1151,41 +1080,6 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
         }
     else:
         snow_stats_viz = snow_stats
-
-    # Get all computed scores from SnowAnalysis (calculated during sledding score)
-    # This ensures DRY - scoring logic lives only in SnowAnalysis
-    slope_score_viz = None
-    slope_deg_viz = None
-    depth_score_viz = None
-    coverage_score_viz = None
-    variability_score_viz = None
-
-    if hasattr(snow, 'slope_score') and snow.slope_score is not None:
-        slope_score_viz = snow.slope_score[::stride, ::stride] if stride > 1 else snow.slope_score
-    if hasattr(snow, 'slope_deg') and snow.slope_deg is not None:
-        slope_deg_viz = snow.slope_deg[::stride, ::stride] if stride > 1 else snow.slope_deg
-    if hasattr(snow, 'depth_score') and snow.depth_score is not None:
-        depth_score_viz = snow.depth_score[::stride, ::stride] if stride > 1 else snow.depth_score
-    if hasattr(snow, 'coverage_score') and snow.coverage_score is not None:
-        coverage_score_viz = snow.coverage_score[::stride, ::stride] if stride > 1 else snow.coverage_score
-    if hasattr(snow, 'variability_score') and snow.variability_score is not None:
-        variability_score_viz = snow.variability_score[::stride, ::stride] if stride > 1 else snow.variability_score
-
-    # Safety check: ensure arrays match the visualization target shape
-    target_viz_shape = score_viz.shape
-    logger.info(f"Visualization target shape: {target_viz_shape}")
-
-    def resize_if_needed(arr, name):
-        if arr is None:
-            return None
-        logger.info(f"{name} viz shape: {arr.shape}")
-        if arr.shape != target_viz_shape:
-            logger.warning(f"Shape mismatch! Resizing {name} from {arr.shape} to {target_viz_shape}")
-            from scipy.ndimage import zoom
-            zoom_factors = (target_viz_shape[0] / arr.shape[0],
-                          target_viz_shape[1] / arr.shape[1])
-            return zoom(arr, zoom_factors, order=1)
-        return arr
 
     # Visualize slope statistics in detail
     if hasattr(snow, 'slope_stats') and snow.slope_stats is not None:
@@ -1208,22 +1102,21 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
                 aspect_cos=slope_stats_viz.aspect_cos[::stride, ::stride],
             )
 
-        # Visualize all slope statistics
-        slope_stats_path = output_dir / "02_stats_slope.png"
-        visualize_slope_statistics(slope_stats_viz, slope_stats_path)
+        # Save individual slope statistics panels
+        slope_stats_dir = output_dir / "02_slope_stats"
+        save_slope_stat_panels(slope_stats_viz, slope_stats_dir)
 
-        # Visualize how penalties affect the score
-        penalties_path = output_dir / "03_penalty_slope.png"
-        visualize_slope_penalties(slope_stats_viz, penalties_path)
+        # Save individual slope penalty panels
+        penalty_dir = output_dir / "03_slope_penalties"
+        save_slope_penalty_panels(slope_stats_viz, penalty_dir)
 
-        # NEW: Comprehensive raw → transformed → combined visualization
-        comprehensive_path = output_dir / "04_all_components.png"
-        visualize_all_score_components(
+        # Save individual score component panels
+        component_dir = output_dir / "04_score_components"
+        save_score_component_panels(
             slope_stats=slope_stats_viz,
             snow_stats=snow_stats_viz,
-            component_scores=snow.component_scores if hasattr(snow, 'component_scores') else {},
             final_score=score_viz,
-            output_path=comprehensive_path,
+            output_dir=component_dir,
         )
     else:
         logger.warning("No slope_stats available - skipping slope statistics visualizations")
@@ -1258,7 +1151,8 @@ def run_step_render(output_dir: Path, terrain: Terrain):
     terrain.set_color_mapping(blend_elevation_and_sledding, source_layers=["dem", "sledding_score"])
 
     # Render
-    output_path = output_dir / "06_render_3d.png"
+    (output_dir / "06_render").mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "06_render" / "render_3d.png"
     render_3d_with_snow(terrain, output_path)
 
 
@@ -1283,8 +1177,8 @@ Examples:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("examples"),
-        help="Output directory for visualizations (default: examples/)",
+        default=Path("docs/images"),
+        help="Output directory for visualizations (default: docs/images/)",
     )
 
     parser.add_argument(
