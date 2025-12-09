@@ -25,7 +25,9 @@ nav:
   - Getting Started:
     - Installation: PYTHON_SETUP.md
     - Quick Start: QUICK_START.md
-  - Examples: EXAMPLES.md
+  - Examples:
+    - Detroit Elevation Visualization: DETROIT_ELEVATION.md
+    - Snow Sledding Analysis: SNOW_SLEDDING.md
   - API Reference: API_REFERENCE.md
   - Appendix (Development & Workflows):
     - Workflows: WORKFLOWS.md
