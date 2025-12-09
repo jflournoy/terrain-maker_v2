@@ -2,6 +2,20 @@
 
 A complete example showing how to combine elevation data with SNODAS snow statistics to identify optimal sledding locations. This demonstrates the power of multi-layer terrain analysis with visual outputs at each pipeline stage.
 
+## The Final Result
+
+This pipeline produces a comprehensive sledding suitability score map:
+
+![Final Sledding Suitability Score](images/05_final/sledding_score.png)
+
+**Score Interpretation:**
+- **0.7-1.0 (Dark Yellow)**: Excellent sledding locations
+- **0.5-0.7 (Yellow-Green)**: Good sledding with some concerns
+- **0.3-0.5 (Green-Cyan)**: Moderate - marginal conditions
+- **0.0-0.3 (Dark Blue/Purple)**: Poor sledding potential
+
+---
+
 ### What This Example Shows
 
 ✓ **Multi-Layer Analysis**: Combine terrain elevation with snow depth/coverage data
@@ -411,8 +425,8 @@ Identifies rough, boulder-strewn terrain vs smooth slopes
 **Dominant Aspect** - Direction slopes face (compass direction):
 ```
 Shows which way slopes face:
-- Dark colors: North-facing (shadier, retains more snow)
-- Light colors: South-facing (sunnier, more melt)
+- Light colors: North-facing (shadier, retains more snow)
+- Dark colors: South-facing (sunnier, more melt)
 - North-facing aspects often have better sledding
 ```
 

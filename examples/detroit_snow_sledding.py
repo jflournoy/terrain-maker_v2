@@ -501,9 +501,9 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     fig, ax = plt.subplots(figsize=(10, 8))
     aspect_deg = slope_stats.dominant_aspect
 
-    # Use standard twilight colormap: North (0°) = dark, South (180°) = light
+    # Use reversed twilight colormap: North (0°) = light, South (180°) = dark
     norm = Normalize(vmin=0, vmax=360)
-    aspect_colors = plt.cm.twilight(norm(aspect_deg))
+    aspect_colors = plt.cm.twilight_r(norm(aspect_deg))
 
     # Fade to gray for low slopes
     slope_fade_threshold = 3.0
@@ -513,10 +513,10 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
         aspect_colors[:, :, i] = gray + slope_fade * (aspect_colors[:, :, i] - gray)
 
     im = ax.imshow(aspect_colors, aspect="equal", interpolation="nearest")
-    ax.set_title("Dominant Aspect (°) - N=dark, S=light", fontweight="bold", fontsize=14)
+    ax.set_title("Dominant Aspect (°) - N=light, S=dark", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
-    sm = plt.cm.ScalarMappable(cmap=plt.cm.twilight, norm=norm)
+    sm = plt.cm.ScalarMappable(cmap=plt.cm.twilight_r, norm=norm)
     cbar = plt.colorbar(sm, ax=ax, shrink=0.8, ticks=[0, 90, 180, 270, 360])
     cbar.ax.set_yticklabels(['N', 'E', 'S', 'W', 'N'])
     plt.tight_layout()
