@@ -21,6 +21,7 @@ from src.scoring.transforms import (
     trapezoidal,
     dealbreaker,
     linear,
+    snow_consistency,
     terrain_consistency,
 )
 from src.scoring.combiner import ScoreComponent, ScoreCombiner
@@ -30,6 +31,7 @@ __all__ = [
     "trapezoidal",
     "dealbreaker",
     "linear",
+    "snow_consistency",
     "terrain_consistency",
     # Combiner
     "ScoreComponent",

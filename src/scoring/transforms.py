@@ -213,34 +213,90 @@ def linear(
     return result
 
 
+def snow_consistency(
+    interseason_cv: NumericType,
+    intraseason_cv: NumericType,
+    interseason_threshold: float = 1.5,
+    intraseason_threshold: float = 1.0,
+) -> NumericType:
+    """
+    Combined snow consistency metric from year-to-year and within-winter variability.
+
+    Uses RMS (root mean square) to combine normalized CVs.
+    Returns 1.0 for consistent snow, with gradual falloff for high variability.
+
+    This is used as an ADDITIVE component (weighted contribution to score),
+    not a multiplicative penalty. The score represents how reliable the snow is.
+
+    Args:
+        interseason_cv: Year-to-year coefficient of variation
+        intraseason_cv: Within-winter coefficient of variation
+        interseason_threshold: CV value that maps to full inconsistency (default: 1.5)
+        intraseason_threshold: CV value that maps to full inconsistency (default: 1.0)
+
+    Returns:
+        Consistency score in [0, 1] where 1.0 = reliable, 0.0 = unreliable
+
+    Example:
+        >>> snow_consistency(interseason_cv=0.0, intraseason_cv=0.0)
+        1.0
+        >>> snow_consistency(interseason_cv=1.5, intraseason_cv=1.0)
+        0.0
+        >>> snow_consistency(interseason_cv=0.75, intraseason_cv=0.5)  # Both at 50%
+        0.5
+    """
+    interseason_cv = np.asarray(interseason_cv)
+    intraseason_cv = np.asarray(intraseason_cv)
+
+    # Normalize each to [0, 1] where 1 = fully inconsistent
+    inter_norm = np.clip(interseason_cv / interseason_threshold, 0.0, 1.0)
+    intra_norm = np.clip(intraseason_cv / intraseason_threshold, 0.0, 1.0)
+
+    # Combine using RMS (natural for variance-like measures)
+    inconsistency = np.sqrt((inter_norm**2 + intra_norm**2) / 2)
+
+    # Invert to get consistency (1 = good, 0 = bad)
+    result = 1.0 - inconsistency
+
+    # Return scalar if input was scalar
+    if result.ndim == 0:
+        return float(result)
+    return result
+
+
 def terrain_consistency(
     roughness: NumericType,
     slope_std: NumericType,
     roughness_threshold: float = 30.0,
     slope_std_threshold: float = 10.0,
+    soft_start: float = 0.5,
 ) -> NumericType:
     """
     Combined terrain consistency metric from roughness and slope variability.
 
-    Uses RMS (root mean square) to combine normalized roughness and slope_std.
-    Returns 1.0 for perfectly consistent terrain, 0.0 for highly inconsistent.
+    Uses RMS to combine normalized roughness and slope_std, but only penalizes
+    EXTREME inconsistency. Most terrain gets a score of 1.0 (no penalty).
+
+    The penalty only kicks in when the combined inconsistency exceeds soft_start,
+    providing a gradual falloff for very rough terrain.
 
     Args:
         roughness: Elevation standard deviation in meters
         slope_std: Slope standard deviation in degrees
         roughness_threshold: Roughness value that maps to full inconsistency
         slope_std_threshold: Slope std value that maps to full inconsistency
+        soft_start: Normalized inconsistency level where penalty begins (default 0.5)
 
     Returns:
-        Consistency score in [0, 1] where 1.0 = consistent, 0.0 = inconsistent
+        Consistency score in [0, 1] where 1.0 = acceptable, 0.0 = extremely rough
 
     Example:
         >>> terrain_consistency(roughness=0.0, slope_std=0.0)
         1.0
-        >>> terrain_consistency(roughness=30.0, slope_std=10.0)
+        >>> terrain_consistency(roughness=15.0, slope_std=5.0)  # Both at 50%, at threshold
+        1.0
+        >>> terrain_consistency(roughness=30.0, slope_std=10.0)  # Extreme
         0.0
-        >>> terrain_consistency(roughness=15.0, slope_std=5.0)  # Both at 50%
-        0.5
     """
     roughness = np.asarray(roughness)
     slope_std = np.asarray(slope_std)
@@ -252,8 +308,17 @@ def terrain_consistency(
     # Combine using RMS (natural for variance-like measures)
     inconsistency = np.sqrt((roughness_norm**2 + slope_std_norm**2) / 2)
 
-    # Invert to get consistency (1 = good, 0 = bad)
-    result = 1.0 - inconsistency
+    # Only penalize EXTREME inconsistency (above soft_start threshold)
+    # Below soft_start: score = 1.0 (no penalty)
+    # Above soft_start: gradual falloff to 0.0
+    result = np.ones_like(inconsistency, dtype=float)
+    extreme = inconsistency > soft_start
+    if np.any(extreme):
+        # Scale from soft_start->1.0 to 1.0->0.0
+        falloff_range = 1.0 - soft_start
+        result[extreme] = 1.0 - (inconsistency[extreme] - soft_start) / falloff_range
+
+    result = np.clip(result, 0.0, 1.0)
 
     # Return scalar if input was scalar
     if result.ndim == 0:
