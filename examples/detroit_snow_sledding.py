@@ -364,6 +364,54 @@ def save_sledding_score_percentiles(score: np.ndarray, output_path: Path):
     logger.info(f"✓ Sledding score percentile map saved: {output_path}")
 
 
+def save_sledding_score_filtered(score: np.ndarray, output_path: Path, threshold: float = 0.7):
+    """
+    Create filtered map showing only excellent sledding locations (score > threshold).
+
+    Args:
+        score: Sledding suitability score (0-1)
+        output_path: Where to save the filtered map
+        threshold: Score threshold for excellent locations (default: 0.7)
+    """
+    logger.info(f"Creating filtered sledding score map (threshold > {threshold}): {output_path}")
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Create filtered score: excellent locations retain value, others become 0
+    excellent_spots = score > threshold
+    filtered_score = np.where(excellent_spots, score, 0)
+
+    # Count excellent pixels
+    excellent_count = np.sum(excellent_spots)
+    total_pixels = np.sum(~np.isnan(score))
+    excellent_pct = (excellent_count / total_pixels * 100) if total_pixels > 0 else 0
+
+    # Use RdYlGn colormap with vmin/vmax to highlight the excellent range
+    im = ax.imshow(filtered_score, cmap="RdYlGn", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
+    ax.set_title(f"Excellent Sledding Locations (Score > {threshold})", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label("Sledding Score", rotation=270, labelpad=20)
+
+    # Add annotation showing how many excellent pixels found
+    ax.text(
+        0.5, -0.12,
+        f"{excellent_count:,} excellent pixels ({excellent_pct:.1f}% of area)",
+        transform=ax.transAxes,
+        ha='center',
+        fontsize=11,
+        bbox=dict(boxstyle="round", facecolor="lightgreen", alpha=0.8)
+    )
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    logger.info(f"✓ Sledding score filtered map saved: {output_path}")
+
+
 def save_slope_stat_panels(slope_stats, output_dir: Path):
     """
     Save individual slope statistics panels to separate PNG files.
@@ -1172,6 +1220,10 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     # Save percentile map of sledding scores
     percentile_path = output_dir / "05_final" / "sledding_score_percentiles.png"
     save_sledding_score_percentiles(score_viz, percentile_path)
+
+    # Save filtered map showing only excellent locations (score > 0.7)
+    filtered_path = output_dir / "05_final" / "sledding_score_excellent.png"
+    save_sledding_score_filtered(score_viz, filtered_path, threshold=0.7)
 
     # Downsample snow_stats arrays to match
     if stride > 1:

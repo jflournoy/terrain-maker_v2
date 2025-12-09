@@ -292,17 +292,26 @@ sledding_score = snow.calculate_sledding_score(
 
 #### Filter by Score Threshold
 
-Identify only the best locations:
+The pipeline automatically generates a filtered visualization showing only excellent locations (score > 0.7). This is saved as `sledding_score_excellent.png` in the `05_final/` output directory.
+
+If you want to filter by a different threshold, you can customize it in code:
 
 ```python
-# Get high-scoring areas (score > 0.7)
-excellent_spots = sledding_score > 0.7
+# Get high-scoring areas (score > 0.8 for very high standards)
+excellent_spots = sledding_score > 0.8
 
-# Visualize only excellent locations
-visualize_sledding_score(
-    np.where(excellent_spots, sledding_score, 0),
-    output_path="excellent_sledding.png"
-)
+# Visualize only excellent locations with custom threshold
+score_filtered = np.where(excellent_spots, sledding_score, 0)
+# Then plot with same visualization logic...
+```
+
+Or adjust the pipeline directly:
+
+```python
+from examples.detroit_snow_sledding import save_sledding_score_filtered
+
+# Generate with custom threshold (e.g., 0.75)
+save_sledding_score_filtered(sledding_score, output_path="excellent_0.75.png", threshold=0.75)
 ```
 
 #### Use Different Time Periods
@@ -565,6 +574,17 @@ The final sledding score combines all factors into a single suitability map (0-1
 - **0.5-0.7 (Yellow-Green)**: Good sledding with some concerns
 - **0.3-0.5 (Green-Cyan)**: Moderate - marginal conditions
 - **0.0-0.3 (Dark Blue/Purple)**: Poor sledding potential
+
+**Additional Analysis Visualizations:**
+
+![Sledding Score Distribution](images/05_final/sledding_score_histogram.png)
+*Histogram showing the distribution of sledding scores across all pixels, with quartile markers (25th, 50th, 75th percentiles)*
+
+![Sledding Score Percentiles](images/05_final/sledding_score_percentiles.png)
+*Spatial distribution of score percentiles: bottom 25% (red), 25-50% (orange), 50-75% (yellow), top 25% (green/blue)*
+
+![Excellent Sledding Locations](images/05_final/sledding_score_excellent.png)
+*Filtered map highlighting only the excellent sledding locations (score > 0.7) - the most promising areas for sledding*
 
 ### Generating These Visualizations
 
