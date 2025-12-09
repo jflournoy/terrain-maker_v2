@@ -207,7 +207,7 @@ This project uses Claude Code's TDD workflow for development:
 3. **`/commit`** - Quality-checked commits
 4. **`/learn`** - Capture development insights
 
-See [CLAUDE.md](CLAUDE.md) for full Claude Code guidelines.
+See CLAUDE.md in the project root for full Claude Code guidelines.
 
 ## Troubleshooting
 

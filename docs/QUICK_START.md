@@ -189,7 +189,7 @@ See the [Water Body Detection section](API_REFERENCE.md#terrainwater) in the API
 
 - **See it in action**: Check [Examples](EXAMPLES.md) for a complete Detroit example
 - **Learn the API**: Browse [API Reference](API_REFERENCE.md)
-- **Explore features**: Read [Best Practices](../guides/best-practices.md)
+- **Explore features**: Read [Best Practices](BEST_PRACTICES.md)
 
 ## Troubleshooting
 

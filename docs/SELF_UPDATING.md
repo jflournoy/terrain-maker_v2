@@ -49,7 +49,7 @@ This header:
 
 ### 2. The `/docs` Command
 
-The enhanced `/docs` command ([view command](.claude/commands/docs.md)) supports:
+The enhanced `/docs` command supports:
 
 #### Updating Documentation
 
