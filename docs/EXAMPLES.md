@@ -1,8 +1,4 @@
-# Examples Gallery
-
-Real-world examples demonstrating the power and simplicity of Terrain Maker.
-
-## Detroit Elevation Visualization
+# Detroit Elevation Visualization
 
 A complete example showing how to create stunning 3D terrain visualizations from real SRTM elevation data with just a few lines of Python.
 
@@ -520,7 +516,7 @@ This ensures you always have current data without manual cache management.
 
 ---
 
-## Snow Integration: Sledding Location Analysis
+# Snow Integration: Sledding Location Analysis
 
 A complete example showing how to combine elevation data with SNODAS snow statistics to identify optimal sledding locations. This demonstrates the power of multi-layer terrain analysis with visual outputs at each pipeline stage.
 

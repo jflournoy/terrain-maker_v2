@@ -31,7 +31,7 @@ TDD doesn't slow Claude down - it gives Claude superpowers:
 
 - **Without TDD**: Would have been a mess of regex and file operations
 - **With TDD**: 27 tests (test/docs-examples.unit.test.js) → Perfect implementation
-- **Result**: Feature works flawlessly, see commits [aa00002](../../commit/aa00002)
+- **Result**: Feature works flawlessly, see commits (aa00002)
 
 ### Example 2: Context Management
 

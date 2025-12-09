@@ -29,9 +29,9 @@ Real examples from this repository showing the power of TDD with Claude.
 
 #### The Commits Tell the Story
 
-1. [🔴 Test Phase](../../commit/aa00002) - Wrote all tests first
-2. [🟢 Implementation](../../commit/aa00002) - Claude implemented perfectly
-3. [📚 Documentation](../../commit/b131df0) - Auto-generated examples
+1. 🔴 Test Phase (aa00002) - Wrote all tests first
+2. 🟢 Implementation (aa00002) - Claude implemented perfectly
+3. 📚 Documentation (b131df0) - Auto-generated examples
 
 #### The Result
 
@@ -65,7 +65,7 @@ Then Claude implemented exactly that. No more, no less.
 
 ### The Victory
 
-- [✅ Commit c446afe](../../commit/c446afe) - Perfect implementation
+- ✅ Commit c446afe - Perfect implementation
 - All edge cases handled
 - Clean, readable code
 - 100% test coverage
@@ -78,8 +78,8 @@ We used TDD to build the TDD tooling. How's that for eating our own dog food?
 
 ### The Process
 
-1. [🔴 Tests for TDD detection](../../commit/2ce43d1)
-2. [🟢 Framework detection implementation](../../commit/b344bc7)
+1. 🔴 Tests for TDD detection (2ce43d1)
+2. 🟢 Framework detection implementation (b344bc7)
 3. Tests for test commands
 4. Implementation of test runners
 
@@ -156,15 +156,15 @@ Needed to refactor the entire docs.js module for better organization.
 
 ### "The Test That Saved Production"
 
-Commit [8ec6319](../../commit/8ec6319): A simple test for broken links caught an issue that would have broken documentation in production.
+Commit 8ec6319: A simple test for broken links caught an issue that would have broken documentation in production.
 
 ### "The Refactor That Just Worked"
 
-Commit [f84cac6](../../commit/f84cac6): Major refactoring completed in one commit because tests ensured nothing broke.
+Commit f84cac6: Major refactoring completed in one commit because tests ensured nothing broke.
 
 ### "The Feature That Wrote Itself"
 
-Commit series [1fdac58](../../commit/1fdac58) → [d0af9df](../../commit/d0af9df): Tests defined the behavior so clearly that Claude's implementation was perfect on first try.
+Commit series 1fdac58 → d0af9df: Tests defined the behavior so clearly that Claude's implementation was perfect on first try.
 
 ## Pattern Recognition
 
