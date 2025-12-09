@@ -151,20 +151,30 @@ def _load_snodas_data(binary_path, header_path):
     logger.debug(f"Loading SNODAS from {binary_path}")
     binary_path = Path(binary_path)
     header_path = Path(header_path)
-    uncompressed_binary_path = binary_path.with_suffix("")
-    uncompressed_header_path = header_path.with_suffix("")
 
+    # Handle binary file decompression
     loaded_uncompressed = False
     if binary_path.suffix == ".gz":
+        uncompressed_binary_path = binary_path.with_suffix("")
         if not uncompressed_binary_path.exists():
             uncompressed_binary_path = _gunzip_snodas_file(binary_path)
         else:
             loaded_uncompressed = True
+    else:
+        # Already uncompressed
+        uncompressed_binary_path = binary_path
+
+    # Handle header file decompression
     if header_path.suffix == ".gz":
+        uncompressed_header_path = header_path.with_suffix("")
         if not uncompressed_header_path.exists():
             uncompressed_header_path = _gunzip_snodas_file(header_path)
         else:
             loaded_uncompressed = True
+    else:
+        # Already uncompressed
+        uncompressed_header_path = header_path
+
     if loaded_uncompressed:
         logger.debug("Decompressed file exists, did not decompress.")
 
@@ -397,34 +407,119 @@ class SnowAnalysis:
         self._store_snow_stats_in_terrain(stats, metadata)
         return stats, metadata, failed_files
 
-    def calculate_sledding_score(self, stats=None, min_depth_mm=100, min_coverage=0.3):
+    def calculate_sledding_score(self, stats=None, scorer=None):
         """
-        Calculate a sledding suitability score combining depth and consistency metrics.
+        Calculate a sledding suitability score using the configurable scoring system.
+
+        Uses a ScoreCombiner to combine terrain and snow statistics into a
+        suitability score. The scorer can be customized or replaced entirely.
 
         Args:
             stats: Dictionary of snow statistics (defaults to self.stats).
-            min_depth_mm: Minimum snow depth for sledding in mm (default: 100).
-            min_coverage: Min proportion of snow days (default: 0.3 or 30%).
+            scorer: Optional ScoreCombiner instance. Defaults to DEFAULT_SLEDDING_SCORER.
+                    Pass a custom scorer to modify thresholds, weights, or add components.
 
         Returns:
             numpy.ma.MaskedArray: Sledding score [0-1].
+
+        See Also:
+            src.scoring.configs.sledding: Default scoring configuration
+            src.scoring.combiner.ScoreCombiner: How to build custom scorers
+
+        Example:
+            # Use default scorer
+            score = snow.calculate_sledding_score()
+
+            # Use custom scorer from JSON
+            import json
+            from src.scoring import ScoreCombiner
+            with open("my_config.json") as f:
+                custom = ScoreCombiner.from_dict(json.load(f))
+            score = snow.calculate_sledding_score(scorer=custom)
         """
+        # Import scoring system
+        from src.scoring.configs.sledding import (
+            DEFAULT_SLEDDING_SCORER,
+            compute_derived_inputs,
+        )
+        from src.scoring.transforms import terrain_consistency
+
+        if scorer is None:
+            scorer = DEFAULT_SLEDDING_SCORER
+
         if stats is None:
             if self.stats is None:
                 raise ValueError("No snow stats. Call process_snow_data() first.")
             stats = self.stats
 
-        logger.info("Computing sledding potential score...")
+        logger.info(f"Computing sledding score using '{scorer.name}' config...")
 
-        with np.errstate(divide="ignore", invalid="ignore"):
-            depth_score = np.clip(stats["median_max_depth"] / (min_depth_mm * 2), 0, 1)
-            coverage_score = np.clip(stats["mean_snow_day_ratio"] / min_coverage, 0, 1)
-            variability_score = 1 - np.clip(
-                (stats["interseason_cv"] + stats["mean_intraseason_cv"]) / 4, 0, 1
+        # Calculate slope from terrain DEM at target (SNODAS) resolution
+        target_shape = stats["median_max_depth"].shape
+        slope_stats = None
+
+        if self.terrain is not None and "dem" in self.terrain.data_layers:
+            logger.info("  Calculating slope statistics from DEM (tiled processing)...")
+            from src.snow.slope_statistics import compute_tiled_slope_statistics
+
+            dem = self.terrain.data_layers["dem"]["data"]
+            dem_shape = dem.shape
+            logger.info(f"  DEM shape: {dem_shape}, target output: {target_shape}")
+
+            # Compute slope statistics using tiled processing
+            slope_stats = compute_tiled_slope_statistics(
+                dem=dem,
+                dem_transform=self.terrain.dem_transform,
+                dem_crs=self.terrain.data_layers["dem"]["crs"],
+                target_shape=target_shape,
+                target_transform=self.metadata.get("transform", self.terrain.dem_transform),
+                target_crs=self.metadata.get("crs", "EPSG:4326"),
             )
 
-        # Weighted combination
-        sledding_score = 0.4 * depth_score + 0.4 * coverage_score + 0.2 * variability_score
+            logger.info(f"  Slope stats computed: mean={np.mean(slope_stats.slope_mean):.1f}°, "
+                       f"max={np.max(slope_stats.slope_max):.1f}°, "
+                       f"p95={np.mean(slope_stats.slope_p95):.1f}°")
+
+            self.slope_stats = slope_stats
+            self.slope_deg = slope_stats.slope_mean
+        else:
+            logger.warning("  No terrain available - using neutral slope values")
+
+        # Prepare inputs for the scorer
+        logger.info("  Preparing scorer inputs...")
+
+        if slope_stats is not None:
+            # Compute derived inputs from slope statistics
+            inputs = compute_derived_inputs(slope_stats, stats)
+        else:
+            # No terrain - create neutral slope inputs
+            shape = stats["median_max_depth"].shape
+            inputs = {
+                "slope_mean": np.full(shape, 10.0),  # Neutral (in sweet spot)
+                "slope_p95": np.full(shape, 10.0),   # Safe (no cliffs)
+                "snow_depth": stats["median_max_depth"],
+                "snow_coverage": stats["mean_snow_day_ratio"],
+                "snow_consistency": stats["interseason_cv"],
+                "aspect_bonus": np.zeros(shape),
+                "runout_bonus": np.ones(shape),
+                "terrain_consistency": np.ones(shape),
+            }
+
+        # Compute the score using the configurable scorer
+        logger.info(f"  Computing score with {len(scorer.components)} components...")
+        sledding_score = scorer.compute(inputs)
+
+        # Get individual component scores for visualization/debugging
+        component_scores = scorer.get_component_scores(inputs)
+
+        # Store intermediate results for visualization
+        self.slope_score = component_scores.get("slope_mean")
+        self.depth_score = component_scores.get("snow_depth")
+        self.coverage_score = component_scores.get("snow_coverage")
+        self.variability_score = component_scores.get("snow_consistency")
+        self.component_scores = component_scores  # All components
+
+        # Mask invalid values
         sledding_score = np.ma.masked_invalid(sledding_score)
 
         logger.info("Sledding score stats:")
@@ -602,6 +697,10 @@ class SnowAnalysis:
         for key, arr in stats.items():
             if not isinstance(arr, np.ndarray):
                 continue
+            # Convert masked arrays to regular ndarrays (reproject doesn't support MaskedArray)
+            # Use filled() to preserve masked values as NaN
+            if isinstance(arr, np.ma.MaskedArray):
+                arr = arr.filled(np.nan).astype(np.float32)
             layer_name = f"snodas_{key}"  # e.g., "snodas_median_max_depth"
             logger.info(f"Storing {layer_name} in Terrain.")
             self.terrain.add_data_layer(
@@ -756,7 +855,11 @@ class SnowAnalysis:
 
             logger.debug(f"Computing cv_depth for season {season}")
             with np.errstate(divide="ignore", invalid="ignore"):
-                stats_dict["cv_depth"] = stats_dict["std_depth"] / stats_dict["mean_depth"]
+                cv_depth = stats_dict["std_depth"] / stats_dict["mean_depth"]
+                # Replace NaN/Inf with 0 for areas with no snow (mean_depth ≈ 0)
+                # These areas have no meaningful variability to measure
+                cv_depth = np.where(np.isfinite(cv_depth), cv_depth, 0.0)
+                stats_dict["cv_depth"] = cv_depth
 
             seasonal_stats.append(stats_dict)
             logger.info(
@@ -776,15 +879,32 @@ class SnowAnalysis:
         # Snow day ratio
         ratios = [s["snow_days"] / s["total_days"] for s in seasonal_stats]
         final_stats["mean_snow_day_ratio"] = np.ma.mean(ratios, axis=0)
-        # Inter-season variability
+        # Inter-season variability (year-to-year variation in snow)
         seasonal_means = np.ma.stack([s["mean_depth"] for s in seasonal_stats])
         with np.errstate(divide="ignore", invalid="ignore"):
-            final_stats["interseason_cv"] = np.ma.std(seasonal_means, axis=0) / np.ma.mean(
+            interseason_cv = np.ma.std(seasonal_means, axis=0) / np.ma.mean(
                 seasonal_means, axis=0
             )
-        # Intra-season average CV
-        final_stats["mean_intraseason_cv"] = np.ma.mean(
+            # Replace NaN/Inf with 0 for areas with no snow across all seasons
+            interseason_cv = np.where(np.isfinite(interseason_cv), interseason_cv, 0.0)
+            final_stats["interseason_cv"] = interseason_cv
+
+        # Intra-season average CV (within-winter variability, averaged across years)
+        mean_intraseason_cv = np.ma.mean(
             [s["cv_depth"] for s in seasonal_stats], axis=0
+        )
+        # Ensure no NaN values remain (should already be handled above, but be safe)
+        mean_intraseason_cv = np.where(
+            np.isfinite(mean_intraseason_cv), mean_intraseason_cv, 0.0
+        )
+        final_stats["mean_intraseason_cv"] = mean_intraseason_cv
+
+        logger.info(
+            f"Final stats computed: "
+            f"median_max_depth range={float(np.nanmin(final_stats['median_max_depth'])):.1f}-"
+            f"{float(np.nanmax(final_stats['median_max_depth'])):.1f}, "
+            f"mean_intraseason_cv range={float(np.nanmin(final_stats['mean_intraseason_cv'])):.2f}-"
+            f"{float(np.nanmax(final_stats['mean_intraseason_cv'])):.2f}"
         )
 
         return final_stats, metadata, failed_files
