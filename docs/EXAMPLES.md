@@ -842,6 +842,275 @@ stats, metadata, failed = snow.process_snow_data(
 )
 ```
 
+### Snow Analysis Pipeline: Detailed Breakdown
+
+The sledding location analysis pipeline breaks down into distinct stages, each generating individual visualizations for detailed analysis and documentation:
+
+#### Stage 1: Terrain Input
+
+**Raw elevation data visualization:**
+
+![DEM - Digital Elevation Model](images/01_raw/dem.png)
+
+The pipeline begins with a Digital Elevation Model showing the terrain's elevation features. This is the foundation for all subsequent analysis - the terrain's slope and elevation characteristics influence sledding potential.
+
+#### Stage 2: Snow Data Input
+
+**Median maximum snow depth:**
+
+![Snow Depth Distribution](images/01_raw/snow_depth.png)
+
+SNODAS snow data is processed to show median maximum snow depth. Deeper snow generally provides better sledding conditions, but too-consistent depth can indicate areas that flood seasonally.
+
+#### Stage 3: Slope Statistics Analysis
+
+The terrain's slope characteristics are computed at full resolution using tiled analysis (to handle large DEMs efficiently). This breaks down into 8 detailed panels:
+
+**Slope Mean** - Average slope angle in degrees:
+```
+Shows the gentle-to-moderate slopes ideal for sledding
+- 5-15°: Excellent sledding terrain (not too steep, not too flat)
+- 0-5°: Too flat - snow won't move
+- >25°: Too steep - avalanche risk, hard to control
+```
+
+![Slope Mean - Average slope](images/02_slope_stats/mean.png)
+
+**Slope Max** - Maximum slope within each region (cliff detection):
+```
+Identifies steep cliffs and drop-offs that reduce sledding suitability
+- High values: Terrain has hidden cliffs (dangerous)
+- Low values: Smooth, consistent terrain
+```
+
+![Slope Max - Cliff Detection](images/02_slope_stats/max.png)
+
+**Slope Min** - Minimum slope (flat spot identification):
+```
+Finds the flattest areas which are good for run-out zones
+- 0-5°: Ideal flat run-out areas to slow sleds
+- Shows where sledders naturally decelerate
+```
+
+![Slope Min - Flat Spots](images/02_slope_stats/min.png)
+
+**Slope Std Dev** - Slope variability (terrain roughness):
+```
+Measures how consistent the slope is
+- Low values: Smooth, predictable descent
+- High values: Choppy, variable terrain
+```
+
+![Slope Std Dev - Terrain Consistency](images/02_slope_stats/std.png)
+
+**Slope P95** - 95th percentile slope (steep outliers):
+```
+Detects scattered steep areas without averaging them out
+- Used to penalize regions with hidden cliffs
+- More robust than slope_max to noise
+```
+
+![Slope P95 - 95th Percentile Slope](images/02_slope_stats/p95.png)
+
+**Roughness** - Elevation variation (standard deviation of elevation within grid):
+```
+Identifies rough, boulder-strewn terrain vs smooth slopes
+- High roughness: Rocky, dangerous terrain
+- Low roughness: Smooth, sled-friendly slopes
+```
+
+![Roughness - Elevation Variability](images/02_slope_stats/roughness.png)
+
+**Dominant Aspect** - Direction slopes face (compass direction):
+```
+Shows which way slopes face:
+- Dark colors: North-facing (shadier, retains more snow)
+- Light colors: South-facing (sunnier, more melt)
+- North-facing aspects often have better sledding
+```
+
+![Dominant Aspect - Slope Direction](images/02_slope_stats/aspect.png)
+
+**Aspect Strength** - Consistency of aspect direction:
+```
+Shows how uniform the slope direction is:
+- High values: All slopes face the same direction
+- Low values: Slopes face mixed directions
+- Affects snow retention patterns
+```
+
+![Aspect Strength - Direction Consistency](images/02_slope_stats/aspect_strength.png)
+
+#### Stage 4: Slope Penalties Analysis
+
+Raw slope statistics are transformed into a sledding score with penalties for hazards:
+
+**Base Slope Score** - Trapezoidal scoring function on slope mean:
+```python
+# Sweet range: 5-15° (ideal sledding slope)
+# Ramp range: 3-25° (acceptable range)
+# Outside ramp range: 0 points
+slope_score = trapezoidal(slope_mean, sweet_range=(5, 15), ramp_range=(3, 25))
+```
+
+![Base Slope Score - Trapezoidal Function](images/03_slope_penalties/base_score.png)
+
+**Cliff Penalty** - Dealbreaker penalty for steep areas:
+```python
+# If p95 slope > 25°, penalize heavily
+# Applies smooth rolloff to avoid hard cutoffs
+cliff_penalty = dealbreaker(slope_p95, threshold=25, falloff=10)
+```
+
+![Cliff Penalty - Steep Area Reduction](images/03_slope_penalties/cliff_penalty.png)
+
+**Terrain Consistency Penalty** - Penalizes rough terrain:
+```python
+# Combined penalty from roughness + slope variability
+# Extreme roughness or high std deviation reduces score
+consistency_penalty = terrain_consistency(roughness, slope_std)
+```
+
+![Terrain Consistency - Roughness Penalty](images/03_slope_penalties/terrain_consistency.png)
+
+**Combined Penalties** - Multiplication of all penalties:
+```python
+# Final slope score = base × cliff_penalty × consistency_penalty
+combined_penalty = cliff_penalty × consistency_penalty
+```
+
+![Combined Penalties - Total Slope Reduction](images/03_slope_penalties/combined_penalty.png)
+
+**Final Slope Score** - Base score after all penalties:
+```python
+final_slope_score = slope_score × combined_penalty
+```
+
+![Final Slope Score - Penalized Result](images/03_slope_penalties/final_score.png)
+
+**Score Reduction Map** - Visual of penalty impact:
+```python
+# Shows how much score was lost to penalties
+# Yellow = high penalty, Black = low penalty
+score_reduction = base_score - final_slope_score
+```
+
+![Score Reduction - Penalty Impact](images/03_slope_penalties/score_reduction.png)
+
+#### Stage 5: Comprehensive Score Component Analysis
+
+The final sledding score combines multiple components. The detailed analysis breaks these into 17 individual panels showing each transformation:
+
+**Additive Components** (weighted sum = base score):
+
+![Slope Score - Primary terrain factor](images/04_score_components/slope_score.png)
+*Slope Score (30% weight) - Weighted contribution from terrain slope*
+
+![Depth Score - Snow accumulation suitability](images/04_score_components/depth_score.png)
+*Depth Score (15% weight) - Deeper snow is better for sledding*
+
+![Coverage Score - Snow persistence](images/04_score_components/coverage_score.png)
+*Coverage Score (25% weight) - Consistent snow coverage throughout season*
+
+![Consistency Score - Snow reliability](images/04_score_components/consistency_score.png)
+*Consistency Score (20% weight) - Low variability = reliable sledding*
+
+**Additional Components**:
+
+![Aspect Score - North-facing bonus](images/04_score_components/aspect_score.png)
+*Aspect Score (5% weight) - North-facing slopes retain more snow*
+
+![Runout Bonus - Flat areas for deceleration](images/04_score_components/runout_bonus.png)
+*Runout Bonus (5% weight) - Flat areas (< 5°) provide natural run-out zones*
+
+**Multiplicative Penalties** (applied as multipliers):
+
+![Cliff Penalty - Steep area hazard](images/04_score_components/cliff_penalty.png)
+*Cliff Penalty (×) - Reduces score if steep sections present*
+
+![Terrain Consistency - Roughness hazard](images/04_score_components/terrain_consistency.png)
+*Terrain Consistency (×) - Reduces score for rough, choppy terrain*
+
+**Raw Input Data** (for reference):
+
+![Raw Slope Mean](images/04_score_components/raw_slope_mean.png)
+*Raw: Slope Mean in degrees - Unscored terrain slope*
+
+![Raw Snow Depth](images/04_score_components/raw_snow_depth.png)
+*Raw: Snow Depth in mm - Unscored SNODAS measurements*
+
+![Raw Interseason CV](images/04_score_components/raw_interseason_cv.png)
+*Raw: Interseason CV - Year-to-year variability coefficient*
+
+![Raw Intraseason CV](images/04_score_components/raw_intraseason_cv.png)
+*Raw: Intraseason CV - Within-winter variability coefficient*
+
+**Combination Steps** (formula stages):
+
+![Additive Sum](images/04_score_components/additive_sum.png)
+*Additive Sum - Weighted combination of all additive components*
+
+![Multiplicative Product](images/04_score_components/multiplicative.png)
+*Multiplicative Product - Penalty multipliers (cliff × terrain consistency)*
+
+![Final Sledding Score](images/04_score_components/final_score.png)
+*Final Sledding Score - Complete suitability score (0-1 scale)*
+
+![Score Reduction from Penalties](images/04_score_components/score_reduction.png)
+*Score Reduction - How much penalty reduced the final score*
+
+**Scoring Formula:**
+
+The complete formula is generated and saved as markdown for documentation:
+
+```
+Sledding Suitability Score = (
+    0.30 × Slope Mean
+    + 0.15 × Snow Depth
+    + 0.25 × Snow Coverage
+    + 0.20 × Snow Consistency
+    + 0.05 × Aspect Bonus
+    + 0.05 × Runout Bonus
+) × Slope P95 Penalty × Terrain Consistency Penalty
+```
+
+See `docs/images/04_score_components/equation.md` for the exact formula.
+
+#### Stage 6: Final Result
+
+The final sledding score combines all factors into a single suitability map (0-1 scale):
+
+![Final Sledding Suitability Score](images/05_final/sledding_score.png)
+
+**Score Interpretation:**
+- **0.7-1.0 (Dark Yellow)**: Excellent sledding locations
+- **0.5-0.7 (Yellow-Green)**: Good sledding with some concerns
+- **0.3-0.5 (Green-Cyan)**: Moderate - marginal conditions
+- **0.0-0.3 (Dark Blue/Purple)**: Poor sledding potential
+
+### Generating These Visualizations
+
+All individual panels are generated automatically when you run the example:
+
+```bash
+# Generate all visualizations
+uv run examples/detroit_snow_sledding.py --mock-data --all-steps
+
+# Output structure:
+# docs/images/
+# ├── 01_raw/                    # Input data
+# │   ├── dem.png
+# │   └── snow_depth.png
+# ├── 02_slope_stats/             # 8 slope analysis panels
+# ├── 03_slope_penalties/         # 6 penalty analysis panels
+# ├── 04_score_components/        # 16 component + equation
+# └── 05_final/                   # Final sledding score
+```
+
+Each panel can be embedded in documentation, presentations, or analysis reports. The individual format makes it easy to explain each step of the pipeline in detail.
+
+---
+
 ### Why This Example Matters
 
 **Traditional snow analysis workflow**:
