@@ -211,7 +211,7 @@ Using a threshold of 0.1 on scaled data would catch 90% of terrain as "water" be
 - **Default for Detroit**: `0.01` produces realistic 13-15% water coverage
 
 **For More Details:**
-See [Water Body Detection in API Reference](API_REFERENCE.md#identify_water_by_slope) for complete documentation including examples, threshold guidelines, and best practices.
+See the API Reference for complete documentation on water body detection including examples, threshold guidelines, and best practices.
 
 ### Running This Example
 

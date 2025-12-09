@@ -274,6 +274,96 @@ def visualize_sledding_score(score: np.ndarray, output_path: Path):
     logger.info(f"✓ Sledding score visualization saved: {output_path}")
 
 
+def save_sledding_score_histogram(score: np.ndarray, output_path: Path):
+    """
+    Create histogram of sledding score distribution.
+
+    Args:
+        score: Sledding suitability score (0-1)
+        output_path: Where to save the histogram
+    """
+    logger.info(f"Creating sledding score histogram: {output_path}")
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Flatten and remove NaNs
+    scores_flat = score.flatten()
+    scores_clean = scores_flat[~np.isnan(scores_flat)]
+
+    # Create histogram with percentile lines
+    ax.hist(scores_clean, bins=50, color="steelblue", alpha=0.7, edgecolor="black")
+
+    # Calculate percentiles
+    p25 = np.percentile(scores_clean, 25)
+    p50 = np.percentile(scores_clean, 50)
+    p75 = np.percentile(scores_clean, 75)
+
+    # Add percentile lines
+    ax.axvline(p25, color="orange", linestyle="--", linewidth=2, label=f"25th percentile: {p25:.3f}")
+    ax.axvline(p50, color="red", linestyle="--", linewidth=2, label=f"50th percentile: {p50:.3f}")
+    ax.axvline(p75, color="green", linestyle="--", linewidth=2, label=f"75th percentile: {p75:.3f}")
+
+    ax.set_xlabel("Sledding Score", fontsize=12, fontweight="bold")
+    ax.set_ylabel("Frequency (pixels)", fontsize=12, fontweight="bold")
+    ax.set_title("Sledding Score Distribution", fontsize=14, fontweight="bold")
+    ax.legend(fontsize=10)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    logger.info(f"✓ Sledding score histogram saved: {output_path}")
+
+
+def save_sledding_score_percentiles(score: np.ndarray, output_path: Path):
+    """
+    Create percentile map showing where each location falls in the score distribution.
+
+    Args:
+        score: Sledding suitability score (0-1)
+        output_path: Where to save the percentile map
+    """
+    logger.info(f"Creating sledding score percentile map: {output_path}")
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Flatten to get percentiles
+    scores_flat = score.flatten()
+    scores_clean = scores_flat[~np.isnan(scores_flat)]
+
+    # Create percentile ranks (0-100)
+    percentile_map = np.zeros_like(score)
+    valid_mask = ~np.isnan(score)
+    percentile_map[valid_mask] = (
+        np.searchsorted(np.sort(scores_clean), score[valid_mask]) / len(scores_clean) * 100
+    )
+    percentile_map[~valid_mask] = np.nan
+
+    # Custom colormap for percentiles: 0-25 (red), 25-50 (orange), 50-75 (yellow), 75-100 (green)
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+    colors = ["#d73027", "#fc8d59", "#fee090", "#91bfdb", "#4575b4"]
+    percentile_cmap = ListedColormap(colors)
+    bounds = [0, 25, 50, 75, 100]
+    norm = BoundaryNorm(bounds, percentile_cmap.N)
+
+    im = ax.imshow(percentile_map, cmap=percentile_cmap, aspect="equal", norm=norm, interpolation="nearest")
+    ax.set_title("Sledding Score Percentiles", fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # Add colorbar with percentile labels
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8, ticks=[12.5, 37.5, 62.5, 87.5])
+    cbar.ax.set_yticklabels(["0-25%", "25-50%", "50-75%", "75-100%"])
+    cbar.set_label("Percentile Rank", rotation=270, labelpad=20)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
+
+    logger.info(f"✓ Sledding score percentile map saved: {output_path}")
+
+
 def save_slope_stat_panels(slope_stats, output_dir: Path):
     """
     Save individual slope statistics panels to separate PNG files.
@@ -375,8 +465,11 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     shifted_colors = [base_cmap((i / n_colors + 0.5) % 1.0) for i in range(n_colors)]
     twilight_north_dark = ListedColormap(shifted_colors)
 
+    # Flip aspect so North (0°) = dark and South (180°) = light
+    # Negate aspect: North (0°) → 0°, South (180°) → -180° which wraps to near 180°
+    aspect_flipped = (360 - aspect_deg) % 360
     norm = Normalize(vmin=0, vmax=360)
-    aspect_colors = twilight_north_dark(norm(aspect_deg))
+    aspect_colors = twilight_north_dark(norm(aspect_flipped))
 
     # Fade to gray for low slopes
     slope_fade_threshold = 3.0
@@ -1071,6 +1164,14 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "05_final" / "sledding_score.png"
     visualize_sledding_score(score_viz, output_path)
+
+    # Save histogram of sledding scores
+    histogram_path = output_dir / "05_final" / "sledding_score_histogram.png"
+    save_sledding_score_histogram(score_viz, histogram_path)
+
+    # Save percentile map of sledding scores
+    percentile_path = output_dir / "05_final" / "sledding_score_percentiles.png"
+    save_sledding_score_percentiles(score_viz, percentile_path)
 
     # Downsample snow_stats arrays to match
     if stride > 1:

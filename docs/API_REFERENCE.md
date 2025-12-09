@@ -6,8 +6,8 @@ Comprehensive documentation of all classes and functions in the terrain-maker li
 
 ## Table of Contents
 
-- [terrain.core](#terrain-core)
-- [terrain.water](#terrain-water)
+- terrain.core
+- terrain.water
 
 ---
 
