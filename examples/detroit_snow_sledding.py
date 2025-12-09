@@ -380,8 +380,8 @@ def save_sledding_score_filtered(score: np.ndarray, output_path: Path, threshold
     total_pixels = np.sum(~np.isnan(score))
     excellent_pct = (excellent_count / total_pixels * 100) if total_pixels > 0 else 0
 
-    # Use RdYlGn colormap with vmin/vmax to highlight the excellent range
-    im = ax.imshow(filtered_score, cmap="RdYlGn", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
+    # Use RdYlGn colormap with vmin/vmax to highlight only the excellent range (0.7-1.0)
+    im = ax.imshow(filtered_score, cmap="RdYlGn", aspect="equal", interpolation="nearest", vmin=0.7, vmax=1.0)
     ax.set_title(f"Excellent Sledding Locations (Score > {threshold})", fontweight="bold", fontsize=14)
     ax.set_xticks([])
     ax.set_yticks([])
