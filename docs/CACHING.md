@@ -1,12 +1,11 @@
 # Caching in Terrain Maker
 
-Terrain Maker uses a **three-tier caching system** to optimize performance and avoid redundant computations:
+Terrain Maker uses a **two-tier internal caching system** to optimize performance and avoid redundant computations:
 
-1. **Subsystem Caching** - Cache expensive I/O and transformation operations
-2. **Pipeline Task Caching** - Cache task outputs based on input hashes
-3. **Data Caching** - Cache preprocessed data (SNODAS snow data)
+1. **Subsystem Caching** - Cache expensive I/O and transformation operations (DEMCache, MeshCache)
+2. **Data Caching** - Cache preprocessed SNODAS snow data
 
-## Tier 1: Subsystem Caching
+## Internal Caching Patterns
 
 ### DEMCache
 Caches loaded and merged DEM (Digital Elevation Model) data to avoid reloading from disk.
@@ -62,97 +61,7 @@ Caches generated 3D mesh files to avoid recomputing Blender meshes.
 - Creating 3D meshes for rendering
 - Blender mesh generation with specific parameters
 
-## Tier 2: Task/Workflow Caching
-
-### SnowAnalysisPipeline (Generic Dependency Graph Caching)
-
-Provides a **reusable caching framework** for sequential computations with explicit dependencies.
-
-**Location:** `src/snow/analysis.py` (class: `SnowAnalysisPipeline`)
-
-**How it works:**
-- Define custom tasks with SHA256 hashing of inputs
-- Implements a dependency graph to track task relationships
-- Automatically caches task results as `.npz` files with metadata
-- Invalidates cache when inputs change (based on hash comparison)
-
-**Key features:**
-- **Input-based cache invalidation:** Different inputs = different hash = cache miss
-- **Flexible task definitions:** Users define their own tasks and dependencies
-- **Metadata logging:** Timestamps and execution parameters stored for debugging
-- **Optional caching:** Toggle with `caching_enabled=False` for testing
-- **Force rebuild:** `force_rebuild=True` bypasses cache when needed
-- **Cache statistics:** Query cache size and entry counts
-
-**Usage Example - Define Your Own Tasks:**
-
-```python
-from src.snow.analysis import SnowAnalysisPipeline
-from pathlib import Path
-import numpy as np
-
-# Step 1: Subclass to define custom task implementations
-class MyAnalysisPipeline(SnowAnalysisPipeline):
-    def _execute_task(self, task_name, **kwargs):
-        if task_name == "load_data":
-            # Your custom load logic
-            data = load_my_data(**kwargs)
-            return {"data": data}
-
-        elif task_name == "process_data":
-            # Your custom processing logic
-            raw_data = kwargs.get("data")
-            processed = process_my_data(raw_data, **kwargs)
-            return {"processed": processed}
-
-        elif task_name == "analyze":
-            # Your custom analysis logic
-            processed = kwargs.get("processed")
-            results = analyze_my_data(processed, **kwargs)
-            return {"results": results}
-
-        raise ValueError(f"Unknown task: {task_name}")
-
-# Step 2: Create and use your pipeline
-pipeline = MyAnalysisPipeline(
-    cache_dir=Path(".my_analysis_cache"),
-    caching_enabled=True  # Enable caching
-)
-
-# Step 3: Execute tasks - caching happens automatically
-raw_data = np.random.rand(100, 100)
-
-# First run - computes and caches result
-result1 = pipeline.execute(task="load_data", data=raw_data)
-
-# Second run with same inputs - loads from cache instantly
-result2 = pipeline.execute(task="load_data", data=raw_data)
-# Same hash → cache hit → no recomputation
-
-# Different inputs trigger recomputation
-different_data = np.random.rand(100, 100)
-result3 = pipeline.execute(task="load_data", data=different_data)
-# Different hash → cache miss → recomputed and cached
-
-# Force recomputation (bypass cache)
-result4 = pipeline.execute(task="load_data", data=raw_data, force_rebuild=True)
-
-# Monitor caching
-stats = pipeline.get_cache_stats()
-print(f"Cache size: {stats['total_cache_size_mb']:.2f} MB")
-print(f"Cached entries: {stats['num_cached_results']}")
-
-# Clear cache between experiments
-pipeline.clear_cache()
-```
-
-**When to use:**
-- Sequential workflows where one step depends on previous outputs
-- Computationally expensive analyses you'll run multiple times
-- Iterative development - avoid recomputing stable intermediate results
-- Multi-step data pipelines with expensive processing
-
-## Tier 3: Data Caching
+## Tier 2: Data Caching
 
 ### SNODAS Data Caching
 `SnowAnalysis` caches processed SNODAS snow data to avoid reprocessing the same geographic extents.
@@ -168,15 +77,14 @@ pipeline.clear_cache()
 - Processing SNODAS snow data for multiple analyses
 - Rerunning analysis on same geographic region
 
-## Choosing Which Cache to Use
+## How Terrain Maker Uses Caching Internally
 
-| Use Case | Recommended Cache | Why |
-|----------|-------------------|-----|
-| Loading raw DEM files repeatedly | DEMCache | Avoids re-reading and merging files |
+| Use Case | Caching Mechanism | How It Works |
+|----------|-------------------|--------------|
+| Loading raw DEM files repeatedly | DEMCache | Avoids re-reading and merging files from disk |
 | Creating multiple 3D meshes with same DEM | MeshCache | Avoids expensive Blender mesh generation |
-| Custom sequential analysis workflow | SnowAnalysisPipeline (subclass) | Generic caching + dependency tracking |
 | Re-analyzing same SNODAS extent | SnowAnalysis (auto) | Built into snow processing workflow |
-| One-off computation | None needed | Skip caching overhead |
+| One-off computation | No caching | Skip caching overhead |
 
 ## Performance Impact
 
@@ -210,70 +118,35 @@ Second run (cache hit):
 - Total: 0.9s
 ```
 
-## Disabling Caching
-
-Caches can be disabled for development or testing:
-
-```python
-# Disable pipeline caching
-pipeline = MyAnalysisPipeline(caching_enabled=False)
-
-# Forces recomputation every run
-result = pipeline.execute(task="my_task", force_rebuild=True)
-```
-
 ## Cache Storage Locations
 
 | Cache | Default Location | Configurable? |
 |-------|------------------|---------------|
 | DEMCache | `.dem_cache/` | Via constructor |
 | MeshCache | `.mesh_cache/` | Via constructor |
-| SnowAnalysisPipeline | `.snow_analysis_cache/` | Via `cache_dir` parameter |
 
 ## Debugging Cache Issues
 
 ### View cache contents:
 ```bash
-ls -lah .snow_analysis_cache/
-cat .snow_analysis_cache/load_dem_*_meta.json | jq
+ls -lah .dem_cache/
+ls -lah .mesh_cache/
 ```
 
-### Clear all caches:
-```python
-pipeline.clear_cache()
-import shutil
-shutil.rmtree(".dem_cache")
-shutil.rmtree(".mesh_cache")
-```
-
-### Force recomputation:
-```python
-pipeline.execute(task="compute_snow_stats", force_rebuild=True, ...)
-```
-
-### Check if cache was used:
-```python
-stats_before = pipeline.get_cache_stats()
-result = pipeline.execute(task="compute_snow_stats", ...)
-stats_after = pipeline.get_cache_stats()
-
-if stats_before['num_cached_results'] == stats_after['num_cached_results']:
-    print("Cache was used (no new files)")
-else:
-    print("New computation (cache was missed)")
+### Clear caches:
+```bash
+rm -rf .dem_cache
+rm -rf .mesh_cache
 ```
 
 ## Best Practices
 
-1. **Use appropriate cache tier:** Don't use pipeline caching for one-time operations
-2. **Monitor cache size:** Large cache directories can accumulate over time
-3. **Clear old caches periodically:** Manual cleanup of `.cache` directories
-4. **Use consistent parameters:** Different parameters create different cache entries
-5. **Test without cache first:** Verify computation works before relying on caching
-6. **Document cache dependencies:** If task outputs are cached, document input assumptions
+1. **Monitor cache size:** Large cache directories can accumulate over time
+2. **Clear old caches periodically:** Remove `.dem_cache` and `.mesh_cache` directories when restarting analysis
+3. **Understand cache invalidation:** DEMCache uses source file metadata (paths + mod times), MeshCache uses DEM hash + mesh parameters
+4. **Use for expensive operations:** Caching is most beneficial for DEM loading and mesh generation
 
 ## Further Reading
 
-- See [examples/snow_analysis_pipeline_example.py](../examples/snow_analysis_pipeline_example.py) for detailed usage examples
-- See [SNOW_SLEDDING.md](./SNOW_SLEDDING.md) for snow analysis workflow that could benefit from caching
-- Terrain Maker's internal caching: [DEMCache](../src/terrain/cache.py), [MeshCache](../src/terrain/mesh_cache.py)
+- **Internal cache implementations:** [DEMCache](../src/terrain/cache.py), [MeshCache](../src/terrain/mesh_cache.py), [SnowAnalysis](../src/snow/analysis.py)
+- **Example usage:** See [examples/detroit_snow_sledding.py](../examples/detroit_snow_sledding.py) for a real-world example using Terrain Maker's caching system
