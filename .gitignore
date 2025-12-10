@@ -27,7 +27,6 @@ coverage/
 .env.*.local
 
 # Local Claude settings (user-specific)
-.claude/settings.local.json
 .claude/workflows/
 .claude/issues/
 .claude/designs/
@@ -94,6 +93,7 @@ data/snodas_data
 # Terrain-maker cache directories
 .dem_cache/
 .mesh_cache/
+.gridded_data_cache/
 
 # Blender files
 *.blend

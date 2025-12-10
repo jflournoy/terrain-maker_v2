@@ -61,21 +61,73 @@ Caches generated 3D mesh files to avoid recomputing Blender meshes.
 - Creating 3D meshes for rendering
 - Blender mesh generation with specific parameters
 
-## Tier 2: Data Caching
+## Tier 2: Gridded Data Pipeline Caching
 
-### SNODAS Data Caching
-`SnowAnalysis` caches processed SNODAS snow data to avoid reprocessing the same geographic extents.
+### GriddedDataLoader
+Generic loader for external gridded datasets (SNODAS, temperature, precipitation, etc.) with pipeline-based caching.
 
-**Location:** `src/snow/analysis.py` (class: `SnowAnalysis`)
+**Location:** `src/terrain/gridded_data.py` (class: `GriddedDataLoader`)
 
 **How it works:**
-- Uses MD5 hashing of extent tuple + SNODAS root directory
-- Caches snow statistics as `.npz` files
-- Automatically detects when extent or data directory changes
+- User defines processing pipeline as sequence of (name, function, kwargs) tuples
+- Each pipeline step is cached independently as `.npz` file
+- Cache key includes: step name + function code hash + kwargs + upstream dependencies
+- **Smart invalidation:** If step N changes, steps N, N+1, N+2... are invalidated (but earlier steps are reused)
+
+**Pipeline Caching Example:**
+
+```python
+from src.terrain.gridded_data import GriddedDataLoader
+
+# Define processing steps
+def load_data(source, extent, target_shape):
+    # Load and crop data (expensive I/O)
+    return {"raw": load_and_crop(source, extent, target_shape)}
+
+def compute_stats(input_data):
+    # Compute statistics (fast numpy)
+    return {"mean": input_data["raw"].mean(axis=0)}
+
+# Build pipeline
+pipeline = [
+    ("load", load_data, {}),
+    ("stats", compute_stats, {}),
+]
+
+# Run with caching
+loader = GriddedDataLoader(terrain, cache_dir=Path(".cache"))
+result = loader.run_pipeline(
+    data_source="/path/to/data",
+    pipeline=pipeline,
+    cache_name="my_analysis"
+)
+```
+
+**Caching Behavior - Smart Invalidation:**
+
+First run (no cache): All steps execute
+```
+Step 1: load → Cached
+Step 2: stats → Cached
+```
+
+Second run (all cached): All steps reuse cache
+```
+Step 1: load → Cache HIT
+Step 2: stats → Cache HIT
+```
+
+Third run (after changing step 2): Only step 2 recomputes
+```
+Step 1: load → Cache HIT (reused!)
+Step 2: stats → RECOMPUTED (code changed)
+```
 
 **When to use:**
-- Processing SNODAS snow data for multiple analyses
-- Rerunning analysis on same geographic region
+- Processing external gridded datasets (SNODAS, temperature, precipitation)
+- Multi-step data transformation pipelines
+- Iterative development on analysis parameters
+- Example: See `examples/detroit_snow_sledding.py` for SNODAS pipeline
 
 ## How Terrain Maker Uses Caching Internally
 
@@ -83,7 +135,7 @@ Caches generated 3D mesh files to avoid recomputing Blender meshes.
 |----------|-------------------|--------------|
 | Loading raw DEM files repeatedly | DEMCache | Avoids re-reading and merging files from disk |
 | Creating multiple 3D meshes with same DEM | MeshCache | Avoids expensive Blender mesh generation |
-| Re-analyzing same SNODAS extent | SnowAnalysis (auto) | Built into snow processing workflow |
+| Processing SNODAS or other gridded data | GriddedDataLoader | Caches each pipeline step independently |
 | One-off computation | No caching | Skip caching overhead |
 
 ## Performance Impact
@@ -124,6 +176,7 @@ Second run (cache hit):
 |-------|------------------|---------------|
 | DEMCache | `.dem_cache/` | Via constructor |
 | MeshCache | `.mesh_cache/` | Via constructor |
+| GriddedDataLoader | `.gridded_data_cache/` | Via constructor |
 
 ## Debugging Cache Issues
 
@@ -131,22 +184,31 @@ Second run (cache hit):
 ```bash
 ls -lah .dem_cache/
 ls -lah .mesh_cache/
+ls -lah .gridded_data_cache/
 ```
 
 ### Clear caches:
 ```bash
 rm -rf .dem_cache
 rm -rf .mesh_cache
+rm -rf .gridded_data_cache
 ```
 
 ## Best Practices
 
 1. **Monitor cache size:** Large cache directories can accumulate over time
-2. **Clear old caches periodically:** Remove `.dem_cache` and `.mesh_cache` directories when restarting analysis
-3. **Understand cache invalidation:** DEMCache uses source file metadata (paths + mod times), MeshCache uses DEM hash + mesh parameters
-4. **Use for expensive operations:** Caching is most beneficial for DEM loading and mesh generation
+2. **Clear old caches periodically:** Remove `.dem_cache`, `.mesh_cache`, and `.gridded_data_cache` directories when restarting analysis
+3. **Understand cache invalidation:**
+   - DEMCache: Uses source file metadata (paths + modification times)
+   - MeshCache: Uses DEM hash + mesh parameters
+   - GriddedDataLoader: Uses function source code hash + kwargs + upstream dependencies (smart invalidation)
+4. **Use for expensive operations:** Caching is most beneficial for:
+   - DEM loading and merging
+   - 3D mesh generation
+   - External gridded data processing (SNODAS, precipitation, temperature)
+5. **Pipeline parameter tuning:** GriddedDataLoader's smart invalidation makes it ideal for iterative parameter adjustment - upstream steps stay cached while only modified steps recompute
 
 ## Further Reading
 
-- **Internal cache implementations:** [DEMCache](../src/terrain/cache.py), [MeshCache](../src/terrain/mesh_cache.py), [SnowAnalysis](../src/snow/analysis.py)
-- **Example usage:** See [examples/detroit_snow_sledding.py](../examples/detroit_snow_sledding.py) for a real-world example using Terrain Maker's caching system
+- **Cache implementations:** [DEMCache](../src/terrain/cache.py), [MeshCache](../src/terrain/mesh_cache.py), [GriddedDataLoader](../src/terrain/gridded_data.py)
+- **Example usage:** See [examples/detroit_snow_sledding.py](../examples/detroit_snow_sledding.py) for a real-world example using GriddedDataLoader for SNODAS snow data processing
