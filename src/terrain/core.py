@@ -982,7 +982,9 @@ class Terrain:
             return
 
         # Create target array and reproject if needed
-        if crs != target_crs or transform != target_transform:
+        # Note: Affine.__ne__ returns array, so use tuple comparison instead
+        transforms_differ = (crs != target_crs) or (tuple(transform) != tuple(target_transform))
+        if transforms_differ:
             self.logger.info(f"Reprojecting from {crs} to {target_crs}")
             self.logger.info(f"Transforms: {transform} to {target_transform}")
             aligned_data = np.zeros(target_shape, dtype=data.dtype)
