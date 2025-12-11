@@ -149,6 +149,7 @@ def create_terrain_with_score(
     score_grid: np.ndarray,
     dem: np.ndarray,
     transform: Affine,
+    dem_crs: str = "EPSG:32617",
     location: Tuple[float, float, float] = (0, 0, 0),
     scale_factor: float = 100,
     height_scale: float = 2.0,
@@ -161,6 +162,7 @@ def create_terrain_with_score(
         score_grid: Score values for vertex coloring (0-1 range)
         dem: DEM elevation data
         transform: Affine transform for coordinate mapping
+        dem_crs: CRS of DEM data (default: EPSG:32617 for UTM zone 17N)
         location: (x, y, z) position in Blender for the mesh
         scale_factor: Horizontal scale divisor
         height_scale: Vertical elevation scale
@@ -171,14 +173,14 @@ def create_terrain_with_score(
     logger.info(f"Creating terrain mesh: {name}")
 
     # Create terrain using terrain maker library
-    terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+    terrain = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Add score grid as data layer
+    # Add score grid as data layer (use same CRS as DEM)
     terrain.add_data_layer(
         "score",
         score_grid,
         transform,
-        "EPSG:4326",
+        dem_crs,
         target_layer="dem",
     )
 
@@ -476,8 +478,10 @@ Examples:
     # Load DEM
     if args.mock_data:
         logger.info("Generating mock DEM...")
-        dem = np.random.randint(150, 250, (1024, 1024))
-        transform = Affine.identity()
+        dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
+        # Create a proper UTM transform (Detroit is in UTM zone 17N)
+        # Each pixel represents ~10m x ~10m in projected coordinates
+        transform = Affine.translation(300000, 4700000) * Affine.scale(10, -10)
     else:
         dem_dir = Path("data/dem/detroit")
         if dem_dir.exists():
@@ -485,8 +489,9 @@ Examples:
             dem, transform = load_dem_files(dem_dir)
         else:
             logger.info("Generating mock DEM (DEM directory not found)...")
-            dem = np.random.randint(150, 250, (1024, 1024))
-            transform = Affine.identity()
+            dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
+            # Create a proper UTM transform (Detroit is in UTM zone 17N)
+            transform = Affine.translation(300000, 4700000) * Affine.scale(10, -10)
 
     # Load sledding scores
     sledding_scores = load_sledding_scores(args.scores_dir)

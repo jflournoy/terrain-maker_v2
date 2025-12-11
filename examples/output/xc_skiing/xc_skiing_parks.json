@@ -1,232 +1,232 @@
 [
   {
-    "name": "Big Bone Lick State Park",
-    "lat": 38.8828,
-    "lon": -84.7528,
-    "score": 0.6453824639320374,
-    "pixel_coords": [
-      405,
-      193
-    ]
-  },
-  {
-    "name": "Kensington Metropark",
-    "lat": 42.5303,
-    "lon": -83.6581,
-    "score": 0.6294787526130676,
-    "pixel_coords": [
-      223,
-      242
-    ]
-  },
-  {
-    "name": "Kettle Moraine State Forest",
-    "lat": 43.0036,
-    "lon": -88.1467,
-    "score": 0.6268884539604187,
-    "pixel_coords": [
-      199,
-      38
-    ]
-  },
-  {
     "name": "Tahquamenon Falls State Park",
     "lat": 46.5983,
     "lon": -85.2072,
-    "score": 0.618182897567749,
+    "score": 0.908569872379303,
     "pixel_coords": [
-      20,
-      172
-    ]
-  },
-  {
-    "name": "Cross Country Ski Headquarters (Roscommon)",
-    "lat": 44.5031,
-    "lon": -84.5917,
-    "score": 0.6144824624061584,
-    "pixel_coords": [
-      124,
-      200
-    ]
-  },
-  {
-    "name": "Stony Creek Metropark",
-    "lat": 42.7377,
-    "lon": -83.0583,
-    "score": 0.5981070399284363,
-    "pixel_coords": [
-      213,
-      270
-    ]
-  },
-  {
-    "name": "Findley State Park",
-    "lat": 41.1203,
-    "lon": -82.2311,
-    "score": 0.574607789516449,
-    "pixel_coords": [
-      293,
-      307
-    ]
-  },
-  {
-    "name": "Proud Lake Recreation Area",
-    "lat": 42.5583,
-    "lon": -83.5553,
-    "score": 0.5647814273834229,
-    "pixel_coords": [
-      222,
-      247
-    ]
-  },
-  {
-    "name": "Indian Springs Metropark",
-    "lat": 42.6514,
-    "lon": -83.5028,
-    "score": 0.5569250583648682,
-    "pixel_coords": [
-      217,
-      249
-    ]
-  },
-  {
-    "name": "Salt Fork State Park",
-    "lat": 40.1172,
-    "lon": -81.5067,
-    "score": 0.5444760918617249,
-    "pixel_coords": [
-      344,
-      340
-    ]
-  },
-  {
-    "name": "Lapham Peak State Park",
-    "lat": 43.0408,
-    "lon": -88.3978,
-    "score": 0.543800950050354,
-    "pixel_coords": [
-      197,
-      27
-    ]
-  },
-  {
-    "name": "Bald Mountain Recreation Area",
-    "lat": 42.7958,
-    "lon": -83.1961,
-    "score": 0.5349252820014954,
-    "pixel_coords": [
-      210,
-      263
-    ]
-  },
-  {
-    "name": "Mohican State Park",
-    "lat": 40.6117,
-    "lon": -82.3111,
-    "score": 0.5294667482376099,
-    "pixel_coords": [
-      319,
-      304
-    ]
-  },
-  {
-    "name": "Chain O'Lakes State Park",
-    "lat": 41.3269,
-    "lon": -85.5217,
-    "score": 0.5091975331306458,
-    "pixel_coords": [
-      283,
-      158
-    ]
-  },
-  {
-    "name": "Starved Rock State Park",
-    "lat": 41.3197,
-    "lon": -88.9942,
-    "score": 0.5069277882575989,
-    "pixel_coords": [
-      284,
-      0
-    ]
-  },
-  {
-    "name": "Sleepy Hollow State Park",
-    "lat": 42.9089,
-    "lon": -84.4233,
-    "score": 0.5028432011604309,
-    "pixel_coords": [
-      204,
-      208
-    ]
-  },
-  {
-    "name": "Potato Creek State Park",
-    "lat": 41.5456,
-    "lon": -86.3564,
-    "score": 0.4998376667499542,
-    "pixel_coords": [
-      272,
-      120
-    ]
-  },
-  {
-    "name": "Pinckney Recreation Area",
-    "lat": 42.4214,
-    "lon": -84.0461,
-    "score": 0.49452516436576843,
-    "pixel_coords": [
-      228,
-      225
-    ]
-  },
-  {
-    "name": "Pokagon State Park",
-    "lat": 41.7078,
-    "lon": -85.0178,
-    "score": 0.49328750371932983,
-    "pixel_coords": [
-      264,
-      181
-    ]
-  },
-  {
-    "name": "Indiana Dunes National Park",
-    "lat": 41.6533,
-    "lon": -87.0522,
-    "score": 0.48266902565956116,
-    "pixel_coords": [
-      267,
-      88
-    ]
-  },
-  {
-    "name": "Hanson Hills Recreation Area",
-    "lat": 44.6553,
-    "lon": -84.7372,
-    "score": 0.48081228137016296,
-    "pixel_coords": [
-      117,
-      193
-    ]
-  },
-  {
-    "name": "Cuyahoga Valley National Park",
-    "lat": 41.2808,
-    "lon": -81.5678,
-    "score": 0.47311273217201233,
-    "pixel_coords": [
-      285,
-      337
+      48,
+      455
     ]
   },
   {
     "name": "Hartwick Pines State Park",
     "lat": 44.7442,
     "lon": -84.6647,
-    "score": 0.46140724420547485,
+    "score": 0.9055944085121155,
     "pixel_coords": [
-      112,
-      197
+      270,
+      520
+    ]
+  },
+  {
+    "name": "Hanson Hills Recreation Area",
+    "lat": 44.6553,
+    "lon": -84.7372,
+    "score": 0.8189061880111694,
+    "pixel_coords": [
+      281,
+      511
+    ]
+  },
+  {
+    "name": "Cross Country Ski Headquarters (Roscommon)",
+    "lat": 44.5031,
+    "lon": -84.5917,
+    "score": 0.7059786319732666,
+    "pixel_coords": [
+      299,
+      528
+    ]
+  },
+  {
+    "name": "Bald Mountain Recreation Area",
+    "lat": 42.7958,
+    "lon": -83.1961,
+    "score": 0.4654443562030792,
+    "pixel_coords": [
+      504,
+      696
+    ]
+  },
+  {
+    "name": "Sleepy Hollow State Park",
+    "lat": 42.9089,
+    "lon": -84.4233,
+    "score": 0.4569055736064911,
+    "pixel_coords": [
+      490,
+      549
+    ]
+  },
+  {
+    "name": "Indian Springs Metropark",
+    "lat": 42.6514,
+    "lon": -83.5028,
+    "score": 0.4529680609703064,
+    "pixel_coords": [
+      521,
+      659
+    ]
+  },
+  {
+    "name": "Proud Lake Recreation Area",
+    "lat": 42.5583,
+    "lon": -83.5553,
+    "score": 0.4517609179019928,
+    "pixel_coords": [
+      533,
+      653
+    ]
+  },
+  {
+    "name": "Pokagon State Park",
+    "lat": 41.7078,
+    "lon": -85.0178,
+    "score": 0.4515315592288971,
+    "pixel_coords": [
+      635,
+      477
+    ]
+  },
+  {
+    "name": "Lapham Peak State Park",
+    "lat": 43.0408,
+    "lon": -88.3978,
+    "score": 0.44946563243865967,
+    "pixel_coords": [
+      475,
+      72
+    ]
+  },
+  {
+    "name": "Pinckney Recreation Area",
+    "lat": 42.4214,
+    "lon": -84.0461,
+    "score": 0.44916194677352905,
+    "pixel_coords": [
+      549,
+      594
+    ]
+  },
+  {
+    "name": "Kensington Metropark",
+    "lat": 42.5303,
+    "lon": -83.6581,
+    "score": 0.44831064343452454,
+    "pixel_coords": [
+      536,
+      641
+    ]
+  },
+  {
+    "name": "Kettle Moraine State Forest",
+    "lat": 43.0036,
+    "lon": -88.1467,
+    "score": 0.4403170645236969,
+    "pixel_coords": [
+      479,
+      102
+    ]
+  },
+  {
+    "name": "Potato Creek State Park",
+    "lat": 41.5456,
+    "lon": -86.3564,
+    "score": 0.43797022104263306,
+    "pixel_coords": [
+      654,
+      317
+    ]
+  },
+  {
+    "name": "Stony Creek Metropark",
+    "lat": 42.7377,
+    "lon": -83.0583,
+    "score": 0.4378218948841095,
+    "pixel_coords": [
+      511,
+      713
+    ]
+  },
+  {
+    "name": "Cuyahoga Valley National Park",
+    "lat": 41.2808,
+    "lon": -81.5678,
+    "score": 0.43267953395843506,
+    "pixel_coords": [
+      686,
+      891
+    ]
+  },
+  {
+    "name": "Chain O'Lakes State Park",
+    "lat": 41.3269,
+    "lon": -85.5217,
+    "score": 0.4303544759750366,
+    "pixel_coords": [
+      680,
+      417
+    ]
+  },
+  {
+    "name": "Indiana Dunes National Park",
+    "lat": 41.6533,
+    "lon": -87.0522,
+    "score": 0.4264169931411743,
+    "pixel_coords": [
+      641,
+      233
+    ]
+  },
+  {
+    "name": "Findley State Park",
+    "lat": 41.1203,
+    "lon": -82.2311,
+    "score": 0.4166162312030792,
+    "pixel_coords": [
+      705,
+      812
+    ]
+  },
+  {
+    "name": "Mohican State Park",
+    "lat": 40.6117,
+    "lon": -82.3111,
+    "score": 0.41423100233078003,
+    "pixel_coords": [
+      766,
+      802
+    ]
+  },
+  {
+    "name": "Starved Rock State Park",
+    "lat": 41.3197,
+    "lon": -88.9942,
+    "score": 0.4094316065311432,
+    "pixel_coords": [
+      681,
+      0
+    ]
+  },
+  {
+    "name": "Salt Fork State Park",
+    "lat": 40.1172,
+    "lon": -81.5067,
+    "score": 0.38805249333381653,
+    "pixel_coords": [
+      825,
+      899
+    ]
+  },
+  {
+    "name": "Big Bone Lick State Park",
+    "lat": 38.8828,
+    "lon": -84.7528,
+    "score": 0.36453402042388916,
+    "pixel_coords": [
+      974,
+      509
     ]
   }
 ]
