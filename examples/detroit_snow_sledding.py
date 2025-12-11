@@ -695,6 +695,13 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
                     slope_std: np.ndarray
                     slope_p95: np.ndarray
                     roughness: np.ndarray
+                    aspect_sin: np.ndarray
+                    aspect_cos: np.ndarray
+
+                    @property
+                    def dominant_aspect(self) -> np.ndarray:
+                        """Compute dominant aspect from vector-averaged sin/cos components."""
+                        return np.degrees(np.arctan2(self.aspect_sin, self.aspect_cos)) % 360
 
                 stats = SlopeStats(
                     slope_mean=npz['slope_mean'],
@@ -703,6 +710,8 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
                     slope_std=npz['slope_std'],
                     slope_p95=npz['slope_p95'],
                     roughness=npz['roughness'],
+                    aspect_sin=npz['aspect_sin'],
+                    aspect_cos=npz['aspect_cos'],
                 )
                 logger.info("✓ Cache hit for slope statistics")
                 return stats
@@ -732,6 +741,8 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
             slope_std=slope_stats.slope_std,
             slope_p95=slope_stats.slope_p95,
             roughness=slope_stats.roughness,
+            aspect_sin=slope_stats.aspect_sin,
+            aspect_cos=slope_stats.aspect_cos,
         )
         logger.debug(f"Cached slope statistics to {cache_file.name}")
     except Exception as e:
