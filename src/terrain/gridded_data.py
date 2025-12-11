@@ -534,10 +534,24 @@ class GriddedDataLoader:
         # Inject terrain parameters if needed
         if self._needs_terrain_params(func):
             extent = self.terrain.dem_bounds
-            pixel_size = 1.0 / 120.0  # TODO: make configurable
+            pixel_size = 1.0 / 120.0  # SNODAS native resolution
             minx, miny, maxx, maxy = extent
             target_width = int(round((maxx - minx) / pixel_size))
             target_height = int(round((maxy - miny) / pixel_size))
+
+            # Enforce max_output_pixels limit to prevent OOM
+            total_pixels = target_height * target_width
+            max_pixels = self.tile_config.max_output_pixels
+            if total_pixels > max_pixels:
+                # Downsample to fit within limit while preserving aspect ratio
+                scale = (max_pixels / total_pixels) ** 0.5
+                target_height = int(target_height * scale)
+                target_width = int(target_width * scale)
+                logger.info(
+                    f"Limiting output to {target_height}×{target_width} "
+                    f"({target_height * target_width:,} pixels) to stay within "
+                    f"max_output_pixels={max_pixels:,}"
+                )
 
             kwargs = {
                 **kwargs,
@@ -970,8 +984,83 @@ class GriddedDataLoader:
                     data = npz["data"]
                     return data.item() if data.dtype == object else data
                 else:
-                    # Dict of arrays
-                    return {k: npz[k] for k in npz.files}
+                    # Dict of arrays - need to extract object arrays back to Python types
+                    result = {}
+                    for k in npz.files:
+                        arr = npz[k]
+                        # Object arrays with ndim=0 are pickled Python objects
+                        if arr.dtype == object and arr.ndim == 0:
+                            result[k] = arr.item()
+                        else:
+                            result[k] = arr
+                    return result
         except Exception as e:
             logger.warning(f"Failed to load cache: {e}")
             return None
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+
+def downsample_for_viz(
+    arr: np.ndarray, max_dim: int = 2000
+) -> Tuple[np.ndarray, int]:
+    """
+    Downsample array using stride slicing for visualization.
+
+    Args:
+        arr: Input array to downsample
+        max_dim: Maximum dimension size for output
+
+    Returns:
+        Tuple of (downsampled_array, stride_used)
+    """
+    max_shape = max(arr.shape)
+    if max_shape <= max_dim:
+        return arr, 1
+
+    stride = max(1, max_shape // max_dim)
+    downsampled = arr[::stride, ::stride]
+    return downsampled, stride
+
+
+def create_mock_snow_data(shape: Tuple[int, int]) -> Dict[str, np.ndarray]:
+    """
+    Create mock snow data for testing.
+
+    Generates realistic-looking mock snow statistics using statistical
+    distributions that mimic real SNODAS patterns.
+
+    Args:
+        shape: Shape of the snow data arrays (height, width)
+
+    Returns:
+        Dictionary with mock snow statistics:
+        - median_max_depth: Snow depth in mm (gamma distribution)
+        - mean_snow_day_ratio: Fraction of days with snow (beta distribution)
+        - interseason_cv: Year-to-year variability (beta distribution)
+        - mean_intraseason_cv: Within-winter variability (beta distribution)
+    """
+    logger.info(f"Creating mock snow data at shape {shape}...")
+
+    np.random.seed(42)
+
+    # Snow depth (0-300mm, concentrated in certain areas)
+    median_max_depth = np.random.gamma(2, 30, shape).astype(np.float32)
+    median_max_depth = np.clip(median_max_depth, 0, 300)
+
+    # Snow coverage ratio (0-1, mostly high in winter)
+    mean_snow_day_ratio = np.random.beta(8, 2, shape).astype(np.float32)
+
+    # Variability (0-1, lower is more consistent)
+    interseason_cv = np.random.beta(2, 8, shape).astype(np.float32) * 0.5
+    mean_intraseason_cv = np.random.beta(2, 8, shape).astype(np.float32) * 0.3
+
+    return {
+        "median_max_depth": median_max_depth,
+        "mean_snow_day_ratio": mean_snow_day_ratio,
+        "interseason_cv": interseason_cv,
+        "mean_intraseason_cv": mean_intraseason_cv,
+    }

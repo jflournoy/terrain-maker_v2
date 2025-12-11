@@ -28,6 +28,7 @@ nav:
   - Examples:
     - Detroit Elevation Visualization: DETROIT_ELEVATION.md
     - Snow Sledding Analysis: SNOW_SLEDDING.md
+    - Cross-Country Skiing Analysis: XC_SKIING.md
   - API Reference: API_REFERENCE.md
   - Appendix (Development & Workflows):
     - Workflows: WORKFLOWS.md
