@@ -1,0 +1,1578 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Scoring Configuration Guide - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#scoring-configuration-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scoring Configuration Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DETROIT_ELEVATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detroit Elevation Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SNOW_SLEDDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Snow Sledding Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transformation-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transformation Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Transformation Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-trapezoidal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Trapezoidal
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-dealbreaker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Dealbreaker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-linear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Linear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-snow-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Snow Consistency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-terrain-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Terrain Consistency
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#component-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Component Roles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Component Roles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#additive-weighted-sum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive (Weighted Sum)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiplicative-penalties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplicative (Penalties)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#complete-formula" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Complete Formula
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-sledding-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Sledding Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default Sledding Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#additive-components-sum-to-10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additive Components (sum to 1.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiplicative-components-penalties" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiplicative Components (penalties)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customizing-the-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customizing the Config
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Customizing the Config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-1-edit-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 1: Edit JSON
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-2-programmatic-modification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 2: Programmatic Modification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-3-modify-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option 3: Modify Default
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visualization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-for-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tips for Customization
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="scoring-configuration-guide">Scoring Configuration Guide<a class="headerlink" href="#scoring-configuration-guide" title="Permanent link">&para;</a></h1>
+<p>This guide explains how to use and customize the terrain suitability scoring system.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The scoring system combines multiple terrain and snow statistics into a single suitability score (0-1). It uses:</p>
+<ul>
+<li><strong>Transformation functions</strong> to convert raw values into 0-1 scores</li>
+<li><strong>A combiner</strong> to weight and combine scores using additive and multiplicative rules</li>
+</ul>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>Raw Statistics → Transformations → Component Scores → Combiner → Final Score
+                                        ↓
+                    [additive: weighted sum] × [multiplicative: penalties]
+</code></pre></div>
+
+<h2 id="transformation-types">Transformation Types<a class="headerlink" href="#transformation-types" title="Permanent link">&para;</a></h2>
+<p>All transformations output values in the range [0, 1].</p>
+<h3 id="1-trapezoidal">1. Trapezoidal<a class="headerlink" href="#1-trapezoidal" title="Permanent link">&para;</a></h3>
+<p>For values with a "sweet spot" - ideal range with ramp-up and ramp-down zones.</p>
+<div class="codehilite"><pre><span></span><code>Score
+  1 |        ___________
+    |       /           \
+    |      /             \
+  0 |_____/               \_____
+         |   |       |   |
+       ramp sweet  sweet ramp
+       start start   end  end
+</code></pre></div>
+
+<p><strong>Use for:</strong> slope angle, snow depth, any metric with an ideal middle range</p>
+<p><strong>Parameters:</strong>
+- <code>sweet_range</code>: (start, end) - values in this range score 1.0
+- <code>ramp_range</code>: (start, end) - full range including ramps</p>
+<p><strong>Example:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;slope_mean&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;trapezoidal&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform_params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;sweet_range&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">15</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;ramp_range&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">25</span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;additive&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.25</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="2-dealbreaker">2. Dealbreaker<a class="headerlink" href="#2-dealbreaker" title="Permanent link">&para;</a></h3>
+<p>Step function for hard cutoffs with optional soft falloff. Used for safety-critical thresholds.</p>
+<div class="codehilite"><pre><span></span><code>Score (hard)          Score (soft)
+  1 |_______            1 |_______
+    |       |             |       \
+  0 |       |_____      0 |        \_____
+         threshold              threshold
+</code></pre></div>
+
+<p><strong>Use for:</strong> cliff detection, dangerous conditions, absolute limits</p>
+<p><strong>Parameters:</strong>
+- <code>threshold</code>: cutoff point
+- <code>falloff</code>: width of soft transition (0 = hard cutoff)
+- <code>below_is_good</code>: if True, values below threshold are safe (default)</p>
+<p><strong>Example:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;slope_p95&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dealbreaker&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform_params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">25</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;falloff&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;multiplicative&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="3-linear">3. Linear<a class="headerlink" href="#3-linear" title="Permanent link">&para;</a></h3>
+<p>Simple normalization with optional power scaling and inversion.</p>
+<div class="codehilite"><pre><span></span><code>Score
+  1 |          /
+    |        /
+    |      /
+  0 |____/
+        min    max
+</code></pre></div>
+
+<p><strong>Use for:</strong> ratios, coverage percentages, variability metrics</p>
+<p><strong>Parameters:</strong>
+- <code>value_range</code>: (min, max) to normalize
+- <code>invert</code>: if True, high values → low scores (for CV, variability)
+- <code>power</code>: scaling power (0.5 = sqrt for diminishing returns)</p>
+<p><strong>Example:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;snow_coverage&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;linear&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transform_params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;value_range&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;power&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;additive&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.20</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="4-snow-consistency">4. Snow Consistency<a class="headerlink" href="#4-snow-consistency" title="Permanent link">&para;</a></h3>
+<p>Combined metric for snow reliability using RMS of inter-season and intra-season CVs.</p>
+<p><strong>Use for:</strong> Snow reliability scoring (additive component)</p>
+<p><strong>Parameters:</strong>
+- <code>interseason_cv</code>: Year-to-year coefficient of variation
+- <code>intraseason_cv</code>: Within-winter coefficient of variation
+- <code>interseason_threshold</code>: CV that maps to full inconsistency (default: 1.5)
+- <code>intraseason_threshold</code>: CV that maps to full inconsistency (default: 1.0)</p>
+<h3 id="5-terrain-consistency">5. Terrain Consistency<a class="headerlink" href="#5-terrain-consistency" title="Permanent link">&para;</a></h3>
+<p>Combined metric for roughness + slope variability using RMS. Only penalizes EXTREME inconsistency.</p>
+<p><strong>Use for:</strong> Multiplicative penalty for very rough terrain</p>
+<p><strong>Parameters:</strong>
+- <code>roughness</code>: elevation std dev in meters
+- <code>slope_std</code>: slope std dev in degrees
+- <code>roughness_threshold</code>: meters (default: 30)
+- <code>slope_std_threshold</code>: degrees (default: 10)
+- <code>soft_start</code>: normalized inconsistency where penalty begins (default: 0.5)</p>
+<h2 id="component-roles">Component Roles<a class="headerlink" href="#component-roles" title="Permanent link">&para;</a></h2>
+<h3 id="additive-weighted-sum">Additive (Weighted Sum)<a class="headerlink" href="#additive-weighted-sum" title="Permanent link">&para;</a></h3>
+<p>Components that contribute to the base score. Weights must sum to 1.0.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">base_score</span> <span class="o">=</span> <span class="n">Σ</span> <span class="p">(</span><span class="n">weight_i</span> <span class="err">×</span> <span class="n">score_i</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Properties:</strong>
+- Must have a <code>weight</code> (0.0-1.0)
+- All weights must sum to 1.0
+- Each contributes independently to the score</p>
+<h3 id="multiplicative-penalties">Multiplicative (Penalties)<a class="headerlink" href="#multiplicative-penalties" title="Permanent link">&para;</a></h3>
+<p>Components that can reduce the score. No weight needed.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">final_score</span> <span class="o">=</span> <span class="n">base_score</span> <span class="err">×</span> <span class="n">penalty_1</span> <span class="err">×</span> <span class="n">penalty_2</span> <span class="err">×</span> <span class="o">...</span>
+</code></pre></div>
+
+<p><strong>Properties:</strong>
+- No weight (applies as multiplier)
+- Score of 1.0 = no penalty
+- Score of 0.0 = complete disqualification
+- Multiple penalties compound</p>
+<h2 id="complete-formula">Complete Formula<a class="headerlink" href="#complete-formula" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="n">final_score</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">w1</span> <span class="err">×</span> <span class="n">additive_1</span> <span class="o">+</span>
+    <span class="n">w2</span> <span class="err">×</span> <span class="n">additive_2</span> <span class="o">+</span>
+    <span class="o">...</span>
+<span class="p">)</span> <span class="err">×</span> <span class="n">multiplicative_1</span> <span class="err">×</span> <span class="n">multiplicative_2</span> <span class="err">×</span> <span class="o">...</span>
+</code></pre></div>
+
+<h2 id="default-sledding-configuration">Default Sledding Configuration<a class="headerlink" href="#default-sledding-configuration" title="Permanent link">&para;</a></h2>
+<p>Located at: <code>src/scoring/configs/sledding_default.json</code></p>
+<h3 id="additive-components-sum-to-10">Additive Components (sum to 1.0)<a class="headerlink" href="#additive-components-sum-to-10" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Transform</th>
+<th>Weight</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slope_mean</code></td>
+<td>trapezoidal</td>
+<td>30%</td>
+<td>Ideal: 5-15°, usable: 3-25°</td>
+</tr>
+<tr>
+<td><code>snow_depth</code></td>
+<td>trapezoidal</td>
+<td>15%</td>
+<td>Ideal: 150-500mm (~6-20")</td>
+</tr>
+<tr>
+<td><code>snow_coverage</code></td>
+<td>linear (√)</td>
+<td>25%</td>
+<td>Fraction of days with snow</td>
+</tr>
+<tr>
+<td><code>snow_consistency</code></td>
+<td>snow_consistency</td>
+<td>20%</td>
+<td>RMS of inter/intra-season CVs</td>
+</tr>
+<tr>
+<td><code>aspect_bonus</code></td>
+<td>linear</td>
+<td>5%</td>
+<td>North-facing snow retention</td>
+</tr>
+<tr>
+<td><code>runout_bonus</code></td>
+<td>linear</td>
+<td>5%</td>
+<td>Safe stopping area</td>
+</tr>
+</tbody>
+</table>
+<h3 id="multiplicative-components-penalties">Multiplicative Components (penalties)<a class="headerlink" href="#multiplicative-components-penalties" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Transform</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slope_p95</code></td>
+<td>dealbreaker</td>
+<td>Cliff detection (25° threshold)</td>
+</tr>
+<tr>
+<td><code>terrain_consistency</code></td>
+<td>terrain_consistency</td>
+<td>Extreme roughness penalty (soft at 50%)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="customizing-the-config">Customizing the Config<a class="headerlink" href="#customizing-the-config" title="Permanent link">&para;</a></h2>
+<h3 id="option-1-edit-json">Option 1: Edit JSON<a class="headerlink" href="#option-1-edit-json" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Copy default config</span>
+cp<span class="w"> </span>src/scoring/configs/sledding_default.json<span class="w"> </span>my_config.json
+
+<span class="c1"># Edit thresholds, weights, etc.</span>
+</code></pre></div>
+
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.scoring</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScoreCombiner</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;my_config.json&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">scorer</span> <span class="o">=</span> <span class="n">ScoreCombiner</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">))</span>
+
+<span class="n">score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">(</span><span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="option-2-programmatic-modification">Option 2: Programmatic Modification<a class="headerlink" href="#option-2-programmatic-modification" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">src.scoring</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScoreComponent</span><span class="p">,</span> <span class="n">ScoreCombiner</span>
+
+<span class="c1"># Create custom scorer</span>
+<span class="n">scorer</span> <span class="o">=</span> <span class="n">ScoreCombiner</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;my_sledding_score&quot;</span><span class="p">,</span>
+    <span class="n">components</span><span class="o">=</span><span class="p">[</span>
+        <span class="c1"># Steeper slopes for advanced sledding</span>
+        <span class="n">ScoreComponent</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="s2">&quot;slope_mean&quot;</span><span class="p">,</span>
+            <span class="n">transform</span><span class="o">=</span><span class="s2">&quot;trapezoidal&quot;</span><span class="p">,</span>
+            <span class="n">transform_params</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;sweet_range&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">25</span><span class="p">),</span>  <span class="c1"># Steeper!</span>
+                <span class="s2">&quot;ramp_range&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">35</span><span class="p">),</span>
+            <span class="p">},</span>
+            <span class="n">role</span><span class="o">=</span><span class="s2">&quot;additive&quot;</span><span class="p">,</span>
+            <span class="n">weight</span><span class="o">=</span><span class="mf">0.30</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="c1"># ... more components</span>
+    <span class="p">],</span>
+<span class="p">)</span>
+
+<span class="n">score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">(</span><span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="option-3-modify-default">Option 3: Modify Default<a class="headerlink" href="#option-3-modify-default" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">src.scoring.configs.sledding</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_default_sledding_scorer</span>
+
+<span class="n">scorer</span> <span class="o">=</span> <span class="n">create_default_sledding_scorer</span><span class="p">()</span>
+
+<span class="c1"># Modify a component&#39;s parameters</span>
+<span class="k">for</span> <span class="n">component</span> <span class="ow">in</span> <span class="n">scorer</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">component</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;slope_mean&quot;</span><span class="p">:</span>
+        <span class="n">component</span><span class="o">.</span><span class="n">transform_params</span><span class="p">[</span><span class="s2">&quot;sweet_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+
+<span class="n">score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">(</span><span class="n">scorer</span><span class="o">=</span><span class="n">scorer</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="required-inputs">Required Inputs<a class="headerlink" href="#required-inputs" title="Permanent link">&para;</a></h2>
+<p>The scorer expects these inputs (computed automatically by <code>compute_derived_inputs</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Source</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>slope_mean</code></td>
+<td>SlopeStatistics</td>
+<td>Mean slope in degrees</td>
+</tr>
+<tr>
+<td><code>slope_p95</code></td>
+<td>SlopeStatistics</td>
+<td>95th percentile slope</td>
+</tr>
+<tr>
+<td><code>snow_depth</code></td>
+<td>SNODAS stats</td>
+<td><code>median_max_depth</code> in mm</td>
+</tr>
+<tr>
+<td><code>snow_coverage</code></td>
+<td>SNODAS stats</td>
+<td><code>mean_snow_day_ratio</code> (0-1)</td>
+</tr>
+<tr>
+<td><code>snow_consistency</code></td>
+<td>SNODAS stats</td>
+<td><code>interseason_cv</code></td>
+</tr>
+<tr>
+<td><code>aspect_bonus</code></td>
+<td>Derived</td>
+<td>cos(aspect) × strength × 0.05</td>
+</tr>
+<tr>
+<td><code>runout_bonus</code></td>
+<td>Derived</td>
+<td>1.0 if slope_min &lt; 5°</td>
+</tr>
+<tr>
+<td><code>terrain_consistency</code></td>
+<td>Derived</td>
+<td>RMS of roughness + slope_std</td>
+</tr>
+</tbody>
+</table>
+<h2 id="visualization">Visualization<a class="headerlink" href="#visualization" title="Permanent link">&para;</a></h2>
+<p>The example script (<code>detroit_snow_sledding.py</code>) generates visualizations showing:</p>
+<ol>
+<li><strong>Raw statistics</strong> - slope, snow depth, coverage, CVs</li>
+<li><strong>Component scores</strong> - each transformed to 0-1</li>
+<li><strong>Penalties</strong> - cliff detection, terrain consistency</li>
+<li><strong>Final score</strong> - combined result</li>
+</ol>
+<h2 id="tips-for-customization">Tips for Customization<a class="headerlink" href="#tips-for-customization" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Weights must sum to 1.0</strong> - The system will raise an error if not</p>
+</li>
+<li>
+<p><strong>Multiplicative for safety</strong> - Use multiplicative role for anything that should disqualify an area entirely (cliffs, water, hazards)</p>
+</li>
+<li>
+<p><strong>Additive for preferences</strong> - Use additive role for quality factors that trade off against each other</p>
+</li>
+<li>
+<p><strong>Test incrementally</strong> - Use <code>get_component_scores()</code> to debug individual components</p>
+</li>
+<li>
+<p><strong>Consider local conditions</strong> - Adjust thresholds based on your region:</p>
+</li>
+<li>More snow? Increase depth thresholds</li>
+<li>Steeper terrain? Adjust slope sweet spot</li>
+<li>Different safety tolerance? Modify cliff threshold</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

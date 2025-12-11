@@ -1,0 +1,1355 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Caching in Terrain Maker - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#caching-in-terrain-maker" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Caching in Terrain Maker
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DETROIT_ELEVATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detroit Elevation Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SNOW_SLEDDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Snow Sledding Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#internal-caching-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Internal Caching Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Internal Caching Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#demcache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DEMCache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#meshcache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MeshCache
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier-2-gridded-data-pipeline-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2: Gridded Data Pipeline Caching
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tier 2: Gridded Data Pipeline Caching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#griddeddataloader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GriddedDataLoader
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-terrain-maker-uses-caching-internally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Terrain Maker Uses Caching Internally
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cache-storage-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Storage Locations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debugging-cache-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debugging Cache Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Debugging Cache Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#view-cache-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        View cache contents:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clear-caches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clear caches:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="caching-in-terrain-maker">Caching in Terrain Maker<a class="headerlink" href="#caching-in-terrain-maker" title="Permanent link">&para;</a></h1>
+<p>Terrain Maker uses a <strong>two-tier internal caching system</strong> to optimize performance and avoid redundant computations:</p>
+<ol>
+<li><strong>Subsystem Caching</strong> - Cache expensive I/O and transformation operations (DEMCache, MeshCache)</li>
+<li><strong>Data Caching</strong> - Cache preprocessed SNODAS snow data</li>
+</ol>
+<h2 id="internal-caching-patterns">Internal Caching Patterns<a class="headerlink" href="#internal-caching-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="demcache">DEMCache<a class="headerlink" href="#demcache" title="Permanent link">&para;</a></h3>
+<p>Caches loaded and merged DEM (Digital Elevation Model) data to avoid reloading from disk.</p>
+<p><strong>Location:</strong> <code>src/terrain/cache.py</code></p>
+<p><strong>How it works:</strong>
+- Uses SHA256 hashing of source file metadata (paths + modification times)
+- Stores DEM arrays as <code>.npz</code> files with metadata JSON
+- Automatically invalidates cache when source files change</p>
+<p><strong>Example:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEMCache</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">cache</span> <span class="o">=</span> <span class="n">DEMCache</span><span class="p">(</span><span class="n">cache_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;.dem_cache&quot;</span><span class="p">),</span> <span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Compute hash of source files</span>
+<span class="n">source_hash</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">compute_source_hash</span><span class="p">(</span>
+    <span class="n">directory_path</span><span class="o">=</span><span class="s2">&quot;data/dem/detroit&quot;</span><span class="p">,</span>
+    <span class="n">pattern</span><span class="o">=</span><span class="s2">&quot;*.hgt&quot;</span><span class="p">,</span>
+    <span class="n">recursive</span><span class="o">=</span><span class="kc">False</span>
+<span class="p">)</span>
+
+<span class="c1"># Load from cache or compute and save</span>
+<span class="n">cache_path</span> <span class="o">=</span> <span class="n">cache</span><span class="o">.</span><span class="n">get_cache_path</span><span class="p">(</span><span class="n">source_hash</span><span class="p">,</span> <span class="n">cache_name</span><span class="o">=</span><span class="s2">&quot;detroit&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">cache_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+    <span class="c1"># Load from cache</span>
+    <span class="n">cached_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">cache_path</span><span class="p">)[</span><span class="s2">&quot;dem&quot;</span><span class="p">]</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="c1"># Load and process, then cache</span>
+    <span class="n">dem</span> <span class="o">=</span> <span class="n">load_dem_files</span><span class="p">(</span><span class="n">dem_dir</span><span class="p">)</span>
+    <span class="n">cache</span><span class="o">.</span><span class="n">save_dem_cache</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">source_hash</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>When to use:</strong>
+- Loading DEM files from disk
+- Merging multiple DEM tiles
+- Any expensive DEM preprocessing</p>
+<h3 id="meshcache">MeshCache<a class="headerlink" href="#meshcache" title="Permanent link">&para;</a></h3>
+<p>Caches generated 3D mesh files to avoid recomputing Blender meshes.</p>
+<p><strong>Location:</strong> <code>src/terrain/mesh_cache.py</code></p>
+<p><strong>How it works:</strong>
+- Uses SHA256 hashing of DEM hash + mesh parameters
+- Stores cached meshes as <code>.blend</code> files
+- Preserves mesh parameters and vertex data</p>
+<p><strong>When to use:</strong>
+- Creating 3D meshes for rendering
+- Blender mesh generation with specific parameters</p>
+<h2 id="tier-2-gridded-data-pipeline-caching">Tier 2: Gridded Data Pipeline Caching<a class="headerlink" href="#tier-2-gridded-data-pipeline-caching" title="Permanent link">&para;</a></h2>
+<h3 id="griddeddataloader">GriddedDataLoader<a class="headerlink" href="#griddeddataloader" title="Permanent link">&para;</a></h3>
+<p>Generic loader for external gridded datasets (SNODAS, temperature, precipitation, etc.) with pipeline-based caching.</p>
+<p><strong>Location:</strong> <code>src/terrain/gridded_data.py</code> (class: <code>GriddedDataLoader</code>)</p>
+<p><strong>How it works:</strong>
+- User defines processing pipeline as sequence of (name, function, kwargs) tuples
+- Each pipeline step is cached independently as <code>.npz</code> file
+- Cache key includes: step name + function code hash + kwargs + upstream dependencies
+- <strong>Smart invalidation:</strong> If step N changes, steps N, N+1, N+2... are invalidated (but earlier steps are reused)</p>
+<p><strong>Pipeline Caching Example:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.gridded_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">GriddedDataLoader</span>
+
+<span class="c1"># Define processing steps</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_data</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">target_shape</span><span class="p">):</span>
+    <span class="c1"># Load and crop data (expensive I/O)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;raw&quot;</span><span class="p">:</span> <span class="n">load_and_crop</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">extent</span><span class="p">,</span> <span class="n">target_shape</span><span class="p">)}</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_stats</span><span class="p">(</span><span class="n">input_data</span><span class="p">):</span>
+    <span class="c1"># Compute statistics (fast numpy)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;mean&quot;</span><span class="p">:</span> <span class="n">input_data</span><span class="p">[</span><span class="s2">&quot;raw&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)}</span>
+
+<span class="c1"># Build pipeline</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">&quot;load&quot;</span><span class="p">,</span> <span class="n">load_data</span><span class="p">,</span> <span class="p">{}),</span>
+    <span class="p">(</span><span class="s2">&quot;stats&quot;</span><span class="p">,</span> <span class="n">compute_stats</span><span class="p">,</span> <span class="p">{}),</span>
+<span class="p">]</span>
+
+<span class="c1"># Run with caching</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">GriddedDataLoader</span><span class="p">(</span><span class="n">terrain</span><span class="p">,</span> <span class="n">cache_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;.cache&quot;</span><span class="p">))</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">run_pipeline</span><span class="p">(</span>
+    <span class="n">data_source</span><span class="o">=</span><span class="s2">&quot;/path/to/data&quot;</span><span class="p">,</span>
+    <span class="n">pipeline</span><span class="o">=</span><span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">cache_name</span><span class="o">=</span><span class="s2">&quot;my_analysis&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Caching Behavior - Smart Invalidation:</strong></p>
+<p>First run (no cache): All steps execute</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Step</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="w"> </span><span class="nb">load</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Cached</span>
+<span class="n">Step</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">stats</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Cached</span>
+</code></pre></div>
+
+<p>Second run (all cached): All steps reuse cache</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Step</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="w"> </span><span class="nb">load</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Cache</span><span class="w"> </span><span class="n">HIT</span>
+<span class="n">Step</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">stats</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Cache</span><span class="w"> </span><span class="n">HIT</span>
+</code></pre></div>
+
+<p>Third run (after changing step 2): Only step 2 recomputes</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Step</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="w"> </span><span class="nb">load</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Cache</span><span class="w"> </span><span class="n">HIT</span><span class="w"> </span><span class="p">(</span><span class="n">reused</span><span class="o">!</span><span class="p">)</span>
+<span class="n">Step</span><span class="w"> </span><span class="mi">2</span><span class="p">:</span><span class="w"> </span><span class="n">stats</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">RECOMPUTED</span><span class="w"> </span><span class="p">(</span><span class="n">code</span><span class="w"> </span><span class="n">changed</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>When to use:</strong>
+- Processing external gridded datasets (SNODAS, temperature, precipitation)
+- Multi-step data transformation pipelines
+- Iterative development on analysis parameters
+- Example: See <code>examples/detroit_snow_sledding.py</code> for SNODAS pipeline</p>
+<h2 id="how-terrain-maker-uses-caching-internally">How Terrain Maker Uses Caching Internally<a class="headerlink" href="#how-terrain-maker-uses-caching-internally" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Caching Mechanism</th>
+<th>How It Works</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Loading raw DEM files repeatedly</td>
+<td>DEMCache</td>
+<td>Avoids re-reading and merging files from disk</td>
+</tr>
+<tr>
+<td>Creating multiple 3D meshes with same DEM</td>
+<td>MeshCache</td>
+<td>Avoids expensive Blender mesh generation</td>
+</tr>
+<tr>
+<td>Processing SNODAS or other gridded data</td>
+<td>GriddedDataLoader</td>
+<td>Caches each pipeline step independently</td>
+</tr>
+<tr>
+<td>One-off computation</td>
+<td>No caching</td>
+<td>Skip caching overhead</td>
+</tr>
+</tbody>
+</table>
+<h2 id="performance-impact">Performance Impact<a class="headerlink" href="#performance-impact" title="Permanent link">&para;</a></h2>
+<p><strong>Typical cache benefits:</strong></p>
+<ul>
+<li><strong>First run (no cache):</strong> Full computation time</li>
+<li><strong>Subsequent runs (cache hit):</strong> 100-1000× faster</li>
+<li>DEM loading: 10-100× faster</li>
+<li>Mesh generation: 100-1000× faster</li>
+<li>Task caching: 10-100× faster (avoids numpy operations)</li>
+</ul>
+<p><strong>Cache overhead:</strong></p>
+<ul>
+<li>Cache checking: &lt;10ms per task</li>
+<li>.npz I/O: 100-500ms (depends on data size)</li>
+<li>Metadata logging: &lt;1ms per task</li>
+</ul>
+<p><strong>Example timing:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">First</span><span class="w"> </span><span class="n">run</span><span class="w"> </span><span class="p">(</span><span class="n">no</span><span class="w"> </span><span class="n">cache</span><span class="p">):</span>
+<span class="o">-</span><span class="w"> </span><span class="n">load_dem</span><span class="p">:</span><span class="w"> </span><span class="mf">2.1</span><span class="n">s</span>
+<span class="o">-</span><span class="w"> </span><span class="n">compute_snow_stats</span><span class="p">:</span><span class="w"> </span><span class="mf">3.4</span><span class="n">s</span>
+<span class="o">-</span><span class="w"> </span><span class="n">calculate_scores</span><span class="p">:</span><span class="w"> </span><span class="mf">1.5</span><span class="n">s</span>
+<span class="o">-</span><span class="w"> </span><span class="n">Total</span><span class="p">:</span><span class="w"> </span><span class="mf">7.0</span><span class="n">s</span>
+
+<span class="n">Second</span><span class="w"> </span><span class="n">run</span><span class="w"> </span><span class="p">(</span><span class="n">cache</span><span class="w"> </span><span class="n">hit</span><span class="p">):</span>
+<span class="o">-</span><span class="w"> </span><span class="n">load_dem</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="n">s</span><span class="w"> </span><span class="p">(</span><span class="n">cache</span><span class="w"> </span><span class="nb">load</span><span class="p">)</span>
+<span class="o">-</span><span class="w"> </span><span class="n">compute_snow_stats</span><span class="p">:</span><span class="w"> </span><span class="mf">0.3</span><span class="n">s</span><span class="w"> </span><span class="p">(</span><span class="n">cache</span><span class="w"> </span><span class="nb">load</span><span class="p">)</span>
+<span class="o">-</span><span class="w"> </span><span class="n">calculate_scores</span><span class="p">:</span><span class="w"> </span><span class="mf">0.4</span><span class="n">s</span><span class="w"> </span><span class="p">(</span><span class="n">cache</span><span class="w"> </span><span class="nb">load</span><span class="p">)</span>
+<span class="o">-</span><span class="w"> </span><span class="n">Total</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9</span><span class="n">s</span>
+</code></pre></div>
+
+<h2 id="cache-storage-locations">Cache Storage Locations<a class="headerlink" href="#cache-storage-locations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Cache</th>
+<th>Default Location</th>
+<th>Configurable?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DEMCache</td>
+<td><code>.dem_cache/</code></td>
+<td>Via constructor</td>
+</tr>
+<tr>
+<td>MeshCache</td>
+<td><code>.mesh_cache/</code></td>
+<td>Via constructor</td>
+</tr>
+<tr>
+<td>GriddedDataLoader</td>
+<td><code>.gridded_data_cache/</code></td>
+<td>Via constructor</td>
+</tr>
+</tbody>
+</table>
+<h2 id="debugging-cache-issues">Debugging Cache Issues<a class="headerlink" href="#debugging-cache-issues" title="Permanent link">&para;</a></h2>
+<h3 id="view-cache-contents">View cache contents:<a class="headerlink" href="#view-cache-contents" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>ls<span class="w"> </span>-lah<span class="w"> </span>.dem_cache/
+ls<span class="w"> </span>-lah<span class="w"> </span>.mesh_cache/
+ls<span class="w"> </span>-lah<span class="w"> </span>.gridded_data_cache/
+</code></pre></div>
+
+<h3 id="clear-caches">Clear caches:<a class="headerlink" href="#clear-caches" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>rm<span class="w"> </span>-rf<span class="w"> </span>.dem_cache
+rm<span class="w"> </span>-rf<span class="w"> </span>.mesh_cache
+rm<span class="w"> </span>-rf<span class="w"> </span>.gridded_data_cache
+</code></pre></div>
+
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Monitor cache size:</strong> Large cache directories can accumulate over time</li>
+<li><strong>Clear old caches periodically:</strong> Remove <code>.dem_cache</code>, <code>.mesh_cache</code>, and <code>.gridded_data_cache</code> directories when restarting analysis</li>
+<li><strong>Understand cache invalidation:</strong></li>
+<li>DEMCache: Uses source file metadata (paths + modification times)</li>
+<li>MeshCache: Uses DEM hash + mesh parameters</li>
+<li>GriddedDataLoader: Uses function source code hash + kwargs + upstream dependencies (smart invalidation)</li>
+<li><strong>Use for expensive operations:</strong> Caching is most beneficial for:</li>
+<li>DEM loading and merging</li>
+<li>3D mesh generation</li>
+<li>External gridded data processing (SNODAS, precipitation, temperature)</li>
+<li><strong>Pipeline parameter tuning:</strong> GriddedDataLoader's smart invalidation makes it ideal for iterative parameter adjustment - upstream steps stay cached while only modified steps recompute</li>
+</ol>
+<h2 id="further-reading">Further Reading<a class="headerlink" href="#further-reading" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Cache implementations:</strong></li>
+<li><code>src/terrain/cache.py</code> - DEMCache for DEM caching</li>
+<li><code>src/terrain/mesh_cache.py</code> - MeshCache for 3D mesh caching</li>
+<li>
+<p><code>src/terrain/gridded_data.py</code> - GriddedDataLoader with pipeline caching</p>
+</li>
+<li>
+<p><strong>Example usage:</strong> See <code>examples/detroit_snow_sledding.py</code> for a real-world example using GriddedDataLoader for SNODAS snow data processing</p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

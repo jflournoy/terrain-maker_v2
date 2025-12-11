@@ -1,0 +1,2181 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../DETROIT_ELEVATION/">
+      
+      
+        <link rel="next" href="../API_REFERENCE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Snow Sledding Analysis - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#snow-integration-sledding-location-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Snow Sledding Analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DETROIT_ELEVATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detroit Elevation Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Snow Sledding Analysis
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Snow Sledding Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-final-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Final Result
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Final Result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-this-example-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Example Shows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-this-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running This Example
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running This Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start-with-mock-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start with Mock Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-real-snodas-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Real SNODAS Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-steps-explained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Steps Explained
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Steps Explained">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-dem-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: DEM Visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-snow-depth-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Snow Depth Visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-sledding-score-calculation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Sledding Score Calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-data-for-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock Data for Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snodas-data-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SNODAS Data Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-terrain-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Terrain Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adjust-sledding-score-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adjust Sledding Score Weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-by-score-threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter by Score Threshold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-different-time-periods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Different Time Periods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snow-analysis-pipeline-detailed-breakdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snow Analysis Pipeline: Detailed Breakdown
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Snow Analysis Pipeline: Detailed Breakdown">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-terrain-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 1: Terrain Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-snow-data-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2: Snow Data Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-slope-statistics-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3: Slope Statistics Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-slope-penalties-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4: Slope Penalties Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-comprehensive-score-component-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5: Comprehensive Score Component Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-6-final-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 6: Final Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-these-visualizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generating These Visualizations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-example-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Example Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-final-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Final Result
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Final Result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-this-example-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Example Shows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-this-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running This Example
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running This Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-start-with-mock-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start with Mock Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-real-snodas-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Real SNODAS Data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pipeline-steps-explained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pipeline Steps Explained
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pipeline Steps Explained">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-dem-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: DEM Visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-snow-depth-visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Snow Depth Visualization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-sledding-score-calculation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Sledding Score Calculation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-data-for-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock Data for Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snodas-data-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SNODAS Data Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-terrain-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Terrain Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adjust-sledding-score-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adjust Sledding Score Weights
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-by-score-threshold" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter by Score Threshold
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-different-time-periods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Different Time Periods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#snow-analysis-pipeline-detailed-breakdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Snow Analysis Pipeline: Detailed Breakdown
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Snow Analysis Pipeline: Detailed Breakdown">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stage-1-terrain-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 1: Terrain Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-2-snow-data-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 2: Snow Data Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-3-slope-statistics-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 3: Slope Statistics Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-4-slope-penalties-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 4: Slope Penalties Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-5-comprehensive-score-component-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 5: Comprehensive Score Component Analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stage-6-final-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stage 6: Final Result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-these-visualizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generating These Visualizations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-example-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why This Example Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="snow-integration-sledding-location-analysis">Snow Integration: Sledding Location Analysis<a class="headerlink" href="#snow-integration-sledding-location-analysis" title="Permanent link">&para;</a></h1>
+<p>A complete example showing how to combine elevation data with SNODAS snow statistics to identify optimal sledding locations. This demonstrates the power of multi-layer terrain analysis with visual outputs at each pipeline stage.</p>
+<h2 id="the-final-result">The Final Result<a class="headerlink" href="#the-final-result" title="Permanent link">&para;</a></h2>
+<p>This pipeline produces a comprehensive sledding suitability score map:</p>
+<p><img alt="Final Sledding Suitability Score" src="../images/05_final/sledding_score.png" /></p>
+<p><strong>Score Interpretation:</strong>
+- <strong>0.7-1.0 (Dark Yellow)</strong>: Excellent sledding locations
+- <strong>0.5-0.7 (Yellow-Green)</strong>: Good sledding with some concerns
+- <strong>0.3-0.5 (Green-Cyan)</strong>: Moderate - marginal conditions
+- <strong>0.0-0.3 (Dark Blue/Purple)</strong>: Poor sledding potential</p>
+<hr />
+<h3 id="what-this-example-shows">What This Example Shows<a class="headerlink" href="#what-this-example-shows" title="Permanent link">&para;</a></h3>
+<p>✓ <strong>Multi-Layer Analysis</strong>: Combine terrain elevation with snow depth/coverage data
+✓ <strong>SNODAS Integration</strong>: Process real National Snow and Ice Data Center snow grids
+✓ <strong>Pipeline Visualization</strong>: Generate visual outputs at each analysis step
+✓ <strong>Sledding Score Calculation</strong>: Identify optimal locations based on snow depth, coverage, and consistency
+✓ <strong>Mock Data Support</strong>: Fast testing with realistic synthetic snow data
+✓ <strong>Step-by-Step Execution</strong>: Run individual pipeline steps or the entire workflow</p>
+<h3 id="the-pipeline">The Pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h3>
+<p>The snow integration example demonstrates a multi-stage analysis pipeline:</p>
+<div class="codehilite"><pre><span></span><code>DEM → Snow Depth → Sledding Score → 3D Render (optional)
+</code></pre></div>
+
+<p>Each stage produces a visual artifact:
+- <strong>DEM Visualization</strong>: Terrain elevation heatmap
+- <strong>Snow Depth Visualization</strong>: Median maximum snow depth across the season
+- <strong>Sledding Score Visualization</strong>: Combined suitability score (0-1 scale)
+- <strong>3D Render</strong>: Optional Blender visualization with snow overlay</p>
+<h3 id="the-code">The Code<a class="headerlink" href="#the-code" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dem_files</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">Terrain</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.snow.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">SnowAnalysis</span>
+
+<span class="c1"># 1. Load elevation data</span>
+<span class="n">dem_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/dem/detroit&quot;</span><span class="p">)</span>
+<span class="n">dem</span><span class="p">,</span> <span class="n">transform</span> <span class="o">=</span> <span class="n">load_dem_files</span><span class="p">(</span><span class="n">dem_dir</span><span class="p">,</span> <span class="n">pattern</span><span class="o">=</span><span class="s2">&quot;*.tif&quot;</span><span class="p">)</span>
+
+<span class="c1"># 2. Create terrain</span>
+<span class="n">terrain</span> <span class="o">=</span> <span class="n">Terrain</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">transform</span><span class="p">,</span> <span class="n">dem_crs</span><span class="o">=</span><span class="s2">&quot;EPSG:4326&quot;</span><span class="p">)</span>
+
+<span class="c1"># 3. Process SNODAS snow data</span>
+<span class="n">snodas_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;data/snodas_data&quot;</span><span class="p">)</span>
+<span class="n">snow</span> <span class="o">=</span> <span class="n">SnowAnalysis</span><span class="p">(</span><span class="n">terrain</span><span class="o">=</span><span class="n">terrain</span><span class="p">,</span> <span class="n">snodas_root_dir</span><span class="o">=</span><span class="n">snodas_dir</span><span class="p">)</span>
+<span class="n">stats</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">failed</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">process_snow_data</span><span class="p">()</span>
+
+<span class="c1"># 4. Calculate sledding suitability score</span>
+<span class="c1"># This combines:</span>
+<span class="c1"># - Snow depth (deeper is better)</span>
+<span class="c1"># - Coverage (consistent coverage is better)</span>
+<span class="c1"># - Consistency (low variability is better)</span>
+<span class="n">sledding_score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">()</span>
+
+<span class="c1"># The score is automatically added to terrain.data_layers</span>
+<span class="c1"># Access it via: terrain.data_layers[&#39;sledding_score&#39;][&#39;data&#39;]</span>
+</code></pre></div>
+
+<h3 id="running-this-example">Running This Example<a class="headerlink" href="#running-this-example" title="Permanent link">&para;</a></h3>
+<h4 id="quick-start-with-mock-data">Quick Start with Mock Data<a class="headerlink" href="#quick-start-with-mock-data" title="Permanent link">&para;</a></h4>
+<p>Test the pipeline quickly with synthetic data:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate all visualizations with mock data</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:snow-demo
+
+<span class="c1"># Or run individual steps</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:snow-dem<span class="w">        </span><span class="c1"># DEM visualization only</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:snow-analysis<span class="w">   </span><span class="c1"># Sledding score calculation</span>
+</code></pre></div>
+
+<h4 id="using-real-snodas-data">Using Real SNODAS Data<a class="headerlink" href="#using-real-snodas-data" title="Permanent link">&para;</a></h4>
+<p>Process real snow data from the National Snow and Ice Data Center:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Full pipeline with real SNODAS data</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:snow-real
+
+<span class="c1"># Just the sledding score analysis</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:snow-real-score
+</code></pre></div>
+
+<p>Or run the Python script directly:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># With mock data for testing</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--mock-data<span class="w"> </span>--all-steps
+
+<span class="c1"># With real SNODAS data</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--snodas-dir<span class="w"> </span>data/snodas_data<span class="w"> </span>--all-steps
+
+<span class="c1"># Run individual steps</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--step<span class="w"> </span>dem
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--step<span class="w"> </span>snow
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--step<span class="w"> </span>score
+</code></pre></div>
+
+<h3 id="pipeline-steps-explained">Pipeline Steps Explained<a class="headerlink" href="#pipeline-steps-explained" title="Permanent link">&para;</a></h3>
+<h4 id="step-1-dem-visualization">Step 1: DEM Visualization<a class="headerlink" href="#step-1-dem-visualization" title="Permanent link">&para;</a></h4>
+<p>Generates a terrain elevation heatmap using the 'terrain' colormap:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">visualize_dem</span><span class="p">(</span><span class="n">dem</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">output_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create DEM visualization with terrain colormap.&quot;&quot;&quot;</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;terrain&quot;</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Elevation (meters)&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Detroit Area - Digital Elevation Model&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Output</strong>: <code>detroit_dem.png</code> - Elevation heatmap showing terrain features</p>
+<h4 id="step-2-snow-depth-visualization">Step 2: Snow Depth Visualization<a class="headerlink" href="#step-2-snow-depth-visualization" title="Permanent link">&para;</a></h4>
+<p>Displays median maximum snow depth across the season using a blue-white gradient:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">visualize_snow_depth</span><span class="p">(</span><span class="n">snow_depth</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">output_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create snow depth visualization with blue-white colormap.&quot;&quot;&quot;</span>
+    <span class="c1"># Custom blue-white gradient for snow</span>
+    <span class="n">colors</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;#08519c&quot;</span><span class="p">,</span> <span class="s2">&quot;#3182bd&quot;</span><span class="p">,</span> <span class="s2">&quot;#6baed6&quot;</span><span class="p">,</span> <span class="s2">&quot;#bdd7e7&quot;</span><span class="p">,</span> <span class="s2">&quot;#eff3ff&quot;</span><span class="p">,</span> <span class="s2">&quot;white&quot;</span><span class="p">]</span>
+    <span class="n">cmap</span> <span class="o">=</span> <span class="n">LinearSegmentedColormap</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="s2">&quot;snow&quot;</span><span class="p">,</span> <span class="n">colors</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">snow_depth</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Snow Depth (cm)&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Detroit Area - Median Maximum Snow Depth&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Output</strong>: <code>detroit_snow_depth.png</code> - Snow depth heatmap from SNODAS data</p>
+<p><strong>Data Source</strong>: SNODAS (Snow Data Assimilation System) provides daily snow depth grids at 1km resolution. The visualization shows the median of the maximum daily snow depth for each pixel across the analysis period.</p>
+<h4 id="step-3-sledding-score-calculation">Step 3: Sledding Score Calculation<a class="headerlink" href="#step-3-sledding-score-calculation" title="Permanent link">&para;</a></h4>
+<p>Combines multiple snow metrics to identify optimal sledding locations:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">visualize_sledding_score</span><span class="p">(</span><span class="n">score</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">output_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create sledding score visualization with RdYlGn colormap.&quot;&quot;&quot;</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">plt</span><span class="o">.</span><span class="n">cm</span><span class="o">.</span><span class="n">RdYlGn</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">aspect</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Sledding Suitability Score&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Detroit Area - Sledding Location Score&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Add interpretation guide</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="mf">0.02</span><span class="p">,</span> <span class="mf">0.98</span><span class="p">,</span> <span class="s2">&quot;Green = Excellent | Yellow = Moderate | Red = Poor&quot;</span><span class="p">,</span>
+             <span class="n">transform</span><span class="o">=</span><span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span><span class="o">.</span><span class="n">transAxes</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+             <span class="n">verticalalignment</span><span class="o">=</span><span class="s1">&#39;top&#39;</span><span class="p">,</span> <span class="n">bbox</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">boxstyle</span><span class="o">=</span><span class="s1">&#39;round&#39;</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="s1">&#39;white&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.8</span><span class="p">))</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>Output</strong>: <code>detroit_sledding_score.png</code> - Suitability score heatmap (0-1 scale)</p>
+<p><strong>Scoring Algorithm</strong>:
+- <strong>Snow Depth Component</strong> (40% weight): Normalized median max depth (deeper is better)
+- <strong>Coverage Component</strong> (30% weight): Snow day ratio (more consistent coverage is better)
+- <strong>Consistency Component</strong> (30% weight): 1 - CV (lower variability is better)</p>
+<p>The final score ranges from 0 (poor sledding) to 1 (excellent sledding).</p>
+<h3 id="mock-data-for-testing">Mock Data for Testing<a class="headerlink" href="#mock-data-for-testing" title="Permanent link">&para;</a></h3>
+<p>The example includes realistic mock data generation for fast iteration:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">create_mock_snow_data</span><span class="p">(</span><span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create mock snow data with realistic distributions.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;median_max_depth&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">gamma</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="n">shape</span><span class="p">),</span>      <span class="c1"># 0-300cm</span>
+        <span class="s2">&quot;mean_snow_day_ratio&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">beta</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">shape</span><span class="p">),</span>     <span class="c1"># 0-1</span>
+        <span class="s2">&quot;interseason_cv&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">beta</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">,</span>    <span class="c1"># 0-0.5</span>
+        <span class="s2">&quot;mean_intraseason_cv&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">beta</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.3</span> <span class="c1"># 0-0.3</span>
+    <span class="p">}</span>
+</code></pre></div>
+
+<p>Mock data uses statistical distributions that mimic real SNODAS patterns:
+- <strong>Gamma distribution</strong> for snow depth (right-skewed, realistic accumulation)
+- <strong>Beta distribution</strong> for ratios and coefficients (bounded 0-1)</p>
+<p>This enables:
+- ✓ Fast testing without downloading SNODAS data
+- ✓ Reproducible test cases
+- ✓ TDD-friendly development workflow</p>
+<h3 id="example-output">Example Output<a class="headerlink" href="#example-output" title="Permanent link">&para;</a></h3>
+<p>When you run the full pipeline with mock data:</p>
+<div class="codehilite"><pre><span></span><code>======================================================================
+Detroit Snow Sledding Analysis
+======================================================================
+
+[1/3] Generating DEM visualization...
+      ✓ Saved: examples/detroit_dem.png
+
+[2/3] Generating snow depth visualization...
+      ✓ Mock snow data created (500x500)
+      ✓ Saved: examples/detroit_snow_depth.png
+
+[3/3] Calculating sledding scores...
+      ✓ Sledding score calculated
+      ✓ Score range: 0.00 - 1.00
+      ✓ Mean score: 0.54
+      ✓ Saved: examples/detroit_sledding_score.png
+
+======================================================================
+Pipeline Complete!
+======================================================================
+
+Generated outputs:
+  ✓ examples/detroit_dem.png
+  ✓ examples/detroit_snow_depth.png
+  ✓ examples/detroit_sledding_score.png
+</code></pre></div>
+
+<h3 id="snodas-data-structure">SNODAS Data Structure<a class="headerlink" href="#snodas-data-structure" title="Permanent link">&para;</a></h3>
+<p>The example expects SNODAS data organized by date:</p>
+<div class="codehilite"><pre><span></span><code>data/snodas_data/
+├── 2024-01-01/
+│   └── us_ssmv11034tS__T0001TTNATS2024010105HP001.dat
+├── 2024-01-02/
+│   └── us_ssmv11034tS__T0001TTNATS2024010205HP001.dat
+└── ...
+</code></pre></div>
+
+<p><strong>SNODAS Grid Details</strong>:
+- Resolution: 1 km × 1 km
+- Coverage: Continental United States
+- Temporal: Daily snapshots
+- Variables: Snow depth, SWE, melt, and more</p>
+<p>The <code>SnowAnalysis</code> class automatically:
+- Discovers all daily grids in the directory
+- Reprojects to match the terrain DEM coordinate system
+- Calculates seasonal statistics (median, max, CV, coverage ratio)
+- Caches results for fast subsequent runs</p>
+<h3 id="integration-with-terrain-layers">Integration with Terrain Layers<a class="headerlink" href="#integration-with-terrain-layers" title="Permanent link">&para;</a></h3>
+<p>The snow data integrates seamlessly with the terrain system via <code>add_data_layer()</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Snow statistics are automatically reprojected to match terrain CRS</span>
+<span class="n">snow</span> <span class="o">=</span> <span class="n">SnowAnalysis</span><span class="p">(</span><span class="n">terrain</span><span class="o">=</span><span class="n">terrain</span><span class="p">,</span> <span class="n">snodas_root_dir</span><span class="o">=</span><span class="n">snodas_dir</span><span class="p">)</span>
+<span class="n">stats</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">failed</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">process_snow_data</span><span class="p">()</span>
+
+<span class="c1"># Calculate score - this adds a new layer to terrain</span>
+<span class="n">sledding_score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">()</span>
+
+<span class="c1"># Access the score via data_layers</span>
+<span class="n">score_data</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;sledding_score&#39;</span><span class="p">][</span><span class="s1">&#39;data&#39;</span><span class="p">]</span>
+<span class="n">score_crs</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;sledding_score&#39;</span><span class="p">][</span><span class="s1">&#39;crs&#39;</span><span class="p">]</span>
+<span class="n">score_transform</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;sledding_score&#39;</span><span class="p">][</span><span class="s1">&#39;transform&#39;</span><span class="p">]</span>
+</code></pre></div>
+
+<p>This architecture enables:
+- <strong>Automatic reprojection</strong> between different coordinate systems
+- <strong>Metadata preservation</strong> (CRS, transform, units)
+- <strong>Multi-layer visualization</strong> (combine elevation, snow, and score)
+- <strong>Modular analysis</strong> (keep terrain and snow analysis separate)</p>
+<h3 id="customization">Customization<a class="headerlink" href="#customization" title="Permanent link">&para;</a></h3>
+<h4 id="adjust-sledding-score-weights">Adjust Sledding Score Weights<a class="headerlink" href="#adjust-sledding-score-weights" title="Permanent link">&para;</a></h4>
+<p>Modify the weighting of different snow characteristics:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Default weights</span>
+<span class="n">sledding_score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">()</span>
+
+<span class="c1"># Custom weights (must sum to 1.0)</span>
+<span class="n">sledding_score</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">calculate_sledding_score</span><span class="p">(</span>
+    <span class="n">depth_weight</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>        <span class="c1"># Prioritize depth</span>
+    <span class="n">coverage_weight</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>     <span class="c1"># Medium importance for coverage</span>
+    <span class="n">consistency_weight</span><span class="o">=</span><span class="mf">0.2</span>   <span class="c1"># Less emphasis on consistency</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h4 id="filter-by-score-threshold">Filter by Score Threshold<a class="headerlink" href="#filter-by-score-threshold" title="Permanent link">&para;</a></h4>
+<p>The pipeline automatically generates a filtered visualization showing only excellent locations (score &gt; 0.7). This is saved as <code>sledding_score_excellent.png</code> in the <code>05_final/</code> output directory.</p>
+<p>If you want to filter by a different threshold, you can customize it in code:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Get high-scoring areas (score &gt; 0.8 for very high standards)</span>
+<span class="n">excellent_spots</span> <span class="o">=</span> <span class="n">sledding_score</span> <span class="o">&gt;</span> <span class="mf">0.8</span>
+
+<span class="c1"># Visualize only excellent locations with custom threshold</span>
+<span class="n">score_filtered</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">excellent_spots</span><span class="p">,</span> <span class="n">sledding_score</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="c1"># Then plot with same visualization logic...</span>
+</code></pre></div>
+
+<p>Or adjust the pipeline directly:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">examples.detroit_snow_sledding</span><span class="w"> </span><span class="kn">import</span> <span class="n">save_sledding_score_filtered</span>
+
+<span class="c1"># Generate with custom threshold (e.g., 0.75)</span>
+<span class="n">save_sledding_score_filtered</span><span class="p">(</span><span class="n">sledding_score</span><span class="p">,</span> <span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;excellent_0.75.png&quot;</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.75</span><span class="p">)</span>
+</code></pre></div>
+
+<h4 id="use-different-time-periods">Use Different Time Periods<a class="headerlink" href="#use-different-time-periods" title="Permanent link">&para;</a></h4>
+<p>Process SNODAS data from specific date ranges:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Filter SNODAS files by date</span>
+<span class="n">snow</span> <span class="o">=</span> <span class="n">SnowAnalysis</span><span class="p">(</span><span class="n">terrain</span><span class="o">=</span><span class="n">terrain</span><span class="p">,</span> <span class="n">snodas_root_dir</span><span class="o">=</span><span class="n">snodas_dir</span><span class="p">)</span>
+
+<span class="c1"># Process only December-February (peak sledding season)</span>
+<span class="n">stats</span><span class="p">,</span> <span class="n">metadata</span><span class="p">,</span> <span class="n">failed</span> <span class="o">=</span> <span class="n">snow</span><span class="o">.</span><span class="n">process_snow_data</span><span class="p">(</span>
+    <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2024-12-01&quot;</span><span class="p">,</span>
+    <span class="n">end_date</span><span class="o">=</span><span class="s2">&quot;2025-02-28&quot;</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<h3 id="snow-analysis-pipeline-detailed-breakdown">Snow Analysis Pipeline: Detailed Breakdown<a class="headerlink" href="#snow-analysis-pipeline-detailed-breakdown" title="Permanent link">&para;</a></h3>
+<p>The sledding location analysis pipeline breaks down into distinct stages, each generating individual visualizations for detailed analysis and documentation:</p>
+<h4 id="stage-1-terrain-input">Stage 1: Terrain Input<a class="headerlink" href="#stage-1-terrain-input" title="Permanent link">&para;</a></h4>
+<p><strong>Raw elevation data visualization:</strong></p>
+<p><img alt="DEM - Digital Elevation Model" src="../images/01_raw/dem.png" /></p>
+<p>The pipeline begins with a Digital Elevation Model showing the terrain's elevation features. This is the foundation for all subsequent analysis - the terrain's slope and elevation characteristics influence sledding potential.</p>
+<h4 id="stage-2-snow-data-input">Stage 2: Snow Data Input<a class="headerlink" href="#stage-2-snow-data-input" title="Permanent link">&para;</a></h4>
+<p><strong>Median maximum snow depth:</strong></p>
+<p><img alt="Snow Depth Distribution" src="../images/01_raw/snow_depth.png" /></p>
+<p>SNODAS snow data is processed to show median maximum snow depth. Deeper snow generally provides better sledding conditions, but too-consistent depth can indicate areas that flood seasonally.</p>
+<h4 id="stage-3-slope-statistics-analysis">Stage 3: Slope Statistics Analysis<a class="headerlink" href="#stage-3-slope-statistics-analysis" title="Permanent link">&para;</a></h4>
+<p>The terrain's slope characteristics are computed at full resolution using tiled analysis (to handle large DEMs efficiently). This breaks down into 8 detailed panels:</p>
+<p><strong>Slope Mean</strong> - Average slope angle in degrees:</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">Shows</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">gentle</span><span class="o">-</span><span class="nv">to</span><span class="o">-</span><span class="nv">moderate</span><span class="w"> </span><span class="nv">slopes</span><span class="w"> </span><span class="nv">ideal</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">sledding</span>
+<span class="o">-</span><span class="w"> </span><span class="mi">5</span><span class="o">-</span><span class="mi">15</span>°:<span class="w"> </span><span class="nv">Excellent</span><span class="w"> </span><span class="nv">sledding</span><span class="w"> </span><span class="nv">terrain</span><span class="w"> </span><span class="ss">(</span><span class="nv">not</span><span class="w"> </span><span class="nv">too</span><span class="w"> </span><span class="nv">steep</span>,<span class="w"> </span><span class="nv">not</span><span class="w"> </span><span class="nv">too</span><span class="w"> </span><span class="nv">flat</span><span class="ss">)</span>
+<span class="o">-</span><span class="w"> </span><span class="mi">0</span><span class="o">-</span><span class="mi">5</span>°:<span class="w"> </span><span class="nv">Too</span><span class="w"> </span><span class="nv">flat</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nv">snow</span><span class="w"> </span><span class="nv">won</span><span class="err">&#39;t move</span>
+<span class="err">- &gt;25°: Too steep - avalanche risk, hard to control</span>
+</code></pre></div>
+
+<p><img alt="Slope Mean - Average slope" src="../images/02_slope_stats/mean.png" /></p>
+<p><strong>Slope Max</strong> - Maximum slope within each region (cliff detection):</p>
+<div class="codehilite"><pre><span></span><code>Identifies steep cliffs and drop-offs that reduce sledding suitability
+- High values: Terrain has hidden cliffs (dangerous)
+- Low values: Smooth, consistent terrain
+</code></pre></div>
+
+<p><img alt="Slope Max - Cliff Detection" src="../images/02_slope_stats/max.png" /></p>
+<p><strong>Slope Min</strong> - Minimum slope (flat spot identification):</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">Finds</span><span class="w"> </span><span class="nv">the</span><span class="w"> </span><span class="nv">flattest</span><span class="w"> </span><span class="nv">areas</span><span class="w"> </span><span class="nv">which</span><span class="w"> </span><span class="nv">are</span><span class="w"> </span><span class="nv">good</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">run</span><span class="o">-</span><span class="nv">out</span><span class="w"> </span><span class="nv">zones</span>
+<span class="o">-</span><span class="w"> </span><span class="mi">0</span><span class="o">-</span><span class="mi">5</span>°:<span class="w"> </span><span class="nv">Ideal</span><span class="w"> </span><span class="nv">flat</span><span class="w"> </span><span class="nv">run</span><span class="o">-</span><span class="nv">out</span><span class="w"> </span><span class="nv">areas</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">slow</span><span class="w"> </span><span class="nv">sleds</span>
+<span class="o">-</span><span class="w"> </span><span class="nv">Shows</span><span class="w"> </span><span class="nv">where</span><span class="w"> </span><span class="nv">sledders</span><span class="w"> </span><span class="nv">naturally</span><span class="w"> </span><span class="nv">decelerate</span>
+</code></pre></div>
+
+<p><img alt="Slope Min - Flat Spots" src="../images/02_slope_stats/min.png" /></p>
+<p><strong>Slope Std Dev</strong> - Slope variability (terrain roughness):</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Measures</span><span class="w"> </span><span class="n">how</span><span class="w"> </span><span class="n">consistent</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">slope</span><span class="w"> </span><span class="k">is</span>
+<span class="o">-</span><span class="w"> </span><span class="n">Low</span><span class="w"> </span><span class="n">values</span><span class="p">:</span><span class="w"> </span><span class="n">Smooth</span><span class="p">,</span><span class="w"> </span><span class="n">predictable</span><span class="w"> </span><span class="n">descent</span>
+<span class="o">-</span><span class="w"> </span><span class="n">High</span><span class="w"> </span><span class="n">values</span><span class="p">:</span><span class="w"> </span><span class="n">Choppy</span><span class="p">,</span><span class="w"> </span><span class="n">variable</span><span class="w"> </span><span class="n">terrain</span>
+</code></pre></div>
+
+<p><img alt="Slope Std Dev - Terrain Consistency" src="../images/02_slope_stats/std.png" /></p>
+<p><strong>Slope P95</strong> - 95th percentile slope (steep outliers):</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Detects</span><span class="w"> </span><span class="n">scattered</span><span class="w"> </span><span class="n">steep</span><span class="w"> </span><span class="n">areas</span><span class="w"> </span><span class="n">without</span><span class="w"> </span><span class="n">averaging</span><span class="w"> </span><span class="n">them</span><span class="w"> </span><span class="n">out</span>
+<span class="o">-</span><span class="w"> </span><span class="n">Used</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">penalize</span><span class="w"> </span><span class="n">regions</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">hidden</span><span class="w"> </span><span class="n">cliffs</span>
+<span class="o">-</span><span class="w"> </span><span class="n">More</span><span class="w"> </span><span class="n">robust</span><span class="w"> </span><span class="n">than</span><span class="w"> </span><span class="n">slope_max</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">noise</span>
+</code></pre></div>
+
+<p><img alt="Slope P95 - 95th Percentile Slope" src="../images/02_slope_stats/p95.png" /></p>
+<p><strong>Roughness</strong> - Elevation variation (standard deviation of elevation within grid):</p>
+<div class="codehilite"><pre><span></span><code>Identifies rough, boulder-strewn terrain vs smooth slopes
+- High roughness: Rocky, dangerous terrain
+- Low roughness: Smooth, sled-friendly slopes
+</code></pre></div>
+
+<p><img alt="Roughness - Elevation Variability" src="../images/02_slope_stats/roughness.png" /></p>
+<p><strong>Dominant Aspect</strong> - Direction slopes face (compass direction):</p>
+<div class="codehilite"><pre><span></span><code>Shows which way slopes face:
+- Light colors: North-facing (shadier, retains more snow)
+- Dark colors: South-facing (sunnier, more melt)
+- North-facing aspects often have better sledding
+</code></pre></div>
+
+<p><img alt="Dominant Aspect - Slope Direction" src="../images/02_slope_stats/aspect.png" /></p>
+<p><strong>Aspect Strength</strong> - Consistency of aspect direction:</p>
+<div class="codehilite"><pre><span></span><code>Shows how uniform the slope direction is:
+- High values: All slopes face the same direction
+- Low values: Slopes face mixed directions
+- Affects snow retention patterns
+</code></pre></div>
+
+<p><img alt="Aspect Strength - Direction Consistency" src="../images/02_slope_stats/aspect_strength.png" /></p>
+<h4 id="stage-4-slope-penalties-analysis">Stage 4: Slope Penalties Analysis<a class="headerlink" href="#stage-4-slope-penalties-analysis" title="Permanent link">&para;</a></h4>
+<p>Raw slope statistics are transformed into a sledding score with penalties for hazards:</p>
+<p><strong>Base Slope Score</strong> - Trapezoidal scoring function on slope mean:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Sweet range: 5-15° (ideal sledding slope)</span>
+<span class="c1"># Ramp range: 3-25° (acceptable range)</span>
+<span class="c1"># Outside ramp range: 0 points</span>
+<span class="n">slope_score</span> <span class="o">=</span> <span class="n">trapezoidal</span><span class="p">(</span><span class="n">slope_mean</span><span class="p">,</span> <span class="n">sweet_range</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span> <span class="n">ramp_range</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">25</span><span class="p">))</span>
+</code></pre></div>
+
+<p><img alt="Base Slope Score - Trapezoidal Function" src="../images/03_slope_penalties/base_score.png" /></p>
+<p><strong>Cliff Penalty</strong> - Dealbreaker penalty for steep areas:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># If p95 slope &gt; 25°, penalize heavily</span>
+<span class="c1"># Applies smooth rolloff to avoid hard cutoffs</span>
+<span class="n">cliff_penalty</span> <span class="o">=</span> <span class="n">dealbreaker</span><span class="p">(</span><span class="n">slope_p95</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">falloff</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Cliff Penalty - Steep Area Reduction" src="../images/03_slope_penalties/cliff_penalty.png" /></p>
+<p><strong>Terrain Consistency Penalty</strong> - Penalizes rough terrain:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Combined penalty from roughness + slope variability</span>
+<span class="c1"># Extreme roughness or high std deviation reduces score</span>
+<span class="n">consistency_penalty</span> <span class="o">=</span> <span class="n">terrain_consistency</span><span class="p">(</span><span class="n">roughness</span><span class="p">,</span> <span class="n">slope_std</span><span class="p">)</span>
+</code></pre></div>
+
+<p><img alt="Terrain Consistency - Roughness Penalty" src="../images/03_slope_penalties/terrain_consistency.png" /></p>
+<p><strong>Combined Penalties</strong> - Multiplication of all penalties:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Final slope score = base × cliff_penalty × consistency_penalty</span>
+<span class="n">combined_penalty</span> <span class="o">=</span> <span class="n">cliff_penalty</span> <span class="err">×</span> <span class="n">consistency_penalty</span>
+</code></pre></div>
+
+<p><img alt="Combined Penalties - Total Slope Reduction" src="../images/03_slope_penalties/combined_penalty.png" /></p>
+<p><strong>Final Slope Score</strong> - Base score after all penalties:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">final_slope_score</span> <span class="o">=</span> <span class="n">slope_score</span> <span class="err">×</span> <span class="n">combined_penalty</span>
+</code></pre></div>
+
+<p><img alt="Final Slope Score - Penalized Result" src="../images/03_slope_penalties/final_score.png" /></p>
+<p><strong>Score Reduction Map</strong> - Visual of penalty impact:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Shows how much score was lost to penalties</span>
+<span class="c1"># Yellow = high penalty, Black = low penalty</span>
+<span class="n">score_reduction</span> <span class="o">=</span> <span class="n">base_score</span> <span class="o">-</span> <span class="n">final_slope_score</span>
+</code></pre></div>
+
+<p><img alt="Score Reduction - Penalty Impact" src="../images/03_slope_penalties/score_reduction.png" /></p>
+<h4 id="stage-5-comprehensive-score-component-analysis">Stage 5: Comprehensive Score Component Analysis<a class="headerlink" href="#stage-5-comprehensive-score-component-analysis" title="Permanent link">&para;</a></h4>
+<p>The final sledding score combines multiple components. The detailed analysis breaks these into 17 individual panels showing each transformation:</p>
+<p><strong>Additive Components</strong> (weighted sum = base score):</p>
+<p><img alt="Slope Score - Primary terrain factor" src="../images/04_score_components/slope_score.png" />
+<em>Slope Score (30% weight) - Weighted contribution from terrain slope</em></p>
+<p><img alt="Depth Score - Snow accumulation suitability" src="../images/04_score_components/depth_score.png" />
+<em>Depth Score (15% weight) - Deeper snow is better for sledding</em></p>
+<p><img alt="Coverage Score - Snow persistence" src="../images/04_score_components/coverage_score.png" />
+<em>Coverage Score (25% weight) - Consistent snow coverage throughout season</em></p>
+<p><img alt="Consistency Score - Snow reliability" src="../images/04_score_components/consistency_score.png" />
+<em>Consistency Score (20% weight) - Low variability = reliable sledding</em></p>
+<p><strong>Additional Components</strong>:</p>
+<p><img alt="Aspect Score - North-facing bonus" src="../images/04_score_components/aspect_score.png" />
+<em>Aspect Score (5% weight) - North-facing slopes retain more snow</em></p>
+<p><img alt="Runout Bonus - Flat areas for deceleration" src="../images/04_score_components/runout_bonus.png" />
+<em>Runout Bonus (5% weight) - Flat areas (&lt; 5°) provide natural run-out zones</em></p>
+<p><strong>Multiplicative Penalties</strong> (applied as multipliers):</p>
+<p><img alt="Cliff Penalty - Steep area hazard" src="../images/04_score_components/cliff_penalty.png" />
+<em>Cliff Penalty (×) - Reduces score if steep sections present</em></p>
+<p><img alt="Terrain Consistency - Roughness hazard" src="../images/04_score_components/terrain_consistency.png" />
+<em>Terrain Consistency (×) - Reduces score for rough, choppy terrain</em></p>
+<p><strong>Raw Input Data</strong> (for reference):</p>
+<p><img alt="Raw Slope Mean" src="../images/04_score_components/raw_slope_mean.png" />
+<em>Raw: Slope Mean in degrees - Unscored terrain slope</em></p>
+<p><img alt="Raw Snow Depth" src="../images/04_score_components/raw_snow_depth.png" />
+<em>Raw: Snow Depth in mm - Unscored SNODAS measurements</em></p>
+<p><img alt="Raw Interseason CV" src="../images/04_score_components/raw_interseason_cv.png" />
+<em>Raw: Interseason CV - Year-to-year variability coefficient</em></p>
+<p><img alt="Raw Intraseason CV" src="../images/04_score_components/raw_intraseason_cv.png" />
+<em>Raw: Intraseason CV - Within-winter variability coefficient</em></p>
+<p><strong>Combination Steps</strong> (formula stages):</p>
+<p><img alt="Additive Sum" src="../images/04_score_components/additive_sum.png" />
+<em>Additive Sum - Weighted combination of all additive components</em></p>
+<p><img alt="Multiplicative Product" src="../images/04_score_components/multiplicative.png" />
+<em>Multiplicative Product - Penalty multipliers (cliff × terrain consistency)</em></p>
+<p><img alt="Final Sledding Score" src="../images/04_score_components/final_score.png" />
+<em>Final Sledding Score - Complete suitability score (0-1 scale)</em></p>
+<p><img alt="Score Reduction from Penalties" src="../images/04_score_components/score_reduction.png" />
+<em>Score Reduction - How much penalty reduced the final score</em></p>
+<p><strong>Scoring Formula:</strong></p>
+<p>The complete formula is generated and saved as markdown for documentation:</p>
+<div class="codehilite"><pre><span></span><code>Sledding Suitability Score = (
+    0.30 × Slope Mean
+    + 0.15 × Snow Depth
+    + 0.25 × Snow Coverage
+    + 0.20 × Snow Consistency
+    + 0.05 × Aspect Bonus
+    + 0.05 × Runout Bonus
+) × Slope P95 Penalty × Terrain Consistency Penalty
+</code></pre></div>
+
+<p>See <code>docs/images/04_score_components/equation.md</code> for the exact formula.</p>
+<h4 id="stage-6-final-result">Stage 6: Final Result<a class="headerlink" href="#stage-6-final-result" title="Permanent link">&para;</a></h4>
+<p>The final sledding score combines all factors into a single suitability map (0-1 scale). This is the primary output of the pipeline - a comprehensive assessment of sledding suitability across the entire region:</p>
+<p><img alt="Final Sledding Suitability Score" src="../images/05_final/sledding_score.png" /></p>
+<p>This map shows where sledding conditions are best. The colors represent suitability scores from 0 (poor) to 1 (excellent).</p>
+<p><strong>Score Interpretation:</strong>
+- <strong>0.7-1.0 (Dark Yellow)</strong>: Excellent sledding locations
+- <strong>0.5-0.7 (Yellow-Green)</strong>: Good sledding with some concerns
+- <strong>0.3-0.5 (Green-Cyan)</strong>: Moderate - marginal conditions
+- <strong>0.0-0.3 (Dark Blue/Purple)</strong>: Poor sledding potential</p>
+<p><strong>Additional Analysis Visualizations:</strong></p>
+<p>Understanding the score distribution helps identify optimal locations and assess regional variation:</p>
+<p><img alt="Sledding Score Distribution" src="../images/05_final/sledding_score_histogram.png" />
+<em>Histogram showing the distribution of sledding scores across all pixels, with quartile markers (25th, 50th, 75th percentiles)</em></p>
+<p><img alt="Sledding Score Percentiles" src="../images/05_final/sledding_score_percentiles.png" />
+<em>Spatial distribution of score percentiles: shows which pixels fall into bottom 25% (red), 25-50% (orange), 50-75% (yellow), or top 25% (turquoise/blue) of scores</em></p>
+<p><img alt="Excellent Sledding Locations" src="../images/05_final/sledding_score_excellent.png" />
+<em>Filtered map highlighting only the excellent sledding locations (score &gt; 0.7) - the most promising areas for sledding</em></p>
+<h3 id="generating-these-visualizations">Generating These Visualizations<a class="headerlink" href="#generating-these-visualizations" title="Permanent link">&para;</a></h3>
+<p>All individual panels are generated automatically when you run the example:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate all visualizations</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_snow_sledding.py<span class="w"> </span>--mock-data<span class="w"> </span>--all-steps
+
+<span class="c1"># Output structure:</span>
+<span class="c1"># docs/images/</span>
+<span class="c1"># ├── 01_raw/                    # Input data</span>
+<span class="c1"># │   ├── dem.png</span>
+<span class="c1"># │   └── snow_depth.png</span>
+<span class="c1"># ├── 02_slope_stats/             # 8 slope analysis panels</span>
+<span class="c1"># ├── 03_slope_penalties/         # 6 penalty analysis panels</span>
+<span class="c1"># ├── 04_score_components/        # 16 component + equation</span>
+<span class="c1"># └── 05_final/                   # Final sledding score</span>
+</code></pre></div>
+
+<p>Each panel can be embedded in documentation, presentations, or analysis reports. The individual format makes it easy to explain each step of the pipeline in detail.</p>
+<hr />
+<h3 id="why-this-example-matters">Why This Example Matters<a class="headerlink" href="#why-this-example-matters" title="Permanent link">&para;</a></h3>
+<p><strong>Traditional snow analysis workflow</strong>:
+1. Manually download SNODAS grids
+2. Write custom reprojection code
+3. Manually align snow data with terrain
+4. Implement scoring algorithms
+5. Handle coordinate system mismatches
+6. Generate visualizations separately</p>
+<p><strong>With Terrain Maker + SnowAnalysis</strong>:
+1. Point to SNODAS directory
+2. Call <code>process_snow_data()</code>
+3. Call <code>calculate_sledding_score()</code>
+4. Visual outputs generated automatically</p>
+<p>The example demonstrates:
+- ✓ <strong>Modular design</strong>: Snow analysis is separate from core terrain functionality
+- ✓ <strong>Data layer system</strong>: Automatic reprojection and metadata preservation
+- ✓ <strong>Multi-stage pipeline</strong>: Visual feedback at each step
+- ✓ <strong>Testing-friendly</strong>: Mock data enables fast TDD iteration
+- ✓ <strong>Production-ready</strong>: Real SNODAS integration with caching</p>
+<hr />
+<p><strong>Want to try it yourself?</strong> See <a href="../QUICK_REFERENCE/">Quick Reference</a> for API documentation and <a href="../API_REFERENCE/">API Reference</a> for detailed function signatures.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>

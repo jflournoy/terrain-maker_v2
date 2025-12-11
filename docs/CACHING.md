@@ -210,5 +210,9 @@ rm -rf .gridded_data_cache
 
 ## Further Reading
 
-- **Cache implementations:** [DEMCache](../src/terrain/cache.py), [MeshCache](../src/terrain/mesh_cache.py), [GriddedDataLoader](../src/terrain/gridded_data.py)
-- **Example usage:** See [examples/detroit_snow_sledding.py](../examples/detroit_snow_sledding.py) for a real-world example using GriddedDataLoader for SNODAS snow data processing
+- **Cache implementations:**
+  - `src/terrain/cache.py` - DEMCache for DEM caching
+  - `src/terrain/mesh_cache.py` - MeshCache for 3D mesh caching
+  - `src/terrain/gridded_data.py` - GriddedDataLoader with pipeline caching
+
+- **Example usage:** See `examples/detroit_snow_sledding.py` for a real-world example using GriddedDataLoader for SNODAS snow data processing

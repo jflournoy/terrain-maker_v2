@@ -1,0 +1,2115 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="GeoTIFF terrain visualization and analysis with Blender rendering">
+      
+      
+      
+      
+        <link rel="prev" href="../QUICK_START/">
+      
+      
+        <link rel="next" href="../SNOW_SLEDDING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.0">
+    
+    
+      
+        <title>Detroit Elevation Visualization - Terrain-Maker Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.618322db.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#detroit-elevation-visualization" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Terrain-Maker Documentation" class="md-header__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Terrain-Maker Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Detroit Elevation Visualization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Terrain-Maker Documentation" class="md-nav__button md-logo" aria-label="Terrain-Maker Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Terrain-Maker Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/your-repo/terrain-maker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    terrain-maker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PYTHON_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICK_START/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detroit Elevation Visualization
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detroit Elevation Visualization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiple-views-with-intelligent-camera-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Views with Intelligent Camera Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-example-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Example Shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features-in-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features in Action
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Features in Action">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intelligent-downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intelligent Downsampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cardinal-direction-camera-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cardinal Direction Camera Positioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geographic-coordinate-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Geographic Coordinate Handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#water-body-detection-blue-coloring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Water Body Detection &amp; Blue Coloring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-this-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running This Example
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running This Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-render-south-view-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Render (South View - Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate-multiple-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generate Multiple Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-terrain-maker-makes-this-easy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Terrain Maker Makes This Easy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line-camera-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command-Line Camera Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-code-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-Code Customization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-multiple-comparison-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generating Multiple Comparison Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#regenerating-example-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regenerating Example Images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accelerating-renders-with-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accelerating Renders with Caching
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accelerating Renders with Caching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache File Locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-invalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Invalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SNOW_SLEDDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Snow Sledding Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix (Development & Workflows)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Appendix (Development & Workflows)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WORKFLOWS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_WITH_CLAUDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD with Claude
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TDD_SUCCESS_STORIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TDD Success Stories
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLAUDE_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Claude Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOKEN_EFFICIENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Token Efficiency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_CHECK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SELF_UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Self Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_SETUP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Result
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multiple-views-with-intelligent-camera-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Views with Intelligent Camera Positioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-example-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What This Example Shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features-in-action" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features in Action
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Features in Action">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intelligent-downsampling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intelligent Downsampling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cardinal-direction-camera-positioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cardinal Direction Camera Positioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#geographic-coordinate-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Geographic Coordinate Handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#water-body-detection-blue-coloring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Water Body Detection &amp; Blue Coloring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-this-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running This Example
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running This Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-render-south-view-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Render (South View - Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generate-multiple-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generate Multiple Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-terrain-maker-makes-this-easy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Terrain Maker Makes This Easy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#command-line-camera-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command-Line Camera Control
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-code-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-Code Customization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-multiple-comparison-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generating Multiple Comparison Views
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#regenerating-example-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regenerating Example Images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accelerating-renders-with-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accelerating Renders with Caching
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Accelerating Renders with Caching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Caching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache File Locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-invalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Invalidation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="detroit-elevation-visualization">Detroit Elevation Visualization<a class="headerlink" href="#detroit-elevation-visualization" title="Permanent link">&para;</a></h1>
+<p>A complete example showing how to create stunning 3D terrain visualizations from real SRTM elevation data with just a few lines of Python.</p>
+<h3 id="the-result">The Result<a class="headerlink" href="#the-result" title="Permanent link">&para;</a></h3>
+<p><img alt="Detroit Elevation Visualization" src="../images/detroit_elevation_south.png" /></p>
+<p><em>Professional-quality 3D terrain visualization of Detroit metro area - rendered with Blender from real SRTM elevation data with water body detection enabled</em></p>
+<h3 id="multiple-views-with-intelligent-camera-positioning">Multiple Views with Intelligent Camera Positioning<a class="headerlink" href="#multiple-views-with-intelligent-camera-positioning" title="Permanent link">&para;</a></h3>
+<p>The example demonstrates the power of <code>position_camera_relative()</code> by generating professional renders from different camera angles - each with optimal framing for its view direction:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">North View</th>
+<th style="text-align: center;">East View</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><em>(looking south)</em></td>
+<td style="text-align: center;"><em>(looking west)</em></td>
+</tr>
+<tr>
+<td style="text-align: center;"><img alt="Detroit North View" src="../images/detroit_elevation_north.png" /></td>
+<td style="text-align: center;"><img alt="Detroit East View" src="../images/detroit_elevation_east.png" /></td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">West View</th>
+<th style="text-align: center;">Overhead View</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><em>(looking east)</em></td>
+<td style="text-align: center;"><em>(90° down, zero rotation)</em></td>
+</tr>
+<tr>
+<td style="text-align: center;"><img alt="Detroit West View" src="../images/detroit_elevation_west.png" /></td>
+<td style="text-align: center;"><img alt="Detroit Above View" src="../images/detroit_elevation_above.png" /></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Generate these views yourself:</strong></p>
+<div class="codehilite"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">     </span><span class="c1"># or any of: south, east, west, above</span>
+</code></pre></div>
+
+<p>Each view is automatically framed with intelligent target offset adjustments. No manual coordinate calculations needed!</p>
+<h3 id="what-this-example-shows">What This Example Shows<a class="headerlink" href="#what-this-example-shows" title="Permanent link">&para;</a></h3>
+<p>✓ <strong>Loading Real Geographic Data</strong>: Automatically loads and merges SRTM HGT tiles
+✓ <strong>Intelligent Mesh Optimization</strong>: Configure mesh density by target vertex count, not magic numbers
+✓ <strong>Coordinate Transformation</strong>: Automatic reprojection from WGS84 to UTM coordinates
+✓ <strong>Water Body Detection</strong>: Automatic identification of water bodies using slope-based analysis
+✓ <strong>Intuitive Camera Control</strong>: Position cameras using cardinal directions (north, south, above, etc)
+✓ <strong>Beautiful Visualization</strong>: Professional Blender rendering with color mapping and water shader</p>
+<h3 id="the-code">The Code<a class="headerlink" href="#the-code" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Load elevation data</span>
+<span class="n">dem_data</span><span class="p">,</span> <span class="n">transform</span> <span class="o">=</span> <span class="n">load_dem_files</span><span class="p">(</span><span class="n">SRTM_TILES_DIR</span><span class="p">,</span> <span class="n">pattern</span><span class="o">=</span><span class="s1">&#39;*.hgt&#39;</span><span class="p">)</span>
+<span class="n">terrain</span> <span class="o">=</span> <span class="n">Terrain</span><span class="p">(</span><span class="n">dem_data</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span>
+
+<span class="c1"># 2. Define output image dimensions and compute target mesh vertices</span>
+<span class="c1"># Target vertices = WIDTH × HEIGHT × 2</span>
+<span class="c1"># This ensures ~2 vertices per output pixel for optimal mesh density</span>
+<span class="n">WIDTH</span> <span class="o">=</span> <span class="mi">960</span>
+<span class="n">HEIGHT</span> <span class="o">=</span> <span class="mi">720</span>
+<span class="n">target_vertices</span> <span class="o">=</span> <span class="n">WIDTH</span> <span class="o">*</span> <span class="n">HEIGHT</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># ~1.4 million vertices</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">configure_for_target_vertices</span><span class="p">(</span><span class="n">target_vertices</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+
+<span class="c1"># 3. Apply geographic transforms</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reproject_raster</span><span class="p">(</span>
+    <span class="n">src_crs</span><span class="o">=</span><span class="s1">&#39;EPSG:4326&#39;</span><span class="p">,</span>      <span class="c1"># WGS84 (from SRTM data)</span>
+    <span class="n">dst_crs</span><span class="o">=</span><span class="s1">&#39;EPSG:32617&#39;</span><span class="p">,</span>     <span class="c1"># UTM Zone 17N (Detroit area)</span>
+    <span class="n">num_threads</span><span class="o">=</span><span class="mi">4</span>
+<span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">flip_raster</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s1">&#39;horizontal&#39;</span><span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scale_elevation</span><span class="p">(</span><span class="n">scale_factor</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">apply_transforms</span><span class="p">()</span>
+
+<span class="c1"># 4. Set up beautiful Mako color mapping</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">set_color_mapping</span><span class="p">(</span>
+    <span class="k">lambda</span> <span class="n">dem</span><span class="p">:</span> <span class="n">elevation_colormap</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap_name</span><span class="o">=</span><span class="s1">&#39;mako&#39;</span><span class="p">),</span>
+    <span class="n">source_layers</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;dem&#39;</span><span class="p">]</span>
+<span class="p">)</span>
+
+<span class="c1"># 5. Detect water bodies on unscaled DEM (critical!)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.water</span><span class="w"> </span><span class="kn">import</span> <span class="n">identify_water_by_slope</span>
+<span class="n">transformed_dem</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;dem&#39;</span><span class="p">][</span><span class="s1">&#39;transformed_data&#39;</span><span class="p">]</span>
+<span class="n">unscaled_dem</span> <span class="o">=</span> <span class="n">transformed_dem</span> <span class="o">/</span> <span class="mf">0.0001</span>  <span class="c1"># Undo elevation scaling</span>
+<span class="n">water_mask</span> <span class="o">=</span> <span class="n">identify_water_by_slope</span><span class="p">(</span><span class="n">unscaled_dem</span><span class="p">,</span> <span class="n">slope_threshold</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">fill_holes</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># 6. Create mesh with water detection and render</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">create_mesh</span><span class="p">(</span>
+    <span class="n">scale_factor</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">height_scale</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
+    <span class="n">center_model</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>           <span class="c1"># Center mesh at origin</span>
+    <span class="n">boundary_extension</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>     <span class="c1"># Extend boundaries for clean edges</span>
+    <span class="n">water_mask</span><span class="o">=</span><span class="n">water_mask</span>        <span class="c1"># Use pre-computed water mask</span>
+<span class="p">)</span>
+<span class="n">camera</span> <span class="o">=</span> <span class="n">position_camera_relative</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;south&#39;</span><span class="p">,</span> <span class="n">distance</span><span class="o">=</span><span class="mf">1.5</span><span class="p">)</span>
+<span class="n">render_scene_to_file</span><span class="p">(</span><span class="n">output_path</span><span class="o">=</span><span class="s2">&quot;detroit.png&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="n">WIDTH</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="n">HEIGHT</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="key-features-in-action">Key Features in Action<a class="headerlink" href="#key-features-in-action" title="Permanent link">&para;</a></h3>
+<h4 id="intelligent-downsampling">Intelligent Downsampling<a class="headerlink" href="#intelligent-downsampling" title="Permanent link">&para;</a></h4>
+<p>Instead of guessing downsampling factors, compute target vertices based on your output image dimensions:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Match mesh density to output resolution: ~2 vertices per pixel</span>
+<span class="n">WIDTH</span> <span class="o">=</span> <span class="mi">960</span>
+<span class="n">HEIGHT</span> <span class="o">=</span> <span class="mi">720</span>
+<span class="n">target_vertices</span> <span class="o">=</span> <span class="n">WIDTH</span> <span class="o">*</span> <span class="n">HEIGHT</span> <span class="o">*</span> <span class="mi">2</span>  <span class="c1"># 1,382,400 vertices</span>
+
+<span class="c1"># Terrain Maker automatically calculates the optimal downsampling factor</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">configure_for_target_vertices</span><span class="p">(</span><span class="n">target_vertices</span><span class="p">)</span>
+
+<span class="c1"># This ensures your mesh has perfect detail for the output size</span>
+<span class="c1"># (no wasted vertices, no under-sampling)</span>
+</code></pre></div>
+
+<p><strong>The Math:</strong>
+- Output image: 960 × 720 = 691,200 pixels
+- Target vertices: 691,200 × 2 = 1,382,400
+- This gives approximately 2 vertices per output pixel, providing optimal detail without over-sampling
+- Adjust the multiplier (×2, ×3, etc.) based on your quality needs and performance budget</p>
+<h4 id="cardinal-direction-camera-positioning">Cardinal Direction Camera Positioning<a class="headerlink" href="#cardinal-direction-camera-positioning" title="Permanent link">&para;</a></h4>
+<p>No more confusing coordinate calculations. Position your camera intuitively with intelligent view-specific targeting:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">camera</span> <span class="o">=</span> <span class="n">position_camera_relative</span><span class="p">(</span>
+    <span class="n">mesh_obj</span><span class="p">,</span>
+    <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;south&#39;</span><span class="p">,</span>      <span class="c1"># Can be: north, south, east, west, northeast, etc.</span>
+    <span class="n">distance</span><span class="o">=</span><span class="mf">1.5</span><span class="p">,</span>           <span class="c1"># Multiplier of mesh diagonal</span>
+    <span class="n">elevation</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>          <span class="c1"># Height above center</span>
+    <span class="n">look_at</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>   <span class="c1"># View-specific target offset (auto-calculated)</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><strong>What makes this powerful:</strong>
+- Each cardinal direction has intelligent target offset adjustments
+- North: targets (0, 2, 0) - offsets north for perfect framing
+- South: targets (0, -1.5, 0) - offsets south for perfect framing
+- East/West: adjust X axis similarly for optimal perspective
+- The function automatically calculates rotation, distance, and elevation
+- Overhead view uses zero rotation to eliminate gimbal lock artifacts</p>
+<p>This eliminates trial-and-error camera positioning entirely!</p>
+<h4 id="geographic-coordinate-handling">Geographic Coordinate Handling<a class="headerlink" href="#geographic-coordinate-handling" title="Permanent link">&para;</a></h4>
+<p>Automatic reprojection and proper coordinate system handling:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reproject_raster</span><span class="p">(</span>
+    <span class="n">src_crs</span><span class="o">=</span><span class="s1">&#39;EPSG:4326&#39;</span><span class="p">,</span>      <span class="c1"># WGS84 (from SRTM data)</span>
+    <span class="n">dst_crs</span><span class="o">=</span><span class="s1">&#39;EPSG:32617&#39;</span><span class="p">,</span>     <span class="c1"># UTM Zone 17N (Detroit area)</span>
+    <span class="n">num_threads</span><span class="o">=</span><span class="mi">4</span>
+<span class="p">))</span>
+</code></pre></div>
+
+<h4 id="water-body-detection-blue-coloring">Water Body Detection &amp; Blue Coloring<a class="headerlink" href="#water-body-detection-blue-coloring" title="Permanent link">&para;</a></h4>
+<p>Automatic water body identification using slope-based analysis with direct blue coloring:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># IMPORTANT: Detect water on the UNSCALED DEM (before elevation scaling)</span>
+<span class="c1"># This ensures slope calculations are meaningful (scaled elevation produces tiny slopes)</span>
+
+<span class="c1"># 1. Apply all transforms including elevation scaling</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reproject_raster</span><span class="p">(</span><span class="s1">&#39;EPSG:4326&#39;</span><span class="p">,</span> <span class="s1">&#39;EPSG:32617&#39;</span><span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">flip_raster</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s1">&#39;horizontal&#39;</span><span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">transforms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scale_elevation</span><span class="p">(</span><span class="n">scale_factor</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">))</span>
+<span class="n">terrain</span><span class="o">.</span><span class="n">apply_transforms</span><span class="p">()</span>
+
+<span class="c1"># 2. Get transformed DEM and unscale it</span>
+<span class="n">transformed_dem</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">data_layers</span><span class="p">[</span><span class="s1">&#39;dem&#39;</span><span class="p">][</span><span class="s1">&#39;transformed_data&#39;</span><span class="p">]</span>
+<span class="n">unscaled_dem</span> <span class="o">=</span> <span class="n">transformed_dem</span> <span class="o">/</span> <span class="mf">0.0001</span>  <span class="c1"># Undo elevation scaling</span>
+
+<span class="c1"># 3. Detect water on unscaled DEM with very low threshold</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">src.terrain.water</span><span class="w"> </span><span class="kn">import</span> <span class="n">identify_water_by_slope</span>
+<span class="n">water_mask</span> <span class="o">=</span> <span class="n">identify_water_by_slope</span><span class="p">(</span>
+    <span class="n">unscaled_dem</span><span class="p">,</span>
+    <span class="n">slope_threshold</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>  <span class="c1"># Extremely low threshold for nearly-flat water</span>
+    <span class="n">fill_holes</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="c1"># 4. Create mesh with pre-computed water mask</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">terrain</span><span class="o">.</span><span class="n">create_mesh</span><span class="p">(</span>
+    <span class="n">scale_factor</span><span class="o">=</span><span class="mf">100.0</span><span class="p">,</span>
+    <span class="n">height_scale</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
+    <span class="n">water_mask</span><span class="o">=</span><span class="n">water_mask</span>  <span class="c1"># Use pre-computed water mask</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p><strong>How it works:</strong></p>
+<p><strong>Detection Phase:</strong>
+- Uses Horn's method to compute terrain slope magnitude from elevation data
+- Identifies pixels with slope below threshold as potential water bodies
+- Applies morphological operations (closing: dilation then erosion) to smooth water boundaries and fill gaps
+- Water is nearly flat (slope ~0), while terrain has measurable slopes</p>
+<p><strong>Coloring Phase:</strong>
+- Directly colors detected water pixels blue (RGB: 26, 102, 204)
+- Land pixels retain their elevation-based Mako colormap colors
+- Results in clear visual distinction between water and terrain
+- Water is colored during mesh creation, no shader configuration needed</p>
+<p><strong>Critical Implementation Detail - Why Use Unscaled DEM?</strong></p>
+<p>When elevation data is scaled (e.g., by 0.0001) for visualization:
+- Original DEM: elevations 50-1400 meters → slopes ~0-100 magnitude
+- Scaled DEM: elevations 0.005-0.14 meters → slopes ~0-0.027 magnitude</p>
+<p>Using a threshold of 0.1 on scaled data would catch 90% of terrain as "water" because most slopes are below 0.027. <strong>Always detect water on unscaled DEM before applying elevation scaling.</strong></p>
+<p><strong>Threshold Selection:</strong>
+- For mostly flat water (lakes, reservoirs): <code>0.01 - 0.05</code> (very sensitive)
+- For mixed terrain with some water: <code>0.1 - 0.2</code> (moderate)
+- For all flat-ish areas: <code>0.5+</code> (lenient)
+- <strong>Default for Detroit</strong>: <code>0.01</code> produces realistic 13-15% water coverage</p>
+<p><strong>For More Details:</strong>
+See the API Reference for complete documentation on water body detection including examples, threshold guidelines, and best practices.</p>
+<h3 id="running-this-example">Running This Example<a class="headerlink" href="#running-this-example" title="Permanent link">&para;</a></h3>
+<h4 id="basic-render-south-view-default">Basic Render (South View - Default)<a class="headerlink" href="#basic-render-south-view-default" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>examples/detroit_elevation_real.py
+</code></pre></div>
+
+<p>This will:
+1. Load SRTM elevation tiles from <code>data/dem/detroit/</code> (110 tiles)
+2. Compute target vertices from output image dimensions: WIDTH × HEIGHT × 2 = 960 × 720 × 2 = 1,382,400
+3. Process the data with intelligent downsampling to match target vertex count
+4. Generate a ~1.4 million vertex Blender mesh (exact count varies by interpolation)
+5. Detect water bodies on the unscaled DEM and color them blue
+6. Render a publication-quality PNG (960×720) with elevation colors + water rendering
+7. Save the Blender file for further editing</p>
+<h4 id="generate-multiple-views">Generate Multiple Views<a class="headerlink" href="#generate-multiple-views" title="Permanent link">&para;</a></h4>
+<p>The example supports command-line arguments to easily create renders from different camera angles:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Quick commands for each cardinal direction</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">    </span><span class="c1"># North view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-south<span class="w">    </span><span class="c1"># South view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-east<span class="w">     </span><span class="c1"># East view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-west<span class="w">     </span><span class="c1"># West view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-above<span class="w">    </span><span class="c1"># Overhead bird&#39;s-eye view</span>
+</code></pre></div>
+
+<p>Each renders the same terrain from a different perspective with intelligent view-specific framing. Perfect for creating comparison sets or presentations!</p>
+<h3 id="example-output">Example Output<a class="headerlink" href="#example-output" title="Permanent link">&para;</a></h3>
+<p>When you run the example, you'll see output like this:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">======================================================================</span>
+<span class="n">Detroit</span><span class="w"> </span><span class="n">Real</span><span class="w"> </span><span class="n">Elevation</span><span class="w"> </span><span class="n">Visualization</span>
+<span class="o">======================================================================</span>
+<span class="err">✓</span><span class="w"> </span><span class="n">Blender</span><span class="w"> </span><span class="n">scene</span><span class="w"> </span><span class="n">cleared</span>
+<span class="p">[</span><span class="mi">1</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Loading</span><span class="w"> </span><span class="n">SRTM</span><span class="w"> </span><span class="k">tiles</span><span class="o">...</span>
+<span class="n">Opening</span><span class="w"> </span><span class="n">DEM</span><span class="w"> </span><span class="n">files</span><span class="err">:</span><span class="w"> </span><span class="mi">100</span><span class="err">%</span><span class="o">|</span><span class="err">██████████</span><span class="o">|</span><span class="w"> </span><span class="mi">110</span><span class="o">/</span><span class="mi">110</span><span class="w"> </span><span class="p">[</span><span class="mi">00</span><span class="err">:</span><span class="mi">00</span><span class="p">&lt;</span><span class="mi">00</span><span class="err">:</span><span class="mi">00</span><span class="p">,</span><span class="w"> </span><span class="mf">1530.60</span><span class="n">it</span><span class="o">/</span><span class="n">s</span><span class="p">,</span><span class="w"> </span><span class="n">opened</span><span class="o">=</span><span class="mi">110</span><span class="p">]</span>
+
+<span class="p">[</span><span class="mi">2</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Initializing</span><span class="w"> </span><span class="n">Terrain</span><span class="w"> </span><span class="nb">object</span><span class="o">...</span>
+<span class="w">      </span><span class="n">Terrain</span><span class="w"> </span><span class="n">initialized</span>
+<span class="w">      </span><span class="n">DEM</span><span class="w"> </span><span class="n">shape</span><span class="err">:</span><span class="w"> </span><span class="p">(</span><span class="mi">36001</span><span class="p">,</span><span class="w"> </span><span class="mi">39601</span><span class="p">)</span>
+
+<span class="p">[</span><span class="mi">3</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Applying</span><span class="w"> </span><span class="n">transforms</span><span class="o">...</span>
+<span class="w">      </span><span class="n">Original</span><span class="w"> </span><span class="n">DEM</span><span class="w"> </span><span class="n">shape</span><span class="err">:</span><span class="w"> </span><span class="p">(</span><span class="mi">36001</span><span class="p">,</span><span class="w"> </span><span class="mi">39601</span><span class="p">)</span>
+<span class="w">      </span><span class="n">Configured</span><span class="w"> </span><span class="n">for</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="mi">382</span><span class="p">,</span><span class="mi">400</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="n">vertices</span>
+<span class="w">      </span><span class="n">Calculated</span><span class="w"> </span><span class="n">zoom_factor</span><span class="err">:</span><span class="w"> </span><span class="mf">0.031139</span>
+<span class="w">      </span><span class="n">Downsampled</span><span class="w"> </span><span class="n">DEM</span><span class="w"> </span><span class="n">shape</span><span class="err">:</span><span class="w"> </span><span class="p">(</span><span class="mi">1326</span><span class="p">,</span><span class="w"> </span><span class="mi">1137</span><span class="p">)</span>
+<span class="w">      </span><span class="n">Actual</span><span class="w"> </span><span class="n">vertices</span><span class="err">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="mi">507</span><span class="p">,</span><span class="mi">662</span>
+<span class="w">      </span><span class="n">Transforms</span><span class="w"> </span><span class="n">applied</span><span class="w"> </span><span class="n">successfully</span>
+
+<span class="p">[</span><span class="mi">4</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Setting</span><span class="w"> </span><span class="k">up</span><span class="w"> </span><span class="k">color</span><span class="w"> </span><span class="n">mapping</span><span class="o">...</span>
+<span class="w">      </span><span class="n">Color</span><span class="w"> </span><span class="n">mapping</span><span class="w"> </span><span class="n">configured</span><span class="w"> </span><span class="p">(</span><span class="n">Mako</span><span class="w"> </span><span class="n">colormap</span><span class="p">)</span>
+
+<span class="p">[</span><span class="mi">5</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Creating</span><span class="w"> </span><span class="n">Blender</span><span class="w"> </span><span class="nb">mesh</span><span class="o">...</span>
+<span class="w">      </span><span class="err">✓</span><span class="w"> </span><span class="n">Mesh</span><span class="w"> </span><span class="n">created</span><span class="w"> </span><span class="n">successfully</span><span class="err">!</span>
+<span class="w">      </span><span class="n">Vertices</span><span class="err">:</span><span class="w"> </span><span class="mi">1370951</span>
+<span class="w">      </span><span class="n">Polygons</span><span class="err">:</span><span class="w"> </span><span class="mi">1368731</span>
+
+<span class="p">[</span><span class="mi">6</span><span class="o">/</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="n">Setting</span><span class="w"> </span><span class="k">up</span><span class="w"> </span><span class="nb">camera</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">rendering</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">PNG</span><span class="o">...</span>
+<span class="w">      </span><span class="n">Camera</span><span class="err">:</span><span class="w"> </span><span class="n">South</span><span class="o">-</span><span class="n">facing</span><span class="w"> </span><span class="n">cardinal</span><span class="w"> </span><span class="n">view</span>
+<span class="w">      </span><span class="n">Direction</span><span class="err">:</span><span class="w"> </span><span class="n">south</span><span class="p">,</span><span class="w"> </span><span class="k">distance</span><span class="err">:</span><span class="w"> </span><span class="mf">1.5</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">elevation</span><span class="err">:</span><span class="w"> </span><span class="mf">0.5</span><span class="n">x</span>
+<span class="w">      </span><span class="n">Type</span><span class="err">:</span><span class="w"> </span><span class="n">Orthographic</span>
+<span class="w">      </span><span class="n">Samples</span><span class="err">:</span><span class="w"> </span><span class="mi">32</span>
+<span class="w">      </span><span class="n">Rendering</span><span class="o">...</span>
+<span class="w">      </span><span class="err">✓</span><span class="w"> </span><span class="n">Rendered</span><span class="w"> </span><span class="n">successfully</span><span class="err">!</span>
+<span class="w">      </span><span class="n">File</span><span class="err">:</span><span class="w"> </span><span class="n">detroit_elevation_real</span><span class="o">.</span><span class="k">png</span>
+<span class="w">      </span><span class="n">Size</span><span class="err">:</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="n">MB</span>
+
+<span class="o">======================================================================</span>
+<span class="n">Detroit</span><span class="w"> </span><span class="n">Real</span><span class="w"> </span><span class="n">Elevation</span><span class="w"> </span><span class="n">Visualization</span><span class="w"> </span><span class="n">Complete</span><span class="err">!</span>
+<span class="o">======================================================================</span>
+
+<span class="n">Summary</span><span class="err">:</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Loaded</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">merged</span><span class="w"> </span><span class="k">all</span><span class="w"> </span><span class="n">SRTM</span><span class="w"> </span><span class="k">tiles</span><span class="w"> </span><span class="p">(</span><span class="n">full</span><span class="w"> </span><span class="n">coverage</span><span class="p">)</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Configured</span><span class="w"> </span><span class="n">downsampling</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">target</span><span class="w"> </span><span class="n">vertex</span><span class="w"> </span><span class="k">count</span><span class="w"> </span><span class="n">intelligently</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Applied</span><span class="w"> </span><span class="n">geographic</span><span class="w"> </span><span class="n">coordinate</span><span class="w"> </span><span class="n">reprojection</span><span class="w"> </span><span class="p">(</span><span class="n">WGS84</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">UTM</span><span class="p">)</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Created</span><span class="w"> </span><span class="n">Terrain</span><span class="w"> </span><span class="nb">object</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">real</span><span class="w"> </span><span class="n">elevation</span><span class="w"> </span><span class="n">data</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Applied</span><span class="w"> </span><span class="n">transforms</span><span class="w"> </span><span class="p">(</span><span class="n">reproject</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">flip</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">scale</span><span class="p">)</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Configured</span><span class="w"> </span><span class="n">beautiful</span><span class="w"> </span><span class="n">Mako</span><span class="w"> </span><span class="n">elevation</span><span class="o">-</span><span class="n">based</span><span class="w"> </span><span class="k">color</span><span class="w"> </span><span class="n">mapping</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Detected</span><span class="w"> </span><span class="n">and</span><span class="w"> </span><span class="n">applied</span><span class="w"> </span><span class="n">water</span><span class="w"> </span><span class="n">bodies</span><span class="w"> </span><span class="p">(</span><span class="n">slope</span><span class="o">-</span><span class="n">based</span><span class="w"> </span><span class="n">identification</span><span class="p">)</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Generated</span><span class="w"> </span><span class="n">Blender</span><span class="w"> </span><span class="nb">mesh</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="mi">1370951</span><span class="w"> </span><span class="n">vertices</span>
+<span class="w">  </span><span class="err">✓</span><span class="w"> </span><span class="n">Rendered</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">PNG</span><span class="err">:</span><span class="w"> </span><span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">detroit_elevation_real</span><span class="o">.</span><span class="k">png</span>
+
+<span class="n">That</span><span class="err">&#39;</span><span class="n">s</span><span class="w"> </span><span class="n">it</span><span class="err">!</span><span class="w"> </span><span class="n">Professional</span><span class="w"> </span><span class="n">terrain</span><span class="w"> </span><span class="n">visualization</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">water</span><span class="w"> </span><span class="n">detection</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="n">just</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">few</span><span class="w"> </span><span class="n">lines</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">Python</span><span class="err">!</span>
+</code></pre></div>
+
+<p>The entire process takes about 30-40 seconds on modern hardware. You'll see progress bars for DEM loading and processing, with detailed logging of each transformation step.</p>
+<h3 id="output-files">Output Files<a class="headerlink" href="#output-files" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>examples/detroit_elevation_south.png</code> - Main example render (south view, 960×720, 2.1 MB)</li>
+<li><code>examples/detroit_elevation_{north,east,west,above}.png</code> - Alternative views</li>
+<li><code>examples/detroit_elevation_{view}.blend</code> - Blender files for further editing</li>
+</ul>
+<h3 id="why-terrain-maker-makes-this-easy">Why Terrain Maker Makes This Easy<a class="headerlink" href="#why-terrain-maker-makes-this-easy" title="Permanent link">&para;</a></h3>
+<p>Traditional terrain visualization typically requires:
+- Manually guessing optimal mesh density (under-sample → blurry, over-sample → slow)
+- Complex coordinate reprojection setup
+- Blender scripting knowledge
+- Camera positioning through trial-and-error
+- Manual water body identification and coloring</p>
+<p>With Terrain Maker, you get:
+- <strong>Smart mesh density calculation</strong>: <code>target_vertices = WIDTH × HEIGHT × 2</code> ensures perfect detail for your output resolution
+- <strong>Automatic mesh optimization</strong> - calculates the exact downsampling needed
+- <strong>Built-in geographic transforms</strong> with sensible defaults
+- <strong>Water body detection</strong> using slope-based analysis on unscaled DEM
+- <strong>Automatic water coloring</strong> - flat areas colored blue during mesh creation
+- <strong>Intuitive cardinal direction camera positioning</strong> (north, south, above, etc.)
+- <strong>Professional Blender integration</strong> out of the box
+- <strong>Color mapping from elevation data</strong> in one line</p>
+<h3 id="customization">Customization<a class="headerlink" href="#customization" title="Permanent link">&para;</a></h3>
+<h4 id="command-line-camera-control">Command-Line Camera Control<a class="headerlink" href="#command-line-camera-control" title="Permanent link">&para;</a></h4>
+<p>The example script accepts arguments to customize rendering without code changes:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Change view direction</span>
+python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--view<span class="w"> </span>east
+
+<span class="c1"># Adjust camera distance (closer/farther)</span>
+python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--view<span class="w"> </span>north<span class="w"> </span>--distance<span class="w"> </span><span class="m">0</span>.15
+
+<span class="c1"># Change elevation (higher/lower viewpoint)</span>
+python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--view<span class="w"> </span>above<span class="w"> </span>--elevation<span class="w"> </span><span class="m">0</span>.8
+
+<span class="c1"># Custom output filename</span>
+python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--view<span class="w"> </span>west<span class="w"> </span>--output<span class="w"> </span>my_render.png
+
+<span class="c1"># Switch to orthographic projection</span>
+python<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--view<span class="w"> </span>north<span class="w"> </span>--camera-type<span class="w"> </span>ORTHO
+</code></pre></div>
+
+<h4 id="in-code-customization">In-Code Customization<a class="headerlink" href="#in-code-customization" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Change the colormap</span>
+<span class="n">elevation_colormap</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap_name</span><span class="o">=</span><span class="s1">&#39;viridis&#39;</span><span class="p">)</span>    <span class="c1"># Other options: turbo, plasma, etc.</span>
+
+<span class="c1"># Adjust camera angle</span>
+<span class="n">position_camera_relative</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;east&#39;</span><span class="p">,</span> <span class="n">elevation</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="c1"># Configure rendering</span>
+<span class="n">setup_render_settings</span><span class="p">(</span><span class="n">samples</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span> <span class="n">use_denoising</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Create a presentation set of all views</span>
+<span class="k">for</span> <span class="n">view</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;north&#39;</span><span class="p">,</span> <span class="s1">&#39;south&#39;</span><span class="p">,</span> <span class="s1">&#39;east&#39;</span><span class="p">,</span> <span class="s1">&#39;west&#39;</span><span class="p">,</span> <span class="s1">&#39;above&#39;</span><span class="p">]:</span>
+    <span class="n">position_camera_relative</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="n">view</span><span class="p">)</span>
+    <span class="n">render_scene_to_file</span><span class="p">(</span><span class="n">output_path</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;detroit_</span><span class="si">{</span><span class="n">view</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<h4 id="generating-multiple-comparison-views">Generating Multiple Comparison Views<a class="headerlink" href="#generating-multiple-comparison-views" title="Permanent link">&para;</a></h4>
+<p>Create a full set of renders for comparison or publication:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate all cardinal views at once</span>
+<span class="k">for</span><span class="w"> </span>view<span class="w"> </span><span class="k">in</span><span class="w"> </span>north<span class="w"> </span>south<span class="w"> </span>east<span class="w"> </span>west<span class="w"> </span>above<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">    </span>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-<span class="nv">$view</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p>This creates 5 renders showing the terrain from different perspectives, with consistent framing and optimal camera positioning for each angle.</p>
+<h3 id="regenerating-example-images">Regenerating Example Images<a class="headerlink" href="#regenerating-example-images" title="Permanent link">&para;</a></h3>
+<p>When you update the example code or want to refresh the documentation images with the latest rendering, use these npm commands:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Generate the main example image (south view - default)</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-elevation
+
+<span class="c1"># Generate specific views</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-south<span class="w">      </span><span class="c1"># South view (recommended for main image)</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-north<span class="w">      </span><span class="c1"># North view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-east<span class="w">       </span><span class="c1"># East view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-west<span class="w">       </span><span class="c1"># West view</span>
+npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-above<span class="w">      </span><span class="c1"># Overhead view</span>
+
+<span class="c1"># Generate all views at once</span>
+<span class="k">for</span><span class="w"> </span>view<span class="w"> </span><span class="k">in</span><span class="w"> </span>south<span class="w"> </span>north<span class="w"> </span>east<span class="w"> </span>west<span class="w"> </span>above<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>npm<span class="w"> </span>run<span class="w"> </span>py:example:detroit-<span class="nv">$view</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<p><strong>Output locations:</strong>
+- Main image: <code>examples/detroit_elevation_south.png</code> (recommended for documentation)
+- View-specific: <code>examples/detroit_elevation_{north,south,east,west,above}.png</code>
+- Blender files: <code>examples/detroit_elevation_{view}.blend</code></p>
+<p><strong>Each render takes 30-40 seconds on modern hardware.</strong> The images are then automatically included in the documentation gallery when you run:</p>
+<div class="codehilite"><pre><span></span><code>npm<span class="w"> </span>run<span class="w"> </span>docs:build
+</code></pre></div>
+
+<h3 id="accelerating-renders-with-caching">Accelerating Renders with Caching<a class="headerlink" href="#accelerating-renders-with-caching" title="Permanent link">&para;</a></h3>
+<p>The example supports intelligent caching to dramatically speed up iterative development. Instead of reprocessing elevation data and regenerating meshes for every render, the system caches:</p>
+<ul>
+<li><strong>DEM Cache</strong>: Loaded and merged elevation tiles (.npz format with hash validation)</li>
+<li><strong>Mesh Cache</strong>: Generated Blender mesh files (.blend with parameter-based hashing)</li>
+</ul>
+<h4 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="k">First</span><span class="w"> </span><span class="n">Run</span><span class="w"> </span><span class="p">(</span><span class="k">Full</span><span class="w"> </span><span class="n">Pipeline</span><span class="p">)</span><span class="err">:</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Load</span><span class="w"> </span><span class="n">SRTM</span><span class="w"> </span><span class="n">tiles</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="p">.</span><span class="n">dem_cache</span><span class="o">/</span><span class="n">dem_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="p">.</span><span class="n">npz</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Merge</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">transform</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Create</span><span class="w"> </span><span class="n">mesh</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="p">.</span><span class="n">mesh_cache</span><span class="o">/</span><span class="n">mesh_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="p">.</span><span class="n">blend</span>
+<span class="err">└─</span><span class="w"> </span><span class="n">Render</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">PNG</span>
+
+<span class="k">Second</span><span class="w"> </span><span class="n">Run</span><span class="w"> </span><span class="p">(</span><span class="n">Same</span><span class="w"> </span><span class="n">DEM</span><span class="p">)</span><span class="err">:</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Load</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="p">.</span><span class="n">dem_cache</span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">skip</span><span class="w"> </span><span class="mi">10</span><span class="o">-</span><span class="mi">15</span><span class="w"> </span><span class="n">seconds</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="k">file</span><span class="w"> </span><span class="n">merging</span><span class="p">)</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Create</span><span class="w"> </span><span class="n">mesh</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="p">.</span><span class="n">mesh_cache</span><span class="o">/</span><span class="n">mesh_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="p">.</span><span class="n">blend</span>
+<span class="err">└─</span><span class="w"> </span><span class="n">Render</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">PNG</span>
+
+<span class="n">Subsequent</span><span class="w"> </span><span class="n">Renders</span><span class="w"> </span><span class="p">(</span><span class="n">Same</span><span class="w"> </span><span class="k">view</span><span class="p">)</span><span class="err">:</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Load</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="p">.</span><span class="n">dem_cache</span><span class="o">/</span>
+<span class="err">├─</span><span class="w"> </span><span class="k">Load</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="p">.</span><span class="n">mesh_cache</span><span class="o">/</span><span class="w"> </span><span class="p">(</span><span class="n">skip</span><span class="w"> </span><span class="mi">20</span><span class="o">-</span><span class="mi">30</span><span class="w"> </span><span class="n">seconds</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="n">mesh</span><span class="w"> </span><span class="n">generation</span><span class="err">!</span><span class="p">)</span>
+<span class="err">└─</span><span class="w"> </span><span class="n">Render</span><span class="w"> </span><span class="k">only</span><span class="w"> </span><span class="k">to</span><span class="w"> </span><span class="n">PNG</span>
+</code></pre></div>
+
+<h4 id="using-caching">Using Caching<a class="headerlink" href="#using-caching" title="Permanent link">&para;</a></h4>
+<p>Enable caching by adding the <code>--cache</code> flag:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># First run: caches DEM and mesh</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build<span class="w">        </span><span class="c1"># South view with caching</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build-north<span class="w">  </span><span class="c1"># North view with caching</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build-east<span class="w">   </span><span class="c1"># East view with caching</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build-west<span class="w">   </span><span class="c1"># West view with caching</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build-above<span class="w">  </span><span class="c1"># Overhead view with caching</span>
+
+<span class="c1"># Generate all views with caching (faster on subsequent runs)</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-build:all
+</code></pre></div>
+
+<p>Or run the Python script directly with caching:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Enable caching for full pipeline</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--cache
+
+<span class="c1"># With specific view</span>
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--cache<span class="w"> </span>--view<span class="w"> </span>north
+
+<span class="c1"># Generate multiple views with caching</span>
+<span class="k">for</span><span class="w"> </span>view<span class="w"> </span><span class="k">in</span><span class="w"> </span>south<span class="w"> </span>north<span class="w"> </span>east<span class="w"> </span>west<span class="w"> </span>above<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--cache<span class="w"> </span>--view<span class="w"> </span><span class="nv">$view</span>
+<span class="k">done</span>
+</code></pre></div>
+
+<h4 id="cache-management">Cache Management<a class="headerlink" href="#cache-management" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Clear all cached DEM and mesh files</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-cache-clear
+uv<span class="w"> </span>run<span class="w"> </span>examples/detroit_elevation_real.py<span class="w"> </span>--cache<span class="w"> </span>--clear-cache
+
+<span class="c1"># View cache statistics</span>
+npm<span class="w"> </span>run<span class="w"> </span>detroit-cache-stats
+</code></pre></div>
+
+<h4 id="cache-file-locations">Cache File Locations<a class="headerlink" href="#cache-file-locations" title="Permanent link">&para;</a></h4>
+<div class="codehilite"><pre><span></span><code><span class="p">.</span><span class="n">dem_cache</span><span class="o">/</span><span class="w">           </span><span class="err">#</span><span class="w"> </span><span class="n">DEM</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="p">(.</span><span class="n">npz</span><span class="w"> </span><span class="nf">format</span><span class="p">)</span>
+<span class="w">  </span><span class="n">dem_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="p">.</span><span class="n">npz</span><span class="w">      </span><span class="err">#</span><span class="w"> </span><span class="n">Merged</span><span class="w"> </span><span class="n">elevation</span><span class="w"> </span><span class="k">data</span>
+<span class="w">  </span><span class="n">dem_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="n">_meta</span><span class="p">.</span><span class="n">json</span><span class="w">  </span><span class="err">#</span><span class="w"> </span><span class="n">Metadata</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="k">statistics</span>
+
+<span class="p">.</span><span class="n">mesh_cache</span><span class="o">/</span><span class="w">          </span><span class="err">#</span><span class="w"> </span><span class="n">Mesh</span><span class="w"> </span><span class="n">files</span><span class="w"> </span><span class="p">(.</span><span class="n">blend</span><span class="w"> </span><span class="nf">format</span><span class="p">)</span>
+<span class="w">  </span><span class="n">mesh_</span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="p">.</span><span class="n">blend</span><span class="w">   </span><span class="err">#</span><span class="w"> </span><span class="n">Blender</span><span class="w"> </span><span class="n">scene</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">terrain</span><span class="w"> </span><span class="n">mesh</span>
+<span class="w">  </span><span class="o">[</span><span class="n">hash</span><span class="o">]</span><span class="n">_meta</span><span class="p">.</span><span class="n">json</span><span class="w">    </span><span class="err">#</span><span class="w"> </span><span class="n">Mesh</span><span class="w"> </span><span class="k">parameters</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">hash</span>
+</code></pre></div>
+
+<h4 id="cache-invalidation">Cache Invalidation<a class="headerlink" href="#cache-invalidation" title="Permanent link">&para;</a></h4>
+<p>The cache automatically invalidates when:</p>
+<ul>
+<li><strong>DEM files change</strong> (file modification time or count changes)</li>
+<li><strong>Mesh parameters change</strong> (scale_factor, height_scale, center_model, boundary_extension, water_mask)</li>
+<li><strong>Manual clear</strong> via <code>--clear-cache</code> flag</li>
+</ul>
+<p>This ensures you always have current data without manual cache management.</p>
+<h4 id="performance-impact">Performance Impact<a class="headerlink" href="#performance-impact" title="Permanent link">&para;</a></h4>
+<p><strong>Time savings by caching DEM:</strong>
+- First render: Full merge (10-15 seconds) + mesh generation (20-30 seconds) + render (5-10 seconds) = ~35-55 seconds
+- Cached DEM: Skip merge + mesh generation (20-30 seconds) + render (5-10 seconds) = ~25-40 seconds
+- <strong>Savings: 10-15 seconds per render</strong></p>
+<p><strong>Time savings by caching mesh:</strong>
+- After first full pipeline, subsequent renders skip mesh generation entirely
+- Render-only pass: Load cached mesh + render (5-10 seconds) = ~5-10 seconds
+- <strong>Savings: 20-30 seconds per render</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.expand", "navigation.top", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.7a47a382.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.e71a0d61.min.js"></script>
+      
+    
+  </body>
+</html>
