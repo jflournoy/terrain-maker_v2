@@ -703,6 +703,11 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
                         """Compute dominant aspect from vector-averaged sin/cos components."""
                         return np.degrees(np.arctan2(self.aspect_sin, self.aspect_cos)) % 360
 
+                    @property
+                    def aspect_strength(self) -> np.ndarray:
+                        """Compute aspect strength (consistency of slope direction)."""
+                        return np.sqrt(self.aspect_sin**2 + self.aspect_cos**2)
+
                 stats = SlopeStats(
                     slope_mean=npz['slope_mean'],
                     slope_max=npz['slope_max'],
