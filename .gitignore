@@ -94,7 +94,6 @@ data/snodas_data
 .dem_cache/
 .mesh_cache/
 .gridded_data_cache/
-.slope_cache/
 
 # Blender files
 *.blend

@@ -28,7 +28,6 @@ Usage:
 import sys
 import argparse
 import logging
-import hashlib
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
@@ -645,110 +644,6 @@ def calculate_snow_statistics(
     final_stats["failed_files"] = failed_files
 
     return final_stats
-
-
-# =============================================================================
-# Slope Statistics Caching
-# =============================================================================
-
-
-def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, target_transform, target_crs, cache_dir=None):
-    """
-    Compute slope statistics with caching based on DEM content hash.
-
-    Args:
-        dem: DEM array
-        dem_transform: DEM affine transform
-        dem_crs: DEM coordinate reference system
-        target_shape: Target output shape
-        target_transform: Target affine transform
-        target_crs: Target coordinate reference system
-        cache_dir: Cache directory (default: .slope_cache)
-
-    Returns:
-        Slope statistics object
-    """
-    if cache_dir is None:
-        cache_dir = Path(".slope_cache")
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-
-    # Compute cache key from DEM content
-    dem_hash = hashlib.sha256(dem.tobytes()).hexdigest()[:16]
-    target_hash = hashlib.sha256(str((target_shape, target_crs)).encode()).hexdigest()[:16]
-    cache_key = f"{dem_hash}_{target_hash}"
-    cache_file = cache_dir / f"slope_stats_{cache_key}.npz"
-
-    # Try to load from cache
-    if cache_file.exists():
-        logger.info(f"Loading cached slope statistics: {cache_file.name}")
-        try:
-            with np.load(cache_file, allow_pickle=True) as npz:
-                # Reconstruct the slope stats object
-                from dataclasses import dataclass
-
-                @dataclass
-                class SlopeStats:
-                    slope_mean: np.ndarray
-                    slope_max: np.ndarray
-                    slope_min: np.ndarray
-                    slope_std: np.ndarray
-                    slope_p95: np.ndarray
-                    roughness: np.ndarray
-                    aspect_sin: np.ndarray
-                    aspect_cos: np.ndarray
-
-                    @property
-                    def dominant_aspect(self) -> np.ndarray:
-                        """Compute dominant aspect from vector-averaged sin/cos components."""
-                        return np.degrees(np.arctan2(self.aspect_sin, self.aspect_cos)) % 360
-
-                stats = SlopeStats(
-                    slope_mean=npz['slope_mean'],
-                    slope_max=npz['slope_max'],
-                    slope_min=npz['slope_min'],
-                    slope_std=npz['slope_std'],
-                    slope_p95=npz['slope_p95'],
-                    roughness=npz['roughness'],
-                    aspect_sin=npz['aspect_sin'],
-                    aspect_cos=npz['aspect_cos'],
-                )
-                logger.info("✓ Cache hit for slope statistics")
-                return stats
-        except Exception as e:
-            logger.warning(f"Failed to load slope stats cache: {e}")
-
-    # Compute slope statistics
-    logger.info("Computing slope statistics from DEM (tiled processing)...")
-    from src.snow.slope_statistics import compute_tiled_slope_statistics
-
-    slope_stats = compute_tiled_slope_statistics(
-        dem=dem,
-        dem_transform=dem_transform,
-        dem_crs=dem_crs,
-        target_shape=target_shape,
-        target_transform=target_transform,
-        target_crs=target_crs,
-    )
-
-    # Save to cache
-    try:
-        np.savez_compressed(
-            cache_file,
-            slope_mean=slope_stats.slope_mean,
-            slope_max=slope_stats.slope_max,
-            slope_min=slope_stats.slope_min,
-            slope_std=slope_stats.slope_std,
-            slope_p95=slope_stats.slope_p95,
-            roughness=slope_stats.roughness,
-            aspect_sin=slope_stats.aspect_sin,
-            aspect_cos=slope_stats.aspect_cos,
-        )
-        logger.debug(f"Cached slope statistics to {cache_file.name}")
-    except Exception as e:
-        logger.warning(f"Failed to save slope stats cache: {e}")
-
-    return slope_stats
 
 
 # =============================================================================
@@ -1849,16 +1744,18 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
         compute_derived_inputs,
     )
 
-    # Calculate slope statistics from DEM (with caching)
+    # Calculate slope statistics from DEM
+    logger.info("Computing slope statistics from DEM (tiled processing)...")
+    from src.snow.slope_statistics import compute_tiled_slope_statistics
+
     target_shape = snow_stats["median_max_depth"].shape
-    slope_stats = compute_cached_slope_statistics(
+    slope_stats = compute_tiled_slope_statistics(
         dem=dem,
         dem_transform=transform,
         dem_crs="EPSG:4326",
         target_shape=target_shape,
         target_transform=transform,
         target_crs="EPSG:4326",
-        cache_dir=Path(".slope_cache"),
     )
 
     logger.info(f"Slope stats computed: mean={np.mean(slope_stats.slope_mean):.1f}°, "
