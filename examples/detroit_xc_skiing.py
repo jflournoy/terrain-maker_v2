@@ -655,20 +655,30 @@ def save_outputs(
     scored_parks: list[dict],
     output_dir: Path,
 ):
-    """Save analysis outputs."""
+    """Save analysis outputs.
+
+    Args:
+        score_grid: Score grid array
+        scored_parks: List of parks with scores
+        output_dir: Directory for visualizations (docs/images/)
+    """
     logger.info("\n" + "=" * 70)
     logger.info("Step 5: Saving Outputs")
     logger.info("=" * 70)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Save data files to examples/output/xc_skiing/ for use by other examples
+    data_dir = Path("examples/output/xc_skiing")
+    data_dir.mkdir(parents=True, exist_ok=True)
+
     # Save score grid as .npz
-    score_path = output_dir / "xc_skiing_scores.npz"
+    score_path = data_dir / "xc_skiing_scores.npz"
     np.savez_compressed(score_path, score=score_grid)
     logger.info(f"✓ Score grid saved: {score_path} ({score_path.stat().st_size / 1024:.1f} KB)")
 
     # Save parks as .json
-    parks_path = output_dir / "xc_skiing_parks.json"
+    parks_path = data_dir / "xc_skiing_parks.json"
     with open(parks_path, 'w') as f:
         json.dump(scored_parks, f, indent=2)
     logger.info(f"✓ Parks saved: {parks_path}")
