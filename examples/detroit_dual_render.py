@@ -194,6 +194,11 @@ def create_terrain_with_score(
     # Compute vertex colors based on score data
     terrain.compute_colors()
 
+    # Apply transforms to prepare DEM for mesh creation
+    # Add identity transform to mark DEM as transformed
+    terrain.add_transform(lambda data: data)
+    terrain.apply_transforms()
+
     # Create mesh using terrain maker library
     mesh_obj = terrain.create_mesh(
         scale_factor=scale_factor,

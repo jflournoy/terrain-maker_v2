@@ -27,10 +27,14 @@ class TestDualRenderLoadingFunctions:
         # Import the function
         sys.path.insert(0, str(Path(__file__).parent.parent))
         from examples.detroit_dual_render import load_sledding_scores
+        from unittest.mock import patch
 
+        # Use a temp directory that doesn't have the file, and mock the alternative paths
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = load_sledding_scores(Path(tmpdir))
-            assert result is None
+            # Mock the pathlib.Path to avoid checking alternative paths
+            with patch('pathlib.Path.exists', return_value=False):
+                result = load_sledding_scores(Path(tmpdir))
+                assert result is None
 
     def test_load_xc_skiing_scores_missing_file(self):
         """Test that missing XC skiing scores returns None."""
@@ -94,6 +98,9 @@ class TestDualRenderTerrainCreation:
         assert "source_layers=" in content
         # Should use compute_colors
         assert "compute_colors()" in content
+        # Should prepare transforms before mesh creation
+        assert "add_transform(" in content
+        assert "apply_transforms()" in content
         # Should use create_mesh
         assert "create_mesh(" in content
 
