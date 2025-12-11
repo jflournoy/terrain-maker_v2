@@ -1311,11 +1311,16 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
 
     logger.info(f"Terrain layers: {list(terrain.data_layers.keys())}")
 
+    # Save sledding score grid as .npz for use in other examples (like detroit_dual_render.py)
+    (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
+    score_path = output_dir / "sledding_scores.npz"
+    np.savez_compressed(score_path, score=sledding_score)
+    logger.info(f"✓ Saved sledding scores to {score_path}")
+
     # Visualize sledding score (downsample if needed for memory efficiency)
     score_viz, stride = downsample_for_viz(sledding_score)
     if stride > 1:
         logger.info(f"Downsampling score for visualization: {sledding_score.shape} -> {score_viz.shape} (stride={stride})")
-    (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "05_final" / "sledding_score.png"
     visualize_sledding_score(score_viz, output_path)
 
