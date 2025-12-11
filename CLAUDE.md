@@ -164,6 +164,32 @@ See `examples/detroit_dual_render.py` for the proper pattern:
 - Uses terrain maker's Terrain class for rendering
 - Uses standard argparse for command-line arguments
 
+## Example Development Guidelines
+
+**ALWAYS use library functions where possible** - When building examples, prioritize using terrain maker's public APIs and library functions rather than implementing custom solutions.
+
+### Benefits of Library-First Examples
+
+- **Demonstrates intended usage** - Shows users how to properly use the library
+- **Reduces maintenance burden** - Examples break less often when refactoring library internals
+- **Promotes composability** - Examples become templates for users building similar features
+- **Self-documenting code** - Library function names serve as inline documentation
+
+### Example Patterns
+
+Good example patterns:
+- Use `Terrain` class methods for rendering and data operations
+- Use `ScoreCombiner` and score config classes for scoring logic
+- Use `GriddedDataLoader` for memory-efficient data processing
+- Leverage color mapping functions from `color_mapping.py`
+- Use public functions from `terrain/` package, not internal implementations
+
+Patterns to avoid:
+- Direct Blender API calls (use `Terrain` class methods instead)
+- Reimplementing scoring logic (use `ScoreCombiner`)
+- Manual mesh generation (use `create_mesh()`)
+- Custom DEM loading (use `Terrain` class data handling)
+
 ## Architecture Principles
 
 - Keep functions under 15 complexity

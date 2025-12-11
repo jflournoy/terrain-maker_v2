@@ -36,11 +36,17 @@ import bpy
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import Terrain, elevation_colormap
+from src.terrain.core import (
+    Terrain,
+    elevation_colormap,
+    clear_scene,
+    setup_camera,
+    position_camera_relative,
+    setup_light,
+    render_scene_to_file,
+)
 from src.terrain.data_loading import load_dem_files
-from matplotlib.colors import LinearSegmentedColormap
 from affine import Affine
-from rasterio.transform import rowcol, xy
 
 # Configure logging
 LOG_FILE = Path(__file__).parent / "detroit_dual_render.log"
@@ -137,13 +143,6 @@ def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
 # BLENDER RENDERING
 # =============================================================================
 
-def clear_blender_scene():
-    """Clear all objects from Blender scene."""
-    for obj in bpy.data.objects:
-        bpy.data.objects.remove(obj, do_unlink=True)
-    for mesh in bpy.data.meshes:
-        bpy.data.meshes.remove(mesh, do_unlink=True)
-
 
 def create_terrain_with_score(
     name: str,
@@ -184,12 +183,10 @@ def create_terrain_with_score(
     )
 
     # Set color mapping: red (low) to green (high)
-    # Uses a simple RdYlGn-like colormap (red -> yellow -> green)
+    # Uses elevation_colormap with RdYlGn colormap for score visualization
     terrain.set_color_mapping(
-        layer="score",
-        colormap="RdYlGn",  # Red-Yellow-Green colormap
-        vmin=0.0,
-        vmax=1.0,
+        lambda score: elevation_colormap(score, cmap_name="RdYlGn", min_elev=0.0, max_elev=1.0),
+        source_layers=["score"],
     )
 
     # Compute vertex colors based on score data
@@ -311,6 +308,8 @@ def setup_dual_camera(
     """
     Setup camera to view both terrains side-by-side.
 
+    Uses terrain maker's library functions for camera setup.
+
     Args:
         mesh_left: Left terrain object
         mesh_right: Right terrain object
@@ -330,41 +329,48 @@ def setup_dual_camera(
         center_x = 0
         center_y = 0
 
-    # Position camera
-    camera_data = bpy.data.cameras.new("DualCamera")
-    camera_obj = bpy.data.objects.new("DualCamera", camera_data)
-    bpy.context.collection.objects.link(camera_obj)
+    # Use library function to setup camera
+    # Position relative to center point
+    camera_angle = 1.2  # Tilt angle (radians)
+    camera_location = (center_x, center_y - distance, height)
+    camera = setup_camera(
+        camera_angle=camera_angle,
+        camera_location=camera_location,
+        scale=1.0,
+        focal_length=50,
+        camera_type="PERSP",
+    )
 
-    camera_obj.location = (center_x, center_y - distance, height)
-    camera_obj.rotation_euler = (1.2, 0, 0)  # Tilt down
-
-    bpy.context.scene.camera = camera_obj
     logger.info("✓ Camera positioned")
-
-    return camera_obj
+    return camera
 
 
 def setup_lighting() -> list:
-    """Setup Blender lighting."""
+    """Setup Blender lighting using library functions.
+
+    Creates primary and fill lights for the scene.
+    """
     logger.info("Setting up lighting...")
 
     lights = []
 
-    # Sun light
-    light_data = bpy.data.lights.new("SunLight", type="SUN")
-    light_data.energy = 2.0
-    light_obj = bpy.data.objects.new("SunLight", light_data)
-    bpy.context.collection.objects.link(light_obj)
-    light_obj.location = (2, 2, 3)
-    lights.append(light_obj)
+    # Primary sun light from library function
+    sun_light = setup_light(
+        location=(2, 2, 3),
+        angle=2,
+        energy=2.0,
+        rotation_euler=(0, 0, 0),
+    )
+    lights.append(sun_light)
 
-    # Fill light
-    light_data = bpy.data.lights.new("FillLight", type="AREA")
-    light_data.energy = 1.0
-    light_obj = bpy.data.objects.new("FillLight", light_data)
-    bpy.context.collection.objects.link(light_obj)
-    light_obj.location = (-2, -2, 2)
-    lights.append(light_obj)
+    # Fill light for shadow detail
+    fill_light = setup_light(
+        location=(-2, -2, 2),
+        angle=1,
+        energy=1.0,
+        rotation_euler=(0, 0, 0),
+    )
+    lights.append(fill_light)
 
     logger.info("✓ Lighting setup complete")
     return lights
@@ -376,7 +382,7 @@ def render_dual_terrain(
     height: int = 1080,
 ) -> bool:
     """
-    Render the scene to file.
+    Render the scene to file using library function.
 
     Args:
         output_path: Output PNG path
@@ -389,19 +395,22 @@ def render_dual_terrain(
     logger.info(f"Rendering to {output_path} ({width}x{height})...")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    bpy.context.scene.render.filepath = str(output_path)
-    bpy.context.scene.render.resolution_x = width
-    bpy.context.scene.render.resolution_y = height
-    bpy.context.scene.render.image_settings.file_format = 'PNG'
+    # Use library function to render
+    try:
+        render_scene_to_file(
+            str(output_path),
+            width=width,
+            height=height,
+        )
 
-    # Render
-    bpy.ops.render.render(write_still=True)
-
-    if output_path.exists():
-        logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
-        return True
-    else:
-        logger.warning("Render output not created")
+        if output_path.exists():
+            logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
+            return True
+        else:
+            logger.warning("Render output not created")
+            return False
+    except Exception as e:
+        logger.error(f"Render failed: {e}")
         return False
 
 
@@ -511,7 +520,7 @@ Examples:
     logger.info("Creating Blender Scene")
     logger.info("=" * 70)
 
-    clear_blender_scene()
+    clear_scene()
 
     # Create terrain meshes side-by-side using terrain maker library
     offset = 2.5
