@@ -338,7 +338,7 @@ def setup_dual_camera(
 
     # Use library function to setup camera
     # Position relative to center point
-    camera_angle = 1.2  # Tilt angle (radians)
+    camera_angle = (0.5, 0, 0)  # Tilt angle: 0.5 radians tilt on X axis
     camera_location = (center_x, center_y - distance, height)
     camera = setup_camera(
         camera_angle=camera_angle,
