@@ -1,0 +1,573 @@
+#!/usr/bin/env python3
+"""
+Detroit Dual Terrain Rendering Example.
+
+This example renders sledding and cross-country skiing terrain suitability maps
+side-by-side in Blender using terrain maker's rendering library, with park
+locations marked on the XC skiing terrain.
+
+Requirements:
+- Blender Python API available (bpy)
+- Pre-computed sledding scores from detroit_snow_sledding.py
+- Pre-computed XC skiing scores + parks from detroit_xc_skiing.py
+
+Usage:
+    # Run with computed scores
+    python examples/detroit_dual_render.py
+
+    # Run with mock data
+    python examples/detroit_dual_render.py --mock-data --no-render
+
+    # Specify output directory
+    python examples/detroit_dual_render.py --output-dir ./renders
+"""
+
+import sys
+import argparse
+import logging
+import json
+from pathlib import Path
+from typing import Optional, Tuple
+import numpy as np
+
+import bpy
+
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.terrain.core import Terrain, elevation_colormap
+from src.terrain.data_loading import load_dem_files
+from matplotlib.colors import LinearSegmentedColormap
+from affine import Affine
+from rasterio.transform import rowcol, xy
+
+# Configure logging
+LOG_FILE = Path(__file__).parent / "detroit_dual_render.log"
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.handlers = []
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+logger.addHandler(console_handler)
+
+file_handler = logging.FileHandler(LOG_FILE, mode='w')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s: %(message)s"))
+logger.addHandler(file_handler)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s: %(message)s",
+    handlers=[file_handler]
+)
+
+
+# =============================================================================
+# LOADING OUTPUTS
+# =============================================================================
+
+def load_sledding_scores(output_dir: Path) -> Optional[np.ndarray]:
+    """Load sledding scores from detroit_snow_sledding.py output."""
+    # First check for sledding_score.npz
+    score_path = output_dir / "sledding_scores.npz"
+    if score_path.exists():
+        logger.info(f"Loading sledding scores from {score_path}")
+        data = np.load(score_path)
+        if "score" in data:
+            return data["score"]
+        elif "sledding_score" in data:
+            return data["sledding_score"]
+        else:
+            # Return first array found
+            return data[data.files[0]]
+
+    # Check alternative locations
+    alt_paths = [
+        output_dir.parent / "sledding_scores.npz",
+        Path("examples/output/sledding_scores.npz"),
+    ]
+    for alt_path in alt_paths:
+        if alt_path.exists():
+            logger.info(f"Loading sledding scores from {alt_path}")
+            data = np.load(alt_path)
+            return data[data.files[0]]
+
+    logger.warning("Sledding scores not found, will use mock data")
+    return None
+
+
+def load_xc_skiing_scores(output_dir: Path) -> Optional[np.ndarray]:
+    """Load XC skiing scores from detroit_xc_skiing.py output."""
+    score_path = output_dir / "xc_skiing_scores.npz"
+    if score_path.exists():
+        logger.info(f"Loading XC skiing scores from {score_path}")
+        data = np.load(score_path)
+        if "score" in data:
+            return data["score"]
+        else:
+            return data[data.files[0]]
+
+    logger.warning("XC skiing scores not found, will use mock data")
+    return None
+
+
+def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
+    """Load scored parks from detroit_xc_skiing.py output."""
+    parks_path = output_dir / "xc_skiing_parks.json"
+    if parks_path.exists():
+        logger.info(f"Loading parks from {parks_path}")
+        with open(parks_path, 'r') as f:
+            return json.load(f)
+
+    logger.warning("Parks not found")
+    return None
+
+
+def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
+    """Generate mock score grid."""
+    np.random.seed(42)
+    score = np.random.uniform(0.3, 0.9, shape).astype(np.float32)
+    return score
+
+
+# =============================================================================
+# BLENDER RENDERING
+# =============================================================================
+
+def clear_blender_scene():
+    """Clear all objects from Blender scene."""
+    for obj in bpy.data.objects:
+        bpy.data.objects.remove(obj, do_unlink=True)
+    for mesh in bpy.data.meshes:
+        bpy.data.meshes.remove(mesh, do_unlink=True)
+
+
+def create_terrain_with_score(
+    name: str,
+    score_grid: np.ndarray,
+    dem: np.ndarray,
+    transform: Affine,
+    location: Tuple[float, float, float] = (0, 0, 0),
+    scale_factor: float = 100,
+    height_scale: float = 2.0,
+) -> Optional[object]:
+    """
+    Create a terrain mesh using terrain maker's Terrain class.
+
+    Args:
+        name: Mesh name (for logging and reference)
+        score_grid: Score values for vertex coloring (0-1 range)
+        dem: DEM elevation data
+        transform: Affine transform for coordinate mapping
+        location: (x, y, z) position in Blender for the mesh
+        scale_factor: Horizontal scale divisor
+        height_scale: Vertical elevation scale
+
+    Returns:
+        Blender object positioned at specified location
+    """
+    logger.info(f"Creating terrain mesh: {name}")
+
+    # Create terrain using terrain maker library
+    terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+
+    # Add score grid as data layer
+    terrain.add_data_layer(
+        "score",
+        score_grid,
+        transform,
+        "EPSG:4326",
+        target_layer="dem",
+    )
+
+    # Set color mapping: red (low) to green (high)
+    # Uses a simple RdYlGn-like colormap (red -> yellow -> green)
+    terrain.set_color_mapping(
+        layer="score",
+        colormap="RdYlGn",  # Red-Yellow-Green colormap
+        vmin=0.0,
+        vmax=1.0,
+    )
+
+    # Compute vertex colors based on score data
+    terrain.compute_colors()
+
+    # Create mesh using terrain maker library
+    mesh_obj = terrain.create_mesh(
+        scale_factor=scale_factor,
+        height_scale=height_scale,
+        center_model=True,
+        boundary_extension=True,
+    )
+
+    if mesh_obj is None:
+        logger.error(f"Failed to create mesh for {name}")
+        return None
+
+    # Position the mesh at the specified location
+    mesh_obj.location = location
+    mesh_obj.name = name
+
+    logger.info(f"✓ Created mesh: {name} at position {location}")
+    return mesh_obj
+
+
+def create_park_markers(
+    parks: list[dict],
+    dem: np.ndarray,
+    transform: Affine,
+    terrain_obj,
+    scale_factor: float = 100,
+    height_scale: float = 2.0,
+) -> list:
+    """
+    Create glowing sphere markers for parks.
+
+    Args:
+        parks: List of parks with lat, lon, score, pixel_coords
+        dem: DEM for elevation lookup
+        transform: Affine transform
+        terrain_obj: Blender object (for positioning relative to)
+        scale_factor: Horizontal scale
+        height_scale: Vertical scale
+
+    Returns:
+        List of created marker objects
+    """
+    if not parks:
+        return []
+
+    logger.info(f"Creating {len(parks)} park markers...")
+    markers = []
+
+    for i, park in enumerate(parks):
+        try:
+            row, col = park["pixel_coords"]
+
+            # Get elevation at park location
+            if 0 <= row < dem.shape[0] and 0 <= col < dem.shape[1]:
+                elevation = dem[int(row), int(col)]
+            else:
+                elevation = dem.mean()
+
+            # Convert to Blender world coordinates
+            x = (col - dem.shape[1] / 2) / scale_factor
+            y = (row - dem.shape[0] / 2) / scale_factor
+            z = elevation * height_scale + 0.2  # Slightly above terrain
+
+            # Add offset for terrain_obj position if it exists
+            if terrain_obj and terrain_obj.location:
+                x += terrain_obj.location[0]
+                y += terrain_obj.location[1]
+
+            # Create sphere
+            bpy.ops.mesh.primitive_ico_sphere_add(
+                radius=0.05,
+                location=(x, y, z)
+            )
+            marker = bpy.context.active_object
+            marker.name = f"Park_{park['name'].replace(' ', '_')}"
+
+            # Create emission material (color by score)
+            score = park.get("score", 0.5)
+            color_r = 1.0 - score  # Red for low score
+            color_g = score  # Green for high score
+            color_b = 0.0
+
+            mat = bpy.data.materials.new(name=f"ParkMarker_{i}")
+            mat.use_nodes = True
+            nodes = mat.node_tree.nodes
+            nodes.clear()
+
+            # Create shader network
+            emission = nodes.new("ShaderNodeEmission")
+            emission.inputs["Color"].default_value = (color_r, color_g, color_b, 1.0)
+            emission.inputs["Strength"].default_value = 3.0
+
+            output = nodes.new("ShaderNodeOutputMaterial")
+            mat.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+
+            marker.data.materials.append(mat)
+            markers.append(marker)
+
+            logger.debug(f"  Created marker: {park['name']} at ({x:.2f}, {y:.2f}, {z:.2f}), score={score:.3f}")
+
+        except Exception as e:
+            logger.warning(f"Error creating marker for {park['name']}: {e}")
+
+    logger.info(f"✓ Created {len(markers)} markers")
+    return markers
+
+
+def setup_dual_camera(
+    mesh_left,
+    mesh_right,
+    distance: float = 5,
+    height: float = 3,
+) -> Optional[object]:
+    """
+    Setup camera to view both terrains side-by-side.
+
+    Args:
+        mesh_left: Left terrain object
+        mesh_right: Right terrain object
+        distance: Distance from center
+        height: Camera height
+
+    Returns:
+        Camera object
+    """
+    logger.info("Setting up dual camera...")
+
+    # Calculate center between meshes
+    if mesh_left and mesh_right:
+        center_x = (mesh_left.location[0] + mesh_right.location[0]) / 2
+        center_y = (mesh_left.location[1] + mesh_right.location[1]) / 2
+    else:
+        center_x = 0
+        center_y = 0
+
+    # Position camera
+    camera_data = bpy.data.cameras.new("DualCamera")
+    camera_obj = bpy.data.objects.new("DualCamera", camera_data)
+    bpy.context.collection.objects.link(camera_obj)
+
+    camera_obj.location = (center_x, center_y - distance, height)
+    camera_obj.rotation_euler = (1.2, 0, 0)  # Tilt down
+
+    bpy.context.scene.camera = camera_obj
+    logger.info("✓ Camera positioned")
+
+    return camera_obj
+
+
+def setup_lighting() -> list:
+    """Setup Blender lighting."""
+    logger.info("Setting up lighting...")
+
+    lights = []
+
+    # Sun light
+    light_data = bpy.data.lights.new("SunLight", type="SUN")
+    light_data.energy = 2.0
+    light_obj = bpy.data.objects.new("SunLight", light_data)
+    bpy.context.collection.objects.link(light_obj)
+    light_obj.location = (2, 2, 3)
+    lights.append(light_obj)
+
+    # Fill light
+    light_data = bpy.data.lights.new("FillLight", type="AREA")
+    light_data.energy = 1.0
+    light_obj = bpy.data.objects.new("FillLight", light_data)
+    bpy.context.collection.objects.link(light_obj)
+    light_obj.location = (-2, -2, 2)
+    lights.append(light_obj)
+
+    logger.info("✓ Lighting setup complete")
+    return lights
+
+
+def render_dual_terrain(
+    output_path: Path,
+    width: int = 1920,
+    height: int = 1080,
+) -> bool:
+    """
+    Render the scene to file.
+
+    Args:
+        output_path: Output PNG path
+        width: Render width
+        height: Render height
+
+    Returns:
+        True if successful
+    """
+    logger.info(f"Rendering to {output_path} ({width}x{height})...")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    bpy.context.scene.render.filepath = str(output_path)
+    bpy.context.scene.render.resolution_x = width
+    bpy.context.scene.render.resolution_y = height
+    bpy.context.scene.render.image_settings.file_format = 'PNG'
+
+    # Render
+    bpy.ops.render.render(write_still=True)
+
+    if output_path.exists():
+        logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
+        return True
+    else:
+        logger.warning("Render output not created")
+        return False
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="Detroit Dual Terrain Rendering (Sledding + XC Skiing)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Render with pre-computed scores
+  python examples/detroit_dual_render.py
+
+  # Specify output directory for results
+  python examples/detroit_dual_render.py --output-dir ./renders
+        """,
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("examples/output/dual_render"),
+        help="Output directory (default: examples/output/dual_render/)",
+    )
+
+    parser.add_argument(
+        "--scores-dir",
+        type=Path,
+        default=Path("examples/output"),
+        help="Directory containing pre-computed scores (default: examples/output/)",
+    )
+
+    parser.add_argument(
+        "--mock-data",
+        action="store_true",
+        help="Use mock data for all inputs (skips loading real DEM)",
+    )
+
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Create scene but don't render (for debugging in Blender UI)",
+    )
+
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info("\n" + "=" * 70)
+    logger.info("Detroit Dual Terrain Rendering (Blender Script)")
+    logger.info("=" * 70)
+    logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Scores directory: {args.scores_dir}")
+
+    # Load data
+    logger.info("\n" + "=" * 70)
+    logger.info("Loading Data")
+    logger.info("=" * 70)
+
+    # Load DEM
+    if args.mock_data:
+        logger.info("Generating mock DEM...")
+        dem = np.random.randint(150, 250, (1024, 1024))
+        transform = Affine.identity()
+    else:
+        dem_dir = Path("data/dem/detroit")
+        if dem_dir.exists():
+            logger.info(f"Loading DEM from {dem_dir}...")
+            dem, transform = load_dem_files(dem_dir)
+        else:
+            logger.info("Generating mock DEM (DEM directory not found)...")
+            dem = np.random.randint(150, 250, (1024, 1024))
+            transform = Affine.identity()
+
+    # Load sledding scores
+    sledding_scores = load_sledding_scores(args.scores_dir)
+    if sledding_scores is None:
+        if args.mock_data:
+            logger.info("Generating mock sledding scores...")
+            sledding_scores = generate_mock_scores(dem.shape)
+        else:
+            logger.error("Sledding scores not found. Run detroit_snow_sledding.py first.")
+            return 1
+
+    # Load XC skiing scores
+    xc_scores = load_xc_skiing_scores(args.scores_dir / "xc_skiing")
+    if xc_scores is None:
+        if args.mock_data:
+            logger.info("Generating mock XC skiing scores...")
+            xc_scores = generate_mock_scores(dem.shape)
+        else:
+            logger.error("XC skiing scores not found. Run detroit_xc_skiing.py first.")
+            return 1
+
+    # Load parks
+    parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
+    if parks is None:
+        parks = []
+
+    logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}, {len(parks)} parks")
+
+    # Create Blender scene
+    logger.info("\n" + "=" * 70)
+    logger.info("Creating Blender Scene")
+    logger.info("=" * 70)
+
+    clear_blender_scene()
+
+    # Create terrain meshes side-by-side using terrain maker library
+    offset = 2.5
+    mesh_sledding = create_terrain_with_score(
+        "SleddingTerrain",
+        sledding_scores,
+        dem,
+        transform,
+        location=(-offset, 0, 0),
+        scale_factor=100,
+        height_scale=2.0,
+    )
+    mesh_xc = create_terrain_with_score(
+        "XCSkiingTerrain",
+        xc_scores,
+        dem,
+        transform,
+        location=(offset, 0, 0),
+        scale_factor=100,
+        height_scale=2.0,
+    )
+
+    # Add park markers
+    markers = create_park_markers(parks, dem, transform, mesh_xc)
+
+    # Setup camera and lighting
+    camera = setup_dual_camera(mesh_sledding, mesh_xc)
+    lights = setup_lighting()
+
+    logger.info("✓ Scene created successfully")
+
+    # Render if requested
+    if not args.no_render:
+        logger.info("\n" + "=" * 70)
+        logger.info("Rendering")
+        logger.info("=" * 70)
+
+        output_path = args.output_dir / "sledding_and_xc_skiing_3d.png"
+        render_dual_terrain(output_path, width=1920, height=1080)
+
+    logger.info("\n" + "=" * 70)
+    logger.info("✓ Complete!")
+    logger.info(f"Output directory: {args.output_dir}")
+    logger.info("=" * 70 + "\n")
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        logger.info("\n[✗] Interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"\n[✗] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
