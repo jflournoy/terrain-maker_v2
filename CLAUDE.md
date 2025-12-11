@@ -109,6 +109,61 @@ Examples of honest responses:
 - `/learn` - Capture insights
 - `/docs` - Update documentation
 
+## Scripts Using Blender's Python API
+
+**Import bpy directly** - When a script uses terrain maker's Blender rendering capabilities, import bpy at the module level, just like any other dependency.
+
+### Guidelines for Scripts with Blender Rendering
+
+When creating scripts that use Blender's Python API via terrain maker:
+
+1. **Import bpy directly at the top** - No try/except wrappers
+   ```python
+   import bpy  # Available when running in environment with Blender Python installed
+   ```
+
+2. **Document the requirement clearly** - State that bpy/Blender is needed
+   ```python
+   """
+   Script Name.
+
+   Renders terrain using Blender's Python API.
+
+   Requirements:
+   - Blender Python API available (bpy)
+   - Pre-computed data files
+
+   Usage:
+       python examples/script.py
+
+   With arguments:
+       python examples/script.py --option value
+   """
+   ```
+
+3. **Run as regular Python** - These are standard Python scripts, not special "Blender scripts"
+   ```bash
+   # Regular Python execution
+   python examples/detroit_dual_render.py
+
+   # With arguments
+   python examples/detroit_dual_render.py --mock-data --output-dir ./renders
+   ```
+
+4. **Use terrain maker's rendering library** - All Blender operations are handled by terrain maker, not direct bpy calls
+   - Use `Terrain` class and its rendering methods
+   - Leverage the library's Blender integration
+   - Focus on data pipeline, not low-level Blender API
+
+### Example Pattern
+
+See `examples/detroit_dual_render.py` for the proper pattern:
+- Direct `import bpy` at module level (no try/except)
+- Clear docstring about Blender requirement
+- Run as regular Python script (`python examples/...`)
+- Uses terrain maker's Terrain class for rendering
+- Uses standard argparse for command-line arguments
+
 ## Architecture Principles
 
 - Keep functions under 15 complexity
