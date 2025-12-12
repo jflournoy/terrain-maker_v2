@@ -176,3 +176,198 @@ class TestPositionCameraRelative:
             camera = position_camera_relative(mock_mesh, direction=direction)
             assert camera is not None
             assert camera.type == "CAMERA"
+
+
+class TestPositionCameraRelativeMultiMesh:
+    """Tests for position_camera_relative() with multiple mesh objects.
+
+    TDD RED phase: These tests define expected behavior for multi-mesh support.
+    The function should accept a list of meshes and compute a combined bounding box.
+    """
+
+    @pytest.fixture
+    def two_meshes_side_by_side(self):
+        """Create two meshes positioned side-by-side (like dual terrain render)."""
+        if bpy is None:
+            pytest.skip("Blender not available")
+
+        # Left mesh at X = -10
+        bpy.ops.mesh.primitive_cube_add(size=10, location=(-10, 0, 1))
+        mesh_left = bpy.context.active_object
+        mesh_left.name = "TerrainLeft"
+        mesh_left.scale = (1, 1, 0.1)
+
+        # Right mesh at X = +10
+        bpy.ops.mesh.primitive_cube_add(size=10, location=(10, 0, 1))
+        mesh_right = bpy.context.active_object
+        mesh_right.name = "TerrainRight"
+        mesh_right.scale = (1, 1, 0.1)
+
+        bpy.context.view_layer.update()
+
+        yield [mesh_left, mesh_right]
+
+        # Cleanup
+        bpy.data.objects.remove(mesh_left, do_unlink=True)
+        bpy.data.objects.remove(mesh_right, do_unlink=True)
+
+    @pytest.fixture
+    def three_meshes_triangle(self):
+        """Create three meshes in a triangular arrangement."""
+        if bpy is None:
+            pytest.skip("Blender not available")
+
+        meshes = []
+
+        # Mesh at origin
+        bpy.ops.mesh.primitive_cube_add(size=5, location=(0, 0, 1))
+        mesh1 = bpy.context.active_object
+        mesh1.name = "Terrain1"
+        meshes.append(mesh1)
+
+        # Mesh at upper-left
+        bpy.ops.mesh.primitive_cube_add(size=5, location=(-10, 10, 1))
+        mesh2 = bpy.context.active_object
+        mesh2.name = "Terrain2"
+        meshes.append(mesh2)
+
+        # Mesh at upper-right
+        bpy.ops.mesh.primitive_cube_add(size=5, location=(10, 10, 1))
+        mesh3 = bpy.context.active_object
+        mesh3.name = "Terrain3"
+        meshes.append(mesh3)
+
+        bpy.context.view_layer.update()
+
+        yield meshes
+
+        # Cleanup
+        for mesh in meshes:
+            bpy.data.objects.remove(mesh, do_unlink=True)
+
+    # === Accepts List of Meshes ===
+    def test_accepts_list_of_meshes(self, two_meshes_side_by_side):
+        """Function should accept a list of mesh objects."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = two_meshes_side_by_side
+        camera = position_camera_relative(meshes, direction="south")
+
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    def test_accepts_single_mesh_in_list(self, mock_mesh):
+        """Function should work with a single-element list for consistency."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative([mock_mesh], direction="south")
+
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    # === Combined Bounding Box Tests ===
+    def test_combined_bbox_wider_than_single_mesh(self, two_meshes_side_by_side):
+        """Combined bounding box should span both meshes."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = two_meshes_side_by_side
+        mesh_left, mesh_right = meshes
+
+        # Camera for single mesh
+        cam_single = position_camera_relative(mesh_left, direction="south", distance=1.0)
+        single_pos_y = cam_single.location[1]
+
+        # Camera for both meshes - should be further back due to larger combined bbox
+        cam_both = position_camera_relative(meshes, direction="south", distance=1.0)
+        both_pos_y = cam_both.location[1]
+
+        # Camera should be further south (more negative Y) for combined bbox
+        assert both_pos_y < single_pos_y, (
+            f"Combined camera Y={both_pos_y:.2f} should be < single camera Y={single_pos_y:.2f}"
+        )
+
+    def test_combined_bbox_center_between_meshes(self, two_meshes_side_by_side):
+        """Camera should target the center of the combined bounding box."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = two_meshes_side_by_side
+
+        # For above view, camera X should be at center of combined bbox (X=0)
+        camera = position_camera_relative(meshes, direction="above")
+
+        # Combined center should be at X=0 (between -10 and +10)
+        assert abs(camera.location[0]) < 1.0, (
+            f"Camera X={camera.location[0]:.2f} should be near 0 (center of combined bbox)"
+        )
+
+    def test_ortho_scale_covers_all_meshes(self, two_meshes_side_by_side):
+        """Orthographic scale should be large enough to see all meshes."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = two_meshes_side_by_side
+        mesh_left = meshes[0]
+
+        # Single mesh ortho scale
+        cam_single = position_camera_relative(mesh_left, direction="above", camera_type="ORTHO")
+        single_scale = cam_single.data.ortho_scale
+
+        # Combined ortho scale should be larger
+        cam_both = position_camera_relative(meshes, direction="above", camera_type="ORTHO")
+        both_scale = cam_both.data.ortho_scale
+
+        assert both_scale > single_scale, (
+            f"Combined ortho_scale={both_scale:.2f} should be > single scale={single_scale:.2f}"
+        )
+
+    # === Direction Tests with Multiple Meshes ===
+    def test_all_directions_work_with_multiple_meshes(self, two_meshes_side_by_side):
+        """All cardinal directions should work with a list of meshes."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = two_meshes_side_by_side
+        directions = [
+            "north", "south", "east", "west", "above",
+            "northeast", "northwest", "southeast", "southwest",
+        ]
+
+        for direction in directions:
+            camera = position_camera_relative(meshes, direction=direction)
+            assert camera is not None, f"Failed for direction: {direction}"
+            assert camera.type == "CAMERA"
+
+    # === Three Meshes Tests ===
+    def test_three_meshes_combined_bbox(self, three_meshes_triangle):
+        """Should handle three or more meshes correctly."""
+        from src.terrain.core import position_camera_relative
+
+        meshes = three_meshes_triangle
+
+        camera = position_camera_relative(meshes, direction="above")
+
+        # Center should be between all three meshes
+        # Meshes at (0,0), (-10,10), (10,10) -> center roughly at (0, 6.67)
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    # === Backward Compatibility ===
+    def test_single_mesh_still_works(self, mock_mesh):
+        """Single mesh (not in list) should still work for backward compatibility."""
+        from src.terrain.core import position_camera_relative
+
+        # This is the existing API - should continue to work
+        camera = position_camera_relative(mock_mesh, direction="south")
+
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    def test_single_mesh_same_result_as_single_element_list(self, mock_mesh):
+        """Single mesh and [single_mesh] should produce equivalent camera positions."""
+        from src.terrain.core import position_camera_relative
+
+        cam_single = position_camera_relative(mock_mesh, direction="south", distance=1.5)
+        cam_list = position_camera_relative([mock_mesh], direction="south", distance=1.5)
+
+        # Positions should be essentially the same
+        assert abs(cam_single.location[0] - cam_list.location[0]) < 0.01
+        assert abs(cam_single.location[1] - cam_list.location[1]) < 0.01
+        assert abs(cam_single.location[2] - cam_list.location[2]) < 0.01

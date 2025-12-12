@@ -504,6 +504,97 @@ class TestTerrainTransforms:
         assert terrain.data_layers["dem"]["transformed_crs"] == original_crs
 
 
+class TestAddDataLayerWithTransforms:
+    """Test suite for add_data_layer behavior with transformed target layers.
+
+    These tests verify that add_data_layer uses transformed dimensions
+    when the target layer has been downsampled/transformed.
+    """
+
+    def test_add_data_layer_uses_transformed_shape_after_apply_transforms(self):
+        """add_data_layer should use transformed shape when target layer has been transformed."""
+        # Create terrain with 100x100 DEM
+        dem_data = np.random.rand(100, 100).astype(np.float32) * 1000
+        transform = Affine.scale(0.001, -0.001) * Affine.translation(-83.0, 42.5)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        # Add downsampling transform (50% zoom = 50x50)
+        from scipy.ndimage import zoom as scipy_zoom
+
+        def downsample_transform(data, trans):
+            downsampled = scipy_zoom(data, 0.5, order=1)
+            # Adjust transform for new resolution
+            new_trans = Affine(
+                trans.a * 2, trans.b, trans.c, trans.d, trans.e * 2, trans.f
+            )
+            return downsampled, new_trans, None
+
+        terrain.add_transform(downsample_transform)
+        terrain.apply_transforms()
+
+        # Verify DEM was downsampled
+        transformed_dem = terrain.data_layers["dem"]["transformed_data"]
+        assert transformed_dem.shape == (50, 50), "DEM should be downsampled to 50x50"
+
+        # Create score grid at ORIGINAL resolution (100x100)
+        score_grid = np.random.rand(100, 100).astype(np.float32)
+
+        # Add score layer with target_layer="dem" - should be resampled to match transformed DEM (50x50)
+        terrain.add_data_layer("score", score_grid, transform, "EPSG:4326", target_layer="dem")
+
+        # Verify score layer was resampled to match transformed dimensions
+        score_layer = terrain.data_layers["score"]["data"]
+        assert score_layer.shape == (50, 50), (
+            f"Score layer should be resampled to 50x50, got {score_layer.shape}"
+        )
+
+    def test_add_data_layer_uses_original_shape_before_transforms(self):
+        """add_data_layer should use original shape when target layer not yet transformed."""
+        # Create terrain with 100x100 DEM
+        dem_data = np.random.rand(100, 100).astype(np.float32) * 1000
+        transform = Affine.scale(0.001, -0.001) * Affine.translation(-83.0, 42.5)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        # Create score grid at same resolution (100x100)
+        score_grid = np.random.rand(100, 100).astype(np.float32)
+
+        # Add score layer BEFORE any transforms - should stay at 100x100
+        terrain.add_data_layer("score", score_grid, transform, "EPSG:4326")
+
+        # Verify score layer matches original DEM shape
+        score_layer = terrain.data_layers["score"]["data"]
+        assert score_layer.shape == (100, 100), (
+            f"Score layer should stay at 100x100, got {score_layer.shape}"
+        )
+
+    def test_add_data_layer_uses_transformed_crs_and_transform(self):
+        """add_data_layer should use transformed CRS and transform when available."""
+        # Create terrain with 50x50 DEM
+        dem_data = np.random.rand(50, 50).astype(np.float32) * 1000
+        original_transform = Affine.scale(0.001, -0.001) * Affine.translation(-83.0, 42.5)
+        terrain = Terrain(dem_data, original_transform, dem_crs="EPSG:4326")
+
+        # Add transform that changes CRS
+        new_transform = Affine.scale(100, -100) * Affine.translation(500000, 4500000)
+        new_crs = "EPSG:32617"
+
+        def crs_change_transform(data, trans):
+            return data, new_transform, new_crs
+
+        terrain.add_transform(crs_change_transform)
+        terrain.apply_transforms()
+
+        # Create score grid at original transform/CRS (will need reprojection)
+        score_grid = np.random.rand(50, 50).astype(np.float32)
+
+        # Add score layer with original CRS and target_layer="dem" - should align to transformed CRS
+        terrain.add_data_layer("score", score_grid, original_transform, "EPSG:4326", target_layer="dem")
+
+        # Verify score layer matches transformed DEM shape
+        score_layer = terrain.data_layers["score"]["data"]
+        assert score_layer.shape == (50, 50), "Score layer should match DEM shape"
+
+
 @pytest.mark.skipif(not HAS_BLENDER, reason="Requires Blender (import bpy)")
 class TestBlenderMeshCreation:
     """Test suite for Blender mesh creation functionality.
