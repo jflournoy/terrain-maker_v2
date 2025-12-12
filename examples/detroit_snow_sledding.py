@@ -1312,12 +1312,41 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     logger.info(f"Terrain layers: {list(terrain.data_layers.keys())}")
 
     # Save sledding score grid as .npz for use in other examples (like detroit_dual_render.py)
+    # Include transform so loaders can properly georeference the data
     # Save to examples/output/ for reuse by other examples
     data_dir = Path("examples/output")
     data_dir.mkdir(parents=True, exist_ok=True)
     score_path = data_dir / "sledding_scores.npz"
-    np.savez_compressed(score_path, score=sledding_score)
-    logger.info(f"✓ Saved sledding scores to {score_path}")
+
+    # Calculate the correct transform for the score grid shape
+    # The score grid has different dimensions than the DEM, so we need to
+    # compute pixel sizes based on the geographic extent and score grid shape
+    from rasterio.transform import Affine
+    dem_height, dem_width = dem.shape
+    score_rows, score_cols = sledding_score.shape
+
+    # Get geographic bounds from DEM transform
+    minx = transform.c  # x origin (west)
+    maxy = transform.f  # y origin (north)
+    maxx = minx + transform.a * dem_width  # east
+    miny = maxy + transform.e * dem_height  # south (transform.e is negative)
+
+    # Create transform for score grid dimensions
+    score_transform = Affine(
+        (maxx - minx) / score_cols,  # pixel width
+        0,
+        minx,  # x origin
+        0,
+        -(maxy - miny) / score_rows,  # pixel height (negative for north-up)
+        maxy,  # y origin
+    )
+    logger.info(f"Score grid transform: pixel size = {score_transform.a:.6f}° x {abs(score_transform.e):.6f}°")
+
+    # Save transform as tuple (a, b, c, d, e, f) for Affine reconstruction
+    transform_tuple = (score_transform.a, score_transform.b, score_transform.c,
+                       score_transform.d, score_transform.e, score_transform.f)
+    np.savez_compressed(score_path, score=sledding_score, transform=transform_tuple, crs="EPSG:4326")
+    logger.info(f"✓ Saved sledding scores to {score_path} (with transform metadata)")
 
     # Create output directory for visualizations
     (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
