@@ -187,7 +187,9 @@ def flip_raster(axis="horizontal"):
         #   new_yoff = old_yoff + (height-1)*e
         #   new_e = -old_e    (so that row moves in the opposite direction)
 
-        a, b, xoff, d, e, yoff = transform.to_gdal()
+        # GDAL order is: (xoff, a, b, yoff, d, e)
+        # which maps to Affine(a, b, c, d, e, f) as: c=xoff, f=yoff
+        xoff, a, b, yoff, d, e = transform.to_gdal()
 
         if flip_code == "horizontal":
             # top <-> bottom flip => invert "row" direction
