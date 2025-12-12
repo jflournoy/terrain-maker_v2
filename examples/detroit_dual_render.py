@@ -647,10 +647,10 @@ Examples:
     else:
         logger.warning("Memory monitoring disabled (psutil not available)")
 
-    # Calculate target vertices for mesh creation using proven 960x720x2 pattern
-    # This is the same formula as detroit_elevation_real which works reliably:
-    # 960 × 720 × 2 = 1,382,400 vertices per mesh (safe for dual mesh rendering)
-    target_vertices = RENDER_WIDTH * RENDER_HEIGHT * 2
+    # Calculate target vertices for mesh creation
+    # Conservative: 500k max per mesh to prevent OOM with dual rendering
+    # This ensures safe memory usage for both meshes combined
+    target_vertices = 500000
     logger.info(f"Target vertices per mesh: {target_vertices:,}")
 
     # Create first mesh at origin
