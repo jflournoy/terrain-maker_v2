@@ -10,6 +10,7 @@ import numpy as np
 from math import radians
 
 import bpy
+from mathutils import Euler, Vector
 
 
 def clear_scene():
@@ -156,15 +157,21 @@ def position_camera_relative(
     sun_angle=2,
     sun_energy=3,
     focal_length=50,
+    ortho_scale=1.2,
 ):
-    """Position camera relative to mesh using intuitive cardinal directions.
+    """Position camera relative to mesh(es) using intuitive cardinal directions.
 
     Simplifies camera positioning by using natural directions (north, south, etc.)
     instead of absolute Blender coordinates. The camera is automatically positioned
     relative to the mesh bounds and rotated to point at the mesh center.
 
+    Supports multiple meshes by computing a combined bounding box that encompasses
+    all provided mesh objects. This is useful for dual terrain renders or scenes
+    with multiple terrain meshes that need to be viewed together.
+
     Args:
-        mesh_obj: Blender mesh object to position camera relative to
+        mesh_obj: Blender mesh object or list of mesh objects to position camera
+            relative to. If a list is provided, a combined bounding box is computed.
         direction: Cardinal direction - one of:
             'north', 'south', 'east', 'west' (horizontal directions)
             'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
@@ -180,6 +187,9 @@ def position_camera_relative(
         sun_angle: Angle of sun light in degrees. Default: 2
         sun_energy: Intensity of sun light. Default: 3
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
+        ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
+            Higher values zoom out (show more area), lower values zoom in.
+            Only affects orthographic cameras. Default: 1.2
 
     Returns:
         Camera object
@@ -209,17 +219,40 @@ def position_camera_relative(
 
     logger.info(f"Positioning camera {direction} of mesh with {camera_type} camera")
 
-    # Get mesh bounds
-    bbox = mesh_obj.bound_box
-    xs = [v[0] for v in bbox]
-    ys = [v[1] for v in bbox]
-    zs = [v[2] for v in bbox]
+    # Normalize input: handle both single mesh and list of meshes
+    if isinstance(mesh_obj, list):
+        meshes = mesh_obj
+    else:
+        meshes = [mesh_obj]
 
-    center = np.array([(min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (min(zs) + max(zs)) / 2])
+    # Compute combined bounding box across all meshes
+    all_xs = []
+    all_ys = []
+    all_zs = []
 
-    # Calculate mesh diagonal for scaling
-    mesh_size = np.array([max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs)])
+    for mesh in meshes:
+        bbox = mesh.bound_box
+        # bound_box coordinates are in local space, need to transform to world space
+        world_matrix = mesh.matrix_world
+        for vertex in bbox:
+            world_vertex = world_matrix @ Vector(vertex)
+            all_xs.append(world_vertex[0])
+            all_ys.append(world_vertex[1])
+            all_zs.append(world_vertex[2])
+
+    # Combined bounds
+    min_x, max_x = min(all_xs), max(all_xs)
+    min_y, max_y = min(all_ys), max(all_ys)
+    min_z, max_z = min(all_zs), max(all_zs)
+
+    center = np.array([(min_x + max_x) / 2, (min_y + max_y) / 2, (min_z + max_z) / 2])
+
+    # Calculate combined mesh diagonal for scaling
+    mesh_size = np.array([max_x - min_x, max_y - min_y, max_z - min_z])
     mesh_diagonal = np.linalg.norm(mesh_size)
+
+    if len(meshes) > 1:
+        logger.debug(f"Combined bounding box: size={mesh_size}, diagonal={mesh_diagonal:.2f}")
 
     # Get direction vector and calculate camera position
     dir_vector = np.array(DIRECTIONS[direction])
@@ -243,13 +276,9 @@ def position_camera_relative(
     # Special case: for overhead (above) view, use zero rotation
     # This avoids gimbal lock ambiguity when looking straight down
     if direction == "above":
-        from mathutils import Euler
-
         camera_angle = Euler((0, 0, 0), "XYZ")
     else:
         # In Blender, camera's local -Z axis is forward, +Y is up
-        from mathutils import Vector
-
         cam_to_target = Vector(target_pos - camera_pos).normalized()
 
         # Use to_track_quat to calculate rotation
@@ -260,13 +289,13 @@ def position_camera_relative(
     logger.debug(f"Camera position: {camera_pos}, angle: {camera_angle}")
 
     # Set ortho scale based on mesh size if orthographic
-    ortho_scale = mesh_diagonal * 1.2 if camera_type == "ORTHO" else distance * mesh_diagonal
+    computed_ortho_scale = mesh_diagonal * ortho_scale if camera_type == "ORTHO" else distance * mesh_diagonal
 
     # Create camera directly, optionally with light
     camera = setup_camera(
         camera_angle=camera_angle,
         camera_location=tuple(camera_pos),
-        scale=ortho_scale,
+        scale=computed_ortho_scale,
         focal_length=focal_length,
         camera_type=camera_type,
     )

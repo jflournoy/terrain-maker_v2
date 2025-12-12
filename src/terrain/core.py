@@ -151,6 +151,7 @@ def position_camera_relative(
     sun_angle=2,
     sun_energy=3,
     focal_length=50,
+    ortho_scale=1.2,
 ):
     """Position camera relative to mesh using intuitive cardinal directions.
 
@@ -175,6 +176,9 @@ def position_camera_relative(
         sun_angle: Angle of sun light in degrees. Default: 2
         sun_energy: Intensity of sun light. Default: 3
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
+        ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
+            Higher values zoom out (show more area), lower values zoom in.
+            Only affects orthographic cameras. Default: 1.2
 
     Returns:
         Camera object
@@ -185,7 +189,7 @@ def position_camera_relative(
     from src.terrain.scene_setup import position_camera_relative as _position_camera_relative
 
     return _position_camera_relative(
-        mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length
+        mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length, ortho_scale
     )
 
 
@@ -905,10 +909,11 @@ class Terrain:
         self,
         name: str,
         data: np.ndarray,
-        transform: rasterio.Affine,
-        crs: str,
+        transform: Optional[rasterio.Affine] = None,
+        crs: Optional[str] = None,
         target_crs: Optional[str] = None,
         target_layer: Optional[str] = None,
+        same_extent_as: Optional[str] = None,
         resampling: Resampling = Resampling.bilinear,
     ) -> None:
         """
@@ -920,12 +925,19 @@ class Terrain:
         Args:
             name (str): Unique name for this data layer (e.g., 'dem', 'elevation', 'slope').
             data (np.ndarray): 2D array of data values, shape (height, width).
-            transform (rasterio.Affine): Affine transform mapping pixel to geographic coords.
-            crs (str): Coordinate reference system in EPSG format (e.g., 'EPSG:4326').
+            transform (rasterio.Affine, optional): Affine transform mapping pixel to geographic
+                coords. Required unless same_extent_as is specified.
+            crs (str, optional): Coordinate reference system in EPSG format (e.g., 'EPSG:4326').
+                Required unless same_extent_as is specified (inherits from reference layer).
             target_crs (str, optional): Target CRS to reproject to. If None and target_layer
                 specified, uses target layer's CRS. If None and no target, uses input crs.
             target_layer (str, optional): Name of existing layer to match grid and CRS.
                 If specified, data is automatically reprojected and resampled to align.
+            same_extent_as (str, optional): Name of existing layer whose geographic extent
+                this data covers. When specified, transform and CRS are automatically
+                calculated from the reference layer's bounds and the data's shape.
+                This is useful when score grids or overlays cover the same area as the
+                DEM but at different resolutions. Implies target_layer if not specified.
             resampling (rasterio.enums.Resampling): Resampling method for reprojection
                 (default: Resampling.bilinear). See rasterio docs for options.
 
@@ -933,8 +945,8 @@ class Terrain:
             None: Modifies internal data_layers dictionary.
 
         Raises:
-            KeyError: If target_layer specified but doesn't exist.
-            ValueError: If target_crs specified but no reference layer available.
+            KeyError: If target_layer or same_extent_as layer doesn't exist.
+            ValueError: If neither transform nor same_extent_as is provided.
 
         Examples:
             >>> # Add elevation data with native CRS
@@ -944,11 +956,62 @@ class Terrain:
             >>> terrain.add_data_layer('landcover', lc_array, lc_transform, 'EPSG:3857',
             ...                        target_layer='dem')
 
+            >>> # Add score data that covers the same extent as DEM (automatic transform)
+            >>> terrain.add_data_layer('score', score_array, same_extent_as='dem')
+
             >>> # Use nearest-neighbor for categorical data
             >>> terrain.add_data_layer('zones', zone_array, zone_transform, 'EPSG:4326',
             ...                        target_layer='dem', resampling=Resampling.nearest)
         """
         self.logger.info(f"Adding data layer '{name}'")
+
+        # Handle same_extent_as: calculate transform from reference layer's bounds
+        if same_extent_as is not None:
+            if same_extent_as not in self.data_layers:
+                raise KeyError(f"Reference layer '{same_extent_as}' not found for same_extent_as")
+
+            ref_info = self.data_layers[same_extent_as]
+
+            # Use ORIGINAL extent and CRS (before transforms) since the source data
+            # typically covers the same geographic area as the original reference layer.
+            # The reprojection will handle coordinate transformation.
+            ref_data = ref_info["data"]
+            ref_transform = ref_info["transform"]
+            ref_crs = ref_info["crs"]
+
+            # Calculate geographic bounds of reference layer
+            ref_height, ref_width = ref_data.shape
+            # Top-left corner
+            x_origin = ref_transform.c
+            y_origin = ref_transform.f
+            # Bottom-right corner
+            x_end = x_origin + ref_transform.a * ref_width
+            y_end = y_origin + ref_transform.e * ref_height
+
+            # Calculate pixel size for source data to cover same extent
+            src_height, src_width = data.shape
+            pixel_width = (x_end - x_origin) / src_width
+            pixel_height = (y_end - y_origin) / src_height
+
+            # Create transform for source data
+            transform = rasterio.Affine(pixel_width, 0, x_origin, 0, pixel_height, y_origin)
+            crs = ref_crs
+
+            self.logger.info(
+                f"Calculated transform from '{same_extent_as}' extent: "
+                f"origin=({x_origin:.4f}, {y_origin:.4f}), "
+                f"pixel=({pixel_width:.6f}, {pixel_height:.6f})"
+            )
+
+            # If target_layer not specified, use same_extent_as as target
+            if target_layer is None:
+                target_layer = same_extent_as
+
+        # Validate that transform and crs are provided (either directly or via same_extent_as)
+        if transform is None:
+            raise ValueError("transform is required (or use same_extent_as to calculate automatically)")
+        if crs is None:
+            raise ValueError("crs is required (or use same_extent_as to inherit from reference layer)")
 
         # Determine target CRS and transform
         if target_layer is not None:
@@ -956,9 +1019,24 @@ class Terrain:
                 raise KeyError(f"Target layer '{target_layer}' not found")
 
             target_info = self.data_layers[target_layer]
-            target_crs = target_info["crs"]
-            target_transform = target_info["transform"]
-            target_shape = target_info["data"].shape
+
+            # Use transformed data dimensions if transforms have been applied,
+            # otherwise fall back to original dimensions. This ensures data layers
+            # added after downsampling are automatically resampled to match the
+            # actual mesh dimensions.
+            if target_info.get("transformed", False) and "transformed_data" in target_info:
+                target_shape = target_info["transformed_data"].shape
+                target_transform = target_info.get(
+                    "transformed_transform", target_info["transform"]
+                )
+                target_crs = target_info.get("transformed_crs", target_info["crs"])
+                self.logger.debug(
+                    f"Using transformed target shape {target_shape} for layer alignment"
+                )
+            else:
+                target_shape = target_info["data"].shape
+                target_transform = target_info["transform"]
+                target_crs = target_info["crs"]
 
         elif target_crs is not None:
             # If target_crs provided but no reference layer, we need a reference layer
@@ -967,8 +1045,16 @@ class Terrain:
 
             # Use first layer as reference for grid
             reference_layer = next(iter(self.data_layers.values()))
-            target_transform = reference_layer["transform"]
-            target_shape = reference_layer["data"].shape
+
+            # Use transformed dimensions if available
+            if reference_layer.get("transformed", False) and "transformed_data" in reference_layer:
+                target_transform = reference_layer.get(
+                    "transformed_transform", reference_layer["transform"]
+                )
+                target_shape = reference_layer["transformed_data"].shape
+            else:
+                target_transform = reference_layer["transform"]
+                target_shape = reference_layer["data"].shape
 
         else:
             # If no target specified, keep original
@@ -1739,3 +1825,135 @@ class Terrain:
         from src.terrain.mesh_operations import sort_boundary_points
 
         return sort_boundary_points(boundary_coords)
+
+    def geo_to_mesh_coords(
+        self,
+        lon: np.ndarray | float,
+        lat: np.ndarray | float,
+        elevation_offset: float = 0.0,
+        input_crs: str = "EPSG:4326",
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Convert geographic coordinates to Blender mesh coordinates.
+
+        Transforms lon/lat points through the same pipeline used for the terrain mesh,
+        producing coordinates that align with the rendered terrain. Useful for placing
+        markers, labels, or other objects at geographic locations on the terrain.
+
+        Args:
+            lon: Longitude(s) or X coordinate(s). Can be a single float or array.
+            lat: Latitude(s) or Y coordinate(s). Can be a single float or array
+                (must match lon shape).
+            elevation_offset: Height above terrain surface in mesh units (default: 0.0).
+                Positive values place points above the terrain.
+            input_crs: CRS of input coordinates (default: "EPSG:4326" for WGS84 lon/lat).
+                Will be reprojected to match the transformed DEM's CRS if different.
+
+        Returns:
+            Tuple of (x, y, z) arrays in Blender mesh coordinates. If single values
+            were passed for lon/lat, returns single float values.
+
+        Raises:
+            RuntimeError: If create_mesh() has not been called yet (model_params not set).
+            ValueError: If the DEM layer has not been transformed yet.
+
+        Example:
+            >>> terrain = Terrain(dem, transform)
+            >>> terrain.add_transform(reproject_to_utm("EPSG:4326", "EPSG:32617"))
+            >>> terrain.apply_transforms()
+            >>> mesh = terrain.create_mesh()
+            >>> # Get mesh coords for a park at (-83.1, 42.4) in WGS84
+            >>> x, y, z = terrain.geo_to_mesh_coords(-83.1, 42.4, elevation_offset=0.1)
+            >>> # Create marker at (x, y, z) in Blender
+        """
+        from pyproj import Transformer
+
+        # Check prerequisites
+        if not hasattr(self, "model_params") or self.model_params is None:
+            raise RuntimeError(
+                "create_mesh() must be called before geo_to_mesh_coords(). "
+                "The mesh parameters are needed for coordinate conversion."
+            )
+
+        dem_info = self.data_layers.get("dem", {})
+        if not dem_info.get("transformed", False):
+            raise ValueError(
+                "DEM layer must be transformed before geo_to_mesh_coords(). "
+                "Call apply_transforms() first."
+            )
+
+        # Get transformed DEM and its transform
+        dem_data = dem_info["transformed_data"]
+        transform = dem_info.get("transformed_transform")
+        dem_crs = dem_info.get("transformed_crs", "EPSG:4326")
+
+        if transform is None:
+            raise ValueError("No transform found for transformed DEM layer.")
+
+        # Convert to arrays for uniform handling
+        lon_arr = np.atleast_1d(np.asarray(lon, dtype=np.float64))
+        lat_arr = np.atleast_1d(np.asarray(lat, dtype=np.float64))
+        scalar_input = lon_arr.shape == (1,) and not hasattr(lon, "__len__")
+
+        if lon_arr.shape != lat_arr.shape:
+            raise ValueError(
+                f"lon and lat must have the same shape. Got {lon_arr.shape} and {lat_arr.shape}"
+            )
+
+        # Reproject coordinates if input CRS differs from DEM CRS
+        if input_crs != dem_crs:
+            self.logger.debug(f"  Reprojecting {len(lon_arr)} points from {input_crs} to {dem_crs}")
+            transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
+            lon_arr, lat_arr = transformer.transform(lon_arr, lat_arr)
+
+        # Convert geographic coords to pixel coords using inverse transform
+        # Affine: (col, row) = ~transform * (x, y) where x=easting, y=northing
+        inv_transform = ~transform
+        cols, rows = inv_transform * (lon_arr, lat_arr)
+
+        # Round to nearest pixel
+        rows = np.round(rows).astype(int)
+        cols = np.round(cols).astype(int)
+
+        # Get DEM shape
+        height, width = dem_data.shape
+
+        # Clamp to valid range and track out-of-bounds points
+        valid_mask = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
+        rows_clamped = np.clip(rows, 0, height - 1)
+        cols_clamped = np.clip(cols, 0, width - 1)
+
+        # Get elevation values from DEM
+        elevations = dem_data[rows_clamped, cols_clamped]
+
+        # Handle out-of-bounds or NaN elevations
+        invalid_mask = ~valid_mask | np.isnan(elevations)
+        if np.any(invalid_mask):
+            # Use mean elevation for invalid points
+            valid_elevations = dem_data[~np.isnan(dem_data)]
+            mean_elev = np.mean(valid_elevations) if len(valid_elevations) > 0 else 0.0
+            elevations = np.where(invalid_mask, mean_elev, elevations)
+            self.logger.debug(
+                f"  {np.sum(invalid_mask)} points outside DEM bounds, using mean elevation"
+            )
+
+        # Apply mesh scaling (same as generate_vertex_positions)
+        scale_factor = self.model_params["scale_factor"]
+        height_scale = self.model_params["height_scale"]
+
+        x = cols.astype(np.float64) / scale_factor
+        y = rows.astype(np.float64) / scale_factor
+        z = elevations * height_scale + elevation_offset
+
+        # Apply centering offset if model was centered
+        if self.model_params.get("centered", False):
+            offset = self.model_params["offset"]
+            x = x - offset[0]
+            y = y - offset[1]
+            # Note: z offset not applied - elevation_offset handles vertical positioning
+
+        # Return scalars if input was scalar
+        if scalar_input:
+            return float(x[0]), float(y[0]), float(z[0])
+
+        return x, y, z
