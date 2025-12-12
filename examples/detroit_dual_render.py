@@ -46,6 +46,7 @@ from src.terrain.core import (
     render_scene_to_file,
 )
 from src.terrain.data_loading import load_dem_files
+from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from affine import Affine
 
 # Configure logging
@@ -70,6 +71,15 @@ logging.basicConfig(
     handlers=[file_handler]
 )
 
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+# Render dimensions for vertex count calculation
+# Use conservative 960x720 (proven to work in detroit_elevation_real)
+# Much safer for dual mesh rendering than full 1920x1080
+RENDER_WIDTH = 960
+RENDER_HEIGHT = 720
 
 # =============================================================================
 # LOADING OUTPUTS
@@ -153,6 +163,7 @@ def create_terrain_with_score(
     location: Tuple[float, float, float] = (0, 0, 0),
     scale_factor: float = 100,
     height_scale: float = 2.0,
+    target_vertices: Optional[int] = None,
 ) -> Optional[object]:
     """
     Create a terrain mesh using terrain maker's Terrain class.
@@ -166,6 +177,7 @@ def create_terrain_with_score(
         location: (x, y, z) position in Blender for the mesh
         scale_factor: Horizontal scale divisor
         height_scale: Vertical elevation scale
+        target_vertices: Target vertex count for downsampling (optional)
 
     Returns:
         Blender object positioned at specified location
@@ -198,6 +210,22 @@ def create_terrain_with_score(
     # Add identity transform to mark DEM as transformed
     terrain.add_transform(lambda data: data)
     terrain.apply_transforms()
+
+    # Configure vertex count limiting if specified (prevents OOM with large DEMs)
+    if target_vertices is not None:
+        original_h, original_w = terrain.dem_shape
+        original_vertices = original_h * original_w
+
+        if original_vertices > target_vertices:
+            zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
+            logger.info(
+                f"Downsampling {name}: {original_vertices:,} → ~{target_vertices:,} vertices "
+                f"(zoom={zoom:.6f})"
+            )
+        else:
+            logger.debug(
+                f"No downsampling needed for {name}: {original_vertices:,} ≤ {target_vertices:,}"
+            )
 
     # Create mesh using terrain maker library
     mesh_obj = terrain.create_mesh(
@@ -304,6 +332,83 @@ def create_park_markers(
 
     logger.info(f"✓ Created {len(markers)} markers")
     return markers
+
+
+def calculate_mesh_width(mesh_obj) -> float:
+    """
+    Calculate mesh width from bound_box (X dimension).
+
+    Args:
+        mesh_obj: Blender mesh object
+
+    Returns:
+        Width in Blender units
+    """
+    bounds = mesh_obj.bound_box
+    xs = [v[0] for v in bounds]
+    return max(xs) - min(xs)
+
+
+def calculate_dual_terrain_spacing(
+    width_left: float,
+    width_right: float,
+    gap_ratio: float = 0.10,
+    min_gap: float = 0.5,
+) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    """
+    Calculate symmetric positions for two terrains with dynamic spacing.
+
+    Args:
+        width_left: Width of left terrain mesh
+        width_right: Width of right terrain mesh
+        gap_ratio: Gap as fraction of combined width (default: 10%)
+        min_gap: Minimum gap in Blender units (default: 0.5)
+
+    Returns:
+        Tuple of (left_position, right_position) as (x, y, z) tuples
+    """
+    combined_width = width_left + width_right
+    gap = max(combined_width * gap_ratio, min_gap)
+
+    left_x = -(width_left / 2 + gap / 2)
+    right_x = (width_right / 2 + gap / 2)
+
+    return (left_x, 0, 0), (right_x, 0, 0)
+
+
+def validate_spacing(
+    gap: float,
+    width_left: float,
+    width_right: float,
+    min_gap_warn: float = 0.3,
+    max_gap_warn: float = 5.0,
+) -> None:
+    """
+    Validate spacing and log warnings if suboptimal.
+
+    Args:
+        gap: Calculated gap between meshes
+        width_left: Width of left mesh
+        width_right: Width of right mesh
+        min_gap_warn: Warn if gap below this threshold (default: 0.3)
+        max_gap_warn: Warn if gap above this threshold (default: 5.0)
+    """
+    if gap < min_gap_warn:
+        logger.warning(
+            f"Terrain spacing is tight: gap={gap:.2f} < {min_gap_warn:.2f}. "
+            f"Meshes may appear to overlap from certain angles."
+        )
+
+    if gap > max_gap_warn:
+        logger.warning(
+            f"Terrain spacing is wide: gap={gap:.2f} > {max_gap_warn:.2f}. "
+            f"Consider adjusting camera to frame both terrains."
+        )
+
+    logger.info(
+        f"Terrain spacing: left_width={width_left:.2f}, "
+        f"right_width={width_right:.2f}, gap={gap:.2f}"
+    )
 
 
 def setup_dual_camera(
@@ -532,26 +637,83 @@ Examples:
 
     clear_scene()
 
-    # Create terrain meshes side-by-side using terrain maker library
-    offset = 2.5
+    # Initialize memory monitor
+    memory_config = TiledDataConfig()  # Defaults: 85% RAM, 50% swap
+    monitor = MemoryMonitor(memory_config)
+
+    if monitor.enabled:
+        logger.info("Memory monitoring enabled")
+        monitor.check_memory(force=True)
+    else:
+        logger.warning("Memory monitoring disabled (psutil not available)")
+
+    # Calculate target vertices for mesh creation using proven 960x720x2 pattern
+    # This is the same formula as detroit_elevation_real which works reliably:
+    # 960 × 720 × 2 = 1,382,400 vertices per mesh (safe for dual mesh rendering)
+    target_vertices = RENDER_WIDTH * RENDER_HEIGHT * 2
+    logger.info(f"Target vertices per mesh: {target_vertices:,}")
+
+    # Create first mesh at origin
+    logger.info("Creating first terrain mesh (sledding)...")
     mesh_sledding = create_terrain_with_score(
         "SleddingTerrain",
         sledding_scores,
         dem,
         transform,
-        location=(-offset, 0, 0),
+        location=(0, 0, 0),
         scale_factor=100,
         height_scale=2.0,
+        target_vertices=target_vertices,
     )
+
+    # Measure sledding mesh
+    width_sledding = calculate_mesh_width(mesh_sledding)
+    logger.debug(f"Sledding terrain width: {width_sledding:.2f}")
+
+    # Memory check before second mesh (critical point)
+    try:
+        monitor.check_memory(force=True)
+        logger.info("Memory check passed before creating second mesh")
+    except MemoryLimitExceeded as e:
+        logger.error(f"Insufficient memory to create second mesh: {e}")
+        logger.error("Try reducing DEM resolution or closing other applications")
+        return 1
+
+    # Create second mesh at origin
+    logger.info("Creating second terrain mesh (XC skiing)...")
     mesh_xc = create_terrain_with_score(
         "XCSkiingTerrain",
         xc_scores,
         dem,
         transform,
-        location=(offset, 0, 0),
+        location=(0, 0, 0),
         scale_factor=100,
         height_scale=2.0,
+        target_vertices=target_vertices,
     )
+
+    # Measure XC mesh
+    width_xc = calculate_mesh_width(mesh_xc)
+    logger.debug(f"XC skiing terrain width: {width_xc:.2f}")
+
+    # Calculate dynamic spacing
+    pos_left, pos_right = calculate_dual_terrain_spacing(
+        width_sledding,
+        width_xc,
+        gap_ratio=0.10,
+        min_gap=0.5,
+    )
+
+    # Validate and log spacing
+    gap = pos_right[0] - pos_left[0] - (width_sledding + width_xc) / 2
+    validate_spacing(gap, width_sledding, width_xc)
+
+    # Reposition meshes
+    mesh_sledding.location = pos_left
+    mesh_xc.location = pos_right
+
+    logger.info(f"Positioned sledding terrain at {pos_left}")
+    logger.info(f"Positioned XC skiing terrain at {pos_right}")
 
     # Add park markers
     markers = create_park_markers(parks, dem, transform, mesh_xc)
