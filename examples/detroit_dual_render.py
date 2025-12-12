@@ -26,6 +26,7 @@ import sys
 import argparse
 import logging
 import json
+import gc
 from pathlib import Path
 from typing import Optional, Tuple
 import numpy as np
@@ -725,6 +726,12 @@ Examples:
 
     # Add park markers
     markers = create_park_markers(parks, dem, transform, mesh_xc)
+
+    # Free the original DEM array from memory (it's no longer needed)
+    # The Terrain objects have their own downsampled copies
+    del dem
+    gc.collect()
+    logger.info("Freed original DEM from memory")
 
     # Setup camera and lighting
     camera = setup_dual_camera(mesh_sledding, mesh_xc)
