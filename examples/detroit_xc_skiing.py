@@ -563,7 +563,7 @@ def run_step_parks(
     dem: np.ndarray,
     transform: Affine,
     score_grid: np.ndarray,
-) -> list[dict]:
+) -> tuple[list[dict], Affine]:
     """
     Fetch and score parks.
 
@@ -572,6 +572,9 @@ def run_step_parks(
         dem: DEM array (for getting geographic bounds)
         transform: Affine transform for DEM
         score_grid: Score grid
+
+    Returns:
+        Tuple of (scored_parks list, score_transform Affine)
     """
     logger.info("\n" + "=" * 70)
     logger.info("Step 4: Park Location & Scoring")
@@ -643,7 +646,7 @@ def run_step_parks(
         plt.close()
         logger.info(f"✓ Parks visualization: {output_path}")
 
-    return scored_parks
+    return scored_parks, score_transform
 
 
 # =============================================================================
@@ -654,6 +657,7 @@ def save_outputs(
     score_grid: np.ndarray,
     scored_parks: list[dict],
     output_dir: Path,
+    score_transform: Affine,
 ):
     """Save analysis outputs.
 
@@ -661,6 +665,7 @@ def save_outputs(
         score_grid: Score grid array
         scored_parks: List of parks with scores
         output_dir: Directory for visualizations (docs/images/)
+        score_transform: Affine transform for the score grid
     """
     logger.info("\n" + "=" * 70)
     logger.info("Step 5: Saving Outputs")
@@ -672,10 +677,15 @@ def save_outputs(
     data_dir = Path("examples/output/xc_skiing")
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save score grid as .npz
+    # Save score grid as .npz with transform metadata
     score_path = data_dir / "xc_skiing_scores.npz"
-    np.savez_compressed(score_path, score=score_grid)
-    logger.info(f"✓ Score grid saved: {score_path} ({score_path.stat().st_size / 1024:.1f} KB)")
+    # Save transform as tuple (a, b, c, d, e, f) for Affine reconstruction
+    transform_tuple = (
+        score_transform.a, score_transform.b, score_transform.c,
+        score_transform.d, score_transform.e, score_transform.f
+    )
+    np.savez_compressed(score_path, score=score_grid, transform=transform_tuple, crs="EPSG:4326")
+    logger.info(f"✓ Score grid saved: {score_path} ({score_path.stat().st_size / 1024:.1f} KB) (with transform)")
 
     # Save parks as .json
     parks_path = data_dir / "xc_skiing_parks.json"
@@ -756,10 +766,10 @@ Examples:
     score_grid = run_step_score(args.output_dir, snow_stats)
 
     # Find and score parks
-    scored_parks = run_step_parks(args.output_dir, dem, transform, score_grid)
+    scored_parks, score_transform = run_step_parks(args.output_dir, dem, transform, score_grid)
 
-    # Save outputs
-    save_outputs(score_grid, scored_parks, args.output_dir)
+    # Save outputs (with transform metadata for use by other examples)
+    save_outputs(score_grid, scored_parks, args.output_dir, score_transform)
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Analysis complete!")
