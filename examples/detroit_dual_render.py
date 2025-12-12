@@ -666,6 +666,10 @@ Examples:
         target_vertices=target_vertices,
     )
 
+    if mesh_sledding is None:
+        logger.error("Failed to create sledding terrain mesh")
+        return 1
+
     # Measure sledding mesh
     width_sledding = calculate_mesh_width(mesh_sledding)
     logger.debug(f"Sledding terrain width: {width_sledding:.2f}")
@@ -691,6 +695,10 @@ Examples:
         height_scale=2.0,
         target_vertices=target_vertices,
     )
+
+    if mesh_xc is None:
+        logger.error("Failed to create XC skiing terrain mesh")
+        return 1
 
     # Measure XC mesh
     width_xc = calculate_mesh_width(mesh_xc)
