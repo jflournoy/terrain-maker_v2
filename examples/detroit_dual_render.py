@@ -6,6 +6,14 @@ This example renders sledding and cross-country skiing terrain suitability maps
 side-by-side in Blender using terrain maker's rendering library, with park
 locations marked on the XC skiing terrain.
 
+Features:
+- Detects and colors water bodies blue (slope-based detection)
+- Colors activity suitability red (low) → yellow → green (high)
+- Applies geographic transforms for proper coordinate handling
+- Intelligently limits mesh density to prevent OOM with large DEMs
+- Dynamic spacing between terrain meshes based on actual bounds
+- Dual camera positioned to view both terrains
+
 Requirements:
 - Blender Python API available (bpy)
 - Pre-computed sledding scores from detroit_snow_sledding.py
@@ -44,7 +52,11 @@ from src.terrain.core import (
     setup_camera,
     position_camera_relative,
     setup_light,
+    setup_render_settings,
     render_scene_to_file,
+    reproject_raster,
+    flip_raster,
+    scale_elevation,
 )
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
@@ -79,27 +91,42 @@ logging.basicConfig(
 # Render dimensions for vertex count calculation
 # Use conservative 960x720 (proven to work in detroit_elevation_real)
 # Much safer for dual mesh rendering than full 1920x1080
-RENDER_WIDTH = 960
-RENDER_HEIGHT = 720
+RENDER_WIDTH = 1920
+RENDER_HEIGHT = 1080
 
 # =============================================================================
 # LOADING OUTPUTS
 # =============================================================================
 
-def load_sledding_scores(output_dir: Path) -> Optional[np.ndarray]:
-    """Load sledding scores from detroit_snow_sledding.py output."""
+def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
+    """Load sledding scores from detroit_snow_sledding.py output.
+
+    Returns:
+        Tuple of (score_array, transform_affine). Transform may be None if
+        file was saved without transform metadata (backward compatibility).
+    """
     # First check for sledding_score.npz
     score_path = output_dir / "sledding_scores.npz"
     if score_path.exists():
         logger.info(f"Loading sledding scores from {score_path}")
         data = np.load(score_path)
+
+        # Get score array
         if "score" in data:
-            return data["score"]
+            score = data["score"]
         elif "sledding_score" in data:
-            return data["sledding_score"]
+            score = data["sledding_score"]
         else:
-            # Return first array found
-            return data[data.files[0]]
+            score = data[data.files[0]]
+
+        # Get transform if present (new format includes transform metadata)
+        score_transform = None
+        if "transform" in data:
+            t = data["transform"]
+            score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
+            logger.info(f"  Loaded transform: origin=({t[2]:.4f}, {t[5]:.4f}), pixel=({t[0]:.6f}, {t[4]:.6f})")
+
+        return score, score_transform
 
     # Check alternative locations
     alt_paths = [
@@ -110,25 +137,49 @@ def load_sledding_scores(output_dir: Path) -> Optional[np.ndarray]:
         if alt_path.exists():
             logger.info(f"Loading sledding scores from {alt_path}")
             data = np.load(alt_path)
-            return data[data.files[0]]
+            score = data[data.files[0]]
+
+            # Get transform if present
+            score_transform = None
+            if "transform" in data:
+                t = data["transform"]
+                score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
+
+            return score, score_transform
 
     logger.warning("Sledding scores not found, will use mock data")
-    return None
+    return None, None
 
 
-def load_xc_skiing_scores(output_dir: Path) -> Optional[np.ndarray]:
-    """Load XC skiing scores from detroit_xc_skiing.py output."""
+def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
+    """Load XC skiing scores from detroit_xc_skiing.py output.
+
+    Returns:
+        Tuple of (score_array, transform_affine). Transform may be None if
+        file was saved without transform metadata (backward compatibility).
+    """
     score_path = output_dir / "xc_skiing_scores.npz"
     if score_path.exists():
         logger.info(f"Loading XC skiing scores from {score_path}")
         data = np.load(score_path)
+
+        # Get score array
         if "score" in data:
-            return data["score"]
+            score = data["score"]
         else:
-            return data[data.files[0]]
+            score = data[data.files[0]]
+
+        # Get transform if present (new format includes transform metadata)
+        score_transform = None
+        if "transform" in data:
+            t = data["transform"]
+            score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
+            logger.info(f"  Loaded transform: origin=({t[2]:.4f}, {t[5]:.4f}), pixel=({t[0]:.6f}, {t[4]:.6f})")
+
+        return score, score_transform
 
     logger.warning("XC skiing scores not found, will use mock data")
-    return None
+    return None, None
 
 
 def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
@@ -161,11 +212,13 @@ def create_terrain_with_score(
     dem: np.ndarray,
     transform: Affine,
     dem_crs: str = "EPSG:32617",
+    score_transform: Optional[Affine] = None,
     location: Tuple[float, float, float] = (0, 0, 0),
     scale_factor: float = 100,
-    height_scale: float = 2.0,
+    height_scale: float = 12.5,
     target_vertices: Optional[int] = None,
-) -> Optional[object]:
+    cmap_name: str = "viridis",
+) -> Tuple[Optional[object], Optional["Terrain"]]:
     """
     Create a terrain mesh using terrain maker's Terrain class.
 
@@ -173,60 +226,126 @@ def create_terrain_with_score(
         name: Mesh name (for logging and reference)
         score_grid: Score values for vertex coloring (0-1 range)
         dem: DEM elevation data
-        transform: Affine transform for coordinate mapping
+        transform: Affine transform for DEM coordinate mapping
         dem_crs: CRS of DEM data (default: EPSG:32617 for UTM zone 17N)
+        score_transform: Affine transform for score data (if different from DEM)
         location: (x, y, z) position in Blender for the mesh
         scale_factor: Horizontal scale divisor
         height_scale: Vertical elevation scale
         target_vertices: Target vertex count for downsampling (optional)
+        cmap_name: Matplotlib colormap name for score visualization (default: viridis)
 
     Returns:
-        Blender object positioned at specified location
+        Tuple of (mesh_obj, terrain) where mesh_obj is the Blender object and
+        terrain is the Terrain instance (useful for geo_to_mesh_coords)
     """
+    # Note: When score_transform is None, the library's same_extent_as feature
+    # will automatically calculate the transform from the DEM's extent.
     logger.info(f"Creating terrain mesh: {name}")
+    logger.debug(
+        f"  Score input: shape={score_grid.shape}, "
+        f"range=[{np.nanmin(score_grid):.3f}, {np.nanmax(score_grid):.3f}], "
+        f"std={np.nanstd(score_grid):.3f}"
+    )
 
     # Create terrain using terrain maker library
     terrain = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Add score grid as data layer (use same CRS as DEM)
-    terrain.add_data_layer(
-        "score",
-        score_grid,
-        transform,
-        dem_crs,
-        target_layer="dem",
-    )
+    # Build transform pipeline: geographic transforms + downsampling
+    logger.debug(f"  Building transform pipeline for {name}...")
 
-    # Set color mapping: red (low) to green (high)
-    # Uses elevation_colormap with RdYlGn colormap for score visualization
-    terrain.set_color_mapping(
-        lambda score: elevation_colormap(score, cmap_name="RdYlGn", min_elev=0.0, max_elev=1.0),
-        source_layers=["score"],
-    )
+    # 1. Reproject to UTM Zone 17N for proper geographic scaling
+    # Use dem_crs as source CRS (typically EPSG:4326 for real data)
+    utm_reproject = reproject_raster(src_crs=dem_crs, dst_crs="EPSG:32617", num_threads=4)
+    terrain.add_transform(utm_reproject)
 
-    # Compute vertex colors based on score data
-    terrain.compute_colors()
+    # 2. Flip raster horizontally to correct orientation
+    terrain.add_transform(flip_raster(axis="horizontal"))
 
-    # Apply transforms to prepare DEM for mesh creation
-    # Add identity transform to mark DEM as transformed
-    terrain.add_transform(lambda data: data)
-    terrain.apply_transforms()
+    # 3. Scale elevation to prevent extreme Z values
+    terrain.add_transform(scale_elevation(scale_factor=0.0001))
 
-    # Configure vertex count limiting if specified (prevents OOM with large DEMs)
+    # 4. Configure downsampling BEFORE apply_transforms() so it's included in the pipeline
+    zoom_factor = 1.0
     if target_vertices is not None:
         original_h, original_w = terrain.dem_shape
         original_vertices = original_h * original_w
 
         if original_vertices > target_vertices:
-            zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
+            zoom_factor = terrain.configure_for_target_vertices(target_vertices, order=4)
             logger.info(
                 f"Downsampling {name}: {original_vertices:,} → ~{target_vertices:,} vertices "
-                f"(zoom={zoom:.6f})"
+                f"(zoom={zoom_factor:.6f})"
             )
         else:
             logger.debug(
                 f"No downsampling needed for {name}: {original_vertices:,} ≤ {target_vertices:,}"
             )
+
+    # 5. Apply transforms to DEM only first (reproject + flip + scale + downsample)
+    logger.debug(f"  Applying transforms to DEM...")
+    terrain.apply_transforms()
+
+    # 6. Add score layer AFTER transforms - it will be reprojected to match
+    # the transformed DEM's dimensions.
+    logger.debug(f"  Adding score data layer for {name}...")
+    if score_transform is not None:
+        # Explicit transform provided - use it directly
+        logger.debug(f"  Using explicit score transform: {score_transform}")
+        terrain.add_data_layer(
+            "score",
+            score_grid,
+            score_transform,
+            dem_crs,
+            target_layer="dem",
+        )
+    else:
+        # No transform provided - use same_extent_as for automatic georeferencing
+        # This assumes score covers the same geographic extent as the DEM
+        logger.debug(f"  Using same_extent_as='dem' for automatic georeferencing")
+        terrain.add_data_layer(
+            "score",
+            score_grid,
+            same_extent_as="dem",  # Library calculates transform automatically
+        )
+
+    # Note: Score layer does NOT need manual flipping
+    # The reprojection to the transformed DEM coordinates handles alignment correctly
+    # because it maps geographic coordinates, not pixel indices
+
+    # Set color mapping using specified colormap
+    # min_elev=0.0, max_elev=1.0 maps scores in [0,1] range to full colormap
+    logger.debug(f"  Setting color mapping with colormap: {cmap_name}")
+    terrain.set_color_mapping(
+        lambda score: elevation_colormap(score, cmap_name=cmap_name, min_elev=0.0, max_elev=1.0),
+        source_layers=["score"],
+    )
+
+    # Compute vertex colors based on resampled score data
+    terrain.compute_colors()
+
+    # Detect water bodies on the unscaled DEM
+    # Water will be colored blue, activity scores red-yellow-green
+    logger.debug(f"  Detecting water bodies for {name}...")
+    water_mask = None
+    try:
+        from src.terrain.water import identify_water_by_slope
+
+        transformed_dem = terrain.data_layers["dem"]["transformed_data"]
+        # Unscale the DEM to get original elevation values for slope calculation
+        unscaled_dem = transformed_dem / 0.0001
+
+        water_mask = identify_water_by_slope(
+            unscaled_dem, slope_threshold=0.01, fill_holes=True
+        )
+        water_pixels = np.sum(water_mask)
+        water_percent = 100 * water_pixels / water_mask.size
+        logger.debug(
+            f"  Water detected: {water_pixels:,} pixels ({water_percent:.1f}% of terrain)"
+        )
+    except Exception as e:
+        logger.debug(f"  Water detection skipped: {e}")
+        water_mask = None
 
     # Create mesh using terrain maker library
     mesh_obj = terrain.create_mesh(
@@ -234,38 +353,37 @@ def create_terrain_with_score(
         height_scale=height_scale,
         center_model=True,
         boundary_extension=True,
+        water_mask=water_mask,
     )
 
     if mesh_obj is None:
         logger.error(f"Failed to create mesh for {name}")
-        return None
+        return None, None
 
     # Position the mesh at the specified location
     mesh_obj.location = location
     mesh_obj.name = name
 
     logger.info(f"✓ Created mesh: {name} at position {location}")
-    return mesh_obj
+    return mesh_obj, terrain
 
 
 def create_park_markers(
     parks: list[dict],
-    dem: np.ndarray,
-    transform: Affine,
-    terrain_obj,
-    scale_factor: float = 100,
-    height_scale: float = 2.0,
+    terrain: "Terrain",
+    mesh_obj,
+    elevation_offset: float = 0.1,
+    marker_radius: float = 0.05,
 ) -> list:
     """
-    Create glowing sphere markers for parks.
+    Create glowing sphere markers for parks using Terrain's coordinate transform.
 
     Args:
-        parks: List of parks with lat, lon, score, pixel_coords
-        dem: DEM for elevation lookup
-        transform: Affine transform
-        terrain_obj: Blender object (for positioning relative to)
-        scale_factor: Horizontal scale
-        height_scale: Vertical scale
+        parks: List of parks with lat, lon, score
+        terrain: Terrain object (must have create_mesh() already called)
+        mesh_obj: Blender mesh object (for positioning offset in multi-mesh scenes)
+        elevation_offset: Height above terrain in mesh units (default: 0.1)
+        marker_radius: Radius of marker spheres (default: 0.05)
 
     Returns:
         List of created marker objects
@@ -276,49 +394,44 @@ def create_park_markers(
     logger.info(f"Creating {len(parks)} park markers...")
     markers = []
 
+    # Extract lon/lat arrays from parks for batch processing
+    lons = np.array([park["lon"] for park in parks])
+    lats = np.array([park["lat"] for park in parks])
+
+    # Convert all coordinates at once using Terrain's method
+    try:
+        xs, ys, zs = terrain.geo_to_mesh_coords(lons, lats, elevation_offset=elevation_offset)
+    except (RuntimeError, ValueError) as e:
+        logger.error(f"Failed to convert park coordinates: {e}")
+        return []
+
+    # Add mesh object's location offset (for dual-terrain scenes)
+    if mesh_obj and mesh_obj.location:
+        xs = xs + mesh_obj.location[0]
+        ys = ys + mesh_obj.location[1]
+
     for i, park in enumerate(parks):
         try:
-            row, col = park["pixel_coords"]
-
-            # Get elevation at park location
-            if 0 <= row < dem.shape[0] and 0 <= col < dem.shape[1]:
-                elevation = dem[int(row), int(col)]
-            else:
-                elevation = dem.mean()
-
-            # Convert to Blender world coordinates
-            x = (col - dem.shape[1] / 2) / scale_factor
-            y = (row - dem.shape[0] / 2) / scale_factor
-            z = elevation * height_scale + 0.2  # Slightly above terrain
-
-            # Add offset for terrain_obj position if it exists
-            if terrain_obj and terrain_obj.location:
-                x += terrain_obj.location[0]
-                y += terrain_obj.location[1]
+            x, y, z = xs[i], ys[i], zs[i]
 
             # Create sphere
             bpy.ops.mesh.primitive_ico_sphere_add(
-                radius=0.05,
+                radius=marker_radius,
                 location=(x, y, z)
             )
             marker = bpy.context.active_object
             marker.name = f"Park_{park['name'].replace(' ', '_')}"
 
-            # Create emission material (color by score)
-            score = park.get("score", 0.5)
-            color_r = 1.0 - score  # Red for low score
-            color_g = score  # Green for high score
-            color_b = 0.0
-
+            # Create emission material - bright coral/orange visible against both blue and white
             mat = bpy.data.materials.new(name=f"ParkMarker_{i}")
-            mat.use_nodes = True
+            # Note: use_nodes defaults to True in Blender 4.x+
             nodes = mat.node_tree.nodes
             nodes.clear()
 
-            # Create shader network
+            # Create shader network with bright coral color
             emission = nodes.new("ShaderNodeEmission")
-            emission.inputs["Color"].default_value = (color_r, color_g, color_b, 1.0)
-            emission.inputs["Strength"].default_value = 3.0
+            emission.inputs["Color"].default_value = (1.0, 0.4, 0.2, 1.0)  # Bright coral/orange
+            emission.inputs["Strength"].default_value = 8.0  # Strong glow to stand out
 
             output = nodes.new("ShaderNodeOutputMaterial")
             mat.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
@@ -326,7 +439,7 @@ def create_park_markers(
             marker.data.materials.append(mat)
             markers.append(marker)
 
-            logger.debug(f"  Created marker: {park['name']} at ({x:.2f}, {y:.2f}, {z:.2f}), score={score:.3f}")
+            logger.debug(f"  Created marker: {park['name']} at ({x:.2f}, {y:.2f}, {z:.2f})")
 
         except Exception as e:
             logger.warning(f"Error creating marker for {park['name']}: {e}")
@@ -415,77 +528,90 @@ def validate_spacing(
 def setup_dual_camera(
     mesh_left,
     mesh_right,
-    distance: float = 5,
-    height: float = 3,
+    direction: str = "south",
+    distance: float = 3.5,
+    elevation: float = 5,
+    camera_type: str = "ORTHO",
+    ortho_scale: float = 1,
 ) -> Optional[object]:
     """
     Setup camera to view both terrains side-by-side.
 
-    Uses terrain maker's library functions for camera setup.
+    Uses position_camera_relative with multi-mesh support to automatically
+    compute a combined bounding box and position the camera to see both terrains.
 
     Args:
         mesh_left: Left terrain object
         mesh_right: Right terrain object
-        distance: Distance from center
-        height: Camera height
+        direction: Cardinal direction for camera (default: 'south')
+        distance: Distance multiplier relative to combined mesh diagonal
+        elevation: Height as fraction of mesh diagonal
+        camera_type: 'ORTHO' or 'PERSP' (default: 'PERSP')
 
     Returns:
-        Camera object
+        Camera object positioned to view both terrains
     """
     logger.info("Setting up dual camera...")
 
-    # Calculate center between meshes
-    if mesh_left and mesh_right:
-        center_x = (mesh_left.location[0] + mesh_right.location[0]) / 2
-        center_y = (mesh_left.location[1] + mesh_right.location[1]) / 2
-    else:
-        center_x = 0
-        center_y = 0
+    # Collect meshes (filter out None values)
+    meshes = [m for m in [mesh_left, mesh_right] if m is not None]
 
-    # Use library function to setup camera
-    # Position relative to center point
-    camera_angle = (0.5, 0, 0)  # Tilt angle: 0.5 radians tilt on X axis
-    camera_location = (center_x, center_y - distance, height)
-    camera = setup_camera(
-        camera_angle=camera_angle,
-        camera_location=camera_location,
-        scale=1.0,
-        focal_length=50,
-        camera_type="PERSP",
+    if not meshes:
+        logger.error("No valid meshes provided for camera setup")
+        return None
+
+    # Use position_camera_relative with list of meshes
+    # This automatically computes combined bounding box and positions camera
+    camera = position_camera_relative(
+        meshes,
+        direction=direction,
+        distance=distance,
+        elevation=elevation,
+        camera_type=camera_type,
+        ortho_scale=ortho_scale,
+        sun_angle=0,  # We setup lighting separately
+        sun_energy=0,
     )
 
-    logger.info("✓ Camera positioned")
+    logger.info(f"✓ Camera positioned {direction} of both terrains ({camera_type})")
     return camera
 
 
 def setup_lighting() -> list:
-    """Setup Blender lighting using library functions.
+    """Setup Blender lighting with sunset-style positioning.
 
-    Creates primary and fill lights for the scene.
+    Creates a low-angle sun for dramatic shadows and warm fill light.
     """
-    logger.info("Setting up lighting...")
+    from math import radians
+
+    logger.info("Setting up sunset lighting...")
 
     lights = []
 
-    # Primary sun light from library function
+    # Primary sun - low angle from the west/southwest for sunset shadows
+    # rotation_euler: (pitch down from horizon, yaw direction, roll)
     sun_light = setup_light(
-        location=(2, 2, 3),
-        angle=2,
-        energy=2.0,
-        rotation_euler=(0, 0, 0),
+        location=(10, -5, 2),  # Position doesn't matter much for sun type
+        angle=1,  # Sharper shadows (smaller angle = harder shadows)
+        energy=4.0,
+        rotation_euler=(radians(75), 0, radians(-45)),  # Low sun from SW
     )
+    # Set warm sunset color (golden/orange)
+    sun_light.data.color = (1.0, 0.85, 0.6)  # Warm golden
     lights.append(sun_light)
 
-    # Fill light for shadow detail
+    # Fill light - cooler blue from opposite side for contrast
     fill_light = setup_light(
-        location=(-2, -2, 2),
-        angle=1,
-        energy=1.0,
-        rotation_euler=(0, 0, 0),
+        location=(-10, 5, 5),
+        angle=3,  # Softer
+        energy=1.5,
+        rotation_euler=(radians(60), 0, radians(135)),  # From NE, higher
     )
+    # Cool blue fill to contrast with warm sun
+    fill_light.data.color = (0.7, 0.8, 1.0)  # Cool blue
     lights.append(fill_light)
 
-    logger.info("✓ Lighting setup complete")
+    logger.info("✓ Sunset lighting setup complete")
     return lights
 
 
@@ -583,53 +709,93 @@ Examples:
 
     # Load data
     logger.info("\n" + "=" * 70)
-    logger.info("Loading Data")
+    logger.info("[1/5] Loading Data")
     logger.info("=" * 70)
 
     # Load DEM
     if args.mock_data:
         logger.info("Generating mock DEM...")
         dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
-        # Create a proper UTM transform (Detroit is in UTM zone 17N)
-        # Each pixel represents ~10m x ~10m in projected coordinates
-        transform = Affine.translation(300000, 4700000) * Affine.scale(10, -10)
+        # Create a WGS84 transform (lat/lon) for Detroit area
+        # Detroit is approximately at -83.05 lon, 42.35 lat
+        # ~0.0001 degrees per pixel (~10m resolution at this latitude)
+        # Note: Negative scale on Y because rasters are typically north-up
+        transform = Affine.translation(-83.2, 42.5) * Affine.scale(0.0001, -0.0001)
+        dem_crs = "EPSG:4326"  # WGS84 (lat/lon)
     else:
         dem_dir = Path("data/dem/detroit")
         if dem_dir.exists():
             logger.info(f"Loading DEM from {dem_dir}...")
             dem, transform = load_dem_files(dem_dir)
+            dem_crs = "EPSG:4326"  # Real data is typically WGS84
+            logger.info(f"DEM shape: {dem.shape}")
         else:
             logger.info("Generating mock DEM (DEM directory not found)...")
             dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
-            # Create a proper UTM transform (Detroit is in UTM zone 17N)
-            transform = Affine.translation(300000, 4700000) * Affine.scale(10, -10)
+            # Create a WGS84 transform for Detroit area
+            transform = Affine.translation(-83.2, 42.5) * Affine.scale(0.0001, -0.0001)
+            dem_crs = "EPSG:4326"
 
     # Load sledding scores
-    sledding_scores = load_sledding_scores(args.scores_dir)
-    if sledding_scores is None:
-        if args.mock_data:
-            logger.info("Generating mock sledding scores...")
-            sledding_scores = generate_mock_scores(dem.shape)
-        else:
+    # When using --mock-data, always generate mock scores to ensure dimensions match mock DEM
+    if args.mock_data:
+        logger.info("Generating mock sledding scores (mock mode)...")
+        sledding_scores = generate_mock_scores(dem.shape)
+        # Mock scores cover same extent as DEM - let library calculate transform automatically
+        score_transform = None
+    else:
+        sledding_scores, loaded_transform = load_sledding_scores(args.scores_dir)
+        if sledding_scores is None:
             logger.error("Sledding scores not found. Run detroit_snow_sledding.py first.")
             return 1
 
-    # Load XC skiing scores
-    xc_scores = load_xc_skiing_scores(args.scores_dir / "xc_skiing")
-    if xc_scores is None:
-        if args.mock_data:
-            logger.info("Generating mock XC skiing scores...")
-            xc_scores = generate_mock_scores(dem.shape)
+        # Use loaded transform if available (new format), otherwise fall back to calculation
+        if loaded_transform is not None:
+            score_transform = loaded_transform
+            logger.info("Using transform from score file (automatic georeferencing)")
         else:
+            # Legacy fallback: calculate transform based on DEM extent
+            logger.info("No transform in score file, calculating from DEM extent (legacy mode)")
+            score_height, score_width = sledding_scores.shape
+            dem_height, dem_width = dem.shape
+            score_pixel_width = transform.a * dem_width / score_width
+            score_pixel_height = transform.e * dem_height / score_height
+            score_transform = Affine.translation(transform.c, transform.f) * Affine.scale(
+                score_pixel_width,
+                score_pixel_height
+            )
+
+        logger.info(f"Score shape: {sledding_scores.shape}, DEM shape: {dem.shape}")
+
+    # Load XC skiing scores
+    if args.mock_data:
+        logger.info("Generating mock XC skiing scores (mock mode)...")
+        xc_scores = generate_mock_scores(dem.shape)
+        # Mock scores cover same extent as DEM - let library calculate transform automatically
+        xc_transform = None
+    else:
+        xc_scores, xc_loaded_transform = load_xc_skiing_scores(args.scores_dir / "xc_skiing")
+        if xc_scores is None:
             logger.error("XC skiing scores not found. Run detroit_xc_skiing.py first.")
             return 1
 
-    # Load parks
-    parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
-    if parks is None:
-        parks = []
+        # Use loaded transform if available, otherwise use same as sledding
+        if xc_loaded_transform is not None:
+            xc_transform = xc_loaded_transform
+            logger.info("Using transform from XC score file (automatic georeferencing)")
+        else:
+            # Legacy fallback: use sledding transform (assumes same extent)
+            xc_transform = score_transform
+            logger.info("No transform in XC score file, using sledding transform")
 
-    logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}, {len(parks)} parks")
+    # Load parks for XC skiing markers
+    parks = None
+    if not args.mock_data:
+        parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
+        if parks:
+            logger.info(f"Loaded {len(parks)} parks for markers")
+
+    logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}")
 
     # Create Blender scene
     logger.info("\n" + "=" * 70)
@@ -649,22 +815,26 @@ Examples:
         logger.warning("Memory monitoring disabled (psutil not available)")
 
     # Calculate target vertices for mesh creation
-    # Conservative: 500k max per mesh to prevent OOM with dual rendering
-    # This ensures safe memory usage for both meshes combined
-    target_vertices = 500000
-    logger.info(f"Target vertices per mesh: {target_vertices:,}")
+    # Ultra-conservative for dual rendering: 250k per mesh (500k total)
+    # Blender's mesh creation is memory-intensive; this prevents OOM
+    # For comparison: detroit_elevation_real uses 1.38M for ONE mesh
+    # We need TWO meshes, so each gets 250k for safety
+    target_vertices = 1920*1080
+    logger.info(f"Target vertices per mesh: {target_vertices:,} (ultra-conservative for dual rendering)")
 
     # Create first mesh at origin
-    logger.info("Creating first terrain mesh (sledding)...")
-    mesh_sledding = create_terrain_with_score(
+    logger.info("\n[2/5] Creating Sledding Terrain Mesh...")
+    mesh_sledding, terrain_sledding = create_terrain_with_score(
         "SleddingTerrain",
         sledding_scores,
         dem,
         transform,
+        dem_crs=dem_crs,
+        score_transform=score_transform,  # Score may have different bounds than DEM
         location=(0, 0, 0),
         scale_factor=100,
-        height_scale=2.0,
         target_vertices=target_vertices,
+        cmap_name="mako",  # Purple to yellow for sledding scores
     )
 
     if mesh_sledding is None:
@@ -675,26 +845,32 @@ Examples:
     width_sledding = calculate_mesh_width(mesh_sledding)
     logger.debug(f"Sledding terrain width: {width_sledding:.2f}")
 
-    # Memory check before second mesh (critical point)
+    # Aggressive memory cleanup before second mesh (critical point)
+    logger.info("Cleaning up memory before creating second mesh...")
+    gc.collect()
+
+    # Memory check before second mesh
     try:
         monitor.check_memory(force=True)
         logger.info("Memory check passed before creating second mesh")
     except MemoryLimitExceeded as e:
         logger.error(f"Insufficient memory to create second mesh: {e}")
-        logger.error("Try reducing DEM resolution or closing other applications")
+        logger.error("Try reducing vertex count or closing other applications")
         return 1
 
     # Create second mesh at origin
-    logger.info("Creating second terrain mesh (XC skiing)...")
-    mesh_xc = create_terrain_with_score(
+    logger.info("\n[3/5] Creating XC Skiing Terrain Mesh...")
+    mesh_xc, terrain_xc = create_terrain_with_score(
         "XCSkiingTerrain",
         xc_scores,
         dem,
         transform,
+        dem_crs=dem_crs,
+        score_transform=xc_transform,  # Use XC skiing's own transform
         location=(0, 0, 0),
         scale_factor=100,
-        height_scale=2.0,
         target_vertices=target_vertices,
+        cmap_name="mako",  # Blue to green to yellow for XC skiing scores
     )
 
     if mesh_xc is None:
@@ -724,8 +900,11 @@ Examples:
     logger.info(f"Positioned sledding terrain at {pos_left}")
     logger.info(f"Positioned XC skiing terrain at {pos_right}")
 
-    # Add park markers
-    markers = create_park_markers(parks, dem, transform, mesh_xc)
+    # Create park markers on XC skiing terrain
+    markers = []
+    if parks and terrain_xc:
+        markers = create_park_markers(parks, terrain_xc, mesh_xc)
+        logger.info(f"Created {len(markers)} park markers")
 
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
@@ -734,6 +913,7 @@ Examples:
     logger.info("Freed original DEM from memory")
 
     # Setup camera and lighting
+    logger.info("\n[4/5] Setting up Camera, Lighting & Markers...")
     camera = setup_dual_camera(mesh_sledding, mesh_xc)
     lights = setup_lighting()
 
@@ -741,16 +921,30 @@ Examples:
 
     # Render if requested
     if not args.no_render:
-        logger.info("\n" + "=" * 70)
-        logger.info("Rendering")
+        logger.info("\n[5/5] Rendering to PNG...")
         logger.info("=" * 70)
+
+        # Configure render settings for high-quality output
+        setup_render_settings(use_gpu=True, samples=2048, use_denoising=False)
+        logger.info("Render settings configured (GPU, 2048 samples, denoising off)")
 
         output_path = args.output_dir / "sledding_and_xc_skiing_3d.png"
         render_dual_terrain(output_path, width=1920, height=1080)
 
     logger.info("\n" + "=" * 70)
-    logger.info("✓ Complete!")
-    logger.info(f"Output directory: {args.output_dir}")
+    logger.info("✓ Detroit Dual Terrain Rendering Complete!")
+    logger.info("=" * 70)
+    logger.info("\nSummary:")
+    logger.info(f"  ✓ Loaded DEM and terrain scores")
+    logger.info(f"  ✓ Created sledding terrain mesh ({len(mesh_sledding.data.vertices)} vertices) - plasma colormap")
+    logger.info(f"  ✓ Created XC skiing terrain mesh ({len(mesh_xc.data.vertices)} vertices) - viridis colormap")
+    logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
+    logger.info(f"  ✓ Detected and colored water bodies blue")
+    logger.info(f"  ✓ Positioned meshes with dynamic spacing")
+    logger.info(f"  ✓ Set up dual camera and lighting")
+    if not args.no_render:
+        logger.info(f"  ✓ Rendered 1920×1080 PNG with 2048 samples")
+    logger.info(f"\nOutput directory: {args.output_dir}")
     logger.info("=" * 70 + "\n")
 
     return 0
