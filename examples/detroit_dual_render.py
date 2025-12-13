@@ -422,19 +422,19 @@ def create_park_markers(
             marker = bpy.context.active_object
             marker.name = f"Park_{park['name'].replace(' ', '_')}"
 
-            # Create emission material - bright coral/orange visible against both blue and white
+            # Create diffuse material - warm terra cotta contrasts with mako's blues/greens
             mat = bpy.data.materials.new(name=f"ParkMarker_{i}")
             # Note: use_nodes defaults to True in Blender 4.x+
             nodes = mat.node_tree.nodes
             nodes.clear()
 
-            # Create shader network with bright coral color
-            emission = nodes.new("ShaderNodeEmission")
-            emission.inputs["Color"].default_value = (1.0, 0.4, 0.2, 1.0)  # Bright coral/orange
-            emission.inputs["Strength"].default_value = 8.0  # Strong glow to stand out
+            # Use Principled BSDF for natural lighting with shadows
+            bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+            bsdf.inputs["Base Color"].default_value = (0.8, 0.4, 0.3, 1.0)  # Warm terra cotta
+            bsdf.inputs["Roughness"].default_value = 0.5  # Semi-matte for visible shadows
 
             output = nodes.new("ShaderNodeOutputMaterial")
-            mat.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+            mat.node_tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
 
             marker.data.materials.append(mat)
             markers.append(marker)
@@ -604,7 +604,7 @@ def setup_lighting() -> list:
     fill_light = setup_light(
         location=(-10, 5, 5),
         angle=3,  # Softer
-        energy=1.5,
+        energy=1,
         rotation_euler=(radians(60), 0, radians(135)),  # From NE, higher
     )
     # Cool blue fill to contrast with warm sun
