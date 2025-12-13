@@ -7,17 +7,23 @@ side-by-side in Blender using terrain maker's rendering library, with park
 locations marked on the XC skiing terrain.
 
 Features:
+- Side-by-side comparison of two activity suitability maps
+- Park location markers using geo_to_mesh_coords() for proper positioning
 - Detects and colors water bodies blue (slope-based detection)
-- Colors activity suitability red (low) → yellow → green (high)
-- Applies geographic transforms for proper coordinate handling
+- Colors activity suitability using mako colormap (dark blue → yellow)
+- Sunset-style lighting with warm/cool color contrast
+- Applies geographic transforms (WGS84 → UTM) for proper coordinate handling
 - Intelligently limits mesh density to prevent OOM with large DEMs
 - Dynamic spacing between terrain meshes based on actual bounds
-- Dual camera positioned to view both terrains
 
 Requirements:
 - Blender Python API available (bpy)
 - Pre-computed sledding scores from detroit_snow_sledding.py
 - Pre-computed XC skiing scores + parks from detroit_xc_skiing.py
+
+Output:
+- docs/images/dual_render/sledding_and_xc_skiing_3d.png (1920×1080)
+- docs/images/dual_render/sledding_and_xc_skiing_3d.blend (Blender file)
 
 Usage:
     # Run with computed scores
@@ -528,7 +534,7 @@ def validate_spacing(
 def setup_dual_camera(
     mesh_left,
     mesh_right,
-    direction: str = "south",
+    direction: str = "above",
     distance: float = 3.5,
     elevation: float = 5,
     camera_type: str = "ORTHO",
@@ -593,7 +599,7 @@ def setup_lighting() -> list:
     sun_light = setup_light(
         location=(10, -5, 2),  # Position doesn't matter much for sun type
         angle=1,  # Sharper shadows (smaller angle = harder shadows)
-        energy=4.0,
+        energy=5.0,
         rotation_euler=(radians(75), 0, radians(-45)),  # Low sun from SW
     )
     # Set warm sunset color (golden/orange)
@@ -675,8 +681,8 @@ Examples:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("examples/output/dual_render"),
-        help="Output directory (default: examples/output/dual_render/)",
+        default=Path("docs/images/dual_render"),
+        help="Output directory (default: docs/images/dual_render/)",
     )
 
     parser.add_argument(
@@ -870,7 +876,7 @@ Examples:
         location=(0, 0, 0),
         scale_factor=100,
         target_vertices=target_vertices,
-        cmap_name="mako",  # Blue to green to yellow for XC skiing scores
+        cmap_name="mako", 
     )
 
     if mesh_xc is None:
