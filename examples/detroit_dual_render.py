@@ -423,17 +423,35 @@ def create_terrain_with_score(
 
     # Create final mesh with water detection
     if parks:
-        # Dual colormap mode: delete temp mesh and create final mesh with water detection
+        # Dual colormap mode: manually apply water coloring to vertex colors
+        # (In dual mode, colors are already in vertex space, not grid space)
         logger.debug(f"  Removing temporary mesh and creating final mesh with water detection...")
         bpy.data.objects.remove(mesh_obj_temp, do_unlink=True)
 
-        # Create final mesh with water mask applied to dual colormap
+        # Apply water coloring to vertex colors if water detected
+        if water_mask is not None and hasattr(terrain, 'colors') and terrain.colors is not None:
+            logger.debug(f"  Applying water coloring to vertex colors...")
+            # Map water mask from grid space to vertex space
+            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
+            n_vertices = len(terrain.y_valid)
+            water_vertex_count = 0
+
+            for i in range(n_vertices):
+                y = terrain.y_valid[i]
+                x = terrain.x_valid[i]
+                if water_mask[y, x]:
+                    terrain.colors[i, :3] = water_color
+                    water_vertex_count += 1
+
+            logger.debug(f"  Water colored blue ({water_vertex_count} vertices)")
+
+        # Create final mesh (colors already include water)
         mesh_obj = terrain.create_mesh(
             scale_factor=scale_factor,
             height_scale=height_scale,
             center_model=True,
             boundary_extension=True,
-            water_mask=water_mask,
+            water_mask=None,  # Don't pass water_mask - already applied to colors
         )
     else:
         # Single colormap mode: create mesh with water detection
