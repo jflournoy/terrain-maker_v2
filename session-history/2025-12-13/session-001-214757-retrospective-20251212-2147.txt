@@ -1,0 +1,48 @@
+# Claude Code Session - 2025-12-13 21:47:57
+
+## Session Metadata
+- **Date**: 2025-12-13
+- **Time**: 21:47:57
+- **Session Number**: 001
+- **Session Type**: manual
+- **Description**: retrospective-20251212-2147
+
+## Git Activity
+**Branch**: main
+
+### Recent Commits (20)
+- `677c959` fix: use diffuse material for park markers instead of emission
+- `8c6b508` docs: update parks visualization image
+- `2f0195e` test: add tests for ortho_scale and geo_to_mesh_coords
+- `3cf2a0b` fix: save score transform in XC skiing output
+- `6da3fb5` fix: correct GDAL transform tuple unpacking order
+- `9c73218` feat: add park markers and sunset lighting to dual render
+- `ddfca3d` fix: calculate correct transform for sledding score grid
+- `0eda07e` feat: add ortho_scale parameter and geo_to_mesh_coords method
+- `4778dae` fix: add garbage collection to free original DEM after use
+- `475b511` fix: add null checks after mesh creation
+- ... and 10 more
+
+### Working Directory Changes (8 files)
+- **Modified**: docs/images/xc_skiing/02_xc_scores/xc_skiing_scores.png
+- **Modified**: docs/images/xc_skiing/03_parks/parks_on_score_map.png
+- **Modified**: examples/detroit_dual_render.py
+- **Modified**: examples/detroit_elevation_south.png
+- **Modified**: examples/output/xc_skiing/xc_skiing_parks.json
+- **Modified**: site/sitemap.xml.gz
+- **Modified**: src/scoring/configs/xc_skiing.py
+- **Untracked**: examples/output/dual_render/
+
+## Test Results
+- Tests not run in this session
+
+## Session Summary
+This session captured at 12/12/2025, 9:47:57 PM
+
+### Description
+retrospective-20251212-2147
+
+### Metrics
+- Commits: 20
+- Files changed: 8
+- Tests: 0/0 passing
