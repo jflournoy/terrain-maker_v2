@@ -1610,7 +1610,7 @@ class Terrain:
             f"({100.0 * np.sum(overlay_mask) / len(overlay_mask):.1f}%)"
         )
 
-    def compute_colors(self):
+    def compute_colors(self, water_mask=None):
         """
         Compute colors using color_func and optionally mask_func.
 
@@ -1618,12 +1618,17 @@ class Terrain:
         - Standard: Single colormap applied to all vertices
         - Blended: Two colormaps blended based on proximity mask
 
+        Args:
+            water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
+                For blended mode, water pixels will be colored blue in the final vertex colors.
+                For standard mode, water detection is handled in create_mesh().
+
         Returns:
             np.ndarray: RGBA color array.
         """
         # Check if blended mode
         if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "blended":
-            return self._compute_blended_colors()
+            return self._compute_blended_colors(water_mask=water_mask)
 
         # Standard single colormap mode
         if not hasattr(self, "color_mapping") or not hasattr(self, "color_sources"):
@@ -1687,12 +1692,16 @@ class Terrain:
 
         return colors
 
-    def _compute_blended_colors(self):
+    def _compute_blended_colors(self, water_mask=None):
         """
         Compute colors using blended colormap mode (internal method).
 
         Computes base colors for entire DEM, overlay colors for overlay zones,
         and blends them according to overlay_mask at the vertex level.
+
+        Args:
+            water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
+                If provided, water pixels will be colored blue in the final vertex colors.
 
         Returns:
             np.ndarray: RGBA color array with blended colors.
@@ -1784,13 +1793,30 @@ class Terrain:
             base_vertex_colors,
         )
 
-        self.colors = colors
-
         num_overlay = np.sum(self.overlay_mask)
         num_base = len(self.overlay_mask) - num_overlay
         self.logger.info(
             f"Blended colors computed: {num_overlay} overlay vertices, {num_base} base vertices"
         )
+
+        # Apply water coloring if water mask provided
+        if water_mask is not None:
+            self.logger.info(f"Applying water coloring to blended vertex colors...")
+            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
+
+            # Map water mask from grid space to vertex space
+            # Only for surface vertices (not boundary vertices)
+            water_vertex_count = 0
+            for i in range(num_surface_vertices):
+                y = self.y_valid[i]
+                x = self.x_valid[i]
+                if water_mask[y, x]:
+                    colors[i, :3] = water_color
+                    water_vertex_count += 1
+
+            self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
+
+        self.colors = colors
 
         return colors
 

@@ -382,11 +382,8 @@ def create_terrain_with_score(
             overlay_mask=park_mask,
         )
 
-        # Compute colors with blending
-        terrain.compute_colors()
-
-        logger.debug(f"  Dual colormap applied: {np.sum(park_mask)} vertices in overlay zones")
-        # Continue to water detection below (don't return early)
+        logger.debug(f"  Dual colormap configured: {np.sum(park_mask)} vertices in overlay zones")
+        # Will compute colors with water detection below
 
     else:
         # Single colormap mode: score-based coloring for entire terrain
@@ -396,11 +393,8 @@ def create_terrain_with_score(
             source_layers=["score"],
         )
 
-        # Compute vertex colors based on resampled score data
-        terrain.compute_colors()
-
     # Detect water bodies on the unscaled DEM
-    # Water will be colored blue, activity scores red-yellow-green
+    # Water will be colored blue in both single and dual colormap modes
     logger.debug(f"  Detecting water bodies for {name}...")
     water_mask = None
     try:
@@ -422,56 +416,46 @@ def create_terrain_with_score(
         logger.debug(f"  Water detection skipped: {e}")
         water_mask = None
 
-    # Create final mesh with water detection
+    # Compute colors with water detection
+    # In blended mode, water detection happens internally
+    # In single mode, it happens in create_mesh()
     if parks:
-        # Dual colormap mode: manually apply water coloring to vertex colors
-        # (In dual mode, colors are already in vertex space, not grid space)
-        logger.debug(f"  Removing temporary mesh and creating final mesh with water detection...")
+        logger.debug(f"  Computing blended colors with water detection...")
+        terrain.compute_colors(water_mask=water_mask)
+        logger.debug(f"  ✓ Blended colors with water detection computed")
+
+        # Remove temporary mesh and create final mesh
+        logger.debug(f"  Removing temporary mesh and creating final mesh...")
         bpy.data.objects.remove(mesh_obj_temp, do_unlink=True)
 
-        # Apply water coloring to vertex colors if water detected
-        if water_mask is not None and hasattr(terrain, 'colors') and terrain.colors is not None:
-            logger.debug(f"  Applying water coloring to vertex colors...")
-            # Map water mask from grid space to vertex space
-            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
-            n_vertices = len(terrain.y_valid)
-            water_vertex_count = 0
-
-            for i in range(n_vertices):
-                y = terrain.y_valid[i]
-                x = terrain.x_valid[i]
-                if water_mask[y, x]:
-                    terrain.colors[i, :3] = water_color
-                    water_vertex_count += 1
-
-            logger.debug(f"  Water colored blue ({water_vertex_count} vertices)")
-
-        # Create final mesh (colors already include water)
+        # Create final mesh with colors already applied (including water)
         mesh_obj = terrain.create_mesh(
             scale_factor=scale_factor,
             height_scale=height_scale,
             center_model=True,
             boundary_extension=True,
-            water_mask=None,  # Don't pass water_mask - already applied to colors
+            water_mask=None,  # Water already applied in compute_colors()
         )
 
         if mesh_obj is None:
             logger.error(f"Failed to create final mesh for {name}")
             return None, None
 
-        # Explicitly apply the modified vertex colors to the new mesh
-        logger.debug(f"  Applying vertex colors to final mesh...")
+        # Explicitly apply the computed vertex colors to the mesh
+        logger.debug(f"  Applying vertex colors to mesh...")
         apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
-        logger.debug(f"  ✓ Vertex colors applied ({len(terrain.colors)} vertices)")
+        logger.debug(f"  ✓ Vertex colors applied")
 
     else:
-        # Single colormap mode: create mesh with water detection
+        # Single colormap mode: compute colors first, then create mesh with water detection
+        terrain.compute_colors()
+
         mesh_obj = terrain.create_mesh(
             scale_factor=scale_factor,
             height_scale=height_scale,
             center_model=True,
             boundary_extension=True,
-            water_mask=water_mask,
+            water_mask=water_mask,  # Water detection handled in create_mesh()
         )
 
         if mesh_obj is None:
