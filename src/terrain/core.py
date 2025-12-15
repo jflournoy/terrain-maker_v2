@@ -1507,13 +1507,125 @@ class Terrain:
             if mask_threshold is not None:
                 self.logger.info(f"Mask threshold: {mask_threshold}")
 
+    def set_blended_color_mapping(
+        self,
+        base_colormap: Callable[[np.ndarray], np.ndarray],
+        base_source_layers: list[str],
+        overlay_colormap: Callable[[np.ndarray], np.ndarray],
+        overlay_source_layers: list[str],
+        overlay_mask: np.ndarray,
+        *,
+        base_color_kwargs: Optional[Dict[str, Any]] = None,
+        overlay_color_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Apply two different colormaps based on a spatial mask (hard transition).
+
+        Uses base colormap for most of terrain and overlay colormap for masked zones.
+        This is useful for showing different data types in different regions, such as
+        elevation colors for general terrain but suitability scores near parks.
+
+        Args:
+            base_colormap: Function mapping base layer(s) to RGB/RGBA. Takes N arrays
+                (one per base_source_layers) and returns (H, W, 3) or (H, W, 4).
+            base_source_layers: Layer names to pass to base_colormap, e.g., ['dem'].
+            overlay_colormap: Function mapping overlay layer(s) to RGB/RGBA. Takes N
+                arrays (one per overlay_source_layers) and returns (H, W, 3) or (H, W, 4).
+            overlay_source_layers: Layer names to pass to overlay_colormap, e.g., ['score'].
+            overlay_mask: Boolean array of shape (num_vertices,) indicating where to use
+                overlay colormap. True = overlay, False = base. Use compute_proximity_mask()
+                to create this mask.
+            base_color_kwargs: Optional kwargs passed to base_colormap.
+            overlay_color_kwargs: Optional kwargs passed to overlay_colormap.
+
+        Returns:
+            None: Modifies internal color mapping to use blended approach.
+
+        Raises:
+            ValueError: If source layers don't exist or overlay_mask has wrong shape.
+            RuntimeError: If create_mesh() hasn't been called yet (needed for mask validation).
+
+        Example:
+            >>> from src.terrain.color_mapping import elevation_colormap
+            >>> # Compute proximity mask for park zones
+            >>> park_mask = terrain.compute_proximity_mask(
+            ...     park_lons, park_lats, radius_meters=1000
+            ... )
+            >>> # Set dual colormaps
+            >>> terrain.set_blended_color_mapping(
+            ...     base_colormap=lambda elev: elevation_colormap(
+            ...         elev, cmap_name="gist_earth"
+            ...     ),
+            ...     base_source_layers=["dem"],
+            ...     overlay_colormap=lambda score: elevation_colormap(
+            ...         score, cmap_name="cool", min_elev=0, max_elev=1
+            ...     ),
+            ...     overlay_source_layers=["score"],
+            ...     overlay_mask=park_mask
+            ... )
+            >>> terrain.compute_colors()  # Apply the blended mapping
+        """
+        # Validate source_layers exist
+        all_layers = set(base_source_layers) | set(overlay_source_layers)
+        missing_layers = [name for name in all_layers if name not in self.data_layers]
+        if missing_layers:
+            raise ValueError(f"Source layers not found: {missing_layers}")
+
+        # Validate overlay_mask
+        if not hasattr(self, "vertices") or self.vertices is None:
+            raise RuntimeError(
+                "create_mesh() must be called before set_blended_color_mapping(). "
+                "Vertex count is needed to validate overlay_mask shape."
+            )
+
+        overlay_mask = np.asarray(overlay_mask)
+        expected_shape = (len(self.vertices),)
+        if overlay_mask.shape != expected_shape:
+            raise ValueError(
+                f"overlay_mask must have shape {expected_shape} to match vertex count. "
+                f"Got {overlay_mask.shape}. Use compute_proximity_mask() to create mask."
+            )
+
+        # Default kwargs
+        if base_color_kwargs is None:
+            base_color_kwargs = {}
+        if overlay_color_kwargs is None:
+            overlay_color_kwargs = {}
+
+        # Store blended color mapping configuration
+        self.color_mapping_mode = "blended"
+        self.base_colormap = base_colormap
+        self.base_color_sources = list(base_source_layers)
+        self.base_color_kwargs = base_color_kwargs
+        self.overlay_colormap = overlay_colormap
+        self.overlay_color_sources = list(overlay_source_layers)
+        self.overlay_color_kwargs = overlay_color_kwargs
+        self.overlay_mask = overlay_mask
+
+        self.logger.info("Blended color mapping configured:")
+        self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
+        self.logger.info(f"  Overlay colormap: {overlay_colormap.__name__} on {overlay_source_layers}")
+        self.logger.info(
+            f"  Overlay mask: {np.sum(overlay_mask)}/{len(overlay_mask)} vertices "
+            f"({100.0 * np.sum(overlay_mask) / len(overlay_mask):.1f}%)"
+        )
+
     def compute_colors(self):
         """
         Compute colors using color_func and optionally mask_func.
 
+        Supports two modes:
+        - Standard: Single colormap applied to all vertices
+        - Blended: Two colormaps blended based on proximity mask
+
         Returns:
             np.ndarray: RGBA color array.
         """
+        # Check if blended mode
+        if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "blended":
+            return self._compute_blended_colors()
+
+        # Standard single colormap mode
         if not hasattr(self, "color_mapping") or not hasattr(self, "color_sources"):
             raise ValueError("Color mapping not set. Call set_color_mapping() first.")
 
@@ -1572,6 +1684,113 @@ class Terrain:
         self.colors = colors
 
         self.logger.info(f"Colors computed successfully with shape {colors.shape}")
+
+        return colors
+
+    def _compute_blended_colors(self):
+        """
+        Compute colors using blended colormap mode (internal method).
+
+        Computes base colors for entire DEM, overlay colors for overlay zones,
+        and blends them according to overlay_mask at the vertex level.
+
+        Returns:
+            np.ndarray: RGBA color array with blended colors.
+        """
+        self.logger.info("Computing blended colors...")
+
+        # Get transformed DEM data to determine grid shape
+        dem_data = self.data_layers["dem"]["transformed_data"]
+        height, width = dem_data.shape
+
+        # Compute base colors for all pixels
+        base_arrays = [
+            (
+                self.data_layers[layer]["transformed_data"]
+                if self.data_layers[layer].get("transformed")
+                else self.data_layers[layer]["data"]
+            )
+            for layer in self.base_color_sources
+        ]
+
+        try:
+            base_colors_grid = self.base_colormap(*base_arrays, **self.base_color_kwargs)
+        except Exception as e:
+            self.logger.error(f"Error computing base colors: {str(e)}")
+            raise
+
+        # Compute overlay colors for all pixels
+        overlay_arrays = [
+            (
+                self.data_layers[layer]["transformed_data"]
+                if self.data_layers[layer].get("transformed")
+                else self.data_layers[layer]["data"]
+            )
+            for layer in self.overlay_color_sources
+        ]
+
+        try:
+            overlay_colors_grid = self.overlay_colormap(*overlay_arrays, **self.overlay_color_kwargs)
+        except Exception as e:
+            self.logger.error(f"Error computing overlay colors: {str(e)}")
+            raise
+
+        # Ensure both are RGBA
+        for colors_grid, name in [(base_colors_grid, "base"), (overlay_colors_grid, "overlay")]:
+            if colors_grid.shape[-1] == 3:
+                if colors_grid.dtype == np.uint8:
+                    alpha = np.full(colors_grid.shape[:2] + (1,), 255, dtype=colors_grid.dtype)
+                else:
+                    alpha = np.ones(colors_grid.shape[:2] + (1,), dtype=colors_grid.dtype)
+                if name == "base":
+                    base_colors_grid = np.concatenate([colors_grid, alpha], axis=-1)
+                else:
+                    overlay_colors_grid = np.concatenate([colors_grid, alpha], axis=-1)
+
+        # Map grid colors to vertex colors using y_valid, x_valid
+        # These map vertex index to (row, col) in the grid
+        base_vertex_colors = base_colors_grid[self.y_valid, self.x_valid]
+        overlay_vertex_colors = overlay_colors_grid[self.y_valid, self.x_valid]
+
+        # Handle boundary vertices if they exist
+        # Boundary vertices (from boundary_extension) don't map to grid pixels
+        # Use nearest valid pixel color (or default color)
+        num_surface_vertices = len(self.y_valid)
+        num_total_vertices = len(self.vertices)
+
+        if num_total_vertices > num_surface_vertices:
+            # Has boundary vertices - pad with default color
+            self.logger.info(
+                f"  Padding colors for {num_total_vertices - num_surface_vertices} boundary vertices"
+            )
+            # Use mean color for boundary (or could use edge colors)
+            default_color = np.mean(base_vertex_colors, axis=0).astype(base_vertex_colors.dtype)
+
+            # Extend vertex colors arrays
+            base_vertex_colors = np.vstack(
+                [base_vertex_colors, np.tile(default_color, (num_total_vertices - num_surface_vertices, 1))]
+            )
+            overlay_vertex_colors = np.vstack(
+                [
+                    overlay_vertex_colors,
+                    np.tile(default_color, (num_total_vertices - num_surface_vertices, 1)),
+                ]
+            )
+
+        # Blend colors using overlay_mask: True = overlay, False = base
+        colors = np.where(
+            self.overlay_mask[:, None],  # Broadcast to (N, 1) for RGBA channels
+            overlay_vertex_colors,
+            base_vertex_colors,
+        )
+
+        self.colors = colors
+
+        num_overlay = np.sum(self.overlay_mask)
+        num_base = len(self.overlay_mask) - num_overlay
+        self.logger.info(
+            f"Blended colors computed: {num_overlay} overlay vertices, {num_base} base vertices"
+        )
 
         return colors
 
@@ -1786,6 +2005,12 @@ class Terrain:
         else:
             vertices = positions
 
+        # Store vertices and faces for later use (e.g., proximity calculations)
+        self.vertices = vertices
+        self.faces = faces
+        self.y_valid = y_valid
+        self.x_valid = x_valid
+
         # Create the Blender mesh
         try:
             from src.terrain.blender_integration import create_blender_mesh
@@ -1957,3 +2182,120 @@ class Terrain:
             return float(x[0]), float(y[0]), float(z[0])
 
         return x, y, z
+
+    def compute_proximity_mask(
+        self,
+        lons: np.ndarray,
+        lats: np.ndarray,
+        radius_meters: float,
+        input_crs: str = "EPSG:4326",
+        cluster_threshold_meters: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Create boolean mask for vertices within radius of geographic points.
+
+        Uses KDTree for efficient spatial queries to identify mesh vertices
+        near specified geographic locations (e.g., parks, POIs). Optionally
+        clusters nearby points first to create unified proximity zones.
+
+        Args:
+            lons: Array of longitudes for points of interest.
+            lats: Array of latitudes for points of interest (must match lons shape).
+            radius_meters: Radius in meters around each point/cluster to include.
+            input_crs: CRS of input coordinates (default: "EPSG:4326" for WGS84 lon/lat).
+            cluster_threshold_meters: Optional distance threshold for clustering nearby
+                points using DBSCAN. Points within this distance are merged into single
+                zones. If None, each point gets its own zone. Useful for merging nearby
+                parks into continuous zones.
+
+        Returns:
+            Boolean array of shape (num_vertices,) where True indicates vertex is
+            within radius of at least one point/cluster.
+
+        Raises:
+            RuntimeError: If create_mesh() has not been called yet.
+            ValueError: If lons and lats have different shapes.
+
+        Example:
+            >>> # Create zones around parks
+            >>> park_lons = np.array([-83.1, -83.2, -83.15])
+            >>> park_lats = np.array([42.4, 42.5, 42.45])
+            >>> mask = terrain.compute_proximity_mask(
+            ...     park_lons, park_lats,
+            ...     radius_meters=1000,
+            ...     cluster_threshold_meters=200  # Merge parks within 200m
+            ... )
+            >>> # mask is True for vertices within 1km of park clusters
+        """
+        from scipy.spatial import KDTree
+
+        # Check prerequisites
+        if not hasattr(self, "vertices") or self.vertices is None:
+            raise RuntimeError(
+                "create_mesh() must be called before compute_proximity_mask(). "
+                "Mesh vertices are needed for proximity calculations."
+            )
+
+        # Validate inputs
+        lons = np.asarray(lons)
+        lats = np.asarray(lats)
+        if lons.shape != lats.shape:
+            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
+
+        # Convert geographic coords to mesh space (x, y only, ignore z)
+        xs, ys, _ = self.geo_to_mesh_coords(lons, lats, input_crs=input_crs)
+        point_coords = np.column_stack([xs, ys])
+
+        self.logger.info(f"Computing proximity mask for {len(point_coords)} points...")
+
+        # Optional: cluster nearby points using DBSCAN
+        if cluster_threshold_meters is not None:
+            from sklearn.cluster import DBSCAN
+
+            # Convert cluster threshold from meters to mesh units
+            scale_factor = self.model_params["scale_factor"]
+            cluster_threshold_mesh = cluster_threshold_meters / scale_factor * 1000  # m to km, then to mesh units
+
+            self.logger.info(
+                f"  Clustering points with threshold {cluster_threshold_meters}m "
+                f"({cluster_threshold_mesh:.3f} mesh units)..."
+            )
+
+            clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
+            labels = clustering.fit_predict(point_coords)
+            num_clusters = labels.max() + 1
+
+            # Use cluster centroids instead of individual points
+            point_coords = np.array(
+                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+            )
+
+            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
+
+        # Build KDTree for efficient spatial queries
+        tree = KDTree(point_coords)
+
+        # Get mesh vertex positions (just x, y for 2D distance)
+        # vertices includes boundary vertices if boundary_extension=True
+        mesh_verts_2d = self.vertices[:, :2]
+
+        # Convert radius from meters to mesh units
+        scale_factor = self.model_params["scale_factor"]
+        radius_mesh = radius_meters / scale_factor * 1000  # m to km, then to mesh units
+
+        self.logger.info(
+            f"  Querying vertices within {radius_meters}m ({radius_mesh:.3f} mesh units) "
+            f"of {len(point_coords)} point(s)..."
+        )
+
+        # Query: which vertices are within radius of ANY point?
+        distances, _ = tree.query(mesh_verts_2d, k=1)
+        mask = distances <= radius_mesh
+
+        num_in_zone = np.sum(mask)
+        pct_in_zone = 100.0 * num_in_zone / len(mask)
+        self.logger.info(
+            f"  Proximity mask: {num_in_zone}/{len(mask)} vertices ({pct_in_zone:.1f}%) in zones"
+        )
+
+        return mask

@@ -2502,38 +2502,12 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5984801,
-          42.8210257
-        ]
-      },
-      "properties": {
-        "name": "Trail_320254746"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -88.5927099,
           42.820086
         ]
       },
       "properties": {
-        "name": "Trail_320256635"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5981491,
-          42.8200651
-        ]
-      },
-      "properties": {
-        "name": "Trail_320256637"
+        "name": "White Trail"
       }
     },
     {
@@ -2546,20 +2520,7 @@
         ]
       },
       "properties": {
-        "name": "Trail_320256643"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5942113,
-          42.8229779
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261248"
+        "name": "Blue Trail"
       }
     },
     {
@@ -2573,84 +2534,6 @@
       },
       "properties": {
         "name": "Trail_320261251"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.598924,
-          42.823414
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261252"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5948934,
-          42.8295947
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261253"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5993521,
-          42.83167
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261255"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.59183,
-          42.8302444
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261263"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5909563,
-          42.8270345
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261265"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5922998,
-          42.8250434
-        ]
-      },
-      "properties": {
-        "name": "Trail_320261266"
       }
     },
     {
@@ -4868,32 +4751,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5963705,
-          42.8263686
-        ]
-      },
-      "properties": {
-        "name": "Trail_519459664"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5896234,
-          42.8296064
-        ]
-      },
-      "properties": {
-        "name": "Trail_519459667"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -88.5267123,
           42.8700221
         ]
@@ -5186,19 +5043,6 @@
       },
       "properties": {
         "name": "Trail_558631518"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -79.3088196,
-          46.1919158
-        ]
-      },
-      "properties": {
-        "name": "Blue Trail"
       }
     },
     {
@@ -10510,51 +10354,12 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5904587,
-          42.8193244
-        ]
-      },
-      "properties": {
-        "name": "Trail_981026599"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5978238,
-          42.8187129
-        ]
-      },
-      "properties": {
-        "name": "Trail_981049607"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -88.589676,
           42.8236824
         ]
       },
       "properties": {
-        "name": "Trail_981050134"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5809003,
-          42.8265477
-        ]
-      },
-      "properties": {
-        "name": "Trail_981050304"
+        "name": "Orange Trail"
       }
     },
     {
@@ -14579,181 +14384,12 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5943586,
-          42.8210239
+          -88.5921063,
+          42.8211165
         ]
       },
       "properties": {
-        "name": "Trail_1056885552"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5798269,
-          42.8286153
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885553"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5850888,
-          42.8220142
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885554"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5851292,
-          42.8269958
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885555"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.594347,
-          42.8284113
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885556"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5931497,
-          42.8282481
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885557"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5917616,
-          42.821729
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885558"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5966092,
-          42.8218101
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885559"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5966615,
-          42.8211256
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885560"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.591206,
-          42.8208446
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885561"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.6003224,
-          42.8190393
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885562"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5921383,
-          42.8166362
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885564"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5939571,
-          42.819819
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885565"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.5951093,
-          42.8204522
-        ]
-      },
-      "properties": {
-        "name": "Trail_1056885566"
+        "name": "Blue Alternate"
       }
     },
     {
@@ -15677,19 +15313,6 @@
       },
       "properties": {
         "name": "Green/Orange Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -87.5427423,
-          46.5222124
-        ]
-      },
-      "properties": {
-        "name": "Orange Trail"
       }
     },
     {
@@ -16938,32 +16561,6 @@
       },
       "properties": {
         "name": "Trail_1237098122"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.6004426,
-          42.8221028
-        ]
-      },
-      "properties": {
-        "name": "Trail_1238653677"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -88.6002782,
-          42.8213226
-        ]
-      },
-      "properties": {
-        "name": "Trail_1238653679"
       }
     },
     {
@@ -21196,19 +20793,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.1368829,
-          41.8279368
-        ]
-      },
-      "properties": {
-        "name": "Trail_1456612624"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -88.1370775,
           41.8268789
         ]
@@ -21332,6 +20916,19 @@
       },
       "properties": {
         "name": "Trail_1456924410"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.5953659,
+          42.8281172
+        ]
+      },
+      "properties": {
+        "name": "Trail_1458638022"
       }
     },
     {

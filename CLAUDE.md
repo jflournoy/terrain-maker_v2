@@ -164,6 +164,27 @@ See `examples/detroit_dual_render.py` for the proper pattern:
 - Uses terrain maker's Terrain class for rendering
 - Uses standard argparse for command-line arguments
 
+## Visualization Standards
+
+**ALWAYS use viridis family colormaps** - For terrain visualization, prefer colormaps from the viridis family for their perceptual uniformity and colorblind-friendly properties.
+
+### Recommended Colormaps
+
+- **Elevation/Terrain**: `gist_earth`, `terrain` (earth-like colors)
+- **Snow/Ice data**: `cool`, `winter`, `ice` (snow-like colors)
+- **Score maps**: `viridis`, `plasma`, `inferno`, `magma`, `cividis`
+- **General data**: Any viridis family member for perceptually uniform scaling
+
+### Colormap Selection Criteria
+
+- **Perceptual uniformity**: Equal steps in data = equal perceptual steps in color
+- **Colorblind-friendly**: Accessible to users with color vision deficiencies
+- **Print-friendly**: Converts well to grayscale
+- **Sequential data**: Use single-hue progressions (viridis, plasma)
+- **Diverging data**: Use center-neutral progressions (coolwarm, RdBu)
+
+Avoid rainbow colormaps (jet, hsv) due to perceptual non-uniformity.
+
 ## Example Development Guidelines
 
 **ALWAYS use library functions where possible** - When building examples, prioritize using terrain maker's public APIs and library functions rather than implementing custom solutions.

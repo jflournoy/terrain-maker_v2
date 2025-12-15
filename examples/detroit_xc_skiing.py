@@ -695,6 +695,146 @@ def save_outputs(
 
 
 # =============================================================================
+# 3D RENDERING
+# =============================================================================
+
+def run_step_render_3d(
+    output_dir: Path,
+    dem: np.ndarray,
+    transform: Affine,
+    score_grid: np.ndarray,
+    score_transform: Affine,
+    scored_parks: list[dict],
+):
+    """
+    Render 3D terrain with dual colormaps: elevation base + score overlay near parks.
+
+    Args:
+        output_dir: Output directory for render
+        dem: DEM array
+        transform: Affine transform for DEM
+        score_grid: XC skiing suitability scores
+        score_transform: Affine transform for score grid
+        scored_parks: List of park dictionaries with lat/lon
+    """
+    logger.info("\n" + "=" * 70)
+    logger.info("Step 6: 3D Terrain Rendering (Dual Colormap)")
+    logger.info("=" * 70)
+
+    try:
+        import bpy
+        from src.terrain.color_mapping import elevation_colormap
+        from src.terrain.transforms import reproject_raster, flip_raster, scale_elevation
+        from math import radians
+        from src.terrain.core import setup_camera, setup_light, clear_scene
+
+        # Clear scene
+        clear_scene()
+
+        # Create terrain with DEM
+        logger.info("Creating terrain from DEM...")
+        terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+
+        # Add transforms
+        terrain.add_transform(reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617"))
+        terrain.add_transform(flip_raster(axis="horizontal"))
+        terrain.add_transform(scale_elevation(scale_factor=0.0001))
+
+        # Apply transforms
+        terrain.apply_transforms()
+
+        # Add score layer
+        terrain.add_data_layer("score", score_grid, score_transform, "EPSG:4326", target_layer="dem")
+
+        # Configure downsampling for reasonable performance
+        terrain.configure_for_target_vertices(target_vertices=1920 * 1080)
+
+        # Create mesh FIRST (needed for proximity mask)
+        logger.info("Creating mesh...")
+        mesh_obj = terrain.create_mesh(
+            scale_factor=100,
+            height_scale=15.0,  # Moderate vertical exaggeration
+            center_model=True,
+            boundary_extension=True,
+        )
+
+        if mesh_obj is None:
+            logger.error("Failed to create mesh")
+            return
+
+        # Compute proximity mask for parks
+        park_lons = np.array([p["lon"] for p in scored_parks])
+        park_lats = np.array([p["lat"] for p in scored_parks])
+
+        logger.info("Computing proximity mask for park zones...")
+        park_mask = terrain.compute_proximity_mask(
+            park_lons,
+            park_lats,
+            radius_meters=2000,  # 2km radius around parks
+            cluster_threshold_meters=500,  # Merge parks within 500m
+        )
+
+        # Set dual colormaps
+        logger.info("Setting blended color mapping...")
+        terrain.set_blended_color_mapping(
+            base_colormap=lambda elev: elevation_colormap(elev, cmap_name="gist_earth"),
+            base_source_layers=["dem"],
+            overlay_colormap=lambda score: elevation_colormap(
+                score, cmap_name="cool", min_elev=0.0, max_elev=1.0
+            ),
+            overlay_source_layers=["score"],
+            overlay_mask=park_mask,
+        )
+
+        # Compute colors (now with blending)
+        terrain.compute_colors()
+
+        # Re-apply colors to mesh
+        from src.terrain.blender_integration import apply_vertex_colors
+
+        apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
+
+        # Setup camera
+        camera_angle = (radians(60), 0, radians(0))
+        camera = setup_camera(
+            camera_angle=camera_angle,
+            camera_location=(0, -15, 10),
+            scale=1.0,
+            focal_length=35,
+            camera_type="PERSP",
+        )
+
+        # Setup lighting
+        sun = setup_light(
+            location=(10, -5, 15),
+            angle=2,
+            energy=3.5,
+            rotation_euler=(radians(60), 0, radians(-30)),
+        )
+
+        # Render
+        bpy.context.scene.render.resolution_x = 1920
+        bpy.context.scene.render.resolution_y = 1080
+        bpy.context.scene.render.image_settings.file_format = "PNG"
+
+        render_path = output_dir / "04_render_3d" / "xc_skiing_terrain_3d.png"
+        render_path.parent.mkdir(parents=True, exist_ok=True)
+        bpy.context.scene.render.filepath = str(render_path)
+
+        logger.info("Rendering...")
+        bpy.ops.render.render(write_still=True)
+        logger.info(f"✓ 3D render saved: {render_path}")
+
+    except ImportError:
+        logger.warning("Blender Python API (bpy) not available - skipping 3D rendering")
+        logger.info("  Install blender-python or run in Blender environment for 3D rendering")
+    except Exception as e:
+        logger.error(f"Error during 3D rendering: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -770,6 +910,17 @@ Examples:
 
     # Save outputs (with transform metadata for use by other examples)
     save_outputs(score_grid, scored_parks, args.output_dir, score_transform)
+
+    # Render 3D visualization (if bpy available)
+    if scored_parks:
+        run_step_render_3d(
+            args.output_dir,
+            dem,
+            transform,
+            score_grid,
+            score_transform,
+            scored_parks,
+        )
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Analysis complete!")
