@@ -221,7 +221,7 @@ def create_terrain_with_score(
     score_transform: Optional[Affine] = None,
     location: Tuple[float, float, float] = (0, 0, 0),
     scale_factor: float = 100,
-    height_scale: float = 12.5,
+    height_scale: float = 30.0,
     target_vertices: Optional[int] = None,
     cmap_name: str = "viridis",
 ) -> Tuple[Optional[object], Optional["Terrain"]]:
@@ -436,7 +436,7 @@ def create_park_markers(
 
             # Use Principled BSDF for natural lighting with shadows
             bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-            bsdf.inputs["Base Color"].default_value = (0.8, 0.4, 0.3, 1.0)  # Warm terra cotta
+            bsdf.inputs["Base Color"].default_value = (0.2, 0.2, 0.2, 1.0)  # Warm terra cotta
             bsdf.inputs["Roughness"].default_value = 0.5  # Semi-matte for visible shadows
 
             output = nodes.new("ShaderNodeOutputMaterial")
@@ -599,7 +599,7 @@ def setup_lighting() -> list:
     sun_light = setup_light(
         location=(10, -5, 2),  # Position doesn't matter much for sun type
         angle=1,  # Sharper shadows (smaller angle = harder shadows)
-        energy=5.0,
+        energy=7.0,
         rotation_euler=(radians(75), 0, radians(-45)),  # Low sun from SW
     )
     # Set warm sunset color (golden/orange)

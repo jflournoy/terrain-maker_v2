@@ -63,7 +63,7 @@ def create_xc_skiing_scorer() -> ScoreCombiner:
                     "power": 0.5,  # sqrt for diminishing returns
                 },
                 role="additive",
-                weight=0.35,
+                weight=0.40,
             ),
 
             # Snow consistency: year-to-year reliability (CV)
@@ -77,7 +77,7 @@ def create_xc_skiing_scorer() -> ScoreCombiner:
                     "invert": True,           # Low CV = high score
                 },
                 role="additive",
-                weight=0.25,
+                weight=0.20,
             ),
         ],
     )
