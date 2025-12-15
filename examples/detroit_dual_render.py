@@ -3,14 +3,16 @@
 Detroit Dual Terrain Rendering Example.
 
 This example renders sledding and cross-country skiing terrain suitability maps
-side-by-side in Blender using terrain maker's rendering library, with park
-locations marked on the XC skiing terrain.
+side-by-side in Blender using terrain maker's rendering library with dual colormaps.
 
 Features:
 - Side-by-side comparison of two activity suitability maps
-- Park location markers using geo_to_mesh_coords() for proper positioning
+- XC skiing terrain uses dual colormaps: elevation base + score overlay near parks
+  * Earth tones (gist_earth) for general terrain
+  * Cool blues (cool) for skiing suitability near park clusters
+- Sledding terrain uses single colormap (mako: purple → yellow)
+- Proximity-based coloring with automatic park clustering
 - Detects and colors water bodies blue (slope-based detection)
-- Colors activity suitability using mako colormap (dark blue → yellow)
 - Sunset-style lighting with warm/cool color contrast
 - Applies geographic transforms (WGS84 → UTM) for proper coordinate handling
 - Intelligently limits mesh density to prevent OOM with large DEMs
@@ -224,9 +226,17 @@ def create_terrain_with_score(
     height_scale: float = 30.0,
     target_vertices: Optional[int] = None,
     cmap_name: str = "viridis",
+    parks: Optional[list[dict]] = None,
+    park_radius_meters: float = 2000,
+    park_cluster_threshold: float = 500,
+    base_cmap_name: str = "gist_earth",
+    overlay_cmap_name: str = "cool",
 ) -> Tuple[Optional[object], Optional["Terrain"]]:
     """
     Create a terrain mesh using terrain maker's Terrain class.
+
+    Supports dual colormaps for proximity-based visualization (e.g., elevation
+    for general terrain, scores near parks).
 
     Args:
         name: Mesh name (for logging and reference)
@@ -239,11 +249,17 @@ def create_terrain_with_score(
         scale_factor: Horizontal scale divisor
         height_scale: Vertical elevation scale
         target_vertices: Target vertex count for downsampling (optional)
-        cmap_name: Matplotlib colormap name for score visualization (default: viridis)
+        cmap_name: Colormap name for single-colormap mode (default: viridis)
+        parks: Optional list of parks for dual colormap mode. If provided,
+            enables dual colormaps with score overlay near parks.
+        park_radius_meters: Radius around parks to show score overlay (default: 2000m)
+        park_cluster_threshold: Distance threshold for merging nearby parks (default: 500m)
+        base_cmap_name: Base colormap for general terrain (default: gist_earth)
+        overlay_cmap_name: Overlay colormap for park zones (default: cool)
 
     Returns:
         Tuple of (mesh_obj, terrain) where mesh_obj is the Blender object and
-        terrain is the Terrain instance (useful for geo_to_mesh_coords)
+        terrain is the Terrain instance (useful for proximity_mask calculations)
     """
     # Note: When score_transform is None, the library's same_extent_as feature
     # will automatically calculate the transform from the DEM's extent.
@@ -319,16 +335,68 @@ def create_terrain_with_score(
     # The reprojection to the transformed DEM coordinates handles alignment correctly
     # because it maps geographic coordinates, not pixel indices
 
-    # Set color mapping using specified colormap
-    # min_elev=0.0, max_elev=1.0 maps scores in [0,1] range to full colormap
-    logger.debug(f"  Setting color mapping with colormap: {cmap_name}")
-    terrain.set_color_mapping(
-        lambda score: elevation_colormap(score, cmap_name=cmap_name, min_elev=0.0, max_elev=1.0),
-        source_layers=["score"],
-    )
+    # Apply colormapping (single or dual depending on parks availability)
+    if parks:
+        # Dual colormap mode: elevation base + score overlay near parks
+        logger.info(f"  Using dual colormaps for {name}:")
+        logger.info(f"    Base: {base_cmap_name} (elevation)")
+        logger.info(f"    Overlay: {overlay_cmap_name} (scores near parks)")
 
-    # Compute vertex colors based on resampled score data
-    terrain.compute_colors()
+        # Create mesh first (needed for proximity mask computation)
+        logger.debug(f"  Creating mesh for proximity calculations...")
+        mesh_obj_temp = terrain.create_mesh(
+            scale_factor=scale_factor,
+            height_scale=height_scale,
+            center_model=True,
+            boundary_extension=True,
+            water_mask=None,  # Will apply water coloring separately
+        )
+
+        if mesh_obj_temp is None:
+            logger.error(f"Failed to create temporary mesh for {name}")
+            return None, None
+
+        # Compute proximity mask for park zones
+        park_lons = np.array([p["lon"] for p in parks])
+        park_lats = np.array([p["lat"] for p in parks])
+
+        logger.info(f"  Computing proximity mask ({len(parks)} parks)...")
+        park_mask = terrain.compute_proximity_mask(
+            park_lons,
+            park_lats,
+            radius_meters=park_radius_meters,
+            cluster_threshold_meters=park_cluster_threshold,
+        )
+
+        # Set dual colormaps
+        terrain.set_blended_color_mapping(
+            base_colormap=lambda elev: elevation_colormap(
+                elev, cmap_name=base_cmap_name, min_elev=0.0, max_elev=None
+            ),
+            base_source_layers=["dem"],
+            overlay_colormap=lambda score: elevation_colormap(
+                score, cmap_name=overlay_cmap_name, min_elev=0.0, max_elev=1.0
+            ),
+            overlay_source_layers=["score"],
+            overlay_mask=park_mask,
+        )
+
+        # Compute colors with blending
+        terrain.compute_colors()
+
+        logger.debug(f"  Dual colormap applied: {np.sum(park_mask)} vertices in overlay zones")
+        return mesh_obj_temp, terrain
+
+    else:
+        # Single colormap mode: score-based coloring for entire terrain
+        logger.debug(f"  Setting color mapping with colormap: {cmap_name}")
+        terrain.set_color_mapping(
+            lambda score: elevation_colormap(score, cmap_name=cmap_name, min_elev=0.0, max_elev=1.0),
+            source_layers=["score"],
+        )
+
+        # Compute vertex colors based on resampled score data
+        terrain.compute_colors()
 
     # Detect water bodies on the unscaled DEM
     # Water will be colored blue, activity scores red-yellow-green
@@ -372,86 +440,6 @@ def create_terrain_with_score(
 
     logger.info(f"✓ Created mesh: {name} at position {location}")
     return mesh_obj, terrain
-
-
-def create_park_markers(
-    parks: list[dict],
-    terrain: "Terrain",
-    mesh_obj,
-    elevation_offset: float = 0.1,
-    marker_radius: float = 0.05,
-) -> list:
-    """
-    Create glowing sphere markers for parks using Terrain's coordinate transform.
-
-    Args:
-        parks: List of parks with lat, lon, score
-        terrain: Terrain object (must have create_mesh() already called)
-        mesh_obj: Blender mesh object (for positioning offset in multi-mesh scenes)
-        elevation_offset: Height above terrain in mesh units (default: 0.1)
-        marker_radius: Radius of marker spheres (default: 0.05)
-
-    Returns:
-        List of created marker objects
-    """
-    if not parks:
-        return []
-
-    logger.info(f"Creating {len(parks)} park markers...")
-    markers = []
-
-    # Extract lon/lat arrays from parks for batch processing
-    lons = np.array([park["lon"] for park in parks])
-    lats = np.array([park["lat"] for park in parks])
-
-    # Convert all coordinates at once using Terrain's method
-    try:
-        xs, ys, zs = terrain.geo_to_mesh_coords(lons, lats, elevation_offset=elevation_offset)
-    except (RuntimeError, ValueError) as e:
-        logger.error(f"Failed to convert park coordinates: {e}")
-        return []
-
-    # Add mesh object's location offset (for dual-terrain scenes)
-    if mesh_obj and mesh_obj.location:
-        xs = xs + mesh_obj.location[0]
-        ys = ys + mesh_obj.location[1]
-
-    for i, park in enumerate(parks):
-        try:
-            x, y, z = xs[i], ys[i], zs[i]
-
-            # Create sphere
-            bpy.ops.mesh.primitive_ico_sphere_add(
-                radius=marker_radius,
-                location=(x, y, z)
-            )
-            marker = bpy.context.active_object
-            marker.name = f"Park_{park['name'].replace(' ', '_')}"
-
-            # Create diffuse material - warm terra cotta contrasts with mako's blues/greens
-            mat = bpy.data.materials.new(name=f"ParkMarker_{i}")
-            # Note: use_nodes defaults to True in Blender 4.x+
-            nodes = mat.node_tree.nodes
-            nodes.clear()
-
-            # Use Principled BSDF for natural lighting with shadows
-            bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-            bsdf.inputs["Base Color"].default_value = (0.2, 0.2, 0.2, 1.0)  # Warm terra cotta
-            bsdf.inputs["Roughness"].default_value = 0.5  # Semi-matte for visible shadows
-
-            output = nodes.new("ShaderNodeOutputMaterial")
-            mat.node_tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
-
-            marker.data.materials.append(mat)
-            markers.append(marker)
-
-            logger.debug(f"  Created marker: {park['name']} at ({x:.2f}, {y:.2f}, {z:.2f})")
-
-        except Exception as e:
-            logger.warning(f"Error creating marker for {park['name']}: {e}")
-
-    logger.info(f"✓ Created {len(markers)} markers")
-    return markers
 
 
 def calculate_mesh_width(mesh_obj) -> float:
@@ -864,8 +852,8 @@ Examples:
         logger.error("Try reducing vertex count or closing other applications")
         return 1
 
-    # Create second mesh at origin
-    logger.info("\n[3/5] Creating XC Skiing Terrain Mesh...")
+    # Create second mesh at origin with dual colormaps if parks available
+    logger.info("\n[3/5] Creating XC Skiing Terrain Mesh (Dual Colormap)...")
     mesh_xc, terrain_xc = create_terrain_with_score(
         "XCSkiingTerrain",
         xc_scores,
@@ -876,7 +864,12 @@ Examples:
         location=(0, 0, 0),
         scale_factor=100,
         target_vertices=target_vertices,
-        cmap_name="mako", 
+        cmap_name="mako",  # Fallback for single-colormap mode (not used if parks provided)
+        parks=parks,  # Enable dual colormaps near parks
+        park_radius_meters=2000,
+        park_cluster_threshold=500,
+        base_cmap_name="gist_earth",  # Earth tones for base terrain
+        overlay_cmap_name="cool",  # Cool blues for ski zones
     )
 
     if mesh_xc is None:
@@ -905,12 +898,6 @@ Examples:
 
     logger.info(f"Positioned sledding terrain at {pos_left}")
     logger.info(f"Positioned XC skiing terrain at {pos_right}")
-
-    # Create park markers on XC skiing terrain
-    markers = []
-    if parks and terrain_xc:
-        markers = create_park_markers(parks, terrain_xc, mesh_xc)
-        logger.info(f"Created {len(markers)} park markers")
 
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
@@ -942,8 +929,11 @@ Examples:
     logger.info("=" * 70)
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
-    logger.info(f"  ✓ Created sledding terrain mesh ({len(mesh_sledding.data.vertices)} vertices) - plasma colormap")
-    logger.info(f"  ✓ Created XC skiing terrain mesh ({len(mesh_xc.data.vertices)} vertices) - viridis colormap")
+    logger.info(f"  ✓ Created sledding terrain mesh ({len(mesh_sledding.data.vertices)} vertices)")
+    logger.info(f"    - Single colormap: mako (purple → yellow)")
+    logger.info(f"  ✓ Created XC skiing terrain mesh ({len(mesh_xc.data.vertices)} vertices)")
+    logger.info(f"    - Dual colormaps: gist_earth (base) + cool (park zones)")
+    logger.info(f"    - 2km zones around {len(parks) if parks else 0} park clusters")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
     logger.info(f"  ✓ Positioned meshes with dynamic spacing")
