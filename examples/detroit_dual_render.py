@@ -385,7 +385,7 @@ def create_terrain_with_score(
         terrain.compute_colors()
 
         logger.debug(f"  Dual colormap applied: {np.sum(park_mask)} vertices in overlay zones")
-        return mesh_obj_temp, terrain
+        # Continue to water detection below (don't return early)
 
     else:
         # Single colormap mode: score-based coloring for entire terrain
@@ -421,14 +421,29 @@ def create_terrain_with_score(
         logger.debug(f"  Water detection skipped: {e}")
         water_mask = None
 
-    # Create mesh using terrain maker library
-    mesh_obj = terrain.create_mesh(
-        scale_factor=scale_factor,
-        height_scale=height_scale,
-        center_model=True,
-        boundary_extension=True,
-        water_mask=water_mask,
-    )
+    # Create final mesh with water detection
+    if parks:
+        # Dual colormap mode: delete temp mesh and create final mesh with water detection
+        logger.debug(f"  Removing temporary mesh and creating final mesh with water detection...")
+        bpy.data.objects.remove(mesh_obj_temp, do_unlink=True)
+
+        # Create final mesh with water mask applied to dual colormap
+        mesh_obj = terrain.create_mesh(
+            scale_factor=scale_factor,
+            height_scale=height_scale,
+            center_model=True,
+            boundary_extension=True,
+            water_mask=water_mask,
+        )
+    else:
+        # Single colormap mode: create mesh with water detection
+        mesh_obj = terrain.create_mesh(
+            scale_factor=scale_factor,
+            height_scale=height_scale,
+            center_model=True,
+            boundary_extension=True,
+            water_mask=water_mask,
+        )
 
     if mesh_obj is None:
         logger.error(f"Failed to create mesh for {name}")
