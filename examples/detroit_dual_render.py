@@ -66,6 +66,7 @@ from src.terrain.core import (
     flip_raster,
     scale_elevation,
 )
+from src.terrain.blender_integration import apply_vertex_colors
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from affine import Affine
@@ -453,6 +454,16 @@ def create_terrain_with_score(
             boundary_extension=True,
             water_mask=None,  # Don't pass water_mask - already applied to colors
         )
+
+        if mesh_obj is None:
+            logger.error(f"Failed to create final mesh for {name}")
+            return None, None
+
+        # Explicitly apply the modified vertex colors to the new mesh
+        logger.debug(f"  Applying vertex colors to final mesh...")
+        apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
+        logger.debug(f"  ✓ Vertex colors applied ({len(terrain.colors)} vertices)")
+
     else:
         # Single colormap mode: create mesh with water detection
         mesh_obj = terrain.create_mesh(
@@ -463,9 +474,9 @@ def create_terrain_with_score(
             water_mask=water_mask,
         )
 
-    if mesh_obj is None:
-        logger.error(f"Failed to create mesh for {name}")
-        return None, None
+        if mesh_obj is None:
+            logger.error(f"Failed to create mesh for {name}")
+            return None, None
 
     # Position the mesh at the specified location
     mesh_obj.location = location
