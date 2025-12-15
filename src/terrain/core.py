@@ -2248,29 +2248,37 @@ class Terrain:
 
         self.logger.info(f"Computing proximity mask for {len(point_coords)} points...")
 
-        # Optional: cluster nearby points using DBSCAN
+        # Optional: cluster nearby points using DBSCAN (if sklearn available)
         if cluster_threshold_meters is not None:
-            from sklearn.cluster import DBSCAN
+            try:
+                from sklearn.cluster import DBSCAN
 
-            # Convert cluster threshold from meters to mesh units
-            scale_factor = self.model_params["scale_factor"]
-            cluster_threshold_mesh = cluster_threshold_meters / scale_factor * 1000  # m to km, then to mesh units
+                # Convert cluster threshold from meters to mesh units
+                scale_factor = self.model_params["scale_factor"]
+                cluster_threshold_mesh = cluster_threshold_meters / scale_factor * 1000  # m to km, then to mesh units
 
-            self.logger.info(
-                f"  Clustering points with threshold {cluster_threshold_meters}m "
-                f"({cluster_threshold_mesh:.3f} mesh units)..."
-            )
+                self.logger.info(
+                    f"  Clustering points with threshold {cluster_threshold_meters}m "
+                    f"({cluster_threshold_mesh:.3f} mesh units)..."
+                )
 
-            clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
-            labels = clustering.fit_predict(point_coords)
-            num_clusters = labels.max() + 1
+                clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
+                labels = clustering.fit_predict(point_coords)
+                num_clusters = labels.max() + 1
 
-            # Use cluster centroids instead of individual points
-            point_coords = np.array(
-                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
-            )
+                # Use cluster centroids instead of individual points
+                point_coords = np.array(
+                    [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+                )
 
-            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
+                self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
+
+            except ImportError:
+                self.logger.warning(
+                    f"  sklearn not available - skipping clustering. "
+                    f"Install scikit-learn for point clustering: pip install scikit-learn"
+                )
+                self.logger.info(f"  Using {len(lons)} individual points (no clustering)")
 
         # Build KDTree for efficient spatial queries
         tree = KDTree(point_coords)
