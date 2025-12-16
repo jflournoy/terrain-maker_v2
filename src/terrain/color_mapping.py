@@ -8,7 +8,47 @@ using matplotlib colormaps.
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 from tqdm import tqdm
+
+
+# =============================================================================
+# Custom Colormaps
+# =============================================================================
+
+# Michigan Natural Landscape Colormap
+# Perceptually uniform progression through Michigan's natural features:
+# Great Lakes (deep blue) → Northern forests (evergreen) → Upland meadows → Sand dunes (tan)
+_MICHIGAN_COLORS = {
+    'red': [
+        (0.00, 0.17, 0.17),  # Great Lakes: deep blue-gray (low red)
+        (0.33, 0.24, 0.24),  # Forest: evergreen (low red)
+        (0.67, 0.54, 0.54),  # Upland: meadow tan-green
+        (1.00, 0.83, 0.83),  # Sand dunes: warm tan (high red)
+    ],
+    'green': [
+        (0.00, 0.37, 0.37),  # Great Lakes: blue-gray
+        (0.33, 0.42, 0.42),  # Forest: rich green
+        (0.67, 0.55, 0.55),  # Upland: meadow yellow-green
+        (1.00, 0.77, 0.77),  # Sand dunes: warm tan
+    ],
+    'blue': [
+        (0.00, 0.55, 0.55),  # Great Lakes: deep blue
+        (0.33, 0.18, 0.18),  # Forest: evergreen (low blue)
+        (0.67, 0.35, 0.35),  # Upland: meadow tan-green
+        (1.00, 0.63, 0.63),  # Sand dunes: neutral tan
+    ],
+}
+
+# Register the Michigan colormap with matplotlib
+michigan_cmap = LinearSegmentedColormap('michigan', _MICHIGAN_COLORS, N=256)
+try:
+    # Register with new API (matplotlib >= 3.7)
+    import matplotlib
+    matplotlib.colormaps.register(michigan_cmap, force=True)
+except (AttributeError, TypeError):
+    # Fall back to old API
+    plt.register_cmap(cmap=michigan_cmap)
 
 
 def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None):

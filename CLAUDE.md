@@ -166,22 +166,38 @@ See `examples/detroit_dual_render.py` for the proper pattern:
 
 ## Visualization Standards
 
-**ALWAYS use viridis family colormaps** - For terrain visualization, prefer colormaps from the viridis family for their perceptual uniformity and colorblind-friendly properties.
+**Prefer perceptually uniform colormaps** - For all visualizations, prioritize colormaps that are perceptually uniform and colorblind-friendly.
 
 ### Recommended Colormaps
 
-- **Elevation/Terrain**: `gist_earth`, `terrain` (earth-like colors)
-- **Snow/Ice data**: `cool`, `winter`, `ice` (snow-like colors)
-- **Score maps**: `viridis`, `plasma`, `inferno`, `magma`, `cividis`
-- **General data**: Any viridis family member for perceptually uniform scaling
+**Custom terrain-maker colormaps:**
+- **Michigan elevation**: `michigan` - Perceptually uniform Michigan landscape (Great Lakes blue → forest green → upland meadow → sand dunes)
+
+**Terrain/Elevation (perceptually uniform):**
+- **michigan**: Custom Michigan natural landscape colormap (preferred for Detroit/Michigan examples)
+- **turbo**: Google's modern rainbow replacement with better perceptual properties
+- **cividis**: Optimized for colorblind accessibility
+- **gist_earth**, **terrain**: Traditional earth-tones (less perceptually uniform but intuitive)
+
+**Score maps (viridis family - perceptually uniform):**
+- **viridis**, **plasma**, **inferno**, **magma**, **cividis**
+
+**Snow/Ice data:**
+- **cool**, **winter**, **ice** (snow-like colors)
 
 ### Colormap Selection Criteria
 
 - **Perceptual uniformity**: Equal steps in data = equal perceptual steps in color
 - **Colorblind-friendly**: Accessible to users with color vision deficiencies
 - **Print-friendly**: Converts well to grayscale
-- **Sequential data**: Use single-hue progressions (viridis, plasma)
+- **Sequential data**: Use single-hue progressions (viridis, plasma) or custom michigan
 - **Diverging data**: Use center-neutral progressions (coolwarm, RdBu)
+
+### Trade-offs
+
+- **For scientific publication**: Use viridis family (plasma, viridis, cividis)
+- **For presentations/demos**: Use terrain-specific (michigan, gist_earth, turbo) for immediate visual recognition
+- **For dual colormaps**: Combine terrain-like base (michigan, gist_earth) with viridis family overlay (plasma)
 
 Avoid rainbow colormaps (jet, hsv) due to perceptual non-uniformity.
 
