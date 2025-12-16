@@ -726,7 +726,7 @@ def run_step_render_3d(
         from src.terrain.color_mapping import elevation_colormap
         from src.terrain.transforms import reproject_raster, flip_raster, scale_elevation
         from math import radians
-        from src.terrain.core import setup_camera, setup_light, clear_scene
+        from src.terrain.core import setup_light, clear_scene, position_camera_relative
 
         # Clear scene
         clear_scene()
@@ -770,7 +770,7 @@ def run_step_render_3d(
         park_mask = terrain.compute_proximity_mask(
             park_lons,
             park_lats,
-            radius_meters=2000,  # 2km radius around parks
+            radius_meters=5000,  # 5km radius around parks
             cluster_threshold_meters=500,  # Merge parks within 500m
         )
 
@@ -795,13 +795,11 @@ def run_step_render_3d(
         apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
 
         # Setup camera
-        camera_angle = (radians(60), 0, radians(0))
-        camera = setup_camera(
-            camera_angle=camera_angle,
-            camera_location=(0, -15, 10),
-            scale=1.0,
-            focal_length=35,
-            camera_type="PERSP",
+        camera = position_camera_relative(
+            mesh_obj=mesh_obj,  
+            direction="above",
+            camera_type="ORTHO",
+            ortho_scale=1.2,
         )
 
         # Setup lighting
