@@ -740,14 +740,14 @@ def run_step_render_3d(
         terrain.add_transform(flip_raster(axis="horizontal"))
         terrain.add_transform(scale_elevation(scale_factor=0.0001))
 
-        # Apply transforms
+        # Configure downsampling BEFORE applying transforms
+        terrain.configure_for_target_vertices(target_vertices=1920 * 1080)
+
+        # Apply transforms (including downsampling)
         terrain.apply_transforms()
 
         # Add score layer
         terrain.add_data_layer("score", score_grid, score_transform, "EPSG:4326", target_layer="dem")
-
-        # Configure downsampling for reasonable performance
-        terrain.configure_for_target_vertices(target_vertices=1920 * 1080)
 
         # Create mesh FIRST (needed for proximity mask)
         logger.info("Creating mesh...")
