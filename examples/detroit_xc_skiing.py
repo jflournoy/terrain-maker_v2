@@ -770,24 +770,48 @@ def run_step_render_3d(
         park_mask = terrain.compute_proximity_mask(
             park_lons,
             park_lats,
-            radius_meters=5000,  # 5km radius around parks
+            radius_meters=10_000,  # 5km radius around parks
             cluster_threshold_meters=500,  # Merge parks within 500m
         )
 
-        # Set dual colormaps (viridis family for perceptual uniformity)
+        # Set dual colormaps (Michigan natural landscape + mako scores)
         logger.info("Setting blended color mapping...")
         terrain.set_blended_color_mapping(
-            base_colormap=lambda elev: elevation_colormap(elev, cmap_name="cividis"),
+            base_colormap=lambda elev: elevation_colormap(elev, cmap_name="michigan"),
             base_source_layers=["dem"],
             overlay_colormap=lambda score: elevation_colormap(
-                score, cmap_name="plasma", min_elev=0.0, max_elev=1.0
+                score, cmap_name="mako", min_elev=0.0, max_elev=1.0
             ),
             overlay_source_layers=["score"],
             overlay_mask=park_mask,
         )
 
-        # Compute colors (now with blending)
-        terrain.compute_colors()
+        # Detect water bodies on the unscaled DEM
+        logger.info("Detecting water bodies...")
+        water_mask = None
+        try:
+            from src.terrain.water import identify_water_by_slope
+
+            transformed_dem = terrain.data_layers["dem"]["transformed_data"]
+            # Unscale the DEM to get original elevation values for slope calculation
+            unscaled_dem = transformed_dem / 0.0001
+            water_mask = identify_water_by_slope(
+                unscaled_dem,
+                slope_threshold=0.5,
+                min_area_pixels=100,
+            )
+            water_pixels = np.sum(water_mask)
+            water_percent = 100 * water_pixels / water_mask.size
+            logger.info(
+                f"  Water detected: {water_pixels:,} pixels ({water_percent:.1f}% of terrain)"
+            )
+        except Exception as e:
+            logger.warning(f"  Water detection failed: {e}")
+            water_mask = None
+
+        # Compute colors with blending and water detection
+        logger.info("Computing blended colors with water detection...")
+        terrain.compute_colors(water_mask=water_mask)
 
         # Re-apply colors to mesh
         from src.terrain.blender_integration import apply_vertex_colors
@@ -799,7 +823,7 @@ def run_step_render_3d(
             mesh_obj=mesh_obj,  
             direction="above",
             camera_type="ORTHO",
-            ortho_scale=1.2,
+            ortho_scale=1.5,
         )
 
         # Setup lighting
