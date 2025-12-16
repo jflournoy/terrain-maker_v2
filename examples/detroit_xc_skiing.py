@@ -774,13 +774,13 @@ def run_step_render_3d(
             cluster_threshold_meters=500,  # Merge parks within 500m
         )
 
-        # Set dual colormaps
+        # Set dual colormaps (viridis family for perceptual uniformity)
         logger.info("Setting blended color mapping...")
         terrain.set_blended_color_mapping(
-            base_colormap=lambda elev: elevation_colormap(elev, cmap_name="gist_earth"),
+            base_colormap=lambda elev: elevation_colormap(elev, cmap_name="cividis"),
             base_source_layers=["dem"],
             overlay_colormap=lambda score: elevation_colormap(
-                score, cmap_name="cool", min_elev=0.0, max_elev=1.0
+                score, cmap_name="plasma", min_elev=0.0, max_elev=1.0
             ),
             overlay_source_layers=["score"],
             overlay_mask=park_mask,

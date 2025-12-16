@@ -8,8 +8,8 @@ side-by-side in Blender using terrain maker's rendering library with dual colorm
 Features:
 - Side-by-side comparison of two activity suitability maps
 - XC skiing terrain uses dual colormaps: elevation base + score overlay near parks
-  * Earth tones (gist_earth) for general terrain
-  * Cool blues (cool) for skiing suitability near park clusters
+  * Cividis (viridis family) for general terrain elevation
+  * Plasma (viridis family) for skiing suitability near park clusters
 - Sledding terrain uses single colormap (mako: purple → yellow)
 - Proximity-based coloring with automatic park clustering
 - Detects and colors water bodies blue (slope-based detection)
@@ -230,8 +230,8 @@ def create_terrain_with_score(
     parks: Optional[list[dict]] = None,
     park_radius_meters: float = 2000,
     park_cluster_threshold: float = 500,
-    base_cmap_name: str = "gist_earth",
-    overlay_cmap_name: str = "cool",
+    base_cmap_name: str = "cividis",
+    overlay_cmap_name: str = "plasma",
 ) -> Tuple[Optional[object], Optional["Terrain"]]:
     """
     Create a terrain mesh using terrain maker's Terrain class.
@@ -255,8 +255,8 @@ def create_terrain_with_score(
             enables dual colormaps with score overlay near parks.
         park_radius_meters: Radius around parks to show score overlay (default: 2000m)
         park_cluster_threshold: Distance threshold for merging nearby parks (default: 500m)
-        base_cmap_name: Base colormap for general terrain (default: gist_earth)
-        overlay_cmap_name: Overlay colormap for park zones (default: cool)
+        base_cmap_name: Base colormap for general terrain (default: cividis, viridis family)
+        overlay_cmap_name: Overlay colormap for park zones (default: plasma, viridis family)
 
     Returns:
         Tuple of (mesh_obj, terrain) where mesh_obj is the Blender object and
@@ -896,8 +896,8 @@ Examples:
         parks=parks,  # Enable dual colormaps near parks
         park_radius_meters=2000,
         park_cluster_threshold=500,
-        base_cmap_name="gist_earth",  # Earth tones for base terrain
-        overlay_cmap_name="cool",  # Cool blues for ski zones
+        base_cmap_name="cividis",  # Viridis family for base terrain
+        overlay_cmap_name="plasma",  # Viridis family for ski zones
     )
 
     if mesh_xc is None:

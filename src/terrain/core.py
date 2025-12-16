@@ -2274,14 +2274,33 @@ class Terrain:
 
         self.logger.info(f"Computing proximity mask for {len(point_coords)} points...")
 
+        # Get pixel size from transformed DEM for metric conversions
+        dem_info = self.data_layers.get("dem", {})
+        transformed_transform = dem_info.get("transformed_transform")
+        if transformed_transform is None:
+            raise ValueError("Transformed DEM transform not found")
+
+        # Pixel size in meters (assumes metric CRS like UTM after transformation)
+        pixel_size_meters = abs(transformed_transform.a)
+        scale_factor = self.model_params["scale_factor"]
+
+        # Calculate meters per mesh unit
+        # 1 mesh unit = scale_factor pixels = scale_factor * pixel_size_meters
+        meters_per_mesh_unit = scale_factor * pixel_size_meters
+
+        self.logger.debug(
+            f"  Pixel size: {pixel_size_meters:.2f}m, "
+            f"Scale factor: {scale_factor}, "
+            f"Meters per mesh unit: {meters_per_mesh_unit:.2f}m"
+        )
+
         # Optional: cluster nearby points using DBSCAN (if sklearn available)
         if cluster_threshold_meters is not None:
             try:
                 from sklearn.cluster import DBSCAN
 
                 # Convert cluster threshold from meters to mesh units
-                scale_factor = self.model_params["scale_factor"]
-                cluster_threshold_mesh = cluster_threshold_meters / scale_factor * 1000  # m to km, then to mesh units
+                cluster_threshold_mesh = cluster_threshold_meters / meters_per_mesh_unit
 
                 self.logger.info(
                     f"  Clustering points with threshold {cluster_threshold_meters}m "
@@ -2314,8 +2333,7 @@ class Terrain:
         mesh_verts_2d = self.vertices[:, :2]
 
         # Convert radius from meters to mesh units
-        scale_factor = self.model_params["scale_factor"]
-        radius_mesh = radius_meters / scale_factor * 1000  # m to km, then to mesh units
+        radius_mesh = radius_meters / meters_per_mesh_unit
 
         self.logger.info(
             f"  Querying vertices within {radius_meters}m ({radius_mesh:.3f} mesh units) "
