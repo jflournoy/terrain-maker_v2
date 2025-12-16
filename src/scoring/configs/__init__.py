@@ -20,6 +20,7 @@ from src.scoring.configs.xc_skiing import (
     create_xc_skiing_scorer,
     compute_derived_inputs as xc_skiing_compute_derived_inputs,
     get_required_inputs as xc_skiing_get_required_inputs,
+    compute_improved_xc_skiing_score,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "create_xc_skiing_scorer",
     "xc_skiing_compute_derived_inputs",
     "xc_skiing_get_required_inputs",
+    "compute_improved_xc_skiing_score",
 ]

@@ -17,6 +17,8 @@ Unlike sledding, no penalties for slope steepness - XC skiing can adapt
 to various terrain grades. Only snow quality matters.
 """
 
+import numpy as np
+
 from src.scoring.combiner import ScoreComponent, ScoreCombiner
 
 
@@ -49,7 +51,7 @@ def create_xc_skiing_scorer() -> ScoreCombiner:
                     "ramp_range": (50, 800),    # 2-32 inches usable (5-80cm)
                 },
                 role="additive",
-                weight=0.40,
+                weight=0.30,
             ),
 
             # Snow coverage: fraction of winter days with snow
@@ -63,7 +65,7 @@ def create_xc_skiing_scorer() -> ScoreCombiner:
                     "power": 0.5,  # sqrt for diminishing returns
                 },
                 role="additive",
-                weight=0.40,
+                weight=0.60,
             ),
 
             # Snow consistency: year-to-year reliability (CV)
@@ -77,7 +79,7 @@ def create_xc_skiing_scorer() -> ScoreCombiner:
                     "invert": True,           # Low CV = high score
                 },
                 role="additive",
-                weight=0.20,
+                weight=0.10,
             ),
         ],
     )
@@ -130,3 +132,47 @@ def compute_derived_inputs(snow_stats: dict) -> dict:
         "snow_coverage": snow_stats["mean_snow_day_ratio"],
         "snow_consistency": snow_cons,
     }
+
+
+def compute_improved_xc_skiing_score(
+    snow_stats: dict,
+) -> np.ndarray:
+    """
+    Compute improved XC skiing score using deal breakers and linear coverage.
+
+    This is the new scoring system that uses:
+    - Trapezoid function for snow depth (100-400mm optimal)
+    - Linear coverage (proportional to snow days, no diminishing returns)
+    - Inverted consistency (lower CV = better)
+    - Hard deal breaker: Coverage < 15% (< ~18 days per season)
+    - Weighted sum (depth 30%, coverage 60%, consistency 10%)
+
+    Parks handle terrain safety, so only snow conditions matter.
+
+    Args:
+        snow_stats: Dictionary with SNODAS statistics
+
+    Returns:
+        XC skiing suitability score array (0-1.0)
+    """
+    from src.terrain.scoring import compute_xc_skiing_score
+    from src.scoring.transforms import snow_consistency
+
+    # Get snow metrics
+    snow_depth_mm = snow_stats["median_max_depth"]
+    snow_coverage = snow_stats["mean_snow_day_ratio"]
+
+    # Compute consistency (RMS of inter/intra-season CVs)
+    snow_cons = snow_consistency(
+        snow_stats["interseason_cv"],
+        snow_stats["mean_intraseason_cv"],
+    )
+
+    # Compute improved score
+    score = compute_xc_skiing_score(
+        snow_depth=snow_depth_mm,
+        snow_coverage=snow_coverage,
+        snow_consistency=snow_cons,
+    )
+
+    return score
