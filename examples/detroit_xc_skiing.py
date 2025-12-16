@@ -63,7 +63,7 @@ logger.setLevel(logging.INFO)
 logger.handlers = []
 
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)  # Temporarily enable DEBUG for water detection diagnostics
 console_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
 logger.addHandler(console_handler)
 
@@ -73,7 +73,7 @@ file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s: %(mess
 logger.addHandler(file_handler)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,  # Enable DEBUG for all loggers
     format="%(asctime)s - %(name)s - %(levelname)s: %(message)s",
     handlers=[file_handler]
 )

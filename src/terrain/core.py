@@ -1802,6 +1802,12 @@ class Terrain:
         # Apply water coloring if water mask provided
         if water_mask is not None:
             self.logger.info(f"Applying water coloring to blended vertex colors...")
+            self.logger.debug(f"  Water mask shape: {water_mask.shape}")
+            self.logger.debug(f"  DEM shape: {dem_data.shape}")
+            self.logger.debug(f"  Num surface vertices: {num_surface_vertices}")
+            self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
+            self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
+
             water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
 
             # Map water mask from grid space to vertex space
