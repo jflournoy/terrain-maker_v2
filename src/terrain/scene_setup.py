@@ -64,6 +64,92 @@ def hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     return (r, g, b)
 
 
+def create_matte_material(
+    name: str = "BackgroundMaterial",
+    color: str | tuple = "#F5F5F0",
+    material_roughness: float = 1.0,
+    receive_shadows: bool = False,
+) -> "bpy.types.Material":
+    """Create a matte Principled BSDF material for backgrounds.
+
+    Creates a physically-based matte material with configurable color and
+    shadow receiving behavior. Useful for background planes and other
+    non-reflective surfaces.
+
+    Args:
+        name: Name for the material (default: "BackgroundMaterial")
+        color: Color as hex string (e.g., "#F5F5F0") or RGB tuple (default: eggshell white)
+        material_roughness: Roughness value 0.0-1.0, 1.0 = fully matte (default: 1.0)
+        receive_shadows: Whether the material receives shadows (default: False)
+
+    Returns:
+        Blender Material object configured as specified
+
+    Note:
+        This function requires Blender and the bpy module to be available.
+        Call only from within a Blender environment.
+
+    Raises:
+        RuntimeError: If called outside of Blender environment
+    """
+    logger = logging.getLogger(__name__)
+
+    # Convert hex color to RGB if needed
+    if isinstance(color, str):
+        color = hex_to_rgb(color)
+
+    # Create material
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+
+    # Clear default nodes
+    material.node_tree.nodes.clear()
+
+    # Create Principled BSDF shader
+    nodes = material.node_tree.nodes
+    bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+
+    # Set Principled BSDF properties
+    bsdf.inputs["Base Color"].default_value = (*color, 1.0)  # RGBA
+    bsdf.inputs["Roughness"].default_value = material_roughness
+    bsdf.inputs["Metallic"].default_value = 0.0  # Not metallic
+
+    # Create output node
+    output = nodes.new(type="ShaderNodeOutputMaterial")
+
+    if receive_shadows:
+        # Simple pass-through: just connect BSDF to output
+        material.node_tree.links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
+        logger.debug(f"Created material '{name}' with shadow receiving enabled")
+    else:
+        # Create a shader that doesn't receive shadows by using an emission
+        # fallback on shadow rays, making the material appear as if it doesn't
+        # receive shadows (appears as the base color without darkening)
+
+        # For a simple approach: use a Mix Shader based on Is Shadow Ray
+        light_path = nodes.new(type="ShaderNodeLightPath")
+        mix_shader = nodes.new(type="ShaderNodeMix")
+        mix_shader.data_type = "SHADER"
+
+        # Emission shader for shadow rays (uses the base color without shadowing)
+        emission = nodes.new(type="ShaderNodeEmission")
+        emission.inputs["Color"].default_value = (*color, 1.0)
+        emission.inputs["Strength"].default_value = 1.0
+
+        # Wire up: if is_shadow_ray, use emission; otherwise use BSDF
+        material.node_tree.links.new(
+            light_path.outputs["Is Shadow Ray"], mix_shader.inputs["Selection"]
+        )
+        material.node_tree.links.new(bsdf.outputs["BSDF"], mix_shader.inputs["A"])
+        material.node_tree.links.new(emission.outputs["Emission"], mix_shader.inputs["B"])
+        material.node_tree.links.new(mix_shader.outputs["Result"], output.inputs["Surface"])
+
+        logger.debug(f"Created material '{name}' with shadow receiving disabled")
+
+    logger.info(f"✓ Created material '{name}' (roughness={material_roughness}, receive_shadows={receive_shadows})")
+    return material
+
+
 def clear_scene():
     """
     Clear all objects from the Blender scene.
