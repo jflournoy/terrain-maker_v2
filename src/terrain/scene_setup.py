@@ -7,7 +7,7 @@ lighting, and atmosphere for terrain rendering.
 
 import logging
 import numpy as np
-from math import radians
+from math import radians, tan
 
 import bpy
 from mathutils import Euler, Vector
@@ -148,6 +148,82 @@ def create_matte_material(
 
     logger.info(f"✓ Created material '{name}' (roughness={material_roughness}, receive_shadows={receive_shadows})")
     return material
+
+
+def calculate_camera_frustum_size(
+    camera_type: str,
+    aspect_ratio: float,
+    ortho_scale: float = None,
+    fov_degrees: float = None,
+    distance: float = None,
+) -> tuple[float, float]:
+    """Calculate the visible area of a camera at a given distance.
+
+    Computes the width and height of the camera's frustum (visible area) at a
+    specified distance. Works with both orthographic and perspective cameras.
+
+    For orthographic cameras, the frustum size depends on the ortho_scale parameter.
+    For perspective cameras, the frustum size depends on the FOV and distance from
+    the camera.
+
+    Args:
+        camera_type: Type of camera - "ORTHO" for orthographic or "PERSP" for perspective
+        aspect_ratio: Render aspect ratio (width / height, typically 16/9 or similar)
+        ortho_scale: Scale value for orthographic cameras (required for ORTHO type)
+        fov_degrees: Field of view in degrees for perspective cameras (required for PERSP type)
+        distance: Distance from camera for frustum calculation (required for PERSP type)
+
+    Returns:
+        tuple: (width, height) of the camera frustum in Blender units
+
+    Raises:
+        ValueError: If camera_type is invalid or required parameters are missing
+        TypeError: If parameters have incorrect types
+
+    Examples:
+        >>> # Orthographic camera with 2x ortho_scale and 16:9 aspect ratio
+        >>> w, h = calculate_camera_frustum_size("ORTHO", 16/9, ortho_scale=2.0)
+        >>> print(f"Width: {w:.2f}, Height: {h:.2f}")
+        Width: 2.00, Height: 1.12
+
+        >>> # Perspective camera with 49.13° FOV at 10 units distance
+        >>> w, h = calculate_camera_frustum_size("PERSP", 16/9, fov_degrees=49.13, distance=10.0)
+        >>> # Result width and height depend on FOV and distance
+    """
+    logger = logging.getLogger(__name__)
+
+    if camera_type == "ORTHO":
+        if ortho_scale is None:
+            raise ValueError("ortho_scale parameter is required for orthographic cameras")
+
+        width = float(ortho_scale)
+        height = width / aspect_ratio
+        logger.debug(
+            f"Orthographic frustum: scale={ortho_scale}, aspect={aspect_ratio:.3f} "
+            f"-> width={width:.2f}, height={height:.2f}"
+        )
+        return (width, height)
+
+    elif camera_type == "PERSP":
+        if fov_degrees is None or distance is None:
+            raise ValueError("fov_degrees and distance parameters are required for perspective cameras")
+
+        # Convert FOV from degrees to radians
+        fov_radians = radians(fov_degrees)
+
+        # Calculate frustum width using the tangent of half the FOV angle
+        # frustum_width = 2 * distance * tan(FOV / 2)
+        width = 2.0 * distance * tan(fov_radians / 2)
+        height = width / aspect_ratio
+
+        logger.debug(
+            f"Perspective frustum: fov={fov_degrees:.2f}°, distance={distance:.2f}, "
+            f"aspect={aspect_ratio:.3f} -> width={width:.2f}, height={height:.2f}"
+        )
+        return (width, height)
+
+    else:
+        raise ValueError(f"Invalid camera_type '{camera_type}'. Must be 'ORTHO' or 'PERSP'.")
 
 
 def clear_scene():
