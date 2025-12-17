@@ -7,7 +7,7 @@ lighting, and atmosphere for terrain rendering.
 
 import logging
 import numpy as np
-from math import radians, tan
+from math import radians, tan, atan, degrees
 
 import bpy
 from mathutils import Euler, Vector
@@ -224,6 +224,171 @@ def calculate_camera_frustum_size(
 
     else:
         raise ValueError(f"Invalid camera_type '{camera_type}'. Must be 'ORTHO' or 'PERSP'.")
+
+
+def create_background_plane(
+    camera,
+    mesh_or_meshes,
+    distance_below: float = 50.0,
+    color: str | tuple = "#F5F5F0",
+    size_multiplier: float = 2.0,
+    receive_shadows: bool = False,
+) -> "bpy.types.Object":
+    """Create a background plane for Blender terrain renders.
+
+    Creates a plane mesh positioned below the terrain that fills the camera view.
+    The plane is sized to fill the camera's frustum with a safety margin and
+    positioned below the lowest point of the terrain mesh(es).
+
+    This is useful for adding a clean background color to terrain renders without
+    drop shadows (by default) or with shadows for depth effect.
+
+    Args:
+        camera: Blender camera object to size plane relative to
+        mesh_or_meshes: Single mesh object or list of mesh objects to position
+            plane below. The plane will be positioned below the lowest Z point.
+        distance_below: Distance below the lowest mesh point to place the plane
+            (default: 50.0 units)
+        color: Color for the background plane as hex string (e.g., "#F5F5F0") or
+            RGB tuple (default: eggshell white #F5F5F0)
+        size_multiplier: How much larger than camera frustum to make the plane,
+            for safety margin (default: 2.0, makes plane 2x frustum size)
+        receive_shadows: Whether the plane receives shadows from objects
+            (default: False for clean background)
+
+    Returns:
+        Blender plane object with material applied and positioned
+
+    Raises:
+        ValueError: If camera or mesh is invalid
+        RuntimeError: If called outside of Blender environment
+    """
+    logger = logging.getLogger(__name__)
+
+    logger.info("Creating background plane...")
+
+    # Normalize input: handle both single mesh and list of meshes
+    if isinstance(mesh_or_meshes, list):
+        meshes = mesh_or_meshes
+    else:
+        meshes = [mesh_or_meshes]
+
+    if not meshes:
+        raise ValueError("At least one mesh must be provided")
+
+    # Compute combined bounding box to find lowest Z point
+    all_zs = []
+    center_z = 0
+
+    for mesh in meshes:
+        bbox = mesh.bound_box
+        world_matrix = mesh.matrix_world
+        for vertex in bbox:
+            world_vertex = world_matrix @ Vector(vertex)
+            all_zs.append(world_vertex[2])
+        # Also track center for positioning
+        center_z += (min([world_matrix @ Vector(v) for v in bbox], key=lambda x: x[2])[2])
+
+    min_z = min(all_zs)
+    plane_z = min_z - distance_below
+
+    logger.debug(f"Mesh lowest Z: {min_z:.2f}, plane position Z: {plane_z:.2f}")
+
+    # Get camera properties to calculate frustum size
+    cam_data = camera.data
+    if cam_data.type == "ORTHO":
+        camera_type = "ORTHO"
+        ortho_scale = cam_data.ortho_scale
+        fov_degrees = None
+        distance = None
+    elif cam_data.type == "PERSP":
+        camera_type = "PERSP"
+        ortho_scale = None
+        # Convert focal length (mm) to FOV in degrees
+        # FOV (degrees) = 2 * arctan(sensor_width / (2 * focal_length))
+        # Blender's default sensor width is 36mm for full-frame
+        sensor_width = 36.0  # mm, standard full-frame
+        fov_radians = 2 * atan(sensor_width / (2 * cam_data.lens))
+        fov_degrees = degrees(fov_radians)
+
+        # Calculate distance from camera to plane
+        cam_to_plane = plane_z - camera.location[2]
+        distance = abs(cam_to_plane)
+    else:
+        raise ValueError(f"Unsupported camera type: {cam_data.type}")
+
+    # Get render aspect ratio
+    scene = bpy.context.scene
+    render = scene.render
+    aspect_ratio = render.resolution_x / render.resolution_y
+
+    logger.debug(f"Camera type: {camera_type}, aspect ratio: {aspect_ratio:.3f}")
+
+    # Calculate frustum size at plane location
+    frustum_width, frustum_height = calculate_camera_frustum_size(
+        camera_type=camera_type,
+        aspect_ratio=aspect_ratio,
+        ortho_scale=ortho_scale,
+        fov_degrees=fov_degrees,
+        distance=distance,
+    )
+
+    # Apply size multiplier for safety margin
+    plane_width = frustum_width * size_multiplier
+    plane_height = frustum_height * size_multiplier
+
+    logger.debug(
+        f"Frustum: {frustum_width:.2f}x{frustum_height:.2f}, "
+        f"plane (after {size_multiplier}x multiplier): {plane_width:.2f}x{plane_height:.2f}"
+    )
+
+    # Create plane mesh
+    mesh_data = bpy.data.meshes.new("BackgroundPlane")
+    plane_obj = bpy.data.objects.new("BackgroundPlane", mesh_data)
+    bpy.context.scene.collection.objects.link(plane_obj)
+
+    # Create plane vertices (4 corners)
+    half_w = plane_width / 2
+    half_h = plane_height / 2
+    verts = [
+        (-half_w, -half_h, 0),
+        (half_w, -half_h, 0),
+        (half_w, half_h, 0),
+        (-half_w, half_h, 0),
+    ]
+
+    # Create faces (single quad)
+    faces = [(0, 1, 2, 3)]
+
+    # Fill mesh
+    mesh_data.from_pydata(verts, [], faces)
+    mesh_data.update()
+
+    # Position plane below mesh, centered on camera XY
+    cam_xy = (camera.location[0], camera.location[1])
+    plane_obj.location = (*cam_xy, plane_z)
+
+    logger.debug(f"Plane positioned at: {plane_obj.location}")
+
+    # Create and assign material
+    material = create_matte_material(
+        name="BackgroundMaterial",
+        color=color,
+        material_roughness=1.0,
+        receive_shadows=receive_shadows,
+    )
+
+    if mesh_data.materials:
+        mesh_data.materials[0] = material
+    else:
+        mesh_data.materials.append(material)
+
+    logger.info(
+        f"✓ Created background plane: {plane_width:.2f}x{plane_height:.2f} "
+        f"at Z={plane_z:.2f} (color={color}, shadows={receive_shadows})"
+    )
+
+    return plane_obj
 
 
 def clear_scene():

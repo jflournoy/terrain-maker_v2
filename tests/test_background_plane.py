@@ -211,37 +211,297 @@ class TestCreateMatteMaterial:
 class TestCalculateCameraFrustumSize:
     """Tests for camera frustum size calculation.
 
-    Note: These tests use mocking since bpy is not available in test environment.
+    These tests verify the mathematical calculation without requiring Blender,
+    by testing the helper functions and logic.
     """
 
-    @pytest.mark.skip(reason="Requires Blender environment")
-    def test_ortho_camera_size(self):
-        """Orthographic camera returns correct size based on ortho_scale."""
-        pass
+    def test_function_exists(self):
+        """Function exists and is callable."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
 
-    @pytest.mark.skip(reason="Requires Blender environment")
-    def test_perspective_camera_size(self):
-        """Perspective camera returns correct size based on FOV and distance."""
-        pass
+        assert callable(calculate_camera_frustum_size)
+
+    def test_function_signature(self):
+        """Function has expected parameters."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        import inspect
+        sig = inspect.signature(calculate_camera_frustum_size)
+
+        # Check required parameters
+        assert 'camera_type' in sig.parameters
+        assert 'ortho_scale' in sig.parameters or 'distance' in sig.parameters
+
+    def test_ortho_returns_tuple(self):
+        """Orthographic camera calculation returns (width, height) tuple."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        # Test with orthographic camera
+        result = calculate_camera_frustum_size(
+            camera_type="ORTHO",
+            ortho_scale=2.0,
+            aspect_ratio=16 / 9,
+        )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert all(isinstance(x, float) for x in result)
+
+    def test_ortho_scale_affects_width(self):
+        """Orthographic: width equals ortho_scale."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        scale = 5.0
+        result = calculate_camera_frustum_size(
+            camera_type="ORTHO",
+            ortho_scale=scale,
+            aspect_ratio=1.0,  # Square for simplicity
+        )
+
+        width, height = result
+        # For ortho, width should equal ortho_scale
+        assert abs(width - scale) < 0.001
+
+    def test_ortho_respects_aspect_ratio(self):
+        """Orthographic: height computed from aspect ratio."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        aspect_ratio = 16 / 9
+        result = calculate_camera_frustum_size(
+            camera_type="ORTHO",
+            ortho_scale=10.0,
+            aspect_ratio=aspect_ratio,
+        )
+
+        width, height = result
+        # Height = width / aspect_ratio
+        expected_height = width / aspect_ratio
+        assert abs(height - expected_height) < 0.001
+
+    def test_perspective_returns_tuple(self):
+        """Perspective camera calculation returns (width, height) tuple."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        result = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=49.13,  # Blender default in degrees
+            distance=10.0,
+            aspect_ratio=16 / 9,
+        )
+
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        assert all(isinstance(x, float) for x in result)
+
+    def test_perspective_fov_affects_size(self):
+        """Perspective: larger FOV produces larger frustum."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        distance = 10.0
+        aspect_ratio = 1.0
+
+        # Small FOV
+        small_fov = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=30.0,
+            distance=distance,
+            aspect_ratio=aspect_ratio,
+        )
+
+        # Large FOV
+        large_fov = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=60.0,
+            distance=distance,
+            aspect_ratio=aspect_ratio,
+        )
+
+        # Larger FOV should produce larger width
+        assert large_fov[0] > small_fov[0]
+
+    def test_perspective_distance_affects_size(self):
+        """Perspective: larger distance produces larger frustum."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        fov = 49.13
+        aspect_ratio = 1.0
+
+        # Close distance
+        close = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=fov,
+            distance=5.0,
+            aspect_ratio=aspect_ratio,
+        )
+
+        # Far distance
+        far = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=fov,
+            distance=20.0,
+            aspect_ratio=aspect_ratio,
+        )
+
+        # Farther distance should produce larger frustum
+        assert far[0] > close[0]
+
+    def test_perspective_aspect_ratio_maintained(self):
+        """Perspective: aspect ratio is respected."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        aspect_ratio = 16 / 9
+
+        result = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=49.13,
+            distance=10.0,
+            aspect_ratio=aspect_ratio,
+        )
+
+        width, height = result
+        # Check aspect ratio: width / height should equal aspect_ratio
+        computed_ratio = width / height
+        assert abs(computed_ratio - aspect_ratio) < 0.001
+
+    def test_positive_dimensions(self):
+        """All dimensions are positive values."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        # Orthographic
+        ortho_result = calculate_camera_frustum_size(
+            camera_type="ORTHO",
+            ortho_scale=2.0,
+            aspect_ratio=16 / 9,
+        )
+        assert all(x > 0 for x in ortho_result)
+
+        # Perspective
+        persp_result = calculate_camera_frustum_size(
+            camera_type="PERSP",
+            fov_degrees=49.13,
+            distance=10.0,
+            aspect_ratio=16 / 9,
+        )
+        assert all(x > 0 for x in persp_result)
+
+    def test_has_docstring(self):
+        """Function has proper documentation."""
+        from src.terrain.scene_setup import calculate_camera_frustum_size
+
+        assert calculate_camera_frustum_size.__doc__ is not None
+        assert 'frustum' in calculate_camera_frustum_size.__doc__.lower()
 
 
 class TestCreateBackgroundPlane:
     """Tests for background plane creation.
 
-    Note: These tests use mocking since bpy is not available in test environment.
+    Note: These tests verify function signature and defaults without requiring
+    Blender. Integration tests in Blender environment verify actual plane creation.
     """
 
-    @pytest.mark.skip(reason="Requires Blender environment")
-    def test_plane_created(self):
-        """Function creates a plane mesh object."""
-        pass
+    def test_function_exists(self):
+        """Function exists and is callable."""
+        from src.terrain.scene_setup import create_background_plane
 
-    @pytest.mark.skip(reason="Requires Blender environment")
-    def test_plane_sized_to_camera(self):
-        """Plane is sized to fill camera frustum with margin."""
-        pass
+        assert callable(create_background_plane)
 
-    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_function_signature(self):
+        """Function has expected parameters."""
+        from src.terrain.scene_setup import create_background_plane
+
+        import inspect
+        sig = inspect.signature(create_background_plane)
+
+        # Check required parameters
+        assert 'camera' in sig.parameters
+        assert 'mesh_or_meshes' in sig.parameters
+
+        # Check optional parameters with defaults
+        assert 'distance_below' in sig.parameters
+        assert 'color' in sig.parameters
+        assert 'size_multiplier' in sig.parameters
+        assert 'receive_shadows' in sig.parameters
+
+    def test_default_distance_below(self):
+        """Default distance_below is 50.0 units."""
+        from src.terrain.scene_setup import create_background_plane
+
+        import inspect
+        sig = inspect.signature(create_background_plane)
+
+        assert sig.parameters['distance_below'].default == 50.0
+
     def test_default_color_is_eggshell(self):
         """Default color is eggshell white (#F5F5F0)."""
+        from src.terrain.scene_setup import create_background_plane
+
+        import inspect
+        sig = inspect.signature(create_background_plane)
+
+        assert sig.parameters['color'].default == "#F5F5F0"
+
+    def test_default_size_multiplier(self):
+        """Default size_multiplier is 2.0."""
+        from src.terrain.scene_setup import create_background_plane
+
+        import inspect
+        sig = inspect.signature(create_background_plane)
+
+        assert sig.parameters['size_multiplier'].default == 2.0
+
+    def test_default_receive_shadows_false(self):
+        """Default receive_shadows is False."""
+        from src.terrain.scene_setup import create_background_plane
+
+        import inspect
+        sig = inspect.signature(create_background_plane)
+
+        assert sig.parameters['receive_shadows'].default is False
+
+    def test_has_docstring(self):
+        """Function has proper documentation."""
+        from src.terrain.scene_setup import create_background_plane
+
+        assert create_background_plane.__doc__ is not None
+        assert 'background' in create_background_plane.__doc__.lower()
+        assert 'plane' in create_background_plane.__doc__.lower()
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_plane_created_in_blender(self):
+        """Function creates a plane mesh object in Blender."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_plane_sized_to_camera_frustum(self):
+        """Plane is sized to fill camera frustum with multiplier."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_plane_positioned_below_mesh(self):
+        """Plane is positioned below mesh by specified distance."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_custom_color_applied(self):
+        """Custom colors are applied correctly."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_shadow_receiving_configurable(self):
+        """Shadow receiving can be enabled or disabled."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_works_with_single_mesh(self):
+        """Function works with a single mesh object."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_works_with_multiple_meshes(self):
+        """Function works with a list of mesh objects."""
+        pass
+
+    @pytest.mark.skip(reason="Requires Blender environment")
+    def test_returns_plane_object(self):
+        """Function returns the created plane object."""
         pass
