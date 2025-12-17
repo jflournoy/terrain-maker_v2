@@ -954,7 +954,7 @@ Examples:
 
     # Calculate target vertices for mesh creation
     # Match render resolution for optimal detail
-    target_vertices = render_width * render_height
+    target_vertices = render_width * render_height * 2
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution)")
 
     # Create single terrain mesh with dual colormaps
