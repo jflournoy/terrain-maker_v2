@@ -22,6 +22,8 @@ Components:
   - terrain_consistency: Extreme roughness only (soft threshold at 50%)
 """
 
+import numpy as np
+
 from src.scoring.combiner import ScoreComponent, ScoreCombiner
 
 
@@ -247,3 +249,54 @@ def compute_derived_inputs(
         "runout_bonus": runout_bonus,
         "terrain_consistency": terrain_cons,
     }
+
+
+def compute_improved_sledding_score(
+    slope_stats,
+    snow_stats: dict,
+) -> np.ndarray:
+    """
+    Compute improved sledding score using trapezoid functions and synergy bonuses.
+
+    This is the new scoring system that uses:
+    - Trapezoid functions for sweet spots (snow, slope)
+    - Hard deal breakers (slope > 40°, roughness > 6m, insufficient coverage)
+    - Coverage with diminishing returns
+    - Synergy bonuses for exceptional combinations
+    - Multiplicative base score
+
+    Args:
+        slope_stats: SlopeStatistics object from compute_tiled_slope_statistics()
+        snow_stats: Dictionary with SNODAS statistics
+
+    Returns:
+        Sledding suitability score array (0-~1.5, can exceed 1.0 due to bonuses)
+    """
+    from src.terrain.scoring import compute_sledding_score
+
+    # Convert snow depth from mm to inches (1 mm = 0.0393701 inches)
+    snow_depth_mm = snow_stats["median_max_depth"]
+    snow_depth_inches = snow_depth_mm * 0.0393701
+
+    # Estimate coverage in months
+    # snow_coverage is the fraction of winter days with snow
+    # Assume winter is ~4 months (Dec-Mar), so coverage_months = snow_coverage × 4
+    # But actually, mean_snow_day_ratio is over the full year, not just winter
+    # Let's use it more conservatively: if you have snow 25% of the year, that's ~3 months
+    coverage_months = snow_stats["mean_snow_day_ratio"] * 12.0
+
+    # Use mean slope for primary scoring
+    slope_degrees = slope_stats.slope_mean
+
+    # Use roughness (elevation std dev) for terrain quality - physical metric in meters
+    roughness_meters = slope_stats.roughness
+
+    # Compute improved score
+    score = compute_sledding_score(
+        snow_depth=snow_depth_inches,
+        slope=slope_degrees,
+        coverage_months=coverage_months,
+        roughness=roughness_meters,
+    )
+
+    return score

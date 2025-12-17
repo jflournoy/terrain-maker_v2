@@ -9,8 +9,8 @@ This pipeline produces a comprehensive sledding suitability score map:
 ![Final Sledding Suitability Score](images/05_final/sledding_score.png)
 
 **Score Interpretation:**
-- **0.7-1.0 (Dark Yellow)**: Excellent sledding locations
-- **0.5-0.7 (Yellow-Green)**: Good sledding with some concerns
+- **0.8-1.3 (Bright Yellow)**: Excellent sledding locations (with synergy bonuses)
+- **0.5-0.8 (Yellow-Green)**: Good sledding conditions
 - **0.3-0.5 (Green-Cyan)**: Moderate - marginal conditions
 - **0.0-0.3 (Dark Blue/Purple)**: Poor sledding potential
 
@@ -36,7 +36,7 @@ DEM → Snow Depth → Sledding Score → 3D Render (optional)
 Each stage produces a visual artifact:
 - **DEM Visualization**: Terrain elevation heatmap
 - **Snow Depth Visualization**: Median maximum snow depth across the season
-- **Sledding Score Visualization**: Combined suitability score (0-1 scale)
+- **Sledding Score Visualization**: Combined suitability score (0 to ~1.3 with synergies)
 - **3D Render**: Optional Blender visualization with snow overlay
 
 ### The Code
@@ -60,10 +60,12 @@ snow = SnowAnalysis(terrain=terrain, snodas_root_dir=snodas_dir)
 stats, metadata, failed = snow.process_snow_data()
 
 # 4. Calculate sledding suitability score
-# This combines:
-# - Snow depth (deeper is better)
-# - Coverage (consistent coverage is better)
-# - Consistency (low variability is better)
+# This uses improved scoring with:
+# - Trapezoid functions for sweet spots (snow 1-20", slope 1-20°)
+# - Optimal ranges: snow 2-12", slope 6-12°
+# - Deal breakers for unsuitable terrain (slope >35°, variability >5°)
+# - Coverage with diminishing returns
+# - Synergy bonuses for exceptional combinations
 sledding_score = snow.calculate_sledding_score()
 
 # The score is automatically added to terrain.data_layers
@@ -172,14 +174,20 @@ def visualize_sledding_score(score: np.ndarray, output_path: Path):
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
 ```
 
-**Output**: `detroit_sledding_score.png` - Suitability score heatmap (0-1 scale)
+**Output**: `detroit_sledding_score.png` - Suitability score heatmap (0 to ~1.3 with synergies)
 
-**Scoring Algorithm**:
-- **Snow Depth Component** (40% weight): Normalized median max depth (deeper is better)
-- **Coverage Component** (30% weight): Snow day ratio (more consistent coverage is better)
-- **Consistency Component** (30% weight): 1 - CV (lower variability is better)
+**Improved Scoring Algorithm**:
 
-The final score ranges from 0 (poor sledding) to 1 (excellent sledding).
+The scoring uses trapezoid functions to identify sweet spots, deal breakers for unsuitable terrain, and synergy bonuses for exceptional combinations:
+
+1. **Trapezoid Sweet Spots**: Snow 1-20" (optimal 2-12"), slope 1-20° (optimal 6-12°)
+2. **Deal Breakers**: Hard zeros for slope >35°, variability >5°, coverage <0.5mo
+3. **Multiplicative Base**: Snow × Slope × Coverage (poor factors can't be compensated)
+4. **Synergy Bonuses**: +10% to +30% for exceptional combinations
+
+The final score ranges from 0 (poor sledding) to ~1.3 (excellent with bonuses).
+
+See [equation.md](images/04_score_components/equation.md) for the complete formula.
 
 ### Mock Data for Testing
 
@@ -288,21 +296,22 @@ This architecture enables:
 
 ### Customization
 
-#### Adjust Sledding Score Weights
+#### Understanding the Improved Scoring
 
-Modify the weighting of different snow characteristics:
+The improved sledding score uses a fundamentally different approach than weighted sums:
 
 ```python
-# Default weights
+# The score uses trapezoid functions, deal breakers, and synergies
 sledding_score = snow.calculate_sledding_score()
 
-# Custom weights (must sum to 1.0)
-sledding_score = snow.calculate_sledding_score(
-    depth_weight=0.5,        # Prioritize depth
-    coverage_weight=0.3,     # Medium importance for coverage
-    consistency_weight=0.2   # Less emphasis on consistency
-)
+# Key scoring parameters (defined in src/terrain/scoring.py):
+# - Snow range: 1-20 inches (optimal 2-12")
+# - Slope range: 1-20 degrees (optimal 6-12°)
+# - Deal breaker thresholds: slope >35°, variability >5°, coverage <0.5mo
+# - Synergy bonuses: +10% to +30% for exceptional combinations
 ```
+
+This multiplicative approach ensures that poor performance in any factor significantly impacts the final score, preventing compensation between unrelated factors.
 
 #### Filter by Score Threshold
 
@@ -498,96 +507,85 @@ score_reduction = base_score - final_slope_score
 
 ![Score Reduction - Penalty Impact](images/03_slope_penalties/score_reduction.png)
 
-#### Stage 5: Comprehensive Score Component Analysis
+#### Stage 5: Improved Score Component Analysis
 
-The final sledding score combines multiple components. The detailed analysis breaks these into 17 individual panels showing each transformation:
-
-**Additive Components** (weighted sum = base score):
-
-![Slope Score - Primary terrain factor](images/04_score_components/slope_score.png)
-*Slope Score (30% weight) - Weighted contribution from terrain slope*
-
-![Depth Score - Snow accumulation suitability](images/04_score_components/depth_score.png)
-*Depth Score (15% weight) - Deeper snow is better for sledding*
-
-![Coverage Score - Snow persistence](images/04_score_components/coverage_score.png)
-*Coverage Score (25% weight) - Consistent snow coverage throughout season*
-
-![Consistency Score - Snow reliability](images/04_score_components/consistency_score.png)
-*Consistency Score (20% weight) - Low variability = reliable sledding*
-
-**Additional Components**:
-
-![Aspect Score - North-facing bonus](images/04_score_components/aspect_score.png)
-*Aspect Score (5% weight) - North-facing slopes retain more snow*
-
-![Runout Bonus - Flat areas for deceleration](images/04_score_components/runout_bonus.png)
-*Runout Bonus (5% weight) - Flat areas (< 5°) provide natural run-out zones*
-
-**Multiplicative Penalties** (applied as multipliers):
-
-![Cliff Penalty - Steep area hazard](images/04_score_components/cliff_penalty.png)
-*Cliff Penalty (×) - Reduces score if steep sections present*
-
-![Terrain Consistency - Roughness hazard](images/04_score_components/terrain_consistency.png)
-*Terrain Consistency (×) - Reduces score for rough, choppy terrain*
+The improved sledding score uses trapezoid functions, deal breakers, and synergy bonuses. The detailed analysis breaks these into 11 individual panels showing each transformation:
 
 **Raw Input Data** (for reference):
 
-![Raw Slope Mean](images/04_score_components/raw_slope_mean.png)
-*Raw: Slope Mean in degrees - Unscored terrain slope*
+![Raw Snow Depth](images/04_score_components/raw_snow_depth_inches.png)
+*Raw: Snow Depth in inches - Unscored SNODAS measurements converted to inches*
 
-![Raw Snow Depth](images/04_score_components/raw_snow_depth.png)
-*Raw: Snow Depth in mm - Unscored SNODAS measurements*
+![Raw Slope Degrees](images/04_score_components/raw_slope_degrees.png)
+*Raw: Slope in degrees - Unscored terrain slope from DEM analysis*
 
-![Raw Interseason CV](images/04_score_components/raw_interseason_cv.png)
-*Raw: Interseason CV - Year-to-year variability coefficient*
+![Raw Coverage Months](images/04_score_components/raw_coverage_months.png)
+*Raw: Snow coverage in months - Duration of snow coverage during season*
 
-![Raw Intraseason CV](images/04_score_components/raw_intraseason_cv.png)
-*Raw: Intraseason CV - Within-winter variability coefficient*
+![Raw Slope Variability](images/04_score_components/raw_slope_variability.png)
+*Raw: Slope variability (std dev) - Terrain roughness measure*
 
-**Combination Steps** (formula stages):
+**Trapezoid Sweet Spot Scoring**:
 
-![Additive Sum](images/04_score_components/additive_sum.png)
-*Additive Sum - Weighted combination of all additive components*
+![Snow Trapezoid Score](images/04_score_components/snow_trapezoid_score.png)
+*Snow Trapezoid Score - Sweet spot 2-12" (ramps 1-20") scores highest*
 
-![Multiplicative Product](images/04_score_components/multiplicative.png)
-*Multiplicative Product - Penalty multipliers (cliff × terrain consistency)*
+![Slope Trapezoid Score](images/04_score_components/slope_trapezoid_score.png)
+*Slope Trapezoid Score - Sweet spot 6-12° (ramps 1-20°) scores highest*
+
+![Coverage Score](images/04_score_components/coverage_score.png)
+*Coverage Score - Diminishing returns: 1 - exp(-months/2)*
+
+**Deal Breakers & Validation**:
+
+![Valid Terrain Mask](images/04_score_components/valid_terrain_mask.png)
+*Valid Terrain Mask - Areas passing all deal breaker checks (slope ≤35°, variability ≤5°, coverage ≥0.5mo)*
+
+**Synergy Bonuses**:
+
+![Synergy Bonus](images/04_score_components/synergy_bonus.png)
+*Synergy Bonus Multiplier - Hierarchical bonuses (+10% to +30%) for exceptional combinations*
+
+**Score Combination**:
+
+![Base Score](images/04_score_components/base_score.png)
+*Base Score - Multiplicative: Snow × Slope × Coverage (before synergies)*
 
 ![Final Sledding Score](images/04_score_components/final_score.png)
-*Final Sledding Score - Complete suitability score (0-1 scale)*
+*Final Sledding Score - Base × Synergy Bonus (range: 0 to ~1.3)*
 
-![Score Reduction from Penalties](images/04_score_components/score_reduction.png)
-*Score Reduction - How much penalty reduced the final score*
-
-**Scoring Formula:**
+**Improved Scoring Formula:**
 
 The complete formula is generated and saved as markdown for documentation:
 
 ```
-Sledding Suitability Score = (
-    0.30 × Slope Mean
-    + 0.15 × Snow Depth
-    + 0.25 × Snow Coverage
-    + 0.20 × Snow Consistency
-    + 0.05 × Aspect Bonus
-    + 0.05 × Runout Bonus
-) × Slope P95 Penalty × Terrain Consistency Penalty
+Snow Trapezoid:  1" ━━━ [2-12"] ━━━ 20"
+Slope Trapezoid: 1° ━━━ [6-12°] ━━━ 20°
+Coverage:        1 - exp(-months/2)
+
+Deal Breakers:   Slope > 35° OR Variability > 5° OR Coverage < 0.5mo → Score = 0
+
+Base Score:      Snow_Trapezoid × Slope_Trapezoid × Coverage_Score
+
+Synergies:       Perfect Combo (+30%), Consistent (+15%),
+                 Moderate Slope + Flat Runout (+20%), Low Var + Perfect Slope (+10%)
+
+Final Score:     BASE × SYNERGY_BONUS  (range: 0 to ~1.5)
 ```
 
-See `docs/images/04_score_components/equation.md` for the exact formula.
+See [equation.md](images/04_score_components/equation.md) for the exact formula.
 
 #### Stage 6: Final Result
 
-The final sledding score combines all factors into a single suitability map (0-1 scale). This is the primary output of the pipeline - a comprehensive assessment of sledding suitability across the entire region:
+The final sledding score combines all factors into a single suitability map (0 to ~1.3 scale with synergies). This is the primary output of the pipeline - a comprehensive assessment of sledding suitability across the entire region:
 
 ![Final Sledding Suitability Score](images/05_final/sledding_score.png)
 
-This map shows where sledding conditions are best. The colors represent suitability scores from 0 (poor) to 1 (excellent).
+This map shows where sledding conditions are best. The colors represent suitability scores from 0 (poor) to ~1.3 (excellent with synergy bonuses).
 
 **Score Interpretation:**
-- **0.7-1.0 (Dark Yellow)**: Excellent sledding locations
-- **0.5-0.7 (Yellow-Green)**: Good sledding with some concerns
+- **0.8-1.3 (Bright Yellow)**: Excellent sledding locations (with synergy bonuses)
+- **0.5-0.8 (Yellow-Green)**: Good sledding conditions
 - **0.3-0.5 (Green-Cyan)**: Moderate - marginal conditions
 - **0.0-0.3 (Dark Blue/Purple)**: Poor sledding potential
 
@@ -619,7 +617,7 @@ uv run examples/detroit_snow_sledding.py --mock-data --all-steps
 # │   └── snow_depth.png
 # ├── 02_slope_stats/             # 8 slope analysis panels
 # ├── 03_slope_penalties/         # 6 penalty analysis panels
-# ├── 04_score_components/        # 16 component + equation
+# ├── 04_score_components/        # 11 improved scoring components + equation
 # └── 05_final/                   # Final sledding score
 ```
 

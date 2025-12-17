@@ -320,13 +320,13 @@ def compute_sledding_score(
             return 0.0
         return scores
 
-    # Score snow depth: 1-2-12-20 inches (very steep early ramp for grassy hills)
+    # Score snow depth: 1-4-12-20 inches (25-100-300-500mm)
     snow_score = trapezoid_score(
         value=snow_depth[valid],
-        min_value=1.0,  # Marginal on grass
-        optimal_min=2.0,  # Good on grass - very steep ramp up!
-        optimal_max=12.0,  # Excellent range
-        max_value=20.0,  # Too much for little kids
+        min_value=1.0,  # Marginal on grass (~25mm)
+        optimal_min=4.0,  # Good coverage (~100mm)
+        optimal_max=12.0,  # Excellent range (~300mm)
+        max_value=20.0,  # Too much for little kids (~500mm)
     )
 
     # Score slope: 1-6-12-20 degrees (lowered min from 3 to 1, 35° is deal breaker)

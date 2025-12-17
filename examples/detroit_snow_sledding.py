@@ -295,27 +295,82 @@ def visualize_snow_depth(snow_depth: np.ndarray, output_path: Path):
     logger.info(f"✓ Snow depth visualization saved: {output_path}")
 
 
-def visualize_sledding_score(score: np.ndarray, output_path: Path):
+def visualize_sledding_score(score: np.ndarray, output_path: Path, scale: str = "linear", gamma: float = None):
     """
     Create sledding score visualization.
 
     Args:
         score: Sledding suitability score (0-1)
         output_path: Where to save the visualization
+        scale: Scaling method - "linear", "log", "percentile", "sqrt", "power"
+        gamma: Gamma value for power norm (used with scale="power")
     """
-    logger.info(f"Creating sledding score visualization: {output_path}")
+    scale_desc = f"{scale} scale" if scale != "power" else f"power scale (γ={gamma})"
+    logger.info(f"Creating sledding score visualization ({scale_desc}): {output_path}")
 
     fig, ax = plt.subplots(figsize=(12, 9))
 
+    # Prepare data based on scaling method
+    if scale == "power":
+        # Custom power norm with specified gamma
+        from matplotlib.colors import PowerNorm
+        display_data = score
+        norm = PowerNorm(gamma=gamma, vmin=0, vmax=1)
+        vmin, vmax = None, None
+        cbar_label = f"Sledding Score (γ={gamma:.1f}, 0=poor, 1=excellent)"
+    elif scale == "log":
+        # True logarithmic scale using SymLogNorm (handles zeros gracefully)
+        # Linear near zero (linthresh=0.01), logarithmic elsewhere
+        from matplotlib.colors import SymLogNorm
+        display_data = score
+        norm = SymLogNorm(linthresh=0.01, vmin=0, vmax=1, base=10)
+        vmin, vmax = None, None
+        cbar_label = "Sledding Score (log scale, 0=poor, 1=excellent)"
+    elif scale == "percentile":
+        # Map scores to percentile ranks
+        scores_flat = score.flatten()
+        scores_clean = scores_flat[~np.isnan(scores_flat)]
+        display_data = np.zeros_like(score)
+        valid_mask = ~np.isnan(score)
+        display_data[valid_mask] = (
+            np.searchsorted(np.sort(scores_clean), score[valid_mask]) / len(scores_clean)
+        )
+        display_data[~valid_mask] = np.nan
+        norm = None
+        vmin, vmax = 0, 1
+        cbar_label = "Percentile Rank (0=worst, 1=best)"
+    elif scale == "sqrt":
+        # Square root scale (spreads out low values)
+        # Use PowerNorm to transform colors but show original values on colorbar
+        from matplotlib.colors import PowerNorm
+        display_data = score
+        norm = PowerNorm(gamma=0.5, vmin=0, vmax=1)  # gamma=0.5 is sqrt
+        vmin, vmax = None, None
+        cbar_label = "Sledding Score (sqrt scale, 0=poor, 1=excellent)"
+    else:  # linear
+        display_data = score
+        norm = None
+        vmin, vmax = 0, 1
+        cbar_label = "Sledding Score (0=poor, 1=excellent)"
+
     # Use viridis colormap (yellow = good sledding, purple = poor)
-    im = ax.imshow(score, cmap="viridis", aspect="auto", vmin=0, vmax=1)
-    ax.set_title("Sledding Suitability Score", fontsize=16, fontweight="bold")
+    if norm:
+        im = ax.imshow(display_data, cmap="viridis", aspect="auto", norm=norm)
+    else:
+        im = ax.imshow(display_data, cmap="viridis", aspect="auto", vmin=vmin, vmax=vmax)
+
+    # Set title based on scale type
+    if scale == "power":
+        title = f"Sledding Suitability Score (Power Scale, γ={gamma:.1f})"
+    else:
+        title = f"Sledding Suitability Score ({scale.capitalize()} Scale)"
+    ax.set_title(title, fontsize=16, fontweight="bold")
     ax.set_xlabel("Longitude (pixels)")
     ax.set_ylabel("Latitude (pixels)")
 
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label("Sledding Score (0=poor, 1=excellent)", rotation=270, labelpad=20)
+    cbar.set_label(cbar_label, rotation=270, labelpad=20)
 
     # Add statistics and interpretation text
     stats_text = (
@@ -740,97 +795,109 @@ def save_score_component_panels(
     scorer=None,
 ):
     """
-    Save individual score component panels to separate PNG files.
+    Save individual score component panels for improved sledding scoring.
+
+    Visualizes the new scoring system components:
+    - Trapezoid functions for sweet spots (snow, slope)
+    - Deal breaker conditions
+    - Coverage with diminishing returns
+    - Synergy bonuses
+    - Final multiplicative score
 
     Args:
         slope_stats: SlopeStatistics object
         snow_stats: Dictionary with snow statistics
         final_score: Final sledding score array
         output_dir: Directory to save individual panel PNG files
-        scorer: Optional ScoreCombiner to generate formula from config
+        scorer: Unused (kept for API compatibility)
     """
-    from src.scoring import trapezoidal, dealbreaker, linear, snow_consistency, terrain_consistency
-    from src.scoring.configs import DEFAULT_SLEDDING_SCORER
+    from src.terrain.scoring import (
+        trapezoid_score,
+        sledding_deal_breakers,
+        coverage_diminishing_returns,
+        sledding_synergy_bonus,
+    )
 
-    logger.info(f"Saving individual score component panels to {output_dir}")
+    logger.info(f"Saving improved sledding score component panels to {output_dir}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use provided scorer or default
-    if scorer is None:
-        scorer = DEFAULT_SLEDDING_SCORER
+    # Convert inputs to scoring units
+    snow_depth_mm = snow_stats["median_max_depth"]
+    snow_depth_inches = snow_depth_mm * 0.0393701  # mm to inches
+    coverage_months = snow_stats["mean_snow_day_ratio"] * 12.0  # fraction of year to months
+    slope_degrees = slope_stats.slope_mean
+    roughness = slope_stats.roughness
 
-    # Compute all transformations
-    slope_score = trapezoidal(slope_stats.slope_mean, sweet_range=(5, 15), ramp_range=(3, 25))
-    cliff_penalty = dealbreaker(slope_stats.slope_p95, threshold=25, falloff=10)
-    terrain_cons = terrain_consistency(slope_stats.roughness, slope_stats.slope_std)
-    depth_score = trapezoidal(snow_stats["median_max_depth"], sweet_range=(150, 500), ramp_range=(50, 1000))
-    coverage_score = linear(snow_stats["mean_snow_day_ratio"], value_range=(0, 1), power=0.5)
-    consistency_score = snow_consistency(
-        snow_stats["interseason_cv"],
-        snow_stats["mean_intraseason_cv"],
+    # Compute trapezoid scores
+    snow_trapezoid = trapezoid_score(
+        snow_depth_inches,
+        min_value=1.0,  # Marginal on grass (~25mm)
+        optimal_min=4.0,  # Good coverage (~100mm)
+        optimal_max=12.0,  # Excellent range (~300mm)
+        max_value=20.0,  # Too much for little kids (~500mm)
     )
 
-    # Aspect bonus: northness × strength
-    northness = np.cos(np.radians(slope_stats.dominant_aspect))
-    aspect_bonus_raw = northness * slope_stats.aspect_strength * 0.05
-    aspect_score = linear(aspect_bonus_raw, value_range=(-0.05, 0.05))
-
-    # Runout bonus
-    runout_bonus = np.where(slope_stats.slope_min < 5, 1.0, 0.0)
-
-    # Get weights from scorer config
-    weights = {comp.name: comp.weight for comp in scorer.components if comp.role == "additive"}
-    w_slope = weights.get("slope_mean", 0.30)
-    w_depth = weights.get("snow_depth", 0.15)
-    w_coverage = weights.get("snow_coverage", 0.25)
-    w_consistency = weights.get("snow_consistency", 0.20)
-    w_aspect = weights.get("aspect_bonus", 0.05)
-    w_runout = weights.get("runout_bonus", 0.05)
-
-    # Combination using config weights
-    additive_sum = (
-        w_slope * slope_score +
-        w_depth * depth_score +
-        w_coverage * coverage_score +
-        w_consistency * consistency_score +
-        w_aspect * aspect_score +
-        w_runout * runout_bonus
+    slope_trapezoid = trapezoid_score(
+        slope_degrees,
+        min_value=1.0,  # Allow gentler slopes
+        optimal_min=6.0,
+        optimal_max=12.0,
+        max_value=20.0,
     )
-    multiplicative = cliff_penalty * terrain_cons
-    combined_final = additive_sum * multiplicative
+
+    # Compute coverage with diminishing returns
+    coverage_score = coverage_diminishing_returns(coverage_months)
+
+    # Compute deal breakers
+    is_deal_breaker = sledding_deal_breakers(
+        slope=slope_degrees,
+        roughness=roughness,
+        coverage_months=coverage_months,
+    )
+
+    # Compute synergy bonuses
+    synergy = sledding_synergy_bonus(
+        slope=slope_degrees,
+        snow_depth=snow_depth_inches,
+        coverage_months=coverage_months,
+        roughness=roughness,
+    )
+
+    # Compute base score (multiplicative)
+    base_score = snow_trapezoid * slope_trapezoid * coverage_score
+    base_score[is_deal_breaker] = 0.0  # Apply deal breakers
 
     # Save equation to markdown file
-    additive_parts = []
-    multiplicative_parts = []
-    for comp in scorer.components:
-        name = comp.name.replace("_", " ").title()
-        if comp.role == "additive":
-            additive_parts.append(f"{comp.weight:.2f} × {name}")
-        else:
-            multiplicative_parts.append(name)
-
-    additive_formula = "  +  ".join(additive_parts)
-    multiplicative_formula = "  ×  ".join(multiplicative_parts)
-
-    additive_compact = " + ".join(
-        f"{comp.weight:.2f}×{comp.name.replace('_', '').title()[:6]}"
-        for comp in scorer.components if comp.role == "additive"
-    )
-    mult_compact = " × ".join(
-        comp.name.replace("_", "").title()[:8]
-        for comp in scorer.components if comp.role == "multiplicative"
-    )
-
     equation_text = (
-        f"# Sledding Score Formula\n\n"
-        f"**Scorer**: {scorer.name}\n\n"
-        f"## Additive Components (weighted sum = base score)\n\n"
-        f"```\n{additive_formula}\n```\n\n"
-        f"## Multiplicative Penalties\n\n"
-        f"```\n× {multiplicative_formula}\n```\n\n"
-        f"## Final Equation\n\n"
-        f"```\nFINAL = ({additive_compact}) × {mult_compact}\n```\n"
+        f"# Improved Sledding Score Formula\n\n"
+        f"**Method**: Trapezoid Functions + Deal Breakers + Synergy Bonuses\n\n"
+        f"## Sweet Spot Scoring (Trapezoid Functions)\n\n"
+        f"Each factor is scored using trapezoid functions with optimal ranges:\n\n"
+        f"```\n"
+        f"Snow Depth:   1\" ━━━ [4-12\"] ━━━ 20\"  (inches, 25-100-300-500mm)\n"
+        f"Slope:        1° ━━━ [6-12°] ━━━ 20°  (degrees)\n"
+        f"Coverage:     Diminishing returns: 1 - exp(-months/2)\n"
+        f"```\n\n"
+        f"## Deal Breakers (Hard Zeros)\n\n"
+        f"```\n"
+        f"Slope > 40°  OR  Roughness > 6m  OR  Coverage < 0.5 months  →  Score = 0\n"
+        f"```\n\n"
+        f"## Base Score (Multiplicative)\n\n"
+        f"```\n"
+        f"BASE = Snow_Trapezoid × Slope_Trapezoid × Coverage_Score\n"
+        f"```\n\n"
+        f"## Synergy Bonuses (Hierarchical)\n\n"
+        f"```\n"
+        f"1. Perfect Combo (slope + snow + 3+ mo):      +30%\n"
+        f"2. Consistent (4+ mo + good slope + low var): +15%\n"
+        f"3. Moderate Slope + Flat Runout:              +20%\n"
+        f"4. Low Variability + Perfect Slope:           +10%\n"
+        f"```\n\n"
+        f"## Final Score\n\n"
+        f"```\n"
+        f"FINAL = BASE × SYNERGY_BONUS  (range: 0 to ~1.5)\n"
+        f"```\n"
     )
 
     equation_path = output_dir / "equation.md"
@@ -854,48 +921,49 @@ def save_score_component_panels(
         plt.close()
         logger.info(f"✓ Saved: {output_dir / filename}")
 
-    # Row 1: Additive components
-    save_single_panel(slope_score, "slope_score.png", "Slope Score", "viridis")
-    save_single_panel(depth_score, "depth_score.png", "Depth Score", "viridis")
-    save_single_panel(coverage_score, "coverage_score.png", "Coverage Score", "viridis")
-    save_single_panel(consistency_score, "consistency_score.png", "Consistency Score", "viridis")
+    # Save raw inputs
+    save_single_panel(snow_depth_inches, "raw_snow_depth_inches.png",
+                     "Raw: Snow Depth (inches)", "viridis",
+                     vmin=0, vmax=min(30, np.nanpercentile(snow_depth_inches, 99)))
+    save_single_panel(slope_degrees, "raw_slope_degrees.png",
+                     "Raw: Slope (degrees)", "cividis",
+                     vmin=0, vmax=min(25, np.nanpercentile(slope_degrees, 99)))
+    save_single_panel(coverage_months, "raw_coverage_months.png",
+                     "Raw: Coverage (months)", "plasma",
+                     vmin=0, vmax=6)
+    save_single_panel(roughness, "raw_roughness.png",
+                     "Raw: Roughness (meters)", "magma",
+                     vmin=0, vmax=min(10, np.nanpercentile(roughness, 99)))
 
-    # Row 2: Additional components + penalties
-    save_single_panel(aspect_score, "aspect_score.png", "Aspect Score", "viridis")
-    save_single_panel(runout_bonus, "runout_bonus.png", "Runout Bonus", "viridis")
-    save_single_panel(cliff_penalty, "cliff_penalty.png", "Cliff Penalty", "plasma")
-    save_single_panel(terrain_cons, "terrain_consistency.png", "Terrain Consistency", "plasma")
+    # Save trapezoid scores
+    save_single_panel(snow_trapezoid, "snow_trapezoid_score.png",
+                     "Snow Trapezoid Score (1-4-12-20\")", "viridis")
+    save_single_panel(slope_trapezoid, "slope_trapezoid_score.png",
+                     "Slope Trapezoid Score (1-6-12-20°)", "viridis")
 
-    # Row 3: Raw inputs
-    save_single_panel(slope_stats.slope_mean, "raw_slope_mean.png", "Raw: Slope Mean", "cividis",
-                     vmin=np.nanmin(slope_stats.slope_mean), vmax=np.nanmax(slope_stats.slope_mean))
-    save_single_panel(snow_stats["median_max_depth"], "raw_snow_depth.png", "Raw: Snow Depth", "viridis",
-                     vmin=np.nanmin(snow_stats["median_max_depth"]), vmax=np.nanmax(snow_stats["median_max_depth"]))
-    save_single_panel(snow_stats["interseason_cv"], "raw_interseason_cv.png", "Raw: Interseason CV", "magma",
-                     vmin=np.nanmin(snow_stats["interseason_cv"]), vmax=np.nanmax(snow_stats["interseason_cv"]))
-    save_single_panel(snow_stats["mean_intraseason_cv"], "raw_intraseason_cv.png", "Raw: Intraseason CV", "magma",
-                     vmin=np.nanmin(snow_stats["mean_intraseason_cv"]), vmax=np.nanmax(snow_stats["mean_intraseason_cv"]))
+    # Save coverage score
+    save_single_panel(coverage_score, "coverage_score.png",
+                     "Coverage Score (Diminishing Returns)", "viridis")
 
-    # Row 4: Combination steps
-    save_single_panel(additive_sum, "additive_sum.png", "Additive Sum", "viridis")
-    save_single_panel(multiplicative, "multiplicative.png", "Multiplicative Product", "inferno")
+    # Save deal breaker mask
+    save_single_panel((~is_deal_breaker).astype(float), "valid_terrain_mask.png",
+                     "Valid Terrain (No Deal Breakers)", "RdYlGn",
+                     vmin=0, vmax=1)
 
-    # Final score with linear color gradient
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(combined_final, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Final Score", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "final_score.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'final_score.png'}")
+    # Save synergy bonuses
+    save_single_panel(synergy, "synergy_bonus.png",
+                     "Synergy Bonus Multiplier", "inferno",
+                     vmin=1.0, vmax=min(1.5, np.nanmax(synergy)))
 
-    # Score reduction
-    score_reduction = additive_sum - combined_final
-    save_single_panel(score_reduction, "score_reduction.png", "Score Reduction", "magma",
-                     vmin=0, vmax=max(0.01, np.nanmax(score_reduction)))
+    # Save base score
+    save_single_panel(base_score, "base_score.png",
+                     "Base Score (Before Synergy)", "viridis",
+                     vmin=0, vmax=1)
+
+    # Save final score
+    save_single_panel(final_score, "final_score.png",
+                     "Final Score (With Synergies)", "viridis",
+                     vmin=0, vmax=min(1.5, np.nanmax(final_score)))
 
 
 def visualize_sledding_factors(
@@ -1255,11 +1323,8 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
 
     terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
 
-    # Import scoring system
-    from src.scoring.configs.sledding import (
-        DEFAULT_SLEDDING_SCORER,
-        compute_derived_inputs,
-    )
+    # Import improved scoring system
+    from src.scoring.configs.sledding import compute_improved_sledding_score
 
     # Calculate slope statistics from DEM (with caching)
     target_shape = snow_stats["median_max_depth"].shape
@@ -1277,16 +1342,12 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
                f"max={np.max(slope_stats.slope_max):.1f}°, "
                f"p95={np.mean(slope_stats.slope_p95):.1f}°")
 
-    # Prepare inputs for the scorer
-    logger.info("Preparing scorer inputs...")
-    inputs = compute_derived_inputs(slope_stats, snow_stats)
+    # Compute improved sledding score with trapezoid functions and synergies
+    logger.info("Computing improved sledding score with sweet spots and synergies...")
+    sledding_score = compute_improved_sledding_score(slope_stats, snow_stats)
 
-    # Compute the score using the configurable scorer
-    logger.info(f"Computing score with {len(DEFAULT_SLEDDING_SCORER.components)} components...")
-    sledding_score = DEFAULT_SLEDDING_SCORER.compute(inputs)
-
-    # Get individual component scores for visualization/debugging
-    component_scores = DEFAULT_SLEDDING_SCORER.get_component_scores(inputs)
+    # Get component scores is no longer needed with the new system
+    component_scores = None  # Legacy support
 
     # Mask invalid values
     sledding_score = np.ma.masked_invalid(sledding_score)
@@ -1313,8 +1374,8 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
 
     # Save sledding score grid as .npz for use in other examples (like detroit_dual_render.py)
     # Include transform so loaders can properly georeference the data
-    # Save to examples/output/ for reuse by other examples
-    data_dir = Path("examples/output")
+    # Save to output_dir/sledding/ to match XC skiing pattern
+    data_dir = output_dir / "sledding"
     data_dir.mkdir(parents=True, exist_ok=True)
     score_path = data_dir / "sledding_scores.npz"
 
@@ -1351,12 +1412,29 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     # Create output directory for visualizations
     (output_dir / "05_final").mkdir(parents=True, exist_ok=True)
 
-    # Visualize sledding score (downsample if needed for memory efficiency)
+    # Visualize sledding score with multiple scales (downsample if needed for memory efficiency)
     score_viz, stride = downsample_for_viz(sledding_score)
     if stride > 1:
         logger.info(f"Downsampling score for visualization: {sledding_score.shape} -> {score_viz.shape} (stride={stride})")
-    output_path = output_dir / "05_final" / "sledding_score.png"
-    visualize_sledding_score(score_viz, output_path)
+
+    # Linear scale (default, baseline for comparison)
+    output_path = output_dir / "05_final" / "sledding_score_linear.png"
+    visualize_sledding_score(score_viz, output_path, scale="linear")
+
+    # Percentile scale (shows relative ranking, handles discontinuity from deal breakers)
+    output_path_pct = output_dir / "05_final" / "sledding_score_percentile.png"
+    visualize_sledding_score(score_viz, output_path_pct, scale="percentile")
+
+    # True logarithmic scale (SymLogNorm - handles zeros, strong compression)
+    output_path_log = output_dir / "05_final" / "sledding_score_log.png"
+    visualize_sledding_score(score_viz, output_path_log, scale="log")
+
+    # Power norm scales with gamma from 0.5 to 0.9 by 0.1 increments
+    # Lower gamma = more compression of low values (sqrt-like)
+    # Higher gamma = closer to linear (less compression)
+    for gamma in [0.5, 0.6, 0.7, 0.8, 0.9]:
+        output_path_power = output_dir / "05_final" / f"sledding_score_gamma_{gamma:.1f}.png"
+        visualize_sledding_score(score_viz, output_path_power, scale="power", gamma=gamma)
 
     # Save histogram of sledding scores
     histogram_path = output_dir / "05_final" / "sledding_score_histogram.png"

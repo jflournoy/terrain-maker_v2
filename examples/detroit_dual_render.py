@@ -114,8 +114,8 @@ def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Option
         Tuple of (score_array, transform_affine). Transform may be None if
         file was saved without transform metadata (backward compatibility).
     """
-    # First check for sledding_score.npz
-    score_path = output_dir / "sledding_scores.npz"
+    # First check for sledding/sledding_scores.npz (new location matching XC skiing pattern)
+    score_path = output_dir / "sledding" / "sledding_scores.npz"
     if score_path.exists():
         logger.info(f"Loading sledding scores from {score_path}")
         data = np.load(score_path)
@@ -137,10 +137,10 @@ def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Option
 
         return score, score_transform
 
-    # Check alternative locations
+    # Check alternative locations (backward compatibility)
     alt_paths = [
-        output_dir.parent / "sledding_scores.npz",
-        Path("examples/output/sledding_scores.npz"),
+        output_dir / "sledding_scores.npz",  # Old flat structure
+        Path("examples/output/sledding_scores.npz"),  # Legacy hardcoded location
     ]
     for alt_path in alt_paths:
         if alt_path.exists():
@@ -228,10 +228,10 @@ def create_terrain_with_score(
     target_vertices: Optional[int] = None,
     cmap_name: str = "viridis",
     parks: Optional[list[dict]] = None,
-    park_radius_meters: float = 2000,
+    park_radius_meters: float = 10_000,
     park_cluster_threshold: float = 500,
-    base_cmap_name: str = "cividis",
-    overlay_cmap_name: str = "plasma",
+    base_cmap_name: str = "michigan",
+    overlay_cmap_name: str = "mako",
 ) -> Tuple[Optional[object], Optional["Terrain"]]:
     """
     Create a terrain mesh using terrain maker's Terrain class.
@@ -253,10 +253,10 @@ def create_terrain_with_score(
         cmap_name: Colormap name for single-colormap mode (default: viridis)
         parks: Optional list of parks for dual colormap mode. If provided,
             enables dual colormaps with score overlay near parks.
-        park_radius_meters: Radius around parks to show score overlay (default: 2000m)
+        park_radius_meters: Radius around parks to show score overlay (default: 10000m = 10km)
         park_cluster_threshold: Distance threshold for merging nearby parks (default: 500m)
-        base_cmap_name: Base colormap for general terrain (default: cividis, viridis family)
-        overlay_cmap_name: Overlay colormap for park zones (default: plasma, viridis family)
+        base_cmap_name: Base colormap for general terrain (default: michigan)
+        overlay_cmap_name: Overlay colormap for park zones (default: mako)
 
     Returns:
         Tuple of (mesh_obj, terrain) where mesh_obj is the Blender object and
@@ -393,28 +393,18 @@ def create_terrain_with_score(
             source_layers=["score"],
         )
 
-    # Detect water bodies on the unscaled DEM
-    # Water will be colored blue in both single and dual colormap modes
-    logger.debug(f"  Detecting water bodies for {name}...")
-    water_mask = None
-    try:
-        from src.terrain.water import identify_water_by_slope
-
-        transformed_dem = terrain.data_layers["dem"]["transformed_data"]
-        # Unscale the DEM to get original elevation values for slope calculation
-        unscaled_dem = transformed_dem / 0.0001
-
-        water_mask = identify_water_by_slope(
-            unscaled_dem, slope_threshold=0.01, fill_holes=True
-        )
-        water_pixels = np.sum(water_mask)
-        water_percent = 100 * water_pixels / water_mask.size
-        logger.debug(
-            f"  Water detected: {water_pixels:,} pixels ({water_percent:.1f}% of terrain)"
-        )
-    except Exception as e:
-        logger.debug(f"  Water detection skipped: {e}")
-        water_mask = None
+    # Detect water bodies on HIGH-RES DEM (before downsampling)
+    # Water will be colored University of Michigan blue (#00274C) in both modes
+    # NOTE: This must be called AFTER apply_transforms() so the library can access
+    # both the original high-res DEM and the transformed/downsampled version
+    logger.debug(f"  Detecting water bodies on high-resolution DEM for {name}...")
+    water_mask = terrain.detect_water_highres(
+        slope_threshold=0.01,  # Low threshold for nearly-flat water
+        fill_holes=True,
+        scale_factor=0.0001,  # Match the scale_elevation transform
+    )
+    # If water detection fails, the method will raise an exception
+    # We don't silently ignore water detection errors
 
     # Compute colors with water detection
     # In blended mode, water detection happens internally
@@ -554,7 +544,7 @@ def setup_dual_camera(
     distance: float = 3.5,
     elevation: float = 5,
     camera_type: str = "ORTHO",
-    ortho_scale: float = 1,
+    ortho_scale: float = 1.5,
 ) -> Optional[object]:
     """
     Setup camera to view both terrains side-by-side.
@@ -565,10 +555,11 @@ def setup_dual_camera(
     Args:
         mesh_left: Left terrain object
         mesh_right: Right terrain object
-        direction: Cardinal direction for camera (default: 'south')
+        direction: Cardinal direction for camera (default: 'above')
         distance: Distance multiplier relative to combined mesh diagonal
         elevation: Height as fraction of mesh diagonal
-        camera_type: 'ORTHO' or 'PERSP' (default: 'PERSP')
+        camera_type: 'ORTHO' or 'PERSP' (default: 'ORTHO')
+        ortho_scale: Orthographic scale multiplier (default: 1.5)
 
     Returns:
         Camera object positioned to view both terrains
@@ -704,8 +695,8 @@ Examples:
     parser.add_argument(
         "--scores-dir",
         type=Path,
-        default=Path("examples/output"),
-        help="Directory containing pre-computed scores (default: examples/output/)",
+        default=Path("docs/images"),
+        help="Directory containing pre-computed scores (default: docs/images/)",
     )
 
     parser.add_argument(
@@ -891,13 +882,14 @@ Examples:
         score_transform=xc_transform,  # Use XC skiing's own transform
         location=(0, 0, 0),
         scale_factor=100,
+        height_scale=15.0,  # Moderate vertical exaggeration (matches xc_skiing demo)
         target_vertices=target_vertices,
         cmap_name="mako",  # Fallback for single-colormap mode (not used if parks provided)
         parks=parks,  # Enable dual colormaps near parks
-        park_radius_meters=2000,
+        park_radius_meters=10_000,  # 10km radius around parks (matches xc_skiing demo)
         park_cluster_threshold=500,
-        base_cmap_name="cividis",  # Viridis family for base terrain
-        overlay_cmap_name="plasma",  # Viridis family for ski zones
+        base_cmap_name="michigan",  # Michigan natural landscape colormap
+        overlay_cmap_name="mako",  # Mako colormap for ski zones
     )
 
     if mesh_xc is None:

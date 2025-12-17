@@ -280,7 +280,7 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
 
 
 def apply_water_shader(
-    material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.1, 0.4, 0.8)
+    material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.0, 0.153, 0.298)
 ) -> None:
     """
     Apply water shader to material, coloring water areas based on vertex alpha channel.
@@ -289,7 +289,7 @@ def apply_water_shader(
 
     Args:
         material: Blender material to configure
-        water_color: RGB tuple for water (default: blue 0.1, 0.4, 0.8)
+        water_color: RGB tuple for water (default: University of Michigan blue #00274C)
     """
     from src.terrain.materials import apply_water_shader as _apply_water_shader
 
@@ -1389,6 +1389,150 @@ class Terrain:
 
         return zoom_factor
 
+    def detect_water_highres(
+        self,
+        slope_threshold: float = 0.01,
+        fill_holes: bool = True,
+        scale_factor: float = 0.0001,
+    ) -> np.ndarray:
+        """
+        Detect water bodies on high-resolution DEM before downsampling.
+
+        This method properly handles water detection by:
+        1. Applying all NON-downsampling transforms to DEM (reproject, flip, etc.)
+        2. Detecting water on the high-resolution transformed DEM
+        3. Downsampling the water mask to match the final terrain resolution
+
+        This prevents false water detection that occurs when detecting on downsampled DEMs.
+
+        Args:
+            slope_threshold: Maximum slope magnitude to classify as water (default: 0.01)
+            fill_holes: Whether to apply morphological hole filling (default: True)
+            scale_factor: Elevation scale factor to unscale before detection (default: 0.0001)
+
+        Returns:
+            np.ndarray: Boolean water mask matching transformed_data shape
+
+        Raises:
+            ValueError: If transforms haven't been applied yet
+            ImportError: If water detection module is not available
+
+        Example:
+            ```python
+            terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+            terrain.add_transform(reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617"))
+            terrain.add_transform(flip_raster(axis="horizontal"))
+            terrain.add_transform(scale_elevation(scale_factor=0.0001))
+            terrain.configure_for_target_vertices(target_vertices=1_000_000)
+            terrain.apply_transforms()  # Includes downsampling
+
+            # Detect water on high-res BEFORE it was downsampled
+            water_mask = terrain.detect_water_highres(slope_threshold=0.01)
+            # water_mask shape matches downsampled terrain
+            ```
+
+        Note:
+            This method requires that:
+            - Transforms have been applied (apply_transforms() called)
+            - The DEM layer exists in data_layers
+            - Water detection module (src.terrain.water) is available
+        """
+        if "dem" not in self.data_layers:
+            raise ValueError("DEM layer not found. Cannot detect water without DEM.")
+
+        if not self.data_layers["dem"].get("transformed", False):
+            raise ValueError(
+                "Transforms have not been applied yet. Call apply_transforms() first."
+            )
+
+        from src.terrain.water import identify_water_by_slope
+        from scipy.ndimage import zoom
+
+        self.logger.info("Detecting water bodies on high-resolution DEM...")
+
+        # Get the original DEM
+        original_dem = self.data_layers["dem"]["data"]
+        original_transform = self.data_layers["dem"]["transform"]
+        original_crs = self.data_layers["dem"]["crs"]
+
+        # Apply all non-downsampling transforms
+        highres_dem = original_dem.copy()
+        current_transform = original_transform
+        current_crs = original_crs
+
+        for transform_func in self.transforms:
+            # Skip downsampling transforms - we want high-res
+            if "downsample" in transform_func.__name__.lower():
+                self.logger.debug(f"Skipping {transform_func.__name__} for high-res water detection")
+                continue
+
+            try:
+                highres_dem, current_transform, new_crs = transform_func(
+                    highres_dem, current_transform
+                )
+                if new_crs is not None:
+                    current_crs = new_crs
+            except Exception as e:
+                self.logger.error(
+                    f"Failed applying transform {transform_func.__name__} for water detection: {e}"
+                )
+                raise
+
+        self.logger.info(f"  High-res DEM shape: {highres_dem.shape}")
+
+        # Unscale elevation if scale_factor was applied
+        if scale_factor is not None and scale_factor != 1.0:
+            unscaled_dem = highres_dem / scale_factor
+        else:
+            unscaled_dem = highres_dem
+
+        # Detect water on high-res DEM
+        water_mask_highres = identify_water_by_slope(
+            unscaled_dem,
+            slope_threshold=slope_threshold,
+            fill_holes=fill_holes,
+        )
+
+        water_pixels_highres = np.sum(water_mask_highres)
+        water_percent_highres = 100 * water_pixels_highres / water_mask_highres.size
+        self.logger.info(
+            f"  High-res water detection: {water_pixels_highres:,} pixels "
+            f"({water_percent_highres:.1f}%)"
+        )
+
+        # Now downsample the water mask to match the transformed (downsampled) DEM
+        transformed_dem = self.data_layers["dem"]["transformed_data"]
+        target_shape = transformed_dem.shape
+
+        if water_mask_highres.shape == target_shape:
+            self.logger.info(f"  Water mask already matches target shape {target_shape}")
+            return water_mask_highres
+
+        # Calculate zoom factor for downsampling the mask
+        zoom_y = target_shape[0] / water_mask_highres.shape[0]
+        zoom_x = target_shape[1] / water_mask_highres.shape[1]
+
+        self.logger.info(
+            f"  Downsampling water mask: {water_mask_highres.shape} → {target_shape}"
+        )
+
+        # Downsample water mask using nearest-neighbor (order=0) to preserve boolean nature
+        water_mask_downsampled = zoom(
+            water_mask_highres.astype(np.float32),
+            zoom=(zoom_y, zoom_x),
+            order=0,  # Nearest neighbor for boolean mask
+            prefilter=False,
+        ).astype(np.bool_)
+
+        water_pixels_final = np.sum(water_mask_downsampled)
+        water_percent_final = 100 * water_pixels_final / water_mask_downsampled.size
+        self.logger.info(
+            f"  Final water mask: {water_pixels_final:,} pixels "
+            f"({water_percent_final:.1f}%)"
+        )
+
+        return water_mask_downsampled
+
     def set_color_mapping(
         self,
         color_func: Callable[[np.ndarray, ...], np.ndarray],
@@ -1808,7 +1952,7 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
+            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
 
             # Map water mask from grid space to vertex space
             # Only for surface vertices (not boundary vertices)
@@ -1906,9 +2050,9 @@ class Terrain:
                     f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
                 )
 
-            # Apply water mask to colors: color water blue, keep elevation colors for land
-            # Water color: RGB (26, 102, 204)
-            water_color = np.array([26, 102, 204], dtype=np.uint8)  # Blue
+            # Apply water mask to colors: color water with Michigan blue, keep elevation colors for land
+            # Water color: University of Michigan blue #00274C = RGB (0, 39, 76)
+            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
 
             # If colors exist, overwrite water pixels with blue
             if hasattr(self, "colors") and self.colors is not None:

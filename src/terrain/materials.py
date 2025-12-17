@@ -81,7 +81,7 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
 
 
 def apply_water_shader(
-    material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.1, 0.4, 0.8)
+    material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.0, 0.153, 0.298)
 ) -> None:
     """
     Apply water shader to material, coloring water areas based on vertex alpha channel.
@@ -90,7 +90,7 @@ def apply_water_shader(
 
     Args:
         material: Blender material to configure
-        water_color: RGB tuple for water (default: blue 0.1, 0.4, 0.8)
+        water_color: RGB tuple for water (default: University of Michigan blue #00274C)
     """
     logger.info(f"Setting up water shader for {material.name}")
 

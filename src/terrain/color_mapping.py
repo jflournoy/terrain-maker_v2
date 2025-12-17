@@ -19,24 +19,25 @@ from tqdm import tqdm
 # Michigan Natural Landscape Colormap
 # Perceptually uniform progression through Michigan's natural features:
 # Great Lakes (deep blue) → Northern forests (evergreen) → Upland meadows → Sand dunes (tan)
+# Desaturated ~35% for subtle, sun-bleached appearance that works well as base layer in dual colormaps
 _MICHIGAN_COLORS = {
     'red': [
-        (0.00, 0.17, 0.17),  # Great Lakes: deep blue-gray (low red)
-        (0.33, 0.24, 0.24),  # Forest: evergreen (low red)
-        (0.67, 0.54, 0.54),  # Upland: meadow tan-green
-        (1.00, 0.83, 0.83),  # Sand dunes: warm tan (high red)
+        (0.00, 0.24, 0.24),  # Great Lakes: muted blue-gray (desaturated)
+        (0.33, 0.25, 0.25),  # Forest: muted evergreen (desaturated)
+        (0.67, 0.52, 0.52),  # Upland: pale meadow (desaturated)
+        (1.00, 0.80, 0.80),  # Sand dunes: pale tan (desaturated)
     ],
     'green': [
-        (0.00, 0.37, 0.37),  # Great Lakes: blue-gray
-        (0.33, 0.42, 0.42),  # Forest: rich green
-        (0.67, 0.55, 0.55),  # Upland: meadow yellow-green
-        (1.00, 0.77, 0.77),  # Sand dunes: warm tan
+        (0.00, 0.37, 0.37),  # Great Lakes: muted blue-gray (desaturated)
+        (0.33, 0.37, 0.37),  # Forest: muted green (desaturated)
+        (0.67, 0.53, 0.53),  # Upland: pale meadow (desaturated)
+        (1.00, 0.76, 0.76),  # Sand dunes: pale tan (desaturated)
     ],
     'blue': [
-        (0.00, 0.55, 0.55),  # Great Lakes: deep blue
-        (0.33, 0.18, 0.18),  # Forest: evergreen (low blue)
-        (0.67, 0.35, 0.35),  # Upland: meadow tan-green
-        (1.00, 0.63, 0.63),  # Sand dunes: neutral tan
+        (0.00, 0.48, 0.48),  # Great Lakes: muted blue (desaturated)
+        (0.33, 0.22, 0.22),  # Forest: muted evergreen (desaturated)
+        (0.67, 0.40, 0.40),  # Upland: pale meadow (desaturated)
+        (1.00, 0.67, 0.67),  # Sand dunes: pale tan (desaturated)
     ],
 }
 

@@ -786,28 +786,19 @@ def run_step_render_3d(
             overlay_mask=park_mask,
         )
 
-        # Detect water bodies on the unscaled DEM
-        logger.info("Detecting water bodies...")
+        # Detect water bodies on HIGH-RES DEM (before downsampling)
+        logger.info("Detecting water bodies on high-resolution DEM...")
         water_mask = None
         try:
-            from src.terrain.water import identify_water_by_slope
-
-            transformed_dem = terrain.data_layers["dem"]["transformed_data"]
-            # Unscale the DEM to get original elevation values for slope calculation
-            unscaled_dem = transformed_dem / 0.0001
-            water_mask = identify_water_by_slope(
-                unscaled_dem,
-                slope_threshold=0.5,
-                min_area_pixels=100,
-            )
-            water_pixels = np.sum(water_mask)
-            water_percent = 100 * water_pixels / water_mask.size
-            logger.info(
-                f"  Water detected: {water_pixels:,} pixels ({water_percent:.1f}% of terrain)"
+            # Use the library method that properly detects on high-res and downsamples the mask
+            water_mask = terrain.detect_water_highres(
+                slope_threshold=0.01,  # Low threshold for nearly-flat water
+                fill_holes=True,
+                scale_factor=0.0001,  # Match the scale_elevation transform
             )
         except Exception as e:
-            logger.warning(f"  Water detection failed: {e}")
-            water_mask = None
+            logger.error(f"  Water detection failed: {e}")
+            raise  # Don't silently ignore errors
 
         # Compute colors with blending and water detection
         logger.info("Computing blended colors with water detection...")
