@@ -505,3 +505,84 @@ class TestCreateBackgroundPlane:
     def test_returns_plane_object(self):
         """Function returns the created plane object."""
         pass
+
+
+class TestDetroitCombinedRenderCLI:
+    """Tests for detroit_combined_render.py CLI integration.
+
+    Tests verify that background plane options are properly integrated into
+    the CLI without requiring Blender environment.
+    """
+
+    def test_cli_script_syntax(self):
+        """Script has valid Python syntax."""
+        import py_compile
+        import tempfile
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        assert script_path.exists(), f"Script not found: {script_path}"
+
+        # Compile to check syntax (will raise SyntaxError if invalid)
+        try:
+            py_compile.compile(str(script_path), doraise=True)
+        except py_compile.PyCompileError as e:
+            pytest.fail(f"Script has syntax errors: {e}")
+
+    def test_background_plane_import(self):
+        """create_background_plane is imported in the script."""
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        content = script_path.read_text()
+
+        # Check that the function is imported
+        assert "from src.terrain.scene_setup import create_background_plane" in content, \
+            "create_background_plane not imported in script"
+
+    def test_cli_options_documented(self):
+        """Background plane CLI options are documented in script."""
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        content = script_path.read_text()
+
+        # Check that CLI options are present
+        assert "--background" in content, "--background option not found"
+        assert "--background-color" in content, "--background-color option not found"
+        assert "--background-shadow" in content, "--background-shadow option not found"
+        assert "--background-distance" in content, "--background-distance option not found"
+
+    def test_cli_examples_shown(self):
+        """Examples show background plane usage."""
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        content = script_path.read_text()
+
+        # Check for usage examples with background plane
+        assert "--background" in content, "No --background example found"
+        # The examples should show background color
+        assert "--background-color" in content, "No --background-color example found"
+
+    def test_background_integration_code_present(self):
+        """Code to integrate background plane is present in main function."""
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        content = script_path.read_text()
+
+        # Check that background plane is actually created
+        assert "if args.background:" in content, "No conditional to create background plane"
+        assert "create_background_plane(" in content, "create_background_plane not called"
+
+    def test_background_in_summary_output(self):
+        """Summary output mentions background plane if created."""
+        from pathlib import Path
+
+        script_path = Path("examples/detroit_combined_render.py")
+        content = script_path.read_text()
+
+        # Check that summary includes background plane info
+        assert "if args.background:" in content, "Summary doesn't check background flag"
+        assert "Created background plane" in content, "Summary doesn't mention background plane"

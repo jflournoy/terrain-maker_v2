@@ -32,6 +32,12 @@ Usage:
     # Run at print quality (10x8 inches @ 300 DPI)
     python examples/detroit_combined_render.py --print-quality
 
+    # Add a background plane (eggshell white, no shadows)
+    python examples/detroit_combined_render.py --background
+
+    # Background with custom color and shadows
+    python examples/detroit_combined_render.py --background --background-color "#E8E4D9" --background-shadow
+
     # Run with mock data
     python examples/detroit_combined_render.py --mock-data --no-render
 
@@ -67,6 +73,7 @@ from src.terrain.core import (
     flip_raster,
     scale_elevation,
 )
+from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
@@ -684,6 +691,12 @@ Examples:
   # Render at print quality (3000x2400 @ 300 DPI, 8192 samples)
   python examples/detroit_combined_render.py --print-quality
 
+  # Add background plane (eggshell white, no shadows)
+  python examples/detroit_combined_render.py --background
+
+  # Background with custom color and drop shadows
+  python examples/detroit_combined_render.py --background --background-color "#E8E4D9" --background-shadow
+
   # Specify output directory for results
   python examples/detroit_combined_render.py --output-dir ./renders
         """,
@@ -721,6 +734,32 @@ Examples:
         help="Render at print quality: 10x8 inches @ 300 DPI (3000x2400 px) with 8192 samples",
     )
 
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="Enable background plane in render",
+    )
+
+    parser.add_argument(
+        "--background-color",
+        type=str,
+        default="#F5F5F0",
+        help="Background plane color as hex string (default: #F5F5F0 eggshell white)",
+    )
+
+    parser.add_argument(
+        "--background-shadow",
+        action="store_true",
+        help="Enable shadow receiving on background plane (default: no shadows)",
+    )
+
+    parser.add_argument(
+        "--background-distance",
+        type=float,
+        default=50.0,
+        help="Distance below terrain to place background plane (default: 50.0 units)",
+    )
+
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -744,6 +783,11 @@ Examples:
     logger.info(f"Quality mode: {quality_mode}")
     logger.info(f"  Resolution: {render_width}×{render_height} ({render_width/300:.1f}×{render_height/300:.1f} inches @ 300 DPI)")
     logger.info(f"  Samples: {render_samples:,}")
+    if args.background:
+        logger.info(f"Background plane: ENABLED")
+        logger.info(f"  Color: {args.background_color}")
+        logger.info(f"  Distance below terrain: {args.background_distance} units")
+        logger.info(f"  Shadow receiving: {args.background_shadow}")
 
     # Load data
     logger.info("\n" + "=" * 70)
@@ -1070,9 +1114,24 @@ Examples:
         mesh_obj=mesh_combined,
         direction="above",
         camera_type="ORTHO",
-        ortho_scale=1.2,
+        ortho_scale=1.0,
     )
     lights = setup_lighting()
+
+    # Create background plane if requested
+    if args.background:
+        logger.info(f"Creating background plane...")
+        logger.info(f"  Color: {args.background_color}")
+        logger.info(f"  Distance below terrain: {args.background_distance} units")
+        logger.info(f"  Shadow receiving: {args.background_shadow}")
+        background_plane = create_background_plane(
+            camera=camera,
+            mesh_or_meshes=mesh_combined,
+            distance_below=args.background_distance,
+            color=args.background_color,
+            receive_shadows=args.background_shadow,
+        )
+        logger.info("✓ Background plane created successfully")
 
     logger.info("✓ Scene created successfully")
 
@@ -1106,6 +1165,8 @@ Examples:
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
     logger.info(f"  ✓ Set up orthographic camera and lighting")
+    if args.background:
+        logger.info(f"  ✓ Created background plane ({args.background_color}, shadows={args.background_shadow})")
     if not args.no_render:
         logger.info(f"  ✓ Rendered {render_width}×{render_height} PNG with {render_samples:,} samples")
         if args.print_quality:
