@@ -21,12 +21,16 @@ Requirements:
 - Pre-computed XC skiing scores + parks from detroit_xc_skiing.py
 
 Output:
-- docs/images/combined_render/sledding_with_xc_parks_3d.png (1920×1080)
+- docs/images/combined_render/sledding_with_xc_parks_3d.png (1920×1080, 2048 samples)
+- docs/images/combined_render/sledding_with_xc_parks_3d_print.png (3000×2400 @ 300 DPI, 8192 samples)
 - docs/images/combined_render/sledding_with_xc_parks_3d.blend (Blender file)
 
 Usage:
-    # Run with computed scores
+    # Run with computed scores (standard quality)
     python examples/detroit_combined_render.py
+
+    # Run at print quality (10x8 inches @ 300 DPI)
+    python examples/detroit_combined_render.py --print-quality
 
     # Run with mock data
     python examples/detroit_combined_render.py --mock-data --no-render
@@ -674,8 +678,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Render with pre-computed scores
+  # Render with pre-computed scores (1920x1080, 2048 samples)
   python examples/detroit_combined_render.py
+
+  # Render at print quality (3000x2400 @ 300 DPI, 8192 samples)
+  python examples/detroit_combined_render.py --print-quality
 
   # Specify output directory for results
   python examples/detroit_combined_render.py --output-dir ./renders
@@ -708,14 +715,35 @@ Examples:
         help="Create scene but don't render (for debugging in Blender UI)",
     )
 
+    parser.add_argument(
+        "--print-quality",
+        action="store_true",
+        help="Render at print quality: 10x8 inches @ 300 DPI (3000x2400 px) with 8192 samples",
+    )
+
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set resolution and quality based on mode
+    if args.print_quality:
+        render_width = 3000  # 10 inches @ 300 DPI
+        render_height = 2400  # 8 inches @ 300 DPI
+        render_samples = 8192  # High quality for print
+        quality_mode = "PRINT"
+    else:
+        render_width = 1920  # Standard HD
+        render_height = 1080
+        render_samples = 2048  # Good quality for screen
+        quality_mode = "SCREEN"
 
     logger.info("\n" + "=" * 70)
     logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")
     logger.info("=" * 70)
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Scores directory: {args.scores_dir}")
+    logger.info(f"Quality mode: {quality_mode}")
+    logger.info(f"  Resolution: {render_width}×{render_height} ({render_width/300:.1f}×{render_height/300:.1f} inches @ 300 DPI)")
+    logger.info(f"  Samples: {render_samples:,}")
 
     # Load data
     logger.info("\n" + "=" * 70)
@@ -735,10 +763,66 @@ Examples:
     else:
         dem_dir = Path("data/dem/detroit")
         if dem_dir.exists():
-            logger.info(f"Loading DEM from {dem_dir}...")
-            dem, transform = load_dem_files(dem_dir)
-            dem_crs = "EPSG:4326"  # Real data is typically WGS84
-            logger.info(f"DEM shape: {dem.shape}")
+            # Filter HGT files to load only northern tiles (N41 and above)
+            # This focuses on areas with better snow coverage (Detroit metro and north)
+            # Tiles range from N37-N46; loading N41+ removes the southern ~40% of extent
+            import re
+            import rasterio
+            from rasterio.merge import merge
+            from tqdm import tqdm
+
+            min_latitude = 41  # Load N41 and above (N41, N42, N43, N44, N45, N46)
+
+            all_hgt_files = sorted(dem_dir.glob("*.hgt"))
+            logger.info(f"Found {len(all_hgt_files)} total HGT files in {dem_dir}")
+
+            # Filter by latitude from filename (e.g., N42W083.hgt -> lat=42)
+            filtered_files = []
+            for f in all_hgt_files:
+                match = re.match(r'N(\d+)W\d+\.hgt', f.name)
+                if match:
+                    lat = int(match.group(1))
+                    if lat >= min_latitude:
+                        filtered_files.append(f)
+
+            logger.info(f"Loading {len(filtered_files)} HGT files with latitude >= N{min_latitude}")
+            logger.info(f"  (focusing on Detroit metro and northern areas with better snow)")
+
+            if not filtered_files:
+                raise ValueError(f"No HGT files found with latitude >= N{min_latitude}")
+
+            # Open filtered files
+            dem_datasets = []
+            with tqdm(filtered_files, desc="Opening filtered DEM files") as pbar:
+                for file in pbar:
+                    try:
+                        ds = rasterio.open(file)
+                        dem_datasets.append(ds)
+                        pbar.set_postfix({"opened": len(dem_datasets)})
+                    except Exception as e:
+                        logger.warning(f"Failed to open {file}: {e}")
+                        continue
+
+            if not dem_datasets:
+                raise ValueError("No valid DEM files could be opened")
+
+            logger.info(f"Successfully opened {len(dem_datasets)} DEM files")
+
+            # Merge datasets
+            try:
+                with rasterio.Env():
+                    merged_dem, transform = merge(dem_datasets)
+                    dem = merged_dem[0]  # Extract first band
+                    dem_crs = "EPSG:4326"  # Real data is typically WGS84
+
+                    logger.info(f"Successfully merged filtered DEMs:")
+                    logger.info(f"  Shape: {dem.shape}")
+                    logger.info(f"  Value range: {np.nanmin(dem):.2f} to {np.nanmax(dem):.2f}")
+                    logger.info(f"  Transform: {transform}")
+            finally:
+                # Clean up
+                for ds in dem_datasets:
+                    ds.close()
         else:
             logger.info("Generating mock DEM (DEM directory not found)...")
             dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
@@ -825,9 +909,9 @@ Examples:
         logger.warning("Memory monitoring disabled (psutil not available)")
 
     # Calculate target vertices for mesh creation
-    # Single mesh render can use full 1080p resolution
-    target_vertices = 1920*1080
-    logger.info(f"Target vertices: {target_vertices:,} (1080p resolution)")
+    # Match render resolution for optimal detail
+    target_vertices = render_width * render_height
+    logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution)")
 
     # Create single terrain mesh with dual colormaps
     # Base: Mako colormap for sledding suitability scores (with gamma=0.5)
@@ -911,7 +995,7 @@ Examples:
         park_mask = terrain_combined.compute_proximity_mask(
             park_lons,
             park_lats,
-            radius_meters=10_000,
+            radius_meters=5_000,
             cluster_threshold_meters=500,
         )
         logger.debug(f"Proximity mask: {np.sum(park_mask)} vertices in park zones")
@@ -986,7 +1070,7 @@ Examples:
         mesh_obj=mesh_combined,
         direction="above",
         camera_type="ORTHO",
-        ortho_scale=1.5,
+        ortho_scale=1.2,
     )
     lights = setup_lighting()
 
@@ -997,12 +1081,18 @@ Examples:
         logger.info("\n[4/4] Rendering to PNG...")
         logger.info("=" * 70)
 
-        # Configure render settings for high-quality output
-        setup_render_settings(use_gpu=True, samples=2048, use_denoising=False)
-        logger.info("Render settings configured (GPU, 2048 samples, denoising off)")
+        # Configure render settings
+        setup_render_settings(use_gpu=True, samples=render_samples, use_denoising=False)
+        logger.info(f"Render settings configured (GPU, {render_samples:,} samples, denoising off)")
 
-        output_path = args.output_dir / "sledding_with_xc_parks_3d.png"
-        render_dual_terrain(output_path, width=1920, height=1080)
+        # Set output filename based on quality mode
+        if args.print_quality:
+            output_filename = "sledding_with_xc_parks_3d_print.png"
+        else:
+            output_filename = "sledding_with_xc_parks_3d.png"
+
+        output_path = args.output_dir / output_filename
+        render_dual_terrain(output_path, width=render_width, height=render_height)
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Detroit Combined Terrain Rendering Complete!")
@@ -1017,7 +1107,9 @@ Examples:
     logger.info(f"  ✓ Detected and colored water bodies blue")
     logger.info(f"  ✓ Set up orthographic camera and lighting")
     if not args.no_render:
-        logger.info(f"  ✓ Rendered 1920×1080 PNG with 2048 samples")
+        logger.info(f"  ✓ Rendered {render_width}×{render_height} PNG with {render_samples:,} samples")
+        if args.print_quality:
+            logger.info(f"    ({render_width/300:.1f}×{render_height/300:.1f} inches @ 300 DPI - PRINT QUALITY)")
     logger.info(f"\nOutput directory: {args.output_dir}")
     logger.info("=" * 70 + "\n")
 

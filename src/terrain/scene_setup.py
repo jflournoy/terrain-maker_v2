@@ -13,6 +13,57 @@ import bpy
 from mathutils import Euler, Vector
 
 
+def hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
+    """Convert hex color string to normalized RGB tuple.
+
+    Converts hex color strings in various formats (#RRGGBB, #RGB, with or without #)
+    to normalized RGB tuples with values in range 0.0-1.0.
+
+    Args:
+        hex_color: Hex color string in format:
+            - "#RRGGBB" (e.g., "#F5F5F0")
+            - "#RGB" (e.g., "#FFF")
+            - "RRGGBB" or "RGB" (without #)
+
+    Returns:
+        Tuple of (r, g, b) floats in range 0.0-1.0
+
+    Raises:
+        ValueError: If hex_color format is invalid or contains invalid characters
+
+    Examples:
+        >>> r, g, b = hex_to_rgb("#F5F5F0")  # Eggshell white
+        >>> r, g, b = hex_to_rgb("FFF")      # Pure white
+        >>> r, g, b = hex_to_rgb("#000000")  # Pure black
+    """
+    # Remove hash if present
+    hex_str = hex_color.lstrip("#")
+
+    # Handle shorthand format (#RGB -> #RRGGBB)
+    if len(hex_str) == 3:
+        hex_str = "".join([c * 2 for c in hex_str])
+
+    # Validate length
+    if len(hex_str) != 6:
+        raise ValueError(
+            f"Invalid hex color: '{hex_color}'. "
+            f"Expected #RRGGBB, #RGB, RRGGBB, or RGB format."
+        )
+
+    # Validate characters are valid hex
+    try:
+        int(hex_str, 16)
+    except ValueError:
+        raise ValueError(f"Invalid hex color: '{hex_color}'. Contains non-hex characters.")
+
+    # Convert to RGB tuple (normalize to 0.0-1.0)
+    r = int(hex_str[0:2], 16) / 255.0
+    g = int(hex_str[2:4], 16) / 255.0
+    b = int(hex_str[4:6], 16) / 255.0
+
+    return (r, g, b)
+
+
 def clear_scene():
     """
     Clear all objects from the Blender scene.

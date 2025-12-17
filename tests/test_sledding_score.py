@@ -187,7 +187,7 @@ class TestSleddingSynergyBonus:
         """Perfect slope + optimal snow + 3+ months should give 30% bonus."""
         bonus = sledding_synergy_bonus(
             slope=9.0,  # In 6-12° optimal range
-            snow_depth=12.0,  # In 2-12" optimal range
+            snow_depth=8.0,  # In 2-10" optimal range (new trapezoid)
             coverage_months=3.5,
             roughness=2.0,  # Moderate roughness
         )
@@ -241,7 +241,7 @@ class TestSleddingSynergyBonus:
         # Perfect combo (30%) + other bonuses should stack
         bonus = sledding_synergy_bonus(
             slope=9.0,  # Perfect
-            snow_depth=12.0,  # Optimal
+            snow_depth=8.0,  # Optimal (new trapezoid: 2-10")
             coverage_months=5.0,  # 4+ months
             roughness=1.0,  # Very smooth
         )
@@ -265,7 +265,7 @@ class TestComputeSleddingScore:
     def test_perfect_conditions(self):
         """Perfect conditions should give high score."""
         score = compute_sledding_score(
-            snow_depth=12.0,  # Optimal
+            snow_depth=8.0,  # Optimal (new trapezoid: 2-10")
             slope=9.0,  # Optimal
             coverage_months=4.0,  # Good
             roughness=2.0,  # Smooth
@@ -318,7 +318,7 @@ class TestComputeSleddingScore:
 
     def test_array_input(self):
         """Should work with numpy arrays."""
-        snow_depths = np.array([12.0, 40.0, 6.0])
+        snow_depths = np.array([8.0, 40.0, 6.0])  # Updated to 8.0" (new optimal range)
         slopes = np.array([9.0, 9.0, 5.0])
         coverage = np.array([4.0, 4.0, 1.0])
         roughness_vals = np.array([2.0, 2.0, 4.0])
@@ -331,5 +331,5 @@ class TestComputeSleddingScore:
         )
 
         assert len(scores) == 3
-        assert scores[0] > 0.9  # Perfect conditions
+        assert scores[0] > 0.9  # Perfect conditions (8" snow, 9° slope)
         assert 0.1 < scores[2] < 0.5  # Marginal conditions

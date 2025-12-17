@@ -216,7 +216,7 @@ def sledding_synergy_bonus(
 
     # Define optimal ranges
     perfect_slope = (slope >= 6.0) & (slope <= 12.0)
-    optimal_snow = (snow_depth >= 2.0) & (snow_depth <= 12.0)  # Match trapezoid sweet spot
+    optimal_snow = (snow_depth >= 2.0) & (snow_depth <= 10.0)  # Match new trapezoid (2-10")
     long_coverage = coverage_months >= 3.0
     very_long_coverage = coverage_months >= 4.0
     smooth_terrain = roughness < 3.0  # < 3m elevation variation (gentle rolling hills)
@@ -320,13 +320,15 @@ def compute_sledding_score(
             return 0.0
         return scores
 
-    # Score snow depth: 1-4-12-20 inches (25-100-300-500mm)
+    # Score snow depth: 1-2-10-16 inches (25-50-250-400mm)
+    # Optimized for "opportunistic sledding after a good storm"
+    # Rather than "year-round destination" - 2-3" on a good hill = fun!
     snow_score = trapezoid_score(
         value=snow_depth[valid],
         min_value=1.0,  # Marginal on grass (~25mm)
-        optimal_min=4.0,  # Good coverage (~100mm)
-        optimal_max=12.0,  # Excellent range (~300mm)
-        max_value=20.0,  # Too much for little kids (~500mm)
+        optimal_min=2.0,  # Good for casual sledding (~50mm)
+        optimal_max=10.0,  # Excellent range (~250mm)
+        max_value=16.0,  # Deep snow (~400mm)
     )
 
     # Score slope: 1-6-12-20 degrees (lowered min from 3 to 1, 35° is deal breaker)
