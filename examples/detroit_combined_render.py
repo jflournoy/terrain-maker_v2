@@ -729,21 +729,41 @@ def add_skiing_bumps_to_mesh(
     park_lons = np.array([park['lon'] for park in parks])
     park_lats = np.array([park['lat'] for park in parks])
 
+    # Get DEM bounds to filter out-of-bounds parks
+    # geo_to_mesh_coords clamps coordinates to edges, so we need to check bounds ourselves
+    if hasattr(terrain, 'dem_bounds'):
+        minx, miny, maxx, maxy = terrain.dem_bounds
+        logger.info(f"DEM bounds: ({minx:.2f}, {miny:.2f}) to ({maxx:.2f}, {maxy:.2f})")
+
+        # Filter parks to only those within DEM bounds (with small margin for edge effects)
+        margin = 100  # meters
+        in_bounds = (
+            (park_lons >= minx + margin) & (park_lons <= maxx - margin) &
+            (park_lats >= miny + margin) & (park_lats <= maxy - margin)
+        )
+
+        park_lons = park_lons[in_bounds]
+        park_lats = park_lats[in_bounds]
+
+        skipped = len(parks) - len(park_lons)
+        if skipped > 0:
+            logger.info(f"Filtered out {skipped} parks outside DEM bounds")
+
+    if len(park_lons) == 0:
+        logger.warning("No parks within terrain bounds")
+        return
+
     # Convert all park coordinates at once (vectorized, much faster)
-    logger.info(f"Converting {len(parks)} park coordinates to mesh space...")
+    logger.info(f"Converting {len(park_lons)} park coordinates to mesh space...")
     park_x_arr, park_y_arr, park_z_arr = terrain.geo_to_mesh_coords(park_lons, park_lats)
 
-    # Filter out parks with NaN coordinates (outside bounds or invalid)
+    # Final filter for any NaN coordinates
     valid_mask = ~(np.isnan(park_x_arr) | np.isnan(park_y_arr) | np.isnan(park_z_arr))
     park_positions = list(zip(park_x_arr[valid_mask], park_y_arr[valid_mask]))
 
     if not park_positions:
         logger.warning("No valid park positions found within terrain bounds")
         return
-
-    skipped = len(parks) - len(park_positions)
-    if skipped > 0:
-        logger.info(f"Skipped {skipped} parks outside terrain bounds")
 
     logger.info(f"Processing {len(park_positions)} parks within terrain bounds...")
 
