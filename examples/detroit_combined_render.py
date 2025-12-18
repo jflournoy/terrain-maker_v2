@@ -32,6 +32,10 @@ Usage:
     # Run at print quality (10x8 inches @ 300 DPI)
     python examples/detroit_combined_render.py --print-quality
 
+    # Test different height scales from south view
+    python examples/detroit_combined_render.py --camera-direction south --height-scale 20
+    python examples/detroit_combined_render.py --camera-direction south --height-scale 40
+
     # Add a background plane (eggshell white, no shadows)
     python examples/detroit_combined_render.py --background
 
@@ -691,6 +695,11 @@ Examples:
   # Render at print quality (3000x2400 @ 300 DPI, 8192 samples)
   python examples/detroit_combined_render.py --print-quality
 
+  # Test height scales from south view (for finding best vertical exaggeration)
+  python examples/detroit_combined_render.py --camera-direction south --height-scale 15
+  python examples/detroit_combined_render.py --camera-direction south --height-scale 25
+  python examples/detroit_combined_render.py --camera-direction south --height-scale 35
+
   # Add background plane (eggshell white, no shadows)
   python examples/detroit_combined_render.py --background
 
@@ -758,6 +767,28 @@ Examples:
         type=float,
         default=50.0,
         help="Distance below terrain to place background plane (default: 50.0 units)",
+    )
+
+    parser.add_argument(
+        "--height-scale",
+        type=float,
+        default=30.0,
+        help="Vertical exaggeration for terrain (default: 30.0, try 10-50 range)",
+    )
+
+    parser.add_argument(
+        "--camera-direction",
+        type=str,
+        default="above",
+        choices=["above", "south", "north", "east", "west", "northeast", "northwest", "southeast", "southwest"],
+        help="Camera viewing direction (default: above)",
+    )
+
+    parser.add_argument(
+        "--ortho-scale",
+        type=float,
+        default=0.9,
+        help="Orthographic camera scale (default: 0.9, smaller=zoomed in)",
     )
 
     args = parser.parse_args()
@@ -954,7 +985,7 @@ Examples:
 
     # Calculate target vertices for mesh creation
     # Match render resolution for optimal detail
-    target_vertices = render_width * render_height * 2
+    target_vertices = int(np.floor(render_width * render_height * 2.5))
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution)")
 
     # Create single terrain mesh with dual colormaps
@@ -1021,7 +1052,7 @@ Examples:
     logger.debug("Creating temporary mesh for proximity calculations...")
     mesh_temp = terrain_combined.create_mesh(
         scale_factor=100,
-        height_scale=30.0,
+        height_scale=args.height_scale,
         center_model=True,
         boundary_extension=True,
         water_mask=None,
@@ -1039,7 +1070,7 @@ Examples:
         park_mask = terrain_combined.compute_proximity_mask(
             park_lons,
             park_lats,
-            radius_meters=5_000,
+            radius_meters=2_500,
             cluster_threshold_meters=500,
         )
         logger.debug(f"Proximity mask: {np.sum(park_mask)} vertices in park zones")
@@ -1086,7 +1117,7 @@ Examples:
     logger.debug("Creating final combined mesh...")
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
-        height_scale=30.0,
+        height_scale=args.height_scale,
         center_model=True,
         boundary_extension=True,
         water_mask=None,  # Already applied
@@ -1110,11 +1141,14 @@ Examples:
 
     # Setup camera and lighting
     logger.info("\n[3/4] Setting up Camera & Lighting...")
+    logger.info(f"  Camera direction: {args.camera_direction}")
+    logger.info(f"  Height scale: {args.height_scale}")
+    logger.info(f"  Ortho scale: {args.ortho_scale}")
     camera = position_camera_relative(
         mesh_obj=mesh_combined,
-        direction="above",
+        direction=args.camera_direction,
         camera_type="ORTHO",
-        ortho_scale=1.0,
+        ortho_scale=args.ortho_scale,
     )
     lights = setup_lighting()
 
