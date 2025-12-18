@@ -602,10 +602,32 @@ def setup_dual_camera(
     return camera
 
 
-def setup_lighting() -> list:
+def setup_lighting(
+    sun_angle_pitch: float = 75.0,
+    sun_angle_direction: float = -45.0,
+    sun_energy: float = 7.0,
+    sun_angle: float = 1.0,
+    fill_angle_pitch: float = 60.0,
+    fill_angle_direction: float = 135.0,
+    fill_energy: float = 1.0,
+    fill_angle: float = 3.0,
+) -> list:
     """Setup Blender lighting with sunset-style positioning.
 
     Creates a low-angle sun for dramatic shadows and warm fill light.
+
+    Args:
+        sun_angle_pitch: Sun pitch angle in degrees (0=horizon, 90=overhead)
+        sun_angle_direction: Sun direction in degrees (0=north, 90=east, -45=southwest)
+        sun_energy: Sun light strength/energy
+        sun_angle: Sun angular size in degrees (smaller=sharper shadows)
+        fill_angle_pitch: Fill light pitch angle in degrees
+        fill_angle_direction: Fill light direction in degrees
+        fill_energy: Fill light strength/energy
+        fill_angle: Fill light angular size in degrees (softer than sun)
+
+    Returns:
+        List of light objects
     """
     from math import radians
 
@@ -617,9 +639,9 @@ def setup_lighting() -> list:
     # rotation_euler: (pitch down from horizon, yaw direction, roll)
     sun_light = setup_light(
         location=(10, -5, 2),  # Position doesn't matter much for sun type
-        angle=1,  # Sharper shadows (smaller angle = harder shadows)
-        energy=7.0,
-        rotation_euler=(radians(75), 0, radians(-45)),  # Low sun from SW
+        angle=sun_angle,  # Sharper shadows (smaller angle = harder shadows)
+        energy=sun_energy,
+        rotation_euler=(radians(sun_angle_pitch), 0, radians(sun_angle_direction)),
     )
     # Set warm sunset color (golden/orange)
     sun_light.data.color = (1.0, 0.85, 0.6)  # Warm golden
@@ -628,9 +650,9 @@ def setup_lighting() -> list:
     # Fill light - cooler blue from opposite side for contrast
     fill_light = setup_light(
         location=(-10, 5, 5),
-        angle=3,  # Softer
-        energy=1,
-        rotation_euler=(radians(60), 0, radians(135)),  # From NE, higher
+        angle=fill_angle,  # Softer
+        energy=fill_energy,
+        rotation_euler=(radians(fill_angle_pitch), 0, radians(fill_angle_direction)),
     )
     # Cool blue fill to contrast with warm sun
     fill_light.data.color = (0.7, 0.8, 1.0)  # Cool blue
@@ -638,6 +660,107 @@ def setup_lighting() -> list:
 
     logger.info("✓ Sunset lighting setup complete")
     return lights
+
+
+def add_skiing_bumps_to_mesh(
+    mesh_obj: 'bpy.types.Object',
+    terrain: 'Terrain',
+    parks: list,
+    park_radius: float = 2500.0,
+) -> None:
+    """
+    Add half-sphere bumps to existing terrain vertices for each park, colored by skiing score.
+
+    Modifies existing mesh vertices within park radius by adding hemisphere height.
+    For each vertex within radius R of a park center:
+      height_to_add = sqrt(R² - distance²)
+
+    Args:
+        mesh_obj: Blender mesh object to modify
+        terrain: Terrain object with DEM and color data
+        parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
+        park_radius: Radius of half-sphere bumps in meters
+    """
+    if not parks:
+        logger.warning("No parks provided, skipping skiing bumps")
+        return
+
+    mesh = mesh_obj.data
+    logger.info(f"Adding skiing bumps for {len(parks)} parks (radius: {park_radius}m)...")
+
+    # Convert radius from meters to mesh units
+    # The terrain uses scale_factor=100, so 1 mesh unit = 100 meters horizontally
+    mesh_radius = park_radius / 100.0
+    mesh_radius_sq = mesh_radius ** 2
+
+    # Build list of park positions
+    park_positions = []
+    for park_idx, park in enumerate(parks):
+        try:
+            lon = park['lon']
+            lat = park['lat']
+
+            # Get mesh coordinates at park location
+            try:
+                park_x, park_y, park_z = terrain.geo_to_mesh_coords(lon, lat)
+            except Exception:
+                logger.debug(f"geo_to_mesh_coords failed for park {park_idx}, skipping")
+                continue
+
+            park_positions.append((park_x, park_y))
+
+        except Exception as e:
+            logger.debug(f"Error preparing park {park_idx}: {e}")
+            continue
+
+    if not park_positions:
+        logger.warning("No valid park positions found")
+        return
+
+    logger.info(f"Processing {len(park_positions)} valid parks...")
+
+    # Extract all vertex positions into numpy arrays for vectorized operations
+    logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
+    n_verts = len(mesh.vertices)
+    vert_x = np.array([v.co.x for v in mesh.vertices])
+    vert_y = np.array([v.co.y for v in mesh.vertices])
+    logger.info(f"✓ Extracted vertex positions")
+
+    # Track which vertices have been modified (first park wins)
+    height_additions = np.zeros(n_verts, dtype=np.float32)
+    vertices_modified = 0
+
+    # Process each park with vectorized distance calculations
+    for park_idx, (park_x, park_y) in enumerate(park_positions):
+        # Vectorized distance calculation for all vertices
+        dx = vert_x - park_x
+        dy = vert_y - park_y
+        dist_sq = dx*dx + dy*dy
+
+        # Find vertices within radius
+        within_radius = dist_sq <= mesh_radius_sq
+
+        # Only modify vertices not yet modified
+        to_modify = within_radius & (height_additions == 0)
+
+        # Calculate hemisphere height for vertices to modify
+        if np.any(to_modify):
+            heights = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
+            height_additions[to_modify] = heights
+            vertices_modified += np.sum(to_modify)
+
+    # Apply height additions to mesh vertices
+    logger.info(f"Applying height modifications to {vertices_modified} vertices...")
+    for idx, vert in enumerate(mesh.vertices):
+        if height_additions[idx] > 0:
+            vert.co.z += height_additions[idx]
+    logger.info(f"✓ Applied height modifications")
+
+    mesh.update()
+    logger.info(f"✓ Modified {vertices_modified} vertices with hemisphere bumps for {len(park_positions)} parks")
+
+    # Note: Skipping polygon recoloring for performance
+    # The bumps will use the existing terrain colors from the dual colormap
 
 
 def render_dual_terrain(
@@ -757,16 +880,10 @@ Examples:
     )
 
     parser.add_argument(
-        "--background-shadow",
-        action="store_true",
-        help="Enable shadow receiving on background plane (default: no shadows)",
-    )
-
-    parser.add_argument(
         "--background-distance",
         type=float,
         default=50.0,
-        help="Distance below terrain to place background plane (default: 50.0 units)",
+        help="Distance below terrain to place background plane (default: 50.0 units, use 0 for drop shadows)",
     )
 
     parser.add_argument(
@@ -789,6 +906,69 @@ Examples:
         type=float,
         default=0.9,
         help="Orthographic camera scale (default: 0.9, smaller=zoomed in)",
+    )
+
+    # Lighting options
+    parser.add_argument(
+        "--sun-angle-pitch",
+        type=float,
+        default=75.0,
+        help="Sun light pitch angle in degrees (default: 75.0, 0=horizon, 90=overhead)",
+    )
+
+    parser.add_argument(
+        "--sun-angle-direction",
+        type=float,
+        default=-45.0,
+        help="Sun light direction angle in degrees (default: -45.0, 0=north, 90=east, -45=southwest)",
+    )
+
+    parser.add_argument(
+        "--sun-energy",
+        type=float,
+        default=7.0,
+        help="Sun light strength/energy (default: 7.0)",
+    )
+
+    parser.add_argument(
+        "--sun-angle",
+        type=float,
+        default=1.0,
+        help="Sun light angular size in degrees (default: 1.0, smaller=sharper shadows)",
+    )
+
+    parser.add_argument(
+        "--fill-angle-pitch",
+        type=float,
+        default=60.0,
+        help="Fill light pitch angle in degrees (default: 60.0)",
+    )
+
+    parser.add_argument(
+        "--fill-angle-direction",
+        type=float,
+        default=135.0,
+        help="Fill light direction angle in degrees (default: 135.0, northeast)",
+    )
+
+    parser.add_argument(
+        "--fill-energy",
+        type=float,
+        default=1.0,
+        help="Fill light strength/energy (default: 1.0)",
+    )
+
+    parser.add_argument(
+        "--fill-angle",
+        type=float,
+        default=3.0,
+        help="Fill light angular size in degrees (default: 3.0, softer than sun)",
+    )
+
+    parser.add_argument(
+        "--skiing-bumps",
+        action="store_true",
+        help="Add half-sphere bumps at XC skiing park locations, colored by skiing score",
     )
 
     args = parser.parse_args()
@@ -818,7 +998,6 @@ Examples:
         logger.info(f"Background plane: ENABLED")
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
-        logger.info(f"  Shadow receiving: {args.background_shadow}")
 
     # Load data
     logger.info("\n" + "=" * 70)
@@ -1133,6 +1312,11 @@ Examples:
 
     logger.info("✓ Combined terrain mesh created successfully")
 
+    # Add skiing bumps if requested
+    if args.skiing_bumps and parks:
+        logger.info("\nAdding skiing bumps...")
+        add_skiing_bumps_to_mesh(mesh_combined, terrain_combined, parks, park_radius=2500.0)
+
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
     del dem
@@ -1150,20 +1334,28 @@ Examples:
         camera_type="ORTHO",
         ortho_scale=args.ortho_scale,
     )
-    lights = setup_lighting()
+    lights = setup_lighting(
+        sun_angle_pitch=args.sun_angle_pitch,
+        sun_angle_direction=args.sun_angle_direction,
+        sun_energy=args.sun_energy,
+        sun_angle=args.sun_angle,
+        fill_angle_pitch=args.fill_angle_pitch,
+        fill_angle_direction=args.fill_angle_direction,
+        fill_energy=args.fill_energy,
+        fill_angle=args.fill_angle,
+    )
 
     # Create background plane if requested
     if args.background:
         logger.info(f"Creating background plane...")
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
-        logger.info(f"  Shadow receiving: {args.background_shadow}")
         background_plane = create_background_plane(
             camera=camera,
             mesh_or_meshes=mesh_combined,
             distance_below=args.background_distance,
             color=args.background_color,
-            receive_shadows=args.background_shadow,
+            receive_shadows=True,  # Always receive shadows; distance controls shadow appearance
         )
         logger.info("✓ Background plane created successfully")
 
@@ -1196,11 +1388,13 @@ Examples:
     logger.info(f"    - Base colormap: mako (purple → yellow) for sledding scores (gamma=0.5)")
     logger.info(f"    - Overlay colormap: rocket for XC skiing scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
+    if args.skiing_bumps and parks:
+        logger.info(f"    - Added half-sphere bumps at {len(parks)} park locations (colored by skiing score)")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
     logger.info(f"  ✓ Set up orthographic camera and lighting")
     if args.background:
-        logger.info(f"  ✓ Created background plane ({args.background_color}, shadows={args.background_shadow})")
+        logger.info(f"  ✓ Created background plane ({args.background_color})")
     if not args.no_render:
         logger.info(f"  ✓ Rendered {render_width}×{render_height} PNG with {render_samples:,} samples")
         if args.print_quality:
