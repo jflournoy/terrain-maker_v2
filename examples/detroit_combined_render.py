@@ -729,50 +729,42 @@ def add_skiing_bumps_to_mesh(
     park_lons = np.array([park['lon'] for park in parks])
     park_lats = np.array([park['lat'] for park in parks])
 
-    # Get DEM bounds to filter out-of-bounds parks
-    # geo_to_mesh_coords clamps coordinates to edges, so we need to check bounds ourselves
-    if hasattr(terrain, 'dem_bounds'):
-        minx, miny, maxx, maxy = terrain.dem_bounds
-        logger.info(f"DEM bounds: ({minx:.2f}, {miny:.2f}) to ({maxx:.2f}, {maxy:.2f})")
+    # Extract all vertex positions into numpy arrays (needed for both bounds check and processing)
+    logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
+    n_verts = len(mesh.vertices)
+    vert_x = np.array([v.co.x for v in mesh.vertices])
+    vert_y = np.array([v.co.y for v in mesh.vertices])
+    logger.info(f"✓ Extracted vertex positions")
 
-        # Filter parks to only those within DEM bounds (with small margin for edge effects)
-        margin = 100  # meters
-        in_bounds = (
-            (park_lons >= minx + margin) & (park_lons <= maxx - margin) &
-            (park_lats >= miny + margin) & (park_lats <= maxy - margin)
-        )
-
-        park_lons = park_lons[in_bounds]
-        park_lats = park_lats[in_bounds]
-
-        skipped = len(parks) - len(park_lons)
-        if skipped > 0:
-            logger.info(f"Filtered out {skipped} parks outside DEM bounds")
-
-    if len(park_lons) == 0:
-        logger.warning("No parks within terrain bounds")
-        return
+    # Get mesh bounds for filtering parks
+    mesh_minx, mesh_maxx = vert_x.min(), vert_x.max()
+    mesh_miny, mesh_maxy = vert_y.min(), vert_y.max()
+    logger.info(f"Mesh bounds: X=[{mesh_minx:.2f}, {mesh_maxx:.2f}], Y=[{mesh_miny:.2f}, {mesh_maxy:.2f}]")
 
     # Convert all park coordinates at once (vectorized, much faster)
     logger.info(f"Converting {len(park_lons)} park coordinates to mesh space...")
     park_x_arr, park_y_arr, park_z_arr = terrain.geo_to_mesh_coords(park_lons, park_lats)
 
-    # Final filter for any NaN coordinates
-    valid_mask = ~(np.isnan(park_x_arr) | np.isnan(park_y_arr) | np.isnan(park_z_arr))
-    park_positions = list(zip(park_x_arr[valid_mask], park_y_arr[valid_mask]))
+    # Filter parks to only those within mesh bounds (with margin to avoid edge artifacts)
+    # Add radius as margin so entire bump is within terrain
+    margin = mesh_radius * 1.5  # 1.5x bump radius margin
+    in_bounds = (
+        (park_x_arr >= mesh_minx + margin) & (park_x_arr <= mesh_maxx - margin) &
+        (park_y_arr >= mesh_miny + margin) & (park_y_arr <= mesh_maxy - margin) &
+        ~np.isnan(park_x_arr) & ~np.isnan(park_y_arr) & ~np.isnan(park_z_arr)
+    )
+
+    park_positions = list(zip(park_x_arr[in_bounds], park_y_arr[in_bounds]))
+
+    skipped = len(parks) - len(park_positions)
+    if skipped > 0:
+        logger.info(f"Filtered {skipped} parks outside mesh bounds (keeping {len(park_positions)} parks)")
 
     if not park_positions:
         logger.warning("No valid park positions found within terrain bounds")
         return
 
     logger.info(f"Processing {len(park_positions)} parks within terrain bounds...")
-
-    # Extract all vertex positions into numpy arrays for vectorized operations
-    logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
-    n_verts = len(mesh.vertices)
-    vert_x = np.array([v.co.x for v in mesh.vertices])
-    vert_y = np.array([v.co.y for v in mesh.vertices])
-    logger.info(f"✓ Extracted vertex positions")
 
     # Track which vertices have been modified (first park wins)
     height_additions = np.zeros(n_verts, dtype=np.float32)
@@ -1026,7 +1018,21 @@ Examples:
     parser.add_argument(
         "--skiing-bumps",
         action="store_true",
-        help="Add half-sphere bumps at XC skiing park locations, colored by skiing score",
+        help="Add dome bumps at XC skiing park locations to visualize their locations",
+    )
+
+    parser.add_argument(
+        "--bump-radius",
+        type=float,
+        default=500.0,
+        help="Horizontal radius of skiing bumps in meters (default: 500m, try 250-1000)",
+    )
+
+    parser.add_argument(
+        "--bump-height",
+        type=float,
+        default=50.0,
+        help="Maximum height of skiing bumps in meters (default: 50m, try 25-200)",
     )
 
     args = parser.parse_args()
@@ -1377,8 +1383,8 @@ Examples:
             mesh_combined,
             terrain_combined,
             parks,
-            park_radius=2500.0,
-            bump_height=100.0,  # Maximum height of bumps in meters
+            park_radius=args.bump_radius,
+            bump_height=args.bump_height,
             elevation_scale=0.0001,  # Must match scale_elevation transform applied earlier
         )
 
