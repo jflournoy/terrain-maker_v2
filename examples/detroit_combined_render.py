@@ -709,9 +709,23 @@ def add_skiing_bumps_to_mesh(
     scale_factor = terrain.model_params.get('scale_factor', 100.0)
     height_scale = terrain.model_params.get('height_scale', 1.0)
 
-    # Convert radius from meters to mesh units
-    # Horizontal: 1 mesh unit = scale_factor meters
-    mesh_radius = park_radius / scale_factor
+    # Get pixel size for correct meter-to-mesh conversion
+    # CRITICAL: 1 mesh unit = scale_factor PIXELS, not scale_factor meters!
+    # This is the same formula used in compute_proximity_mask()
+    dem_info = terrain.data_layers.get("dem", {})
+    transformed_transform = dem_info.get("transformed_transform")
+    if transformed_transform is None:
+        logger.error("Transformed DEM transform not found")
+        return
+
+    pixel_size_meters = abs(transformed_transform.a)
+    meters_per_mesh_unit = scale_factor * pixel_size_meters
+
+    logger.info(f"Coordinate conversion: pixel={pixel_size_meters:.1f}m, scale_factor={scale_factor}, "
+                f"→ 1 mesh unit = {meters_per_mesh_unit:.1f}m")
+
+    # Convert radius from meters to mesh units (CORRECT formula matching compute_proximity_mask)
+    mesh_radius = park_radius / meters_per_mesh_unit
     mesh_radius_sq = mesh_radius ** 2
 
     # Calculate Z scaling factor
@@ -722,8 +736,8 @@ def add_skiing_bumps_to_mesh(
     # Calculate maximum height in mesh Z units
     max_height_z = bump_height * z_scale
 
-    logger.info(f"Mesh parameters: scale_factor={scale_factor}, height_scale={height_scale}, elevation_scale={elevation_scale}")
-    logger.info(f"Dome shape: radius={park_radius}m ({mesh_radius:.2f} mesh units), max height={bump_height}m ({max_height_z:.2f} mesh Z units)")
+    logger.info(f"Dome shape: radius={park_radius}m ({mesh_radius:.3f} mesh units), "
+                f"max height={bump_height}m ({max_height_z:.3f} mesh Z units)")
 
     # Extract park coordinates as arrays for vectorized conversion
     park_lons = np.array([park['lon'] for park in parks])
