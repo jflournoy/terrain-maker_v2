@@ -783,9 +783,10 @@ def add_skiing_bumps_to_mesh(
     # Track which vertices have been modified (first park wins)
     height_additions = np.zeros(n_verts, dtype=np.float32)
     vertices_modified = 0
+    parks_with_bumps = 0
 
     # Process each park with vectorized distance calculations
-    for park_x, park_y in park_positions:
+    for park_idx, (park_x, park_y) in enumerate(park_positions):
         # Vectorized distance calculation for all vertices
         dx = vert_x - park_x
         dy = vert_y - park_y
@@ -799,6 +800,8 @@ def add_skiing_bumps_to_mesh(
 
         # Calculate dome height for vertices to modify
         if np.any(to_modify):
+            parks_with_bumps += 1
+
             # Calculate normalized distance (0 at center, 1 at edge)
             # height_factor = sqrt(1 - (d/R)²)
             # This creates a dome shape with height=bump_height at center, 0 at edge
@@ -811,7 +814,15 @@ def add_skiing_bumps_to_mesh(
             heights_z = heights_meters * z_scale
 
             height_additions[to_modify] = heights_z
-            vertices_modified += np.sum(to_modify)
+            num_verts_this_park = np.sum(to_modify)
+            vertices_modified += num_verts_this_park
+
+            # Log first few parks for debugging
+            if park_idx < 3:
+                logger.info(f"  Park {park_idx}: position=({park_x:.2f}, {park_y:.2f}), "
+                           f"vertices={num_verts_this_park}, max_height_z={heights_z.max():.4f}")
+
+    logger.info(f"✓ {parks_with_bumps}/{len(park_positions)} parks had vertices within bump radius")
 
     # Apply height additions to mesh vertices
     logger.info(f"Applying height modifications to {vertices_modified} vertices...")
@@ -1038,15 +1049,15 @@ Examples:
     parser.add_argument(
         "--bump-radius",
         type=float,
-        default=500.0,
-        help="Horizontal radius of skiing bumps in meters (default: 500m, try 250-1000)",
+        default=2500.0,
+        help="Horizontal radius of skiing bumps in meters (default: 2500m, try 1000-5000)",
     )
 
     parser.add_argument(
         "--bump-height",
         type=float,
-        default=50.0,
-        help="Maximum height of skiing bumps in meters (default: 50m, try 25-200)",
+        default=100.0,
+        help="Maximum height of skiing bumps in meters (default: 100m, try 50-500)",
     )
 
     args = parser.parse_args()
