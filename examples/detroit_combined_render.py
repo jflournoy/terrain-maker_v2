@@ -667,14 +667,19 @@ def add_skiing_bumps_to_mesh(
     terrain: 'Terrain',
     parks: list,
     park_radius: float = 2500.0,
+    bump_height: float = 100.0,
     elevation_scale: float = 0.0001,
 ) -> None:
     """
-    Add half-sphere bumps to existing terrain vertices for each park, colored by skiing score.
+    Add dome-shaped bumps to existing terrain vertices for each park, colored by skiing score.
 
-    Modifies existing mesh vertices within park radius by adding hemisphere height.
+    Modifies existing mesh vertices within park radius by adding dome height.
+    Creates a flattened dome (not a perfect hemisphere) where:
+      - Horizontal radius: park_radius (how far the bump extends)
+      - Vertical height: bump_height (max height at center)
+
     For each vertex within radius R of a park center:
-      height_to_add = sqrt(R² - distance²)
+      height_to_add = bump_height × sqrt(1 - (distance/R)²)
 
     IMPORTANT: The height calculation must account for the different scaling between
     horizontal (X, Y) and vertical (Z) coordinates:
@@ -685,7 +690,8 @@ def add_skiing_bumps_to_mesh(
         mesh_obj: Blender mesh object to modify
         terrain: Terrain object with DEM and color data
         parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
-        park_radius: Radius of half-sphere bumps in meters
+        park_radius: Horizontal radius of bumps in meters (default: 2500m)
+        bump_height: Maximum height of bump at center in meters (default: 100m)
         elevation_scale: Scale factor applied to elevations (from scale_elevation transform)
     """
     if not parks:
@@ -693,7 +699,7 @@ def add_skiing_bumps_to_mesh(
         return
 
     mesh = mesh_obj.data
-    logger.info(f"Adding skiing bumps for {len(parks)} parks (radius: {park_radius}m)...")
+    logger.info(f"Adding skiing bumps for {len(parks)} parks (radius: {park_radius}m, height: {bump_height}m)...")
 
     # Get mesh parameters from terrain object
     if not hasattr(terrain, 'model_params'):
@@ -713,8 +719,11 @@ def add_skiing_bumps_to_mesh(
     # To convert from meters to mesh Z units: multiply by (elevation_scale × height_scale)
     z_scale = elevation_scale * height_scale
 
+    # Calculate maximum height in mesh Z units
+    max_height_z = bump_height * z_scale
+
     logger.info(f"Mesh parameters: scale_factor={scale_factor}, height_scale={height_scale}, elevation_scale={elevation_scale}")
-    logger.info(f"Hemisphere: radius={park_radius}m ({mesh_radius:.2f} mesh units), max height={park_radius * z_scale:.2f} mesh Z units")
+    logger.info(f"Dome shape: radius={park_radius}m ({mesh_radius:.2f} mesh units), max height={bump_height}m ({max_height_z:.2f} mesh Z units)")
 
     # Extract park coordinates as arrays for vectorized conversion
     park_lons = np.array([park['lon'] for park in parks])
@@ -762,14 +771,17 @@ def add_skiing_bumps_to_mesh(
         # Only modify vertices not yet modified
         to_modify = within_radius & (height_additions == 0)
 
-        # Calculate hemisphere height for vertices to modify
+        # Calculate dome height for vertices to modify
         if np.any(to_modify):
-            # Heights in horizontal mesh units (1 unit = scale_factor meters)
-            heights_horizontal = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
+            # Calculate normalized distance (0 at center, 1 at edge)
+            # height_factor = sqrt(1 - (d/R)²)
+            # This creates a dome shape with height=bump_height at center, 0 at edge
+            normalized_dist_sq = dist_sq[to_modify] / mesh_radius_sq
+            height_factor = np.sqrt(1.0 - normalized_dist_sq)
 
-            # Convert to real meters, then to mesh Z units
+            # Calculate height in meters, then convert to mesh Z units
             # Z = elevation_meters × elevation_scale × height_scale
-            heights_meters = heights_horizontal * scale_factor
+            heights_meters = bump_height * height_factor
             heights_z = heights_meters * z_scale
 
             height_additions[to_modify] = heights_z
@@ -1346,6 +1358,7 @@ Examples:
             terrain_combined,
             parks,
             park_radius=2500.0,
+            bump_height=100.0,  # Maximum height of bumps in meters
             elevation_scale=0.0001,  # Must match scale_elevation transform applied earlier
         )
 
