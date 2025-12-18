@@ -667,6 +667,7 @@ def add_skiing_bumps_to_mesh(
     terrain: 'Terrain',
     parks: list,
     park_radius: float = 2500.0,
+    elevation_scale: float = 0.0001,
 ) -> None:
     """
     Add half-sphere bumps to existing terrain vertices for each park, colored by skiing score.
@@ -675,11 +676,17 @@ def add_skiing_bumps_to_mesh(
     For each vertex within radius R of a park center:
       height_to_add = sqrt(R² - distance²)
 
+    IMPORTANT: The height calculation must account for the different scaling between
+    horizontal (X, Y) and vertical (Z) coordinates:
+      - Horizontal: 1 mesh unit = scale_factor meters (default 100m)
+      - Vertical: Z = elevation_meters × elevation_scale × height_scale
+
     Args:
         mesh_obj: Blender mesh object to modify
         terrain: Terrain object with DEM and color data
         parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
         park_radius: Radius of half-sphere bumps in meters
+        elevation_scale: Scale factor applied to elevations (from scale_elevation transform)
     """
     if not parks:
         logger.warning("No parks provided, skipping skiing bumps")
@@ -688,36 +695,48 @@ def add_skiing_bumps_to_mesh(
     mesh = mesh_obj.data
     logger.info(f"Adding skiing bumps for {len(parks)} parks (radius: {park_radius}m)...")
 
-    # Convert radius from meters to mesh units
-    # The terrain uses scale_factor=100, so 1 mesh unit = 100 meters horizontally
-    mesh_radius = park_radius / 100.0
-    mesh_radius_sq = mesh_radius ** 2
-
-    # Build list of park positions
-    park_positions = []
-    for park_idx, park in enumerate(parks):
-        try:
-            lon = park['lon']
-            lat = park['lat']
-
-            # Get mesh coordinates at park location
-            try:
-                park_x, park_y, park_z = terrain.geo_to_mesh_coords(lon, lat)
-            except Exception:
-                logger.debug(f"geo_to_mesh_coords failed for park {park_idx}, skipping")
-                continue
-
-            park_positions.append((park_x, park_y))
-
-        except Exception as e:
-            logger.debug(f"Error preparing park {park_idx}: {e}")
-            continue
-
-    if not park_positions:
-        logger.warning("No valid park positions found")
+    # Get mesh parameters from terrain object
+    if not hasattr(terrain, 'model_params'):
+        logger.error("Terrain object missing model_params - was create_mesh() called?")
         return
 
-    logger.info(f"Processing {len(park_positions)} valid parks...")
+    scale_factor = terrain.model_params.get('scale_factor', 100.0)
+    height_scale = terrain.model_params.get('height_scale', 1.0)
+
+    # Convert radius from meters to mesh units
+    # Horizontal: 1 mesh unit = scale_factor meters
+    mesh_radius = park_radius / scale_factor
+    mesh_radius_sq = mesh_radius ** 2
+
+    # Calculate Z scaling factor
+    # Z coordinates: elevation_meters × elevation_scale × height_scale
+    # To convert from meters to mesh Z units: multiply by (elevation_scale × height_scale)
+    z_scale = elevation_scale * height_scale
+
+    logger.info(f"Mesh parameters: scale_factor={scale_factor}, height_scale={height_scale}, elevation_scale={elevation_scale}")
+    logger.info(f"Hemisphere: radius={park_radius}m ({mesh_radius:.2f} mesh units), max height={park_radius * z_scale:.2f} mesh Z units")
+
+    # Extract park coordinates as arrays for vectorized conversion
+    park_lons = np.array([park['lon'] for park in parks])
+    park_lats = np.array([park['lat'] for park in parks])
+
+    # Convert all park coordinates at once (vectorized, much faster)
+    logger.info(f"Converting {len(parks)} park coordinates to mesh space...")
+    park_x_arr, park_y_arr, park_z_arr = terrain.geo_to_mesh_coords(park_lons, park_lats)
+
+    # Filter out parks with NaN coordinates (outside bounds or invalid)
+    valid_mask = ~(np.isnan(park_x_arr) | np.isnan(park_y_arr) | np.isnan(park_z_arr))
+    park_positions = list(zip(park_x_arr[valid_mask], park_y_arr[valid_mask]))
+
+    if not park_positions:
+        logger.warning("No valid park positions found within terrain bounds")
+        return
+
+    skipped = len(parks) - len(park_positions)
+    if skipped > 0:
+        logger.info(f"Skipped {skipped} parks outside terrain bounds")
+
+    logger.info(f"Processing {len(park_positions)} parks within terrain bounds...")
 
     # Extract all vertex positions into numpy arrays for vectorized operations
     logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
@@ -731,7 +750,7 @@ def add_skiing_bumps_to_mesh(
     vertices_modified = 0
 
     # Process each park with vectorized distance calculations
-    for park_idx, (park_x, park_y) in enumerate(park_positions):
+    for park_x, park_y in park_positions:
         # Vectorized distance calculation for all vertices
         dx = vert_x - park_x
         dy = vert_y - park_y
@@ -745,8 +764,15 @@ def add_skiing_bumps_to_mesh(
 
         # Calculate hemisphere height for vertices to modify
         if np.any(to_modify):
-            heights = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
-            height_additions[to_modify] = heights
+            # Heights in horizontal mesh units (1 unit = scale_factor meters)
+            heights_horizontal = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
+
+            # Convert to real meters, then to mesh Z units
+            # Z = elevation_meters × elevation_scale × height_scale
+            heights_meters = heights_horizontal * scale_factor
+            heights_z = heights_meters * z_scale
+
+            height_additions[to_modify] = heights_z
             vertices_modified += np.sum(to_modify)
 
     # Apply height additions to mesh vertices
@@ -1315,7 +1341,13 @@ Examples:
     # Add skiing bumps if requested
     if args.skiing_bumps and parks:
         logger.info("\nAdding skiing bumps...")
-        add_skiing_bumps_to_mesh(mesh_combined, terrain_combined, parks, park_radius=2500.0)
+        add_skiing_bumps_to_mesh(
+            mesh_combined,
+            terrain_combined,
+            parks,
+            park_radius=2500.0,
+            elevation_scale=0.0001,  # Must match scale_elevation transform applied earlier
+        )
 
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
