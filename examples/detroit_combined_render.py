@@ -1056,8 +1056,8 @@ Examples:
     parser.add_argument(
         "--bump-height",
         type=float,
-        default=100.0,
-        help="Maximum height of skiing bumps in meters (default: 100m, try 50-500)",
+        default=500.0,
+        help="Maximum height of skiing bumps in meters (default: 500m, try 200-1000)",
     )
 
     args = parser.parse_args()
