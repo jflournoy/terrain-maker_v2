@@ -81,7 +81,7 @@ from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_to_scene
+from src.terrain.roads import apply_road_elevation_overlay
 from examples.detroit_roads import get_roads
 from affine import Affine
 
@@ -1024,13 +1024,6 @@ Examples:
         help="OSM highway types to render (default: motorway trunk primary)",
     )
 
-    parser.add_argument(
-        "--road-color-blend",
-        type=float,
-        default=0.7,
-        help="Road color darkening factor, 0.5-0.9 (default: 0.7)",
-    )
-
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1370,6 +1363,19 @@ Examples:
     logger.debug("Computing colors with water detection...")
     terrain_combined.compute_colors(water_mask=water_mask)
 
+    # Apply road elevation overlay if requested
+    if args.roads and road_data:
+        logger.info("\nApplying road elevation overlay...")
+        try:
+            apply_road_elevation_overlay(
+                terrain=terrain_combined,
+                roads_geojson=road_data,
+                dem_crs="EPSG:32617",
+                colormap_name="viridis",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to apply road overlay: {e}")
+
     # Remove temporary mesh
     bpy.data.objects.remove(mesh_temp, do_unlink=True)
 
@@ -1402,19 +1408,6 @@ Examples:
             parks,
             park_radius=args.bump_radius,
         )
-
-    # Add roads to scene if requested
-    if args.roads and road_data:
-        logger.info("\nAdding roads to terrain...")
-        try:
-            add_roads_to_scene(
-                terrain_combined,
-                road_data,
-                color_blend_factor=args.road_color_blend,
-            )
-            logger.info(f"✓ Roads added successfully")
-        except Exception as e:
-            logger.warning(f"Failed to add roads: {e}")
 
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
