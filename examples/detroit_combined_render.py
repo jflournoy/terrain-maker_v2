@@ -667,29 +667,26 @@ def add_skiing_bumps_to_mesh(
     terrain: 'Terrain',
     parks: list,
     park_radius: float = 2500.0,
-    elevation_scale: float = 0.0001,
 ) -> None:
     """
     Add hemisphere bumps to existing terrain vertices for each park.
 
     Modifies existing mesh vertices within park radius by adding hemisphere height.
-    Creates perfect half-spheres where peak height equals radius.
+    Creates perfect half-spheres where peak height equals radius in mesh units.
 
-    For each vertex within radius R of a park center:
+    For each vertex within radius R of a park center (in mesh units):
       height_to_add = sqrt(R² - distance²)
 
-    IMPORTANT: The height calculation must account for the different scaling between
-    horizontal (X, Y) and vertical (Z) coordinates:
+    The formula works directly in mesh coordinate space - no conversion needed:
       - Horizontal: 1 mesh unit = scale_factor × pixel_size_meters
-      - Vertical: Z = elevation_meters × elevation_scale × height_scale
+      - Vertical: Same mesh units (Z is in the same space as X/Y)
 
     Args:
         mesh_obj: Blender mesh object to modify
         terrain: Terrain object with DEM and color data
         parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
         park_radius: Radius of hemisphere bumps in meters (default: 2500m)
-                     Peak height will equal this radius
-        elevation_scale: Scale factor applied to elevations (from scale_elevation transform)
+                     Peak height will equal radius in mesh units
     """
     if not parks:
         logger.warning("No parks provided, skipping skiing bumps")
@@ -704,7 +701,6 @@ def add_skiing_bumps_to_mesh(
         return
 
     scale_factor = terrain.model_params.get('scale_factor', 100.0)
-    height_scale = terrain.model_params.get('height_scale', 1.0)
 
     # Get pixel size for correct meter-to-mesh conversion
     # CRITICAL: 1 mesh unit = scale_factor PIXELS, not scale_factor meters!
@@ -725,16 +721,8 @@ def add_skiing_bumps_to_mesh(
     mesh_radius = park_radius / meters_per_mesh_unit
     mesh_radius_sq = mesh_radius ** 2
 
-    # Calculate Z scaling factor
-    # Z coordinates: elevation_meters × elevation_scale × height_scale
-    # To convert from meters to mesh Z units: multiply by (elevation_scale × height_scale)
-    z_scale = elevation_scale * height_scale
-
-    # Calculate maximum height in mesh Z units (for true hemisphere: height = radius)
-    max_height_z = park_radius * z_scale
-
     logger.info(f"Hemisphere: radius={park_radius}m ({mesh_radius:.3f} mesh units), "
-                f"peak height={park_radius}m ({max_height_z:.3f} mesh Z units)")
+                f"peak height={mesh_radius:.3f} mesh units")
 
     # Extract park coordinates as arrays for vectorized conversion
     park_lons = np.array([park['lon'] for park in parks])
@@ -802,14 +790,8 @@ def add_skiing_bumps_to_mesh(
             # True hemisphere formula: height = sqrt(R² - d²)
             # where R is radius and d is horizontal distance from center
             # This creates a perfect half-sphere where peak height = radius
-            height_mesh_units = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
-
-            # Convert from mesh units to real meters
-            heights_meters = height_mesh_units * meters_per_mesh_unit
-
-            # Convert from meters to mesh Z units
-            # Z = elevation_meters × elevation_scale × height_scale
-            heights_z = heights_meters * z_scale
+            # Use height directly in mesh units (no conversion needed!)
+            heights_z = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
 
             height_additions[to_modify] = heights_z
             num_verts_this_park = np.sum(to_modify)
@@ -1400,7 +1382,6 @@ Examples:
             terrain_combined,
             parks,
             park_radius=args.bump_radius,
-            elevation_scale=0.0001,  # Must match scale_elevation transform applied earlier
         )
 
     # Free the original DEM array from memory (it's no longer needed)
