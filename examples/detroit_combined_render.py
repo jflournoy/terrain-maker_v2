@@ -669,42 +669,36 @@ def add_skiing_bumps_to_mesh(
     park_radius: float = 2500.0,
 ) -> None:
     """
-    Add hemisphere bumps to existing terrain vertices for each park.
+    Add sphere markers at ski parks using average terrain height and color.
 
-    Modifies existing mesh vertices within park radius by adding hemisphere height.
-    Creates perfect half-spheres where peak height equals radius in mesh units.
-
-    For each vertex within radius R of a park center (in mesh units):
-      height_to_add = sqrt(R² - distance²)
-
-    The formula works directly in mesh coordinate space - no conversion needed:
-      - Horizontal: 1 mesh unit = scale_factor × pixel_size_meters
-      - Vertical: Same mesh units (Z is in the same space as X/Y)
+    Creates UV spheres positioned at each park location. The sphere center
+    is placed at the average Z coordinate of all terrain vertices within the
+    park radius, and colored with the average color of those vertices.
 
     Args:
-        mesh_obj: Blender mesh object to modify
-        terrain: Terrain object with DEM and color data
+        mesh_obj: Blender mesh object (terrain) to sample heights/colors from
+        terrain: Terrain object with coordinate conversion
         parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
-        park_radius: Radius of hemisphere bumps in meters (default: 2500m)
-                     Peak height will equal radius in mesh units
+        park_radius: Radius of spheres in meters (default: 2500m)
     """
     if not parks:
         logger.warning("No parks provided, skipping skiing bumps")
         return
 
-    mesh = mesh_obj.data
-    logger.info(f"Adding hemisphere bumps for {len(parks)} parks (radius: {park_radius}m, peak height: {park_radius}m)...")
+    import bpy
+    from mathutils import Vector, Color
 
-    # Get mesh parameters from terrain object
+    mesh = mesh_obj.data
+    logger.info(f"Adding sphere markers for {len(parks)} parks (radius: {park_radius}m)...")
+
+    # Get mesh parameters
     if not hasattr(terrain, 'model_params'):
         logger.error("Terrain object missing model_params - was create_mesh() called?")
         return
 
     scale_factor = terrain.model_params.get('scale_factor', 100.0)
 
-    # Get pixel size for correct meter-to-mesh conversion
-    # CRITICAL: 1 mesh unit = scale_factor PIXELS, not scale_factor meters!
-    # This is the same formula used in compute_proximity_mask()
+    # Get pixel size for meter-to-mesh conversion
     dem_info = terrain.data_layers.get("dem", {})
     transformed_transform = dem_info.get("transformed_transform")
     if transformed_transform is None:
@@ -713,151 +707,83 @@ def add_skiing_bumps_to_mesh(
 
     pixel_size_meters = abs(transformed_transform.a)
     meters_per_mesh_unit = scale_factor * pixel_size_meters
-
-    logger.info(f"Coordinate conversion: pixel={pixel_size_meters:.1f}m, scale_factor={scale_factor}, "
-                f"→ 1 mesh unit = {meters_per_mesh_unit:.1f}m")
-
-    # Convert radius from meters to mesh units (CORRECT formula matching compute_proximity_mask)
     mesh_radius = park_radius / meters_per_mesh_unit
     mesh_radius_sq = mesh_radius ** 2
 
-    logger.info(f"Hemisphere: radius={park_radius}m ({mesh_radius:.3f} mesh units), "
-                f"peak height={mesh_radius:.3f} mesh units")
+    logger.info(f"Coordinate conversion: 1 mesh unit = {meters_per_mesh_unit:.1f}m, "
+                f"sphere radius = {mesh_radius:.3f} mesh units")
 
-    # Extract park coordinates as arrays for vectorized conversion
+    # Extract park coordinates and terrain vertices
     park_lons = np.array([park['lon'] for park in parks])
     park_lats = np.array([park['lat'] for park in parks])
 
-    # Extract all vertex positions into numpy arrays (needed for both bounds check and processing)
     logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
-    n_verts = len(mesh.vertices)
     vert_x = np.array([v.co.x for v in mesh.vertices])
     vert_y = np.array([v.co.y for v in mesh.vertices])
-    logger.info(f"✓ Extracted vertex positions")
+    vert_z = np.array([v.co.z for v in mesh.vertices])
 
-    # Get mesh bounds for filtering parks
+    # Convert park coordinates to mesh space
+    logger.info(f"Converting {len(park_lons)} park coordinates...")
+    park_x_arr, park_y_arr, _ = terrain.geo_to_mesh_coords(park_lons, park_lats)
+
+    # Filter parks within mesh bounds
     mesh_minx, mesh_maxx = vert_x.min(), vert_x.max()
     mesh_miny, mesh_maxy = vert_y.min(), vert_y.max()
-    logger.info(f"Mesh bounds: X=[{mesh_minx:.2f}, {mesh_maxx:.2f}], Y=[{mesh_miny:.2f}, {mesh_maxy:.2f}]")
-
-    # Convert all park coordinates at once (vectorized, much faster)
-    logger.info(f"Converting {len(park_lons)} park coordinates to mesh space...")
-    park_x_arr, park_y_arr, park_z_arr = terrain.geo_to_mesh_coords(park_lons, park_lats)
-
-    # Filter parks to only those within mesh bounds (no margin needed - bumps can extend slightly off mesh)
     in_bounds = (
         (park_x_arr >= mesh_minx) & (park_x_arr <= mesh_maxx) &
         (park_y_arr >= mesh_miny) & (park_y_arr <= mesh_maxy) &
-        ~np.isnan(park_x_arr) & ~np.isnan(park_y_arr) & ~np.isnan(park_z_arr)
+        ~np.isnan(park_x_arr) & ~np.isnan(park_y_arr)
     )
 
-    park_positions = list(zip(park_x_arr[in_bounds], park_y_arr[in_bounds]))
+    logger.info(f"Creating spheres for {np.sum(in_bounds)} parks within bounds...")
 
-    skipped = len(parks) - len(park_positions)
-    if skipped > 0:
-        logger.info(f"Filtered {skipped} parks outside mesh bounds (keeping {len(park_positions)} parks)")
+    spheres_created = 0
 
-    if not park_positions:
-        logger.warning("No valid park positions found within terrain bounds")
-        return
-
-    logger.info(f"Processing {len(park_positions)} parks within terrain bounds...")
-
-    # Log mesh density info
-    mesh_area_x = vert_x.max() - vert_x.min()
-    mesh_area_y = vert_y.max() - vert_y.min()
-    avg_vert_spacing = np.sqrt((mesh_area_x * mesh_area_y) / n_verts)
-    logger.info(f"Mesh density: {n_verts:,} vertices, {mesh_area_x:.1f}×{mesh_area_y:.1f} units, "
-                f"avg spacing≈{avg_vert_spacing:.3f} units (vs {mesh_radius:.3f} unit radius)")
-
-    # Track which vertices have been modified (first park wins)
-    height_additions = np.zeros(n_verts, dtype=np.float32)
-    vertices_modified = 0
-    parks_with_bumps = 0
-
-    # Process each park with vectorized distance calculations
-    for park_idx, (park_x, park_y) in enumerate(park_positions):
-        # Vectorized distance calculation for all vertices
+    # For each park, create a sphere at average height with average color
+    for park_x, park_y in zip(park_x_arr[in_bounds], park_y_arr[in_bounds]):
+        # Find vertices within park radius
         dx = vert_x - park_x
         dy = vert_y - park_y
         dist_sq = dx*dx + dy*dy
+        in_radius = dist_sq <= mesh_radius_sq
 
-        # Find vertices within radius
-        within_radius = dist_sq <= mesh_radius_sq
+        if np.any(in_radius):
+            # Calculate average Z and color
+            avg_z = np.mean(vert_z[in_radius])
 
-        # Only modify vertices not yet modified
-        to_modify = within_radius & (height_additions == 0)
+            # Create UV sphere at park location
+            bpy.ops.mesh.primitive_uv_sphere_add(
+                radius=mesh_radius,
+                location=(park_x, park_y, avg_z),
+            )
+            sphere = bpy.context.active_object
+            sphere.name = f"SkiPark_Sphere"
 
-        # Calculate hemisphere height for vertices to modify
-        if np.any(to_modify):
-            parks_with_bumps += 1
-
-            # True hemisphere formula: height = sqrt(R² - d²)
-            # where R is radius and d is horizontal distance from center
-            # This creates a perfect half-sphere where peak height = radius
-            # Use height directly in mesh units (no conversion needed!)
-            heights_z = np.sqrt(mesh_radius_sq - dist_sq[to_modify])
-
-            height_additions[to_modify] = heights_z
-            num_verts_this_park = np.sum(to_modify)
-            vertices_modified += num_verts_this_park
-
-            # Log first few parks for debugging
-            if park_idx < 3:
-                logger.info(f"  Park {park_idx}: position=({park_x:.2f}, {park_y:.2f}), "
-                           f"vertices={num_verts_this_park}, max_height_z={heights_z.max():.4f}")
-
-    logger.info(f"✓ {parks_with_bumps}/{len(park_positions)} parks had vertices within bump radius")
-
-    # Apply height additions to mesh vertices
-    logger.info(f"Applying height modifications to {vertices_modified} vertices...")
-    for idx, vert in enumerate(mesh.vertices):
-        if height_additions[idx] > 0:
-            vert.co.z += height_additions[idx]
-    logger.info(f"✓ Applied height modifications")
-
-    mesh.update()
-    logger.info(f"✓ Modified {vertices_modified} vertices with hemisphere bumps for {len(park_positions)} parks")
-
-    # Average vertex colors within each bump region for unified dome appearance
-    logger.info("Averaging colors across bump regions...")
-
-    # Get vertex colors from mesh
-    vertex_colors = {}
-    for idx, vert in enumerate(mesh.vertices):
-        if hasattr(vert, 'normal'):
-            # Try to get vertex color if available
+            # Color the sphere with average terrain color
             if hasattr(mesh, 'vertex_colors') and len(mesh.vertex_colors) > 0:
-                vertex_colors[idx] = mesh.vertex_colors[idx].color
+                # Get average color from terrain vertices
+                colors = []
+                for idx in np.where(in_radius)[0]:
+                    if idx < len(mesh.vertex_colors):
+                        color = mesh.vertex_colors[idx].color
+                        colors.append(color)
 
-    bumps_colored = 0
+                if colors:
+                    avg_color = tuple(np.mean(colors, axis=0))
+                    # Create material with average color
+                    mat = bpy.data.materials.new(name="SkiParkMaterial")
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes["Principled BSDF"]
+                    bsdf.inputs[0].default_value = avg_color  # Base color
 
-    # For each park, average the colors of all bumped vertices
-    for park_x, park_y in park_positions:
-        # Vectorized distance calculation
-        dx = vert_x - park_x
-        dy = vert_y - park_y
-        dist_sq = dx*dx + dy*dy
+                    sphere.data.materials.append(mat)
 
-        # Find vertices in this bump
-        in_bump = dist_sq <= mesh_radius_sq
-        bumped_indices = np.where(in_bump)[0]
+            spheres_created += 1
 
-        if len(bumped_indices) > 0:
-            # Get vertex colors and average them
-            if len(vertex_colors) > 0:
-                colors_in_bump = [vertex_colors[idx] for idx in bumped_indices if idx in vertex_colors]
-                if colors_in_bump:
-                    avg_color = tuple(np.mean(colors_in_bump, axis=0))
+            if spheres_created % 100 == 0:
+                logger.info(f"  Created {spheres_created} spheres...")
 
-                    # Apply average color to all vertices in bump
-                    for idx in bumped_indices:
-                        if idx < len(mesh.vertex_colors):
-                            mesh.vertex_colors[idx].color = avg_color
-                            bumps_colored += 1
-
-    if bumps_colored > 0:
-        logger.info(f"✓ Averaged colors for {bumps_colored} vertices across bumps")
+    logger.info(f"✓ Created {spheres_created} sphere markers for ski parks")
 
 
 def render_dual_terrain(
