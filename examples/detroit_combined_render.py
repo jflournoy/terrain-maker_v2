@@ -819,8 +819,45 @@ def add_skiing_bumps_to_mesh(
     mesh.update()
     logger.info(f"✓ Modified {vertices_modified} vertices with hemisphere bumps for {len(park_positions)} parks")
 
-    # Note: Skipping polygon recoloring for performance
-    # The bumps will use the existing terrain colors from the dual colormap
+    # Average vertex colors within each bump region for unified dome appearance
+    logger.info("Averaging colors across bump regions...")
+
+    # Get vertex colors from mesh
+    vertex_colors = {}
+    for idx, vert in enumerate(mesh.vertices):
+        if hasattr(vert, 'normal'):
+            # Try to get vertex color if available
+            if hasattr(mesh, 'vertex_colors') and len(mesh.vertex_colors) > 0:
+                vertex_colors[idx] = mesh.vertex_colors[idx].color
+
+    bumps_colored = 0
+
+    # For each park, average the colors of all bumped vertices
+    for park_x, park_y in park_positions:
+        # Vectorized distance calculation
+        dx = vert_x - park_x
+        dy = vert_y - park_y
+        dist_sq = dx*dx + dy*dy
+
+        # Find vertices in this bump
+        in_bump = dist_sq <= mesh_radius_sq
+        bumped_indices = np.where(in_bump)[0]
+
+        if len(bumped_indices) > 0:
+            # Get vertex colors and average them
+            if len(vertex_colors) > 0:
+                colors_in_bump = [vertex_colors[idx] for idx in bumped_indices if idx in vertex_colors]
+                if colors_in_bump:
+                    avg_color = tuple(np.mean(colors_in_bump, axis=0))
+
+                    # Apply average color to all vertices in bump
+                    for idx in bumped_indices:
+                        if idx < len(mesh.vertex_colors):
+                            mesh.vertex_colors[idx].color = avg_color
+                            bumps_colored += 1
+
+    if bumps_colored > 0:
+        logger.info(f"✓ Averaged colors for {bumps_colored} vertices across bumps")
 
 
 def render_dual_terrain(
