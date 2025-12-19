@@ -222,10 +222,28 @@ def create_road_material(
     # Add Principled BSDF
     bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
     bsdf.inputs["Base Color"].default_value = (*color_rgb, 1.0)
-    bsdf.inputs["Emission"].default_value = (*color_rgb, 1.0)
-    bsdf.inputs["Emission Strength"].default_value = emission_strength
-    bsdf.inputs["Metallic"].default_value = 0.0
-    bsdf.inputs["Roughness"].default_value = 0.4
+
+    # Try to set optional emission properties (compatible with different Blender versions)
+    try:
+        bsdf.inputs["Emission"].default_value = (*color_rgb, 1.0)
+    except (KeyError, RuntimeError):
+        pass  # Emission input not available in this Blender version
+
+    try:
+        bsdf.inputs["Emission Strength"].default_value = emission_strength
+    except (KeyError, RuntimeError):
+        pass  # Emission Strength input not available in this Blender version
+
+    # Set other properties if available
+    try:
+        bsdf.inputs["Metallic"].default_value = 0.0
+    except (KeyError, RuntimeError):
+        pass
+
+    try:
+        bsdf.inputs["Roughness"].default_value = 0.4
+    except (KeyError, RuntimeError):
+        pass
 
     # Add output node
     output = nodes.new(type="ShaderNodeOutputMaterial")
