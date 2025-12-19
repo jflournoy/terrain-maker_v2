@@ -1208,19 +1208,11 @@ Examples:
     if args.roads:
         logger.info("Loading road data from OpenStreetMap...")
         try:
-            # Calculate road bbox from DEM extent with 0.1 degree padding
-            min_lat = transform.f + (dem.shape[0] * transform.e)  # Bottom
-            max_lat = transform.f  # Top
-            min_lon = transform.c  # Left
-            max_lon = transform.c + (dem.shape[1] * transform.a)  # Right
-
-            # Normalize lat/lon order (south, west, north, east)
-            road_bbox = (
-                min(min_lat, max_lat) - 0.1,  # south
-                min(min_lon, max_lon) - 0.1,  # west
-                max(min_lat, max_lat) + 0.1,  # north
-                max(min_lon, max_lon) + 0.1,  # east
-            )
+            # Use Detroit metro area bbox (covers Michigan/Ohio border region)
+            # This is more reliable than computing from DEM which may cover huge areas
+            # Detroit metro area: approx 42.15-42.45°N, -83.65-82.90°W
+            road_bbox = (42.10, -83.75, 42.50, -82.80)  # (south, west, north, east)
+            logger.debug(f"  Road bbox: {road_bbox}")
 
             road_data = get_roads(road_bbox, args.road_types)
             if road_data and road_data.get("features"):
