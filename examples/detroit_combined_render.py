@@ -744,12 +744,10 @@ def add_skiing_bumps_to_mesh(
     logger.info(f"Converting {len(park_lons)} park coordinates to mesh space...")
     park_x_arr, park_y_arr, park_z_arr = terrain.geo_to_mesh_coords(park_lons, park_lats)
 
-    # Filter parks to only those within mesh bounds (with margin to avoid edge artifacts)
-    # Add radius as margin so entire bump is within terrain
-    margin = mesh_radius * 1.5  # 1.5x bump radius margin
+    # Filter parks to only those within mesh bounds (no margin needed - bumps can extend slightly off mesh)
     in_bounds = (
-        (park_x_arr >= mesh_minx + margin) & (park_x_arr <= mesh_maxx - margin) &
-        (park_y_arr >= mesh_miny + margin) & (park_y_arr <= mesh_maxy - margin) &
+        (park_x_arr >= mesh_minx) & (park_x_arr <= mesh_maxx) &
+        (park_y_arr >= mesh_miny) & (park_y_arr <= mesh_maxy) &
         ~np.isnan(park_x_arr) & ~np.isnan(park_y_arr) & ~np.isnan(park_z_arr)
     )
 
