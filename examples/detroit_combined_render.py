@@ -81,6 +81,8 @@ from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
+from src.terrain.roads import add_roads_to_scene
+from examples.detroit_roads import get_roads
 from affine import Affine
 
 # Configure logging
@@ -1001,6 +1003,34 @@ Examples:
         help="Radius of hemisphere bumps in meters (peak height = radius, default: 2500m, try 1000-5000)",
     )
 
+    parser.add_argument(
+        "--roads",
+        action="store_true",
+        default=True,
+        help="Include interstate and state roads (default: True)",
+    )
+
+    parser.add_argument(
+        "--no-roads",
+        action="store_false",
+        dest="roads",
+        help="Disable road rendering",
+    )
+
+    parser.add_argument(
+        "--road-types",
+        nargs="+",
+        default=["motorway", "trunk", "primary"],
+        help="OSM highway types to render (default: motorway trunk primary)",
+    )
+
+    parser.add_argument(
+        "--road-color-blend",
+        type=float,
+        default=0.7,
+        help="Road color darkening factor, 0.5-0.9 (default: 0.7)",
+    )
+
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1172,6 +1202,35 @@ Examples:
         parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
         if parks:
             logger.info(f"Loaded {len(parks)} parks for markers")
+
+    # Load road data
+    road_data = None
+    if args.roads:
+        logger.info("Loading road data from OpenStreetMap...")
+        try:
+            # Calculate road bbox from DEM extent with 0.1 degree padding
+            min_lat = transform.f + (dem.shape[0] * transform.e)  # Bottom
+            max_lat = transform.f  # Top
+            min_lon = transform.c  # Left
+            max_lon = transform.c + (dem.shape[1] * transform.a)  # Right
+
+            # Normalize lat/lon order (south, west, north, east)
+            road_bbox = (
+                min(min_lat, max_lat) - 0.1,  # south
+                min(min_lon, max_lon) - 0.1,  # west
+                max(min_lat, max_lat) + 0.1,  # north
+                max(min_lon, max_lon) + 0.1,  # east
+            )
+
+            road_data = get_roads(road_bbox, args.road_types)
+            if road_data and road_data.get("features"):
+                logger.info(f"  Loaded {len(road_data['features'])} road segments")
+            else:
+                logger.warning("  No roads found or fetch failed")
+                road_data = None
+        except Exception as e:
+            logger.warning(f"Failed to load road data: {e}")
+            road_data = None
 
     logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}")
 
@@ -1351,6 +1410,19 @@ Examples:
             parks,
             park_radius=args.bump_radius,
         )
+
+    # Add roads to scene if requested
+    if args.roads and road_data:
+        logger.info("\nAdding roads to terrain...")
+        try:
+            add_roads_to_scene(
+                terrain_combined,
+                road_data,
+                color_blend_factor=args.road_color_blend,
+            )
+            logger.info(f"✓ Roads added successfully")
+        except Exception as e:
+            logger.warning(f"Failed to add roads: {e}")
 
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
