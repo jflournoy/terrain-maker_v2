@@ -765,6 +765,13 @@ def add_skiing_bumps_to_mesh(
 
     logger.info(f"Processing {len(park_positions)} parks within terrain bounds...")
 
+    # Log mesh density info
+    mesh_area_x = vert_x.max() - vert_x.min()
+    mesh_area_y = vert_y.max() - vert_y.min()
+    avg_vert_spacing = np.sqrt((mesh_area_x * mesh_area_y) / n_verts)
+    logger.info(f"Mesh density: {n_verts:,} vertices, {mesh_area_x:.1f}×{mesh_area_y:.1f} units, "
+                f"avg spacing≈{avg_vert_spacing:.3f} units (vs {mesh_radius:.3f} unit radius)")
+
     # Track which vertices have been modified (first park wins)
     height_additions = np.zeros(n_verts, dtype=np.float32)
     vertices_modified = 0
