@@ -26,7 +26,6 @@ import logging
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -69,13 +68,6 @@ def rasterize_roads_to_mask(
     road_widths = np.zeros(dem_shape, dtype=int)
 
     logger.info(f"Rasterizing {len(roads_geojson.get('features', []))} road segments...")
-    logger.info(f"  DEM shape: {dem_shape}")
-    logger.info(f"  Transform: {dem_transform}")
-    if hasattr(dem_transform, 'c'):
-        logger.info(f"    Origin: ({dem_transform.c}, {dem_transform.f})")
-        logger.info(f"    Scale: ({dem_transform.a}, {dem_transform.e})")
-    else:
-        logger.info(f"    Transform has no affine attributes")
 
     processed = 0
     skipped = 0
@@ -230,30 +222,18 @@ def apply_road_elevation_overlay(
     Raises:
         ValueError: If terrain missing required attributes
     """
-    sys.stderr.write(f"[ROADS] apply_road_elevation_overlay called with {len(roads_geojson.get('features', []))} roads\n")
-    sys.stderr.flush()
-
     if not hasattr(terrain, "colors") or terrain.colors is None:
-        sys.stderr.write(f"[ROADS] ERROR: colors not computed\n")
-        sys.stderr.flush()
         raise ValueError("Terrain colors not computed. Call compute_colors() first.")
 
     if not hasattr(terrain, "data_layers") or "dem" not in terrain.data_layers:
-        sys.stderr.write(f"[ROADS] ERROR: dem not in data_layers\n")
-        sys.stderr.flush()
         raise ValueError("Terrain DEM data layer not found.")
 
-    sys.stderr.write(f"[ROADS] Starting road rasterization...\n")
-    sys.stderr.flush()
     logger.info("Applying road elevation overlay...")
 
     # Get DEM data for elevation sampling
     dem_data = terrain.data_layers["dem"].get("transformed_data")
-    logger.info(f"  Transformed DEM data: {dem_data.shape if dem_data is not None else 'None'}")
-
     if dem_data is None:
         dem_data = terrain.data_layers["dem"].get("data")
-        logger.info(f"  Using original DEM data: {dem_data.shape if dem_data is not None else 'None'}")
 
     if dem_data is None:
         logger.error("Could not get DEM data for elevation sampling")
@@ -262,44 +242,30 @@ def apply_road_elevation_overlay(
     dem_shape = dem_data.shape
 
     # Get the proper WGS84 transform for the downsampled DEM
-    # Construct from the DEM shape and known WGS84 bounds
     # The roads are in WGS84 (EPSG:4326), so we need a WGS84 transform
+    # (not the reprojected UTM transform that the DEM layer has after reprojection)
     dem_transform = None
 
-    # Try to get WGS84 transform from DEM layer's original data
-    dem_layer = terrain.data_layers.get("dem", {})
-
-    # Try to read the score file to get the proper WGS84 transform
+    # Load the WGS84 transform from the score file
     try:
-        from pathlib import Path
         score_file = Path("docs/images/sledding/sledding_scores.npz")
-        logger.info(f"  Looking for score file: {score_file}")
         if score_file.exists():
             import numpy as np
             from affine import Affine
 
-            logger.info(f"  Loading transform from score file...")
             loaded = np.load(score_file)
             if "transform" in loaded:
-                # Score file has the proper WGS84 transform
+                # Score file has the proper WGS84 transform matching the downsampled grid
                 transform_array = loaded["transform"]
                 a, b, c, d, e, f = transform_array
-                # Affine(a, b, c, d, e, f)
                 dem_transform = Affine(a, b, c, d, e, f)
-                logger.info(f"  ✓ Loaded WGS84 transform from score file: a={a:.8f}, e={e:.8f}")
-            else:
-                logger.warning(f"  Score file has no transform array")
-        else:
-            logger.warning(f"  Score file not found")
+                logger.info(f"  Using WGS84 transform from score file")
     except Exception as e:
-        logger.error(f"Could not load transform from score file: {e}", exc_info=True)
+        logger.warning(f"Could not load transform from score file: {e}")
 
     if dem_transform is None:
         logger.error("Could not get WGS84 transform for road rasterization")
         return
-
-    logger.debug(f"DEM data shape: {dem_shape}")
-    logger.debug(f"DEM transform: {dem_transform}")
 
     # Rasterize roads to grid mask
     road_mask, road_widths = rasterize_roads_to_mask(
@@ -307,11 +273,7 @@ def apply_road_elevation_overlay(
     )
 
     if not np.any(road_mask):
-        logger.warning(f"No roads were rasterized to the terrain grid")
-        logger.warning(f"  DEM shape: {dem_shape}")
-        logger.warning(f"  DEM transform: {dem_transform}")
-        if hasattr(dem_transform, 'c'):
-            logger.warning(f"    Bounds: lon [{dem_transform.c}, {dem_transform.c + dem_shape[1] * dem_transform.a}], lat [{dem_transform.f + dem_shape[0] * dem_transform.e}, {dem_transform.f}]")
+        logger.warning("No roads were rasterized to the terrain grid")
         return
 
     # Get elevation values at road pixels
