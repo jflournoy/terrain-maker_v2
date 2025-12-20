@@ -1370,7 +1370,7 @@ Examples:
             apply_road_elevation_overlay(
                 terrain=terrain_combined,
                 roads_geojson=road_data,
-                dem_crs="EPSG:32617",
+                dem_crs="EPSG:4326",
                 colormap_name="viridis",
             )
         except Exception as e:

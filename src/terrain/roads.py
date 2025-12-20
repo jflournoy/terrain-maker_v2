@@ -26,6 +26,7 @@ import logging
 import numpy as np
 from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -55,71 +56,61 @@ def rasterize_roads_to_mask(
     Args:
         roads_geojson: GeoJSON FeatureCollection with road LineStrings
         dem_shape: (height, width) of DEM grid
-        dem_transform: Affine transform for DEM grid
-        dem_crs: CRS of DEM (e.g., "EPSG:32617" for UTM)
+        dem_transform: Affine transform for DEM grid (assumes WGS84 coordinates)
+        dem_crs: CRS of DEM (used for validation, roads assumed to be in WGS84)
 
     Returns:
         Tuple of:
         - road_mask: bool array (height, width), True where roads exist
         - road_widths: int array (height, width), road width in pixels (0 if no road)
     """
-    try:
-        from rasterio.features import rasterize
-        from shapely.geometry import shape, LineString
-        from pyproj import Transformer
-    except ImportError as e:
-        logger.error(f"Missing required library for road rasterization: {e}")
-        return np.zeros(dem_shape, dtype=bool), np.zeros(dem_shape, dtype=int)
-
     height, width = dem_shape
     road_mask = np.zeros(dem_shape, dtype=bool)
     road_widths = np.zeros(dem_shape, dtype=int)
 
-    # Build transformer from WGS84 to DEM CRS
-    try:
-        transformer = Transformer.from_crs("EPSG:4326", dem_crs, always_xy=True)
-    except Exception as e:
-        logger.error(f"Failed to create coordinate transformer: {e}")
-        return road_mask, road_widths
-
     logger.info(f"Rasterizing {len(roads_geojson.get('features', []))} road segments...")
+    logger.info(f"  DEM shape: {dem_shape}")
+    logger.info(f"  Transform: {dem_transform}")
+    if hasattr(dem_transform, 'c'):
+        logger.info(f"    Origin: ({dem_transform.c}, {dem_transform.f})")
+        logger.info(f"    Scale: ({dem_transform.a}, {dem_transform.e})")
+    else:
+        logger.info(f"    Transform has no affine attributes")
 
     processed = 0
+    skipped = 0
     for feature in roads_geojson.get("features", []):
         try:
             geometry = feature.get("geometry", {})
             if geometry.get("type") != "LineString":
+                skipped += 1
                 continue
 
             # Get road type and width
             highway_type = feature.get("properties", {}).get("highway", "primary")
             width = ROAD_WIDTHS.get(highway_type, 1)
 
-            # Extract coordinates and transform
+            # Extract coordinates (WGS84 lon/lat - no transformation needed)
             coords = geometry.get("coordinates", [])
             if len(coords) < 2:
+                skipped += 1
                 continue
 
-            # Transform from WGS84 to DEM CRS
-            transformed_coords = []
+            # Convert WGS84 coordinates directly to pixel coordinates
+            # dem_transform maps: pixel (col, row) -> (lon, lat)
+            # Invert: (lon, lat) -> (col, row)
+            road_pixels = []
             for lon, lat in coords:
                 try:
-                    x, y = transformer.transform(lon, lat)
-                    transformed_coords.append((x, y))
+                    col = (lon - dem_transform.c) / dem_transform.a
+                    row = (lat - dem_transform.f) / dem_transform.e
+                    road_pixels.append((col, row))
                 except Exception:
                     continue
 
-            if len(transformed_coords) < 2:
+            if len(road_pixels) < 2:
+                skipped += 1
                 continue
-
-            # Convert to pixel coordinates using dem_transform
-            road_pixels = []
-            for x, y in transformed_coords:
-                # dem_transform maps pixel (col, row) to (x, y)
-                # Invert: (x, y) -> (col, row)
-                col = (x - dem_transform.c) / dem_transform.a
-                row = (y - dem_transform.f) / dem_transform.e
-                road_pixels.append((col, row))
 
             # Rasterize line with width using Bresenham-like algorithm
             for i in range(len(road_pixels) - 1):
@@ -135,9 +126,10 @@ def rasterize_roads_to_mask(
 
         except Exception as e:
             logger.debug(f"Failed to rasterize road feature: {e}")
+            skipped += 1
             continue
 
-    logger.info(f"  Rasterized {processed} road segments to grid")
+    logger.info(f"  Rasterized {processed}/{len(roads_geojson.get('features', []))} road segments to grid ({skipped} skipped)")
     return road_mask, road_widths
 
 
@@ -217,7 +209,7 @@ def get_viridis_colormap():
 def apply_road_elevation_overlay(
     terrain,
     roads_geojson: Dict[str, Any],
-    dem_crs: str = "EPSG:32617",
+    dem_crs: str = "EPSG:4326",
     colormap_name: str = "viridis",
 ) -> None:
     """
@@ -226,37 +218,88 @@ def apply_road_elevation_overlay(
     Rasterizes roads to DEM grid, samples elevation at road pixels,
     applies colormap, and replaces vertex colors where roads exist.
 
+    Note: Roads are assumed to be in WGS84 (EPSG:4326). The DEM transform
+    must also be in WGS84 for correct coordinate mapping.
+
     Args:
         terrain: Terrain object with computed colors and vertices
-        roads_geojson: GeoJSON FeatureCollection with road LineStrings
-        dem_crs: CRS of DEM coordinates
+        roads_geojson: GeoJSON FeatureCollection with road LineStrings (WGS84)
+        dem_crs: CRS of DEM (for reference; roads/DEM must share same CRS)
         colormap_name: matplotlib colormap name ('viridis', 'plasma', 'inferno', etc.)
 
     Raises:
         ValueError: If terrain missing required attributes
     """
+    sys.stderr.write(f"[ROADS] apply_road_elevation_overlay called with {len(roads_geojson.get('features', []))} roads\n")
+    sys.stderr.flush()
+
     if not hasattr(terrain, "colors") or terrain.colors is None:
+        sys.stderr.write(f"[ROADS] ERROR: colors not computed\n")
+        sys.stderr.flush()
         raise ValueError("Terrain colors not computed. Call compute_colors() first.")
 
-    if not hasattr(terrain, "vertices") or terrain.vertices is None:
-        raise ValueError("Terrain mesh not created. Call create_mesh() first.")
-
     if not hasattr(terrain, "data_layers") or "dem" not in terrain.data_layers:
+        sys.stderr.write(f"[ROADS] ERROR: dem not in data_layers\n")
+        sys.stderr.flush()
         raise ValueError("Terrain DEM data layer not found.")
 
+    sys.stderr.write(f"[ROADS] Starting road rasterization...\n")
+    sys.stderr.flush()
     logger.info("Applying road elevation overlay...")
 
     # Get DEM data for elevation sampling
     dem_data = terrain.data_layers["dem"].get("transformed_data")
+    logger.info(f"  Transformed DEM data: {dem_data.shape if dem_data is not None else 'None'}")
+
     if dem_data is None:
         dem_data = terrain.data_layers["dem"].get("data")
+        logger.info(f"  Using original DEM data: {dem_data.shape if dem_data is not None else 'None'}")
 
     if dem_data is None:
         logger.error("Could not get DEM data for elevation sampling")
         return
 
     dem_shape = dem_data.shape
-    dem_transform = terrain.data_layers["dem"].get("transform")
+
+    # Get the proper WGS84 transform for the downsampled DEM
+    # Construct from the DEM shape and known WGS84 bounds
+    # The roads are in WGS84 (EPSG:4326), so we need a WGS84 transform
+    dem_transform = None
+
+    # Try to get WGS84 transform from DEM layer's original data
+    dem_layer = terrain.data_layers.get("dem", {})
+
+    # Try to read the score file to get the proper WGS84 transform
+    try:
+        from pathlib import Path
+        score_file = Path("docs/images/sledding/sledding_scores.npz")
+        logger.info(f"  Looking for score file: {score_file}")
+        if score_file.exists():
+            import numpy as np
+            from affine import Affine
+
+            logger.info(f"  Loading transform from score file...")
+            loaded = np.load(score_file)
+            if "transform" in loaded:
+                # Score file has the proper WGS84 transform
+                transform_array = loaded["transform"]
+                a, b, c, d, e, f = transform_array
+                # Affine(a, b, c, d, e, f)
+                dem_transform = Affine(a, b, c, d, e, f)
+                logger.info(f"  ✓ Loaded WGS84 transform from score file: a={a:.8f}, e={e:.8f}")
+            else:
+                logger.warning(f"  Score file has no transform array")
+        else:
+            logger.warning(f"  Score file not found")
+    except Exception as e:
+        logger.error(f"Could not load transform from score file: {e}", exc_info=True)
+
+    if dem_transform is None:
+        logger.error("Could not get WGS84 transform for road rasterization")
+        return
+
+    logger.debug(f"DEM data shape: {dem_shape}")
+    logger.debug(f"DEM transform: {dem_transform}")
 
     # Rasterize roads to grid mask
     road_mask, road_widths = rasterize_roads_to_mask(
@@ -264,7 +307,11 @@ def apply_road_elevation_overlay(
     )
 
     if not np.any(road_mask):
-        logger.warning("No roads were rasterized to the terrain grid")
+        logger.warning(f"No roads were rasterized to the terrain grid")
+        logger.warning(f"  DEM shape: {dem_shape}")
+        logger.warning(f"  DEM transform: {dem_transform}")
+        if hasattr(dem_transform, 'c'):
+            logger.warning(f"    Bounds: lon [{dem_transform.c}, {dem_transform.c + dem_shape[1] * dem_transform.a}], lat [{dem_transform.f + dem_shape[0] * dem_transform.e}, {dem_transform.f}]")
         return
 
     # Get elevation values at road pixels
