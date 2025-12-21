@@ -81,7 +81,7 @@ from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import apply_road_elevation_overlay
+from src.terrain.roads import add_roads_layer
 from examples.detroit_roads import get_roads
 from affine import Affine
 
@@ -1363,18 +1363,22 @@ Examples:
     logger.debug("Computing colors with water detection...")
     terrain_combined.compute_colors(water_mask=water_mask)
 
-    # Apply road elevation overlay if requested
+    # Add roads as data layer if requested
+    # Roads are added BEFORE mesh creation so they align properly through the pipeline
     if args.roads and road_data:
-        logger.info("\nApplying road elevation overlay...")
+        logger.info("\nAdding roads as data layer...")
         try:
-            apply_road_elevation_overlay(
+            # Use the same bbox that was used to fetch roads
+            road_bbox = (42.10, -83.75, 42.50, -82.80)  # (south, west, north, east)
+            add_roads_layer(
                 terrain=terrain_combined,
                 roads_geojson=road_data,
-                dem_crs="EPSG:4326",
+                bbox=road_bbox,
                 colormap_name="viridis",
+                resolution=30.0,  # 30m pixels
             )
         except Exception as e:
-            logger.warning(f"Failed to apply road overlay: {e}")
+            logger.warning(f"Failed to add roads layer: {e}")
 
     # Remove temporary mesh
     bpy.data.objects.remove(mesh_temp, do_unlink=True)
