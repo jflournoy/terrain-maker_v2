@@ -227,9 +227,60 @@ Patterns to avoid:
 - Manual mesh generation (use `create_mesh()`)
 - Custom DEM loading (use `Terrain` class data handling)
 
-## Terrain-Maker Library Architecture
+## Terrain-Maker Library
 
 **The terrain-maker library is a powerful, well-designed tool. Use it fully.** The library provides a clear "grammar" for data operations. Understanding and extending this grammar is how the library grows.
+
+### Library Capabilities
+
+**Core Data Handling:**
+- Load DEMs from HGT/GeoTIFF files
+- Manage multiple geographic data layers (DEM, scores, roads, etc.)
+- Automatic coordinate system handling (WGS84, UTM, custom CRS)
+- Efficient reprojection and resampling
+- Memory-efficient tiling for large datasets
+- Caching layer results to avoid recomputation
+
+**Transforms (apply to DEM or any raster):**
+- `reproject_raster()` - Reproject between coordinate systems
+- `downsample_raster()` - Reduce resolution with interpolation
+- `flip_raster()` - Mirror along horizontal/vertical axis
+- `scale_elevation()` - Multiply elevation values
+- `smooth_raster()` - Apply median filter
+- Custom transforms via `add_transform()`
+
+**Terrain Analysis:**
+- `detect_water_highres()` - Find water bodies from slope
+- Compute slopes, aspects, hillshade
+- Custom data layers from any source
+
+**Coloring & Visualization:**
+- `elevation_colormap()` - Map values to colors (any matplotlib colormap)
+- `slope_colormap()` - Specialized slope visualization
+- `set_color_mapping()` - Single colormap for terrain
+- `set_blended_color_mapping()` - Dual colormaps with proximity masking
+- `compute_proximity_mask()` - Create zones around points (parks, cities)
+- Water detection and coloring (University of Michigan blue)
+
+**Mesh Generation:**
+- `create_mesh()` - Generate 3D mesh with vertex colors
+- Automatic downsampling to target vertex count
+- Boundary extension for seamless edges
+- Center model option for balanced positioning
+
+**Blender Integration:**
+- `position_camera_relative()` - Smart camera positioning (cardinal directions)
+- `setup_light()` - Configure sun/fill lighting
+- `apply_vertex_colors()` - Apply colors to mesh vertices
+- `render_scene_to_file()` - Render to PNG/JPEG with custom resolution
+- `create_background_plane()` - Add background for drop shadows
+- Material and shader management
+
+**Examples Using Library:**
+- `detroit_elevation_real.py` - Basic elevation visualization
+- `detroit_snow_sledding.py` - Score-based coloring with water detection
+- `detroit_xc_skiing.py` - Multi-layer rendering with proximity zones
+- `detroit_combined_render.py` - Dual colormaps, roads, multiple data sources
 
 ### Core Library Concepts
 
