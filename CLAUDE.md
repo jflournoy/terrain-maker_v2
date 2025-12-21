@@ -227,6 +227,121 @@ Patterns to avoid:
 - Manual mesh generation (use `create_mesh()`)
 - Custom DEM loading (use `Terrain` class data handling)
 
+## Terrain-Maker Library Architecture
+
+**The terrain-maker library is a powerful, well-designed tool. Use it fully.** The library provides a clear "grammar" for data operations. Understanding and extending this grammar is how the library grows.
+
+### Core Library Concepts
+
+**Terrain Class** - The primary interface for all operations
+- Stores data layers (DEM, scores, derived data)
+- Manages coordinate systems and transforms
+- Handles reprojection and resampling automatically
+- Creates meshes for Blender visualization
+
+**Data Layer Pipeline** - The grammar for adding geographic data
+
+```python
+# Universal pattern for any geographic data:
+terrain.add_data_layer(
+    name="my_layer",              # Unique identifier
+    data=my_grid,                 # 2D numpy array
+    transform=my_transform,       # Affine in source CRS
+    crs="EPSG:4326",             # Source CRS (usually WGS84)
+    target_layer="dem",           # Align to DEM's transformed state
+)
+```
+
+This pattern works for ANY geographic raster data:
+- Elevation (DEM)
+- Score grids (sledding, skiing, etc.)
+- Roads (rasterized)
+- Trails, power lines, utilities
+- Land cover, zoning, vegetation
+- Custom computed layers (slopes, aspects, etc.)
+
+**Key principle**: `target_layer="dem"` tells the library to automatically:
+1. Reproject data from source CRS → DEM's CRS
+2. Resample data to match DEM's shape (handles downsampling!)
+3. Align coordinates perfectly
+
+### When to Suggest New Library Functions
+
+**Suggest new library functions when you identify a pattern** that should be reusable across the codebase.
+
+**Suggest if:**
+- You implement the same data processing twice
+- Examples show similar patterns (loading, transforming, coloring)
+- A new feature requires coordinate transformations (use existing transforms)
+- A task involves geographic data layers (use `add_data_layer()` pattern)
+- Vertex coloring logic is repeated (extract to helper function)
+- Mesh operations recur across examples (add to library)
+
+**Do NOT suggest if:**
+- It's a one-off operation specific to one example
+- It's simple enough to be inline (< 10 lines of straightforward code)
+- It's specific to one visualization approach (keep in example, not library)
+
+### Architecture Patterns to Follow
+
+**1. Rasterization**: Convert vector data → grid with geographic transform
+```python
+def my_data_to_layer(vector_data, bbox, resolution=30.0):
+    """Convert vector data to raster with proper geographic transform."""
+    # Calculate grid based on bbox and resolution
+    # Create Affine transform in WGS84 (EPSG:4326)
+    # Rasterize vector features to grid
+    return raster_grid, affine_transform
+```
+
+**2. Data Layer Integration**: Add rasterized data as a layer
+```python
+# Rasterize with proper geographic metadata
+grid, transform = my_data_to_layer(vector_data, bbox)
+
+# Add as data layer (library handles alignment)
+terrain.add_data_layer("my_layer", grid, transform, "EPSG:4326",
+                       target_layer="dem")
+```
+
+**3. Vertex Coloring**: Use aligned layer to color vertices
+```python
+# Get aligned layer data (automatically reprojected/resampled by library)
+layer_data = terrain.data_layers["my_layer"]["data"]
+
+# For each vertex, check corresponding pixel and apply color
+for vertex_idx in range(len(terrain.y_valid)):
+    y, x = terrain.y_valid[vertex_idx], terrain.x_valid[vertex_idx]
+    value = layer_data[y, x]
+    if value > 0:  # Has data
+        color = colormap(value)
+        terrain.colors[vertex_idx, :3] = color
+```
+
+**4. Mesh Creation**: Call library once with all data prepared
+```python
+# Compute colors from all layers (DEM, scores, water, etc.)
+terrain.compute_colors(water_mask=water_mask)
+
+# Create mesh once (all layers already integrated)
+mesh = terrain.create_mesh(scale_factor=100, height_scale=30)
+```
+
+### Real Example: Roads Data Layer
+
+The roads implementation demonstrates the proper pattern:
+
+**Before (broken):**
+- Rasterized roads **after** all transforms using hardcoded mapping
+- Roads appeared tiny, in wrong location
+- Didn't account for DEM downsampling
+
+**After (correct):**
+- `rasterize_roads_to_layer()` - Creates proper WGS84 raster with Affine
+- `add_roads_layer()` - Adds via `add_data_layer()` with `target_layer="dem"`
+- Library automatically reprojects + resamples
+- Roads align perfectly with downsampled DEM
+
 ## Architecture Principles
 
 - Keep functions under 15 complexity
@@ -234,6 +349,8 @@ Patterns to avoid:
 - Comprehensive error handling
 - Prefer functional programming patterns
 - Avoid mutation where possible
+- **Use existing library functions before writing custom code**
+- **Treat data layers as first-class citizens (follow the add_data_layer pattern)**
 
 ## Claude Usage Guidelines
 
