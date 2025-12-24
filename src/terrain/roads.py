@@ -75,7 +75,8 @@ def road_colormap(road_grid, elevation=None):
     colors = np.zeros((height, width, 3), dtype=np.uint8)
 
     if elevation is not None and np.any(road_mask):
-        # Color roads by elevation using magma
+        # Color roads by elevation using upper half of magma (0.5 to 1.0)
+        # This gives brighter, more visible colors while still showing elevation
         magma_cmap = plt.colormaps.get_cmap('magma')
 
         # Normalize elevation to 0-1 range (only where roads exist)
@@ -84,27 +85,30 @@ def road_colormap(road_grid, elevation=None):
         elev_max = np.nanmax(road_elevations)
 
         if elev_max > elev_min:
-            # Normalize and apply colormap
+            # Normalize elevation to 0-1, then map to 0.5-1.0 colormap range
             elev_normalized = (elevation - elev_min) / (elev_max - elev_min)
             elev_normalized = np.clip(elev_normalized, 0, 1)
+            # Map to upper half of colormap: 0->0.5, 1->1.0
+            cmap_values = 0.5 + elev_normalized * 0.5
 
             # Apply magma to all pixels, then mask
-            all_colors = magma_cmap(elev_normalized)[:, :, :3]  # RGB only
+            all_colors = magma_cmap(cmap_values)[:, :, :3]  # RGB only
             colors[road_mask] = (all_colors[road_mask] * 255).astype(np.uint8)
         else:
-            # Flat elevation - use middle of magma
-            mid_color = tuple(int(c * 255) for c in magma_cmap(0.5)[:3])
+            # Flat elevation - use middle-upper of magma
+            mid_color = tuple(int(c * 255) for c in magma_cmap(0.75)[:3])
             colors[road_mask] = mid_color
     else:
-        # Fallback: color by road type (backward compatibility)
+        # Fallback: color by road type using upper half of magma (0.5-1.0)
         magma_cmap = plt.colormaps.get_cmap('magma')
         road_grid_quantized = np.clip(np.round(road_grid).astype(int), 0, 4)
 
+        # Map road types to upper half: 0.55, 0.65, 0.80, 0.95
         road_colors_rgb = {
-            1: tuple(int(c * 255) for c in magma_cmap(0.20)[:3]),
-            2: tuple(int(c * 255) for c in magma_cmap(0.40)[:3]),
-            3: tuple(int(c * 255) for c in magma_cmap(0.60)[:3]),
-            4: tuple(int(c * 255) for c in magma_cmap(0.80)[:3]),
+            1: tuple(int(c * 255) for c in magma_cmap(0.55)[:3]),
+            2: tuple(int(c * 255) for c in magma_cmap(0.65)[:3]),
+            3: tuple(int(c * 255) for c in magma_cmap(0.80)[:3]),
+            4: tuple(int(c * 255) for c in magma_cmap(0.95)[:3]),
         }
 
         for road_value, rgb in road_colors_rgb.items():
