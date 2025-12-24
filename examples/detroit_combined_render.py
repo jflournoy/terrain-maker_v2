@@ -1106,9 +1106,9 @@ Examples:
             logger.info("Setting multi-overlay color mapping:")
             logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
             logger.info("  Overlay 1: XC skiing scores near parks (rocket colormap)")
-            logger.info("  Overlay 2: Roads (magma colormap by elevation)")
-            # Get DEM for road elevation coloring
-            dem_for_roads = terrain_combined.data_layers["dem"]["transformed_data"]
+            logger.info("  Overlay 2: Roads (inverse mako - contrasts with terrain)")
+            # Get sledding scores for road coloring (inverse creates contrast)
+            scores_for_roads = terrain_combined.data_layers["sledding"]["data"]
 
             overlays = [
                 {
@@ -1120,7 +1120,7 @@ Examples:
                     "mask": park_mask,  # Only apply near parks
                 },
                 {
-                    "colormap": lambda roads, dem=dem_for_roads: road_colormap(roads, elevation=dem),
+                    "colormap": lambda roads, s=scores_for_roads: road_colormap(roads, score=s),
                     "source_layers": ["roads"],
                     "priority": 10,  # Higher priority - roads on top
                     "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
@@ -1129,12 +1129,12 @@ Examples:
         else:
             logger.info("Setting multi-overlay color mapping:")
             logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
-            logger.info("  Overlay: Roads (magma colormap by elevation)")
-            # Get DEM for road elevation coloring
-            dem_for_roads = terrain_combined.data_layers["dem"]["transformed_data"]
+            logger.info("  Overlay: Roads (inverse mako - contrasts with terrain)")
+            # Get sledding scores for road coloring (inverse creates contrast)
+            scores_for_roads = terrain_combined.data_layers["sledding"]["data"]
             overlays = [
                 {
-                    "colormap": lambda roads, dem=dem_for_roads: road_colormap(roads, elevation=dem),
+                    "colormap": lambda roads, s=scores_for_roads: road_colormap(roads, score=s),
                     "source_layers": ["roads"],
                     "priority": 10,
                     "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
