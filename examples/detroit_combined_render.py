@@ -79,10 +79,10 @@ from src.terrain.core import (
 )
 from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors
-from src.terrain.data_loading import load_dem_files
+from src.terrain.data_loading import load_dem_files, load_score_grid
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_layer
-from examples.detroit_roads import get_roads
+from src.terrain.roads import add_roads_layer, road_colormap
+from examples.detroit_roads import get_roads_tiled
 from affine import Affine
 
 # Configure logging
@@ -124,51 +124,33 @@ RENDER_HEIGHT = 1080
 def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
     """Load sledding scores from detroit_snow_sledding.py output.
 
+    Uses load_score_grid() for standardized NPZ loading with transform metadata.
+
     Returns:
         Tuple of (score_array, transform_affine). Transform may be None if
         file was saved without transform metadata (backward compatibility).
     """
-    # First check for sledding/sledding_scores.npz (new location matching XC skiing pattern)
-    score_path = output_dir / "sledding" / "sledding_scores.npz"
-    if score_path.exists():
-        logger.info(f"Loading sledding scores from {score_path}")
-        data = np.load(score_path)
-
-        # Get score array
-        if "score" in data:
-            score = data["score"]
-        elif "sledding_score" in data:
-            score = data["sledding_score"]
-        else:
-            score = data[data.files[0]]
-
-        # Get transform if present (new format includes transform metadata)
-        score_transform = None
-        if "transform" in data:
-            t = data["transform"]
-            score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
-            logger.info(f"  Loaded transform: origin=({t[2]:.4f}, {t[5]:.4f}), pixel=({t[0]:.6f}, {t[4]:.6f})")
-
-        return score, score_transform
-
-    # Check alternative locations (backward compatibility)
-    alt_paths = [
+    # Check possible locations in priority order
+    possible_paths = [
+        output_dir / "sledding" / "sledding_scores.npz",  # New location
         output_dir / "sledding_scores.npz",  # Old flat structure
         Path("examples/output/sledding_scores.npz"),  # Legacy hardcoded location
     ]
-    for alt_path in alt_paths:
-        if alt_path.exists():
-            logger.info(f"Loading sledding scores from {alt_path}")
-            data = np.load(alt_path)
-            score = data[data.files[0]]
 
-            # Get transform if present
-            score_transform = None
-            if "transform" in data:
-                t = data["transform"]
-                score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
-
-            return score, score_transform
+    for score_path in possible_paths:
+        if score_path.exists():
+            try:
+                score, score_transform = load_score_grid(
+                    score_path,
+                    data_keys=["score", "sledding_score", "data"]
+                )
+                logger.info(f"Loaded sledding scores from {score_path}")
+                if score_transform:
+                    logger.info(f"  Transform: origin=({score_transform.c:.4f}, {score_transform.f:.4f})")
+                return score, score_transform
+            except Exception as e:
+                logger.warning(f"Failed to load {score_path}: {e}")
+                continue
 
     logger.warning("Sledding scores not found, will use mock data")
     return None, None
@@ -177,29 +159,25 @@ def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Option
 def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
     """Load XC skiing scores from detroit_xc_skiing.py output.
 
+    Uses load_score_grid() for standardized NPZ loading with transform metadata.
+
     Returns:
         Tuple of (score_array, transform_affine). Transform may be None if
         file was saved without transform metadata (backward compatibility).
     """
     score_path = output_dir / "xc_skiing_scores.npz"
     if score_path.exists():
-        logger.info(f"Loading XC skiing scores from {score_path}")
-        data = np.load(score_path)
-
-        # Get score array
-        if "score" in data:
-            score = data["score"]
-        else:
-            score = data[data.files[0]]
-
-        # Get transform if present (new format includes transform metadata)
-        score_transform = None
-        if "transform" in data:
-            t = data["transform"]
-            score_transform = Affine(t[0], t[1], t[2], t[3], t[4], t[5])
-            logger.info(f"  Loaded transform: origin=({t[2]:.4f}, {t[5]:.4f}), pixel=({t[0]:.6f}, {t[4]:.6f})")
-
-        return score, score_transform
+        try:
+            score, score_transform = load_score_grid(
+                score_path,
+                data_keys=["score", "xc_score", "data"]
+            )
+            logger.info(f"Loaded XC skiing scores from {score_path}")
+            if score_transform:
+                logger.info(f"  Transform: origin=({score_transform.c:.4f}, {score_transform.f:.4f})")
+            return score, score_transform
+        except Exception as e:
+            logger.warning(f"Failed to load {score_path}: {e}")
 
     logger.warning("XC skiing scores not found, will use mock data")
     return None, None
@@ -227,251 +205,6 @@ def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
 # =============================================================================
 # BLENDER RENDERING
 # =============================================================================
-
-
-def create_terrain_with_score(
-    name: str,
-    score_grid: np.ndarray,
-    dem: np.ndarray,
-    transform: Affine,
-    dem_crs: str = "EPSG:32617",
-    score_transform: Optional[Affine] = None,
-    location: Tuple[float, float, float] = (0, 0, 0),
-    scale_factor: float = 100,
-    height_scale: float = 30.0,
-    target_vertices: Optional[int] = None,
-    cmap_name: str = "viridis",
-    parks: Optional[list[dict]] = None,
-    park_radius_meters: float = 10_000,
-    park_cluster_threshold: float = 500,
-    base_cmap_name: str = "michigan",
-    overlay_cmap_name: str = "rocket",
-) -> Tuple[Optional[object], Optional["Terrain"]]:
-    """
-    Create a terrain mesh using terrain maker's Terrain class.
-
-    Supports dual colormaps for proximity-based visualization (e.g., elevation
-    for general terrain, scores near parks).
-
-    Args:
-        name: Mesh name (for logging and reference)
-        score_grid: Score values for vertex coloring (0-1 range)
-        dem: DEM elevation data
-        transform: Affine transform for DEM coordinate mapping
-        dem_crs: CRS of DEM data (default: EPSG:32617 for UTM zone 17N)
-        score_transform: Affine transform for score data (if different from DEM)
-        location: (x, y, z) position in Blender for the mesh
-        scale_factor: Horizontal scale divisor
-        height_scale: Vertical elevation scale
-        target_vertices: Target vertex count for downsampling (optional)
-        cmap_name: Colormap name for single-colormap mode (default: viridis)
-        parks: Optional list of parks for dual colormap mode. If provided,
-            enables dual colormaps with score overlay near parks.
-        park_radius_meters: Radius around parks to show score overlay (default: 10000m = 10km)
-        park_cluster_threshold: Distance threshold for merging nearby parks (default: 500m)
-        base_cmap_name: Base colormap for general terrain (default: michigan)
-        overlay_cmap_name: Overlay colormap for park zones (default: rocket)
-
-    Returns:
-        Tuple of (mesh_obj, terrain) where mesh_obj is the Blender object and
-        terrain is the Terrain instance (useful for proximity_mask calculations)
-    """
-    # Note: When score_transform is None, the library's same_extent_as feature
-    # will automatically calculate the transform from the DEM's extent.
-    logger.info(f"Creating terrain mesh: {name}")
-    logger.debug(
-        f"  Score input: shape={score_grid.shape}, "
-        f"range=[{np.nanmin(score_grid):.3f}, {np.nanmax(score_grid):.3f}], "
-        f"std={np.nanstd(score_grid):.3f}"
-    )
-
-    # Create terrain using terrain maker library
-    terrain = Terrain(dem, transform, dem_crs=dem_crs)
-
-    # Build transform pipeline: geographic transforms + downsampling
-    logger.debug(f"  Building transform pipeline for {name}...")
-
-    # 1. Reproject to UTM Zone 17N for proper geographic scaling
-    # Use dem_crs as source CRS (typically EPSG:4326 for real data)
-    utm_reproject = reproject_raster(src_crs=dem_crs, dst_crs="EPSG:32617", num_threads=4)
-    terrain.add_transform(utm_reproject)
-
-    # 2. Flip raster horizontally to correct orientation
-    terrain.add_transform(flip_raster(axis="horizontal"))
-
-    # 3. Scale elevation to prevent extreme Z values
-    terrain.add_transform(scale_elevation(scale_factor=0.0001))
-
-    # 4. Configure downsampling BEFORE apply_transforms() so it's included in the pipeline
-    zoom_factor = 1.0
-    if target_vertices is not None:
-        original_h, original_w = terrain.dem_shape
-        original_vertices = original_h * original_w
-
-        if original_vertices > target_vertices:
-            zoom_factor = terrain.configure_for_target_vertices(target_vertices, order=4)
-            logger.info(
-                f"Downsampling {name}: {original_vertices:,} → ~{target_vertices:,} vertices "
-                f"(zoom={zoom_factor:.6f})"
-            )
-        else:
-            logger.debug(
-                f"No downsampling needed for {name}: {original_vertices:,} ≤ {target_vertices:,}"
-            )
-
-    # 5. Apply transforms to DEM only first (reproject + flip + scale + downsample)
-    logger.debug(f"  Applying transforms to DEM...")
-    terrain.apply_transforms()
-
-    # 6. Add score layer AFTER transforms - it will be reprojected to match
-    # the transformed DEM's dimensions.
-    logger.debug(f"  Adding score data layer for {name}...")
-    if score_transform is not None:
-        # Explicit transform provided - use it directly
-        logger.debug(f"  Using explicit score transform: {score_transform}")
-        terrain.add_data_layer(
-            "score",
-            score_grid,
-            score_transform,
-            dem_crs,
-            target_layer="dem",
-        )
-    else:
-        # No transform provided - use same_extent_as for automatic georeferencing
-        # This assumes score covers the same geographic extent as the DEM
-        logger.debug(f"  Using same_extent_as='dem' for automatic georeferencing")
-        terrain.add_data_layer(
-            "score",
-            score_grid,
-            same_extent_as="dem",  # Library calculates transform automatically
-        )
-
-    # Note: Score layer does NOT need manual flipping
-    # The reprojection to the transformed DEM coordinates handles alignment correctly
-    # because it maps geographic coordinates, not pixel indices
-
-    # Apply colormapping (single or dual depending on parks availability)
-    if parks:
-        # Dual colormap mode: elevation base + score overlay near parks
-        logger.info(f"  Using dual colormaps for {name}:")
-        logger.info(f"    Base: {base_cmap_name} (elevation)")
-        logger.info(f"    Overlay: {overlay_cmap_name} (scores near parks)")
-
-        # Create mesh first (needed for proximity mask computation)
-        logger.debug(f"  Creating mesh for proximity calculations...")
-        mesh_obj_temp = terrain.create_mesh(
-            scale_factor=scale_factor,
-            height_scale=height_scale,
-            center_model=True,
-            boundary_extension=True,
-            water_mask=None,  # Will apply water coloring separately
-        )
-
-        if mesh_obj_temp is None:
-            logger.error(f"Failed to create temporary mesh for {name}")
-            return None, None
-
-        # Compute proximity mask for park zones
-        park_lons = np.array([p["lon"] for p in parks])
-        park_lats = np.array([p["lat"] for p in parks])
-
-        logger.info(f"  Computing proximity mask ({len(parks)} parks)...")
-        park_mask = terrain.compute_proximity_mask(
-            park_lons,
-            park_lats,
-            radius_meters=park_radius_meters,
-            cluster_threshold_meters=park_cluster_threshold,
-        )
-
-        # Set dual colormaps
-        terrain.set_blended_color_mapping(
-            base_colormap=lambda elev: elevation_colormap(
-                elev, cmap_name=base_cmap_name, min_elev=0.0, max_elev=None
-            ),
-            base_source_layers=["dem"],
-            overlay_colormap=lambda score: elevation_colormap(
-                score, cmap_name=overlay_cmap_name, min_elev=0.0, max_elev=1.0
-            ),
-            overlay_source_layers=["score"],
-            overlay_mask=park_mask,
-        )
-
-        logger.debug(f"  Dual colormap configured: {np.sum(park_mask)} vertices in overlay zones")
-        # Will compute colors with water detection below
-
-    else:
-        # Single colormap mode: score-based coloring for entire terrain
-        logger.debug(f"  Setting color mapping with colormap: {cmap_name}")
-        terrain.set_color_mapping(
-            lambda score: elevation_colormap(score, cmap_name=cmap_name, min_elev=0.0, max_elev=1.0),
-            source_layers=["score"],
-        )
-
-    # Detect water bodies on HIGH-RES DEM (before downsampling)
-    # Water will be colored University of Michigan blue (#00274C) in both modes
-    # NOTE: This must be called AFTER apply_transforms() so the library can access
-    # both the original high-res DEM and the transformed/downsampled version
-    logger.debug(f"  Detecting water bodies on high-resolution DEM for {name}...")
-    water_mask = terrain.detect_water_highres(
-        slope_threshold=0.01,  # Low threshold for nearly-flat water
-        fill_holes=True,
-        scale_factor=0.0001,  # Match the scale_elevation transform
-    )
-    # If water detection fails, the method will raise an exception
-    # We don't silently ignore water detection errors
-
-    # Compute colors with water detection
-    # In blended mode, water detection happens internally
-    # In single mode, it happens in create_mesh()
-    if parks:
-        logger.debug(f"  Computing blended colors with water detection...")
-        terrain.compute_colors(water_mask=water_mask)
-        logger.debug(f"  ✓ Blended colors with water detection computed")
-
-        # Remove temporary mesh and create final mesh
-        logger.debug(f"  Removing temporary mesh and creating final mesh...")
-        bpy.data.objects.remove(mesh_obj_temp, do_unlink=True)
-
-        # Create final mesh with colors already applied (including water)
-        mesh_obj = terrain.create_mesh(
-            scale_factor=scale_factor,
-            height_scale=height_scale,
-            center_model=True,
-            boundary_extension=True,
-            water_mask=None,  # Water already applied in compute_colors()
-        )
-
-        if mesh_obj is None:
-            logger.error(f"Failed to create final mesh for {name}")
-            return None, None
-
-        # Explicitly apply the computed vertex colors to the mesh
-        logger.debug(f"  Applying vertex colors to mesh...")
-        apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
-        logger.debug(f"  ✓ Vertex colors applied")
-
-    else:
-        # Single colormap mode: compute colors first, then create mesh with water detection
-        terrain.compute_colors()
-
-        mesh_obj = terrain.create_mesh(
-            scale_factor=scale_factor,
-            height_scale=height_scale,
-            center_model=True,
-            boundary_extension=True,
-            water_mask=water_mask,  # Water detection handled in create_mesh()
-        )
-
-        if mesh_obj is None:
-            logger.error(f"Failed to create mesh for {name}")
-            return None, None
-
-    # Position the mesh at the specified location
-    mesh_obj.location = location
-    mesh_obj.name = name
-
-    logger.info(f"✓ Created mesh: {name} at position {location}")
-    return mesh_obj, terrain
 
 
 def calculate_mesh_width(mesh_obj) -> float:
@@ -1006,8 +739,8 @@ Examples:
     parser.add_argument(
         "--roads",
         action="store_true",
-        default=True,
-        help="Include interstate and state roads (default: True)",
+        default=False,
+        help="Include interstate and state roads (default: False, use --roads to enable)",
     )
 
     parser.add_argument(
@@ -1022,6 +755,13 @@ Examples:
         nargs="+",
         default=["motorway", "trunk", "primary"],
         help="OSM highway types to render (default: motorway trunk primary)",
+    )
+
+    parser.add_argument(
+        "--road-width",
+        type=int,
+        default=3,
+        help="Road width in pixels (default: 3, try 5-10 for thicker roads)",
     )
 
     args = parser.parse_args()
@@ -1198,16 +938,31 @@ Examples:
 
     # Load road data
     road_data = None
+    road_bbox = None
     if args.roads:
         logger.info("Loading road data from OpenStreetMap...")
         try:
-            # Use Detroit metro area bbox (covers Michigan/Ohio border region)
-            # This is more reliable than computing from DEM which may cover huge areas
-            # Detroit metro area: approx 42.15-42.45°N, -83.65-82.90°W
-            road_bbox = (42.10, -83.75, 42.50, -82.80)  # (south, west, north, east)
-            logger.debug(f"  Road bbox: {road_bbox}")
+            # Compute bbox from DEM transform to match actual rendered area
+            dem_height, dem_width = dem.shape
 
-            road_data = get_roads(road_bbox, args.road_types)
+            # Get corners from transform
+            west = transform.c
+            north = transform.f
+            east = west + dem_width * transform.a
+            south = north + dem_height * transform.e
+
+            # Ensure correct ordering
+            if south > north:
+                south, north = north, south
+            if west > east:
+                west, east = east, west
+
+            road_bbox = (south, west, north, east)
+            logger.info(f"  DEM bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+
+            # Use get_roads_tiled() - handles tiling and retries automatically
+            road_data = get_roads_tiled(road_bbox, args.road_types)
+
             if road_data and road_data.get("features"):
                 logger.info(f"  Loaded {len(road_data['features'])} road segments")
             else:
@@ -1328,28 +1083,89 @@ Examples:
         )
         logger.debug(f"Proximity mask: {np.sum(park_mask)} vertices in park zones")
 
-        # Set blended color mapping: sledding (mako) base + XC skiing (rocket) overlay
-        logger.info("Setting blended color mapping:")
-        logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
-        logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
-        terrain_combined.set_blended_color_mapping(
+    # Add roads as data layer if requested
+    # Roads are added BEFORE color mapping so they can be part of the multi-overlay system
+    if args.roads and road_data and road_bbox:
+        logger.info("\nAdding roads as data layer...")
+        try:
+            # Use the same bbox that was used to fetch roads (computed from DEM)
+            add_roads_layer(
+                terrain=terrain_combined,
+                roads_geojson=road_data,
+                bbox=road_bbox,
+                resolution=30.0,  # 30m pixels
+                road_width_pixels=args.road_width,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to add roads layer: {e}")
+
+    # Set up color mapping with overlays
+    if args.roads and road_data and road_bbox:
+        # Multi-overlay mode: base sledding/xc + roads on top
+        if parks:
+            logger.info("Setting multi-overlay color mapping:")
+            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+            logger.info("  Overlay 1: XC skiing scores near parks (rocket colormap)")
+            logger.info("  Overlay 2: Roads (viridis colormap)")
+            overlays = [
+                {
+                    "colormap": lambda score: elevation_colormap(
+                        score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
+                    ),
+                    "source_layers": ["xc_skiing"],
+                    "priority": 20,  # Lower priority than roads
+                    "mask": park_mask,  # Only apply near parks
+                },
+                {
+                    "colormap": road_colormap,
+                    "source_layers": ["roads"],
+                    "priority": 10,  # Higher priority - roads on top
+                    "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
+                },
+            ]
+        else:
+            logger.info("Setting multi-overlay color mapping:")
+            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+            logger.info("  Overlay: Roads (viridis colormap)")
+            overlays = [
+                {
+                    "colormap": road_colormap,
+                    "source_layers": ["roads"],
+                    "priority": 10,
+                    "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
+                },
+            ]
+
+        terrain_combined.set_multi_color_mapping(
             base_colormap=lambda score: elevation_colormap(
-                np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)  # Power scale gamma=0.5
+                np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
             ),
             base_source_layers=["sledding"],
-            overlay_colormap=lambda score: elevation_colormap(
-                score, cmap_name="rocket", min_elev=0.0, max_elev=1.0  # XC skiing 0-1 range
-            ),
-            overlay_source_layers=["xc_skiing"],
-            overlay_mask=park_mask,
+            overlays=overlays,
         )
     else:
-        # No parks - just use sledding scores with gamma=0.5
-        logger.info("No parks available - using sledding scores with gamma=0.5 (mako colormap)")
-        terrain_combined.set_color_mapping(
-            lambda score: elevation_colormap(np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
-            source_layers=["sledding"],
-        )
+        # No roads - use original blended or standard color mapping
+        if parks:
+            logger.info("Setting blended color mapping:")
+            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+            logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+            terrain_combined.set_blended_color_mapping(
+                base_colormap=lambda score: elevation_colormap(
+                    np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
+                ),
+                base_source_layers=["sledding"],
+                overlay_colormap=lambda score: elevation_colormap(
+                    score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
+                ),
+                overlay_source_layers=["xc_skiing"],
+                overlay_mask=park_mask,
+            )
+        else:
+            logger.info("No parks available - using sledding scores with gamma=0.5 (mako colormap)")
+            terrain_combined.set_color_mapping(
+                lambda score: elevation_colormap(np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+                source_layers=["sledding"],
+            )
 
     # Detect water
     logger.debug("Detecting water bodies...")
@@ -1362,23 +1178,6 @@ Examples:
     # Compute colors
     logger.debug("Computing colors with water detection...")
     terrain_combined.compute_colors(water_mask=water_mask)
-
-    # Add roads as data layer if requested
-    # Roads are added BEFORE mesh creation so they align properly through the pipeline
-    if args.roads and road_data:
-        logger.info("\nAdding roads as data layer...")
-        try:
-            # Use the same bbox that was used to fetch roads
-            road_bbox = (42.10, -83.75, 42.50, -82.80)  # (south, west, north, east)
-            add_roads_layer(
-                terrain=terrain_combined,
-                roads_geojson=road_data,
-                bbox=road_bbox,
-                colormap_name="viridis",
-                resolution=30.0,  # 30m pixels
-            )
-        except Exception as e:
-            logger.warning(f"Failed to add roads layer: {e}")
 
     # Remove temporary mesh
     bpy.data.objects.remove(mesh_temp, do_unlink=True)
