@@ -76,11 +76,18 @@ def road_colormap(road_grid, score=None):
 
     if score is not None and np.any(road_mask):
         # Color roads by inverse score using mako (same colormap as terrain)
-        # Inverse creates contrast: high score terrain = low score roads
+        # Apply same gamma correction as terrain (gamma=0.5), then invert
         mako_cmap = plt.colormaps.get_cmap('mako')
 
-        # Invert the score: high score -> low colormap value, low score -> high
-        inverse_score = 1.0 - np.clip(score, 0, 1)
+        # Apply gamma correction like terrain does
+        score_clipped = np.clip(score, 0, 1)
+        score_gamma = np.power(score_clipped, 0.5)
+        # Normalize to terrain's range (0 to sqrt(1.5) ≈ 1.22)
+        max_val = np.power(1.5, 0.5)
+        score_normalized = score_gamma / max_val
+
+        # Invert: high score terrain = low value roads (dark), low score = high (bright)
+        inverse_score = 1.0 - score_normalized
 
         # Apply mako to all pixels, then mask
         all_colors = mako_cmap(inverse_score)[:, :, :3]  # RGB only
