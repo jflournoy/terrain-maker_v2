@@ -81,17 +81,16 @@ def road_colormap(road_grid):
     # Clamp to valid range 0-4 (in case of rounding artifacts)
     road_grid_quantized = np.clip(road_grid_quantized, 0, 4)
 
-    # Sample turbo colormap at dark, distinguishable points
-    # Turbo's darkest colors are at the ends (deep blue, dark red)
-    # Use blues for minor roads, reds for major roads
-    turbo_cmap = plt.cm.get_cmap('turbo')
+    # Sample magma colormap - dark purple to bright yellow
+    # More important roads get brighter colors for visibility
+    magma_cmap = plt.cm.get_cmap('magma')
 
     road_colors_rgb = {
         0: (0, 0, 0),           # No road (black - won't be used due to threshold)
-        1: tuple(int(c * 255) for c in turbo_cmap(0.05)[:3]),  # Secondary - deep blue
-        2: tuple(int(c * 255) for c in turbo_cmap(0.12)[:3]),  # Primary - medium blue
-        3: tuple(int(c * 255) for c in turbo_cmap(0.85)[:3]),  # Trunk - dark orange-red
-        4: tuple(int(c * 255) for c in turbo_cmap(0.95)[:3]),  # Motorway - very dark red
+        1: tuple(int(c * 255) for c in magma_cmap(0.20)[:3]),  # Secondary - dark purple
+        2: tuple(int(c * 255) for c in magma_cmap(0.40)[:3]),  # Primary - purple/magenta
+        3: tuple(int(c * 255) for c in magma_cmap(0.60)[:3]),  # Trunk - pink/coral
+        4: tuple(int(c * 255) for c in magma_cmap(0.80)[:3]),  # Motorway - bright orange
     }
 
     # Create output RGB array
