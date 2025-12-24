@@ -50,57 +50,66 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def road_colormap(road_grid):
+def road_colormap(road_grid, elevation=None):
     """
-    Map road values to turbo colormap colors discretized by road type.
+    Map roads to colors using magma colormap on elevation values.
 
-    Road values encode type: 0=no road, 1=secondary, 2=primary, 3=trunk, 4=motorway.
-    Uses turbo colormap (perceptually uniform) sampled at discrete points:
-    - Motorway (4): Red (turbo high end)
-    - Trunk (3): Yellow (turbo mid-high)
-    - Primary (2): Cyan (turbo mid)
-    - Secondary (1): Blue (turbo low)
-
-    CRITICAL: After resampling during coordinate alignment, road_grid may have
-    fractional values (e.g., 1.5, 2.5, 3.8). These are quantized by rounding to
-    nearest integer before coloring to match the discrete 0-4 encoding.
+    Roads act as a mask to show elevation underneath using the magma colormap.
+    This creates a visual where roads reveal the terrain elevation in a
+    distinct color scheme (dark purple to bright yellow).
 
     Args:
-        road_grid: 2D array of road values (0-4, may be continuous after resampling)
+        road_grid: 2D array of road values (0=no road, >0=road)
+        elevation: 2D array of elevation values (same shape as road_grid).
+            If None, falls back to coloring by road type for backward compatibility.
 
     Returns:
         Array of RGB colors with shape (height, width, 3) as uint8
     """
     import matplotlib.pyplot as plt
 
-    # CRITICAL: Quantize/round to nearest integer
-    # After resampling, we get fractional values like 1.5, 2.5, 3.8
-    # Round them back to 0-4 for proper coloring
-    road_grid_quantized = np.round(road_grid).astype(int)
+    # Create road mask (any road value > 0)
+    road_mask = road_grid > 0.5  # Use 0.5 threshold to handle resampling artifacts
 
-    # Clamp to valid range 0-4 (in case of rounding artifacts)
-    road_grid_quantized = np.clip(road_grid_quantized, 0, 4)
-
-    # Sample magma colormap - dark purple to bright yellow
-    # More important roads get brighter colors for visibility
-    magma_cmap = plt.cm.get_cmap('magma')
-
-    road_colors_rgb = {
-        0: (0, 0, 0),           # No road (black - won't be used due to threshold)
-        1: tuple(int(c * 255) for c in magma_cmap(0.20)[:3]),  # Secondary - dark purple
-        2: tuple(int(c * 255) for c in magma_cmap(0.40)[:3]),  # Primary - purple/magenta
-        3: tuple(int(c * 255) for c in magma_cmap(0.60)[:3]),  # Trunk - pink/coral
-        4: tuple(int(c * 255) for c in magma_cmap(0.80)[:3]),  # Motorway - bright orange
-    }
-
-    # Create output RGB array
-    height, width = road_grid_quantized.shape
+    height, width = road_grid.shape
     colors = np.zeros((height, width, 3), dtype=np.uint8)
 
-    # Map each road value to its color
-    for road_value, rgb in road_colors_rgb.items():
-        mask = road_grid_quantized == road_value
-        colors[mask] = rgb
+    if elevation is not None and np.any(road_mask):
+        # Color roads by elevation using magma
+        magma_cmap = plt.colormaps.get_cmap('magma')
+
+        # Normalize elevation to 0-1 range (only where roads exist)
+        road_elevations = elevation[road_mask]
+        elev_min = np.nanmin(road_elevations)
+        elev_max = np.nanmax(road_elevations)
+
+        if elev_max > elev_min:
+            # Normalize and apply colormap
+            elev_normalized = (elevation - elev_min) / (elev_max - elev_min)
+            elev_normalized = np.clip(elev_normalized, 0, 1)
+
+            # Apply magma to all pixels, then mask
+            all_colors = magma_cmap(elev_normalized)[:, :, :3]  # RGB only
+            colors[road_mask] = (all_colors[road_mask] * 255).astype(np.uint8)
+        else:
+            # Flat elevation - use middle of magma
+            mid_color = tuple(int(c * 255) for c in magma_cmap(0.5)[:3])
+            colors[road_mask] = mid_color
+    else:
+        # Fallback: color by road type (backward compatibility)
+        magma_cmap = plt.colormaps.get_cmap('magma')
+        road_grid_quantized = np.clip(np.round(road_grid).astype(int), 0, 4)
+
+        road_colors_rgb = {
+            1: tuple(int(c * 255) for c in magma_cmap(0.20)[:3]),
+            2: tuple(int(c * 255) for c in magma_cmap(0.40)[:3]),
+            3: tuple(int(c * 255) for c in magma_cmap(0.60)[:3]),
+            4: tuple(int(c * 255) for c in magma_cmap(0.80)[:3]),
+        }
+
+        for road_value, rgb in road_colors_rgb.items():
+            mask = road_grid_quantized == road_value
+            colors[mask] = rgb
 
     return colors
 
@@ -113,8 +122,8 @@ def get_viridis_colormap():
         Function that maps normalized values (0-1) to (R, G, B)
     """
     try:
-        from matplotlib import cm
-        viridis = cm.get_cmap('viridis')
+        import matplotlib.pyplot as plt
+        viridis = plt.colormaps.get_cmap('viridis')
         return lambda x: viridis(np.clip(x, 0, 1))[:3]
     except ImportError:
         logger.warning("matplotlib not available, using simple grayscale colormap")
