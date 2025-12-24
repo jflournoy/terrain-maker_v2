@@ -113,3 +113,245 @@ def load_dem_files(
     except Exception as e:
         logger.error(f"Error processing DEM files: {str(e)}")
         raise
+
+
+def load_score_grid(
+    file_path: Path,
+    data_keys: list[str] = None,
+) -> tuple[np.ndarray, rasterio.Affine | None]:
+    """
+    Load georeferenced raster data from an NPZ file.
+
+    Works with any NPZ file containing a 2D array and optional Affine transform.
+    Common use cases: score grids, classification maps, derived terrain products.
+
+    The function searches for data arrays using the provided keys, falling back
+    to common key names and finally to the first available array.
+
+    Args:
+        file_path: Path to .npz file
+        data_keys: Keys to try for data array. If None, tries ["data", "score", "values"]
+            then falls back to first array in file.
+
+    Returns:
+        Tuple of (data_array, transform) where:
+            - data_array: 2D numpy array with the raster data
+            - transform: Affine transform or None if not present in file
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        ValueError: If file contains no arrays
+
+    Example:
+        >>> scores, transform = load_score_grid("path/to/scores.npz")
+        >>> if transform:
+        ...     terrain.add_data_layer("scores", scores, transform, "EPSG:4326")
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"Score file not found: {file_path}")
+
+    logger.info(f"Loading score grid from {file_path}")
+
+    # Load NPZ file
+    data = np.load(file_path)
+
+    # Determine keys to search for data
+    if data_keys is None:
+        data_keys = ["data", "score", "values"]
+
+    # Find the data array
+    data_array = None
+    for key in data_keys:
+        if key in data:
+            data_array = data[key]
+            logger.debug(f"  Found data under key '{key}'")
+            break
+
+    # Fallback to first available array
+    if data_array is None:
+        available_keys = list(data.files)
+        # Exclude 'transform' and other metadata keys
+        array_keys = [k for k in available_keys if k not in ("transform", "crs")]
+        if array_keys:
+            first_key = array_keys[0]
+            data_array = data[first_key]
+            logger.debug(f"  Using first available array under key '{first_key}'")
+        else:
+            raise ValueError(f"No data arrays found in {file_path}")
+
+    # Extract transform if present
+    transform = None
+    if "transform" in data:
+        t = data["transform"]
+        transform = rasterio.Affine(t[0], t[1], t[2], t[3], t[4], t[5])
+        logger.debug(f"  Loaded transform: origin=({t[2]:.4f}, {t[5]:.4f})")
+
+    logger.info(f"  Shape: {data_array.shape}, dtype: {data_array.dtype}")
+    if transform:
+        logger.info(f"  Transform: pixel size=({transform.a:.6f}, {transform.e:.6f})")
+    else:
+        logger.info("  No transform metadata (will need same_extent_as for alignment)")
+
+    return data_array, transform
+
+
+# =============================================================================
+# HGT FILE UTILITIES
+# =============================================================================
+
+
+def parse_hgt_filename(filename: str | Path) -> tuple[int | None, int | None]:
+    """
+    Parse SRTM HGT filename to extract latitude and longitude.
+
+    Works globally with standard SRTM naming convention:
+    - N42W083.hgt (Northern/Western hemisphere) -> lat=42, lon=-83
+    - S15E028.hgt (Southern/Eastern hemisphere) -> lat=-15, lon=28
+
+    Args:
+        filename: HGT filename or Path (e.g., "N42W083.hgt" or Path("/path/to/N42W083.hgt"))
+
+    Returns:
+        Tuple of (latitude, longitude) as signed integers, or (None, None) if invalid
+    """
+    import re
+
+    # Extract just the filename if it's a path
+    name = Path(filename).stem.upper()
+
+    # Match pattern: N/S followed by 2 digits, then E/W followed by 3 digits
+    pattern = r'^([NS])(\d{2})([EW])(\d{3})$'
+    match = re.match(pattern, name)
+
+    if not match:
+        return None, None
+
+    ns, lat_str, ew, lon_str = match.groups()
+
+    lat = int(lat_str)
+    lon = int(lon_str)
+
+    # Apply sign based on hemisphere
+    if ns == 'S':
+        lat = -lat
+    if ew == 'W':
+        lon = -lon
+
+    return lat, lon
+
+
+def load_filtered_hgt_files(
+    dem_dir: Path | str,
+    min_latitude: int = None,
+    max_latitude: int = None,
+    min_longitude: int = None,
+    max_longitude: int = None,
+    pattern: str = "*.hgt",
+) -> tuple[np.ndarray, rasterio.Affine]:
+    """
+    Load SRTM HGT files filtered by latitude/longitude range.
+
+    Works globally with standard SRTM naming convention. Filters files
+    before loading to reduce memory usage for large DEM directories.
+
+    Args:
+        dem_dir: Directory containing HGT files
+        min_latitude: Southern bound (e.g., -45 for S45, 42 for N42)
+        max_latitude: Northern bound (e.g., 60 for N60)
+        min_longitude: Western bound (e.g., -120 for W120)
+        max_longitude: Eastern bound (e.g., 30 for E30)
+        pattern: File pattern to match (default: "*.hgt")
+
+    Returns:
+        Tuple of (merged_dem, transform)
+
+    Raises:
+        ValueError: If no matching files found after filtering
+
+    Example:
+        >>> # Load only tiles in Michigan area
+        >>> dem, transform = load_filtered_hgt_files(
+        ...     "/path/to/srtm",
+        ...     min_latitude=41, max_latitude=47,
+        ...     min_longitude=-90, max_longitude=-82
+        ... )
+
+        >>> # Alps region (Switzerland/Austria)
+        >>> dem, transform = load_filtered_hgt_files(
+        ...     "/path/to/srtm",
+        ...     min_latitude=45, max_latitude=48,
+        ...     min_longitude=5, max_longitude=15
+        ... )
+    """
+    dem_dir = Path(dem_dir)
+
+    logger.info(f"Loading HGT files from {dem_dir}")
+    if min_latitude is not None or max_latitude is not None:
+        logger.info(f"  Latitude filter: [{min_latitude}, {max_latitude}]")
+    if min_longitude is not None or max_longitude is not None:
+        logger.info(f"  Longitude filter: [{min_longitude}, {max_longitude}]")
+
+    # Find all matching files
+    all_files = list(dem_dir.glob(pattern))
+
+    if not all_files:
+        raise ValueError(f"No files matching '{pattern}' found in {dem_dir}")
+
+    # Filter by lat/lon if specified
+    filtered_files = []
+    for f in all_files:
+        lat, lon = parse_hgt_filename(f)
+
+        # Skip files that couldn't be parsed
+        if lat is None or lon is None:
+            continue
+
+        # Apply filters
+        if min_latitude is not None and lat < min_latitude:
+            continue
+        if max_latitude is not None and lat > max_latitude:
+            continue
+        if min_longitude is not None and lon < min_longitude:
+            continue
+        if max_longitude is not None and lon > max_longitude:
+            continue
+
+        filtered_files.append(f)
+
+    if not filtered_files:
+        raise ValueError(
+            f"No HGT files found matching lat/lon filters in {dem_dir}"
+        )
+
+    logger.info(f"  Found {len(filtered_files)} files after filtering (from {len(all_files)} total)")
+
+    # Load the filtered files directly using rasterio
+    dem_datasets = []
+    for file in filtered_files:
+        try:
+            ds = rasterio.open(file)
+            if ds.count > 0:
+                dem_datasets.append(ds)
+        except rasterio.errors.RasterioIOError as e:
+            logger.warning(f"Failed to open {file}: {str(e)}")
+            continue
+
+    if not dem_datasets:
+        raise ValueError("No valid HGT files could be opened after filtering")
+
+    try:
+        with rasterio.Env():
+            merged_dem, transform = merge(dem_datasets)
+            merged_dem = merged_dem[0]  # Extract first band
+
+            logger.info(f"  Merged {len(dem_datasets)} HGT files:")
+            logger.info(f"    Shape: {merged_dem.shape}")
+            logger.info(f"    Value range: {np.nanmin(merged_dem):.2f} to {np.nanmax(merged_dem):.2f}")
+
+            return merged_dem, transform
+
+    finally:
+        for ds in dem_datasets:
+            ds.close()
