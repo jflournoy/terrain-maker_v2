@@ -2131,7 +2131,9 @@ class Terrain:
             # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            colors[water_at_vertices, :3] = water_color
+            # Apply to surface vertices only (colors may include boundary vertices)
+            surface_colors = colors[:num_surface_vertices]
+            surface_colors[water_at_vertices, :3] = water_color
             water_vertex_count = np.sum(water_at_vertices)
 
             self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")

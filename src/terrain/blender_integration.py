@@ -12,26 +12,21 @@ import bpy
 
 def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, logger=None):
     """
-    Apply vertex-space colors directly to an existing Blender mesh.
+    Apply colors to an existing Blender mesh.
 
-    This function applies colors that are already in vertex space (one color per vertex)
-    rather than grid space. Useful for re-applying colors after modification or when
-    using dual colormaps that produce vertex-space colors.
+    Accepts colors in either vertex-space (n_vertices, 3/4) or grid-space (height, width, 3/4).
+    When grid-space colors are provided with y_valid/x_valid indices, colors are extracted
+    for each vertex using those coordinates.
 
     Args:
         mesh_obj (bpy.types.Object): The Blender mesh object to apply colors to
-        vertex_colors (np.ndarray): Vertex-space colors, shape (n_vertices, 3) or (n_vertices, 4)
-        y_valid (np.ndarray, optional): Not used, kept for API compatibility
-        x_valid (np.ndarray, optional): Not used, kept for API compatibility
+        vertex_colors (np.ndarray): Colors in one of two formats:
+            - Vertex-space: shape (n_vertices, 3) or (n_vertices, 4)
+            - Grid-space: shape (height, width, 3) or (height, width, 4)
+        y_valid (np.ndarray, optional): Y indices for grid-space colors
+        x_valid (np.ndarray, optional): X indices for grid-space colors
         logger (logging.Logger, optional): Logger for progress messages
-
-    Note:
-        This function assumes vertex_colors are already in the correct order matching
-        the mesh vertices. For grid-space colors, use create_blender_mesh instead.
     """
-    if logger:
-        logger.debug(f"Applying {len(vertex_colors)} vertex colors to mesh...")
-
     mesh = mesh_obj.data
 
     # Get or create color layer
@@ -45,8 +40,20 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
             logger.warning("Mesh has no color data")
         return
 
+    # Check if colors are grid-space (3D) or vertex-space (2D)
+    if vertex_colors.ndim == 3 and y_valid is not None and x_valid is not None:
+        # Grid-space colors: extract colors for each vertex using indices
+        colors_for_vertices = vertex_colors[y_valid, x_valid]
+        if logger:
+            logger.debug(f"Extracted {len(colors_for_vertices)} vertex colors from grid")
+    else:
+        # Already vertex-space colors
+        colors_for_vertices = vertex_colors
+        if logger:
+            logger.debug(f"Using {len(colors_for_vertices)} vertex-space colors")
+
     # Normalize colors to 0-1 range if they're uint8
-    colors_normalized = vertex_colors.astype(np.float32)
+    colors_normalized = colors_for_vertices.astype(np.float32)
     if colors_normalized.max() > 1.0:
         colors_normalized = colors_normalized / 255.0
 
