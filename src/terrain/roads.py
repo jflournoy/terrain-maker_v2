@@ -79,20 +79,25 @@ def road_colormap(road_grid, score=None):
         # Apply same gamma correction as terrain (gamma=0.5), then invert
         mako_cmap = plt.colormaps.get_cmap('mako')
 
-        # Apply gamma correction like terrain does
-        score_clipped = np.clip(score, 0, 1)
-        score_gamma = np.power(score_clipped, 0.5)
-        # Normalize to terrain's range (0 to sqrt(1.5) ≈ 1.22)
-        max_val = np.power(1.5, 0.5)
-        score_normalized = score_gamma / max_val
+        # Check if shapes match
+        if road_grid.shape != score.shape:
+            logger.warning(f"Shape mismatch: road_grid={road_grid.shape}, score={score.shape}")
+            score = None
+        else:
+            # Apply gamma correction like terrain does: score^0.5 / sqrt(1.5)
+            score_clipped = np.clip(score, 0, 1)
+            score_gamma = np.power(score_clipped, 0.5)
+            max_val = np.power(1.5, 0.5)
+            score_normalized = score_gamma / max_val
 
-        # Invert: high score terrain = low value roads (dark), low score = high (bright)
-        inverse_score = 1.0 - score_normalized
+            # Invert: high score terrain (light) = low value roads (dark)
+            inverse_score = 1.0 - score_normalized
 
-        # Apply mako to all pixels, then mask
-        all_colors = mako_cmap(inverse_score)[:, :, :3]  # RGB only
-        colors[road_mask] = (all_colors[road_mask] * 255).astype(np.uint8)
-    else:
+            # Apply mako to all pixels, then mask to roads only
+            all_colors = mako_cmap(inverse_score)[:, :, :3]
+            colors[road_mask] = (all_colors[road_mask] * 255).astype(np.uint8)
+
+    if score is None or (score is not None and road_grid.shape != score.shape):
         # Fallback: color by road type using mako
         mako_cmap = plt.colormaps.get_cmap('mako')
         road_grid_quantized = np.clip(np.round(road_grid).astype(int), 0, 4)
