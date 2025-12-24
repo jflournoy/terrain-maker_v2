@@ -50,6 +50,62 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def road_colormap(road_grid):
+    """
+    Map road values to turbo colormap colors discretized by road type.
+
+    Road values encode type: 0=no road, 1=secondary, 2=primary, 3=trunk, 4=motorway.
+    Uses turbo colormap (perceptually uniform) sampled at discrete points:
+    - Motorway (4): Red (turbo high end)
+    - Trunk (3): Yellow (turbo mid-high)
+    - Primary (2): Cyan (turbo mid)
+    - Secondary (1): Blue (turbo low)
+
+    CRITICAL: After resampling during coordinate alignment, road_grid may have
+    fractional values (e.g., 1.5, 2.5, 3.8). These are quantized by rounding to
+    nearest integer before coloring to match the discrete 0-4 encoding.
+
+    Args:
+        road_grid: 2D array of road values (0-4, may be continuous after resampling)
+
+    Returns:
+        Array of RGB colors with shape (height, width, 3) as uint8
+    """
+    import matplotlib.pyplot as plt
+
+    # CRITICAL: Quantize/round to nearest integer
+    # After resampling, we get fractional values like 1.5, 2.5, 3.8
+    # Round them back to 0-4 for proper coloring
+    road_grid_quantized = np.round(road_grid).astype(int)
+
+    # Clamp to valid range 0-4 (in case of rounding artifacts)
+    road_grid_quantized = np.clip(road_grid_quantized, 0, 4)
+
+    # Sample turbo colormap at discrete points for each road type
+    # Turbo goes: dark blue → cyan → green → yellow → orange → red
+    # We'll use evenly spaced samples from 0.2 to 1.0 (skip very dark blue at 0.0)
+    turbo_cmap = plt.cm.get_cmap('turbo')
+
+    road_colors_rgb = {
+        0: (0, 0, 0),           # No road (black - won't be used due to threshold)
+        1: tuple(int(c * 255) for c in turbo_cmap(0.2)[:3]),  # Secondary - blue
+        2: tuple(int(c * 255) for c in turbo_cmap(0.45)[:3]),  # Primary - cyan/green
+        3: tuple(int(c * 255) for c in turbo_cmap(0.7)[:3]),   # Trunk - yellow/orange
+        4: tuple(int(c * 255) for c in turbo_cmap(0.95)[:3]),  # Motorway - red
+    }
+
+    # Create output RGB array
+    height, width = road_grid_quantized.shape
+    colors = np.zeros((height, width, 3), dtype=np.uint8)
+
+    # Map each road value to its color
+    for road_value, rgb in road_colors_rgb.items():
+        mask = road_grid_quantized == road_value
+        colors[mask] = rgb
+
+    return colors
+
+
 def get_viridis_colormap():
     """
     Get viridis colormap function.
@@ -75,6 +131,7 @@ def rasterize_roads_to_layer(
     roads_geojson: Dict[str, Any],
     bbox: Tuple[float, float, float, float],
     resolution: float = 30.0,
+    road_width_pixels: int = 3,
 ) -> Tuple[np.ndarray, Any]:
     """
     Rasterize GeoJSON roads to a layer grid with proper geographic transform.
@@ -92,6 +149,9 @@ def rasterize_roads_to_layer(
         bbox: Bounding box as (south, west, north, east) in WGS84 degrees
         resolution: Pixel size in meters (default: 30.0). At Detroit latitude,
             ~30m/pixel gives good detail without excessive memory use.
+        road_width_pixels: Width of roads in raster pixels (default: 3). Draws roads
+            with thickness instead of 1-pixel lines. Use 1 for thin roads, 3-5 for
+            more visible roads. At 30m resolution, 3 pixels ≈ 90m visual width.
 
     Returns:
         Tuple of:
@@ -177,7 +237,7 @@ def rasterize_roads_to_layer(
             for i in range(len(road_pixels) - 1):
                 x0, y0 = road_pixels[i]
                 x1, y1 = road_pixels[i + 1]
-                _draw_line_on_layer(road_grid, x0, y0, x1, y1, road_value, (height, width))
+                _draw_line_on_layer(road_grid, x0, y0, x1, y1, road_value, (height, width), road_width_pixels)
 
             processed += 1
             if processed % 1000 == 0:
@@ -204,15 +264,18 @@ def _draw_line_on_layer(
     y1: float,
     value: int,
     shape: Tuple[int, int],
+    line_width: int = 1,
 ) -> None:
     """
-    Draw a line on a raster grid using Bresenham algorithm.
+    Draw a thick line on a raster grid using Bresenham algorithm.
 
     Args:
         grid: 2D array to draw on
         x0, y0, x1, y1: line endpoints in pixel coordinates
         value: value to write to grid
         shape: (height, width) of grid
+        line_width: thickness of line in pixels (default: 1). For width N,
+            draws a line with perpendicular thickness of N pixels.
     """
     height, width = shape
 
@@ -227,12 +290,23 @@ def _draw_line_on_layer(
     err = dx - dy
 
     x, y = x0, y0
+    half_width = line_width // 2
 
     while True:
-        # Mark pixel
-        if 0 <= y < height and 0 <= x < width:
-            # Keep highest road type value at this pixel
-            grid[y, x] = max(grid[y, x], value)
+        # Mark pixels in a cross/box pattern for thickness
+        if line_width == 1:
+            # Single pixel - fast path
+            if 0 <= y < height and 0 <= x < width:
+                grid[y, x] = max(grid[y, x], value)
+        else:
+            # Draw thick line: mark perpendicular strip
+            # For simplicity, mark square around center point
+            for dy_offset in range(-half_width, half_width + 1):
+                for dx_offset in range(-half_width, half_width + 1):
+                    yy = y + dy_offset
+                    xx = x + dx_offset
+                    if 0 <= yy < height and 0 <= xx < width:
+                        grid[yy, xx] = max(grid[yy, xx], value)
 
         if x == x1 and y == y1:
             break
@@ -250,37 +324,52 @@ def add_roads_layer(
     terrain,
     roads_geojson: Dict[str, Any],
     bbox: Tuple[float, float, float, float],
-    colormap_name: str = "viridis",
     resolution: float = 30.0,
+    road_width_pixels: int = 3,
 ) -> None:
     """
     Add roads as a data layer to terrain with automatic coordinate alignment.
 
     This is the high-level API for road integration. Roads are rasterized to
-    a grid, added as a data layer, and then used to color vertices. The library's
+    a grid with proper geographic metadata and added as a data layer. The library's
     data layer pipeline ensures proper alignment even if terrain is downsampled
     or reprojected.
 
+    To color roads, use the multi-overlay color mapping system:
+
+        roads_geojson = get_roads(bbox)
+        terrain.add_roads_layer(terrain, roads_geojson, bbox, road_width_pixels=3)
+        terrain.set_multi_color_mapping(
+            base_colormap=lambda dem: elevation_colormap(dem, 'michigan'),
+            base_source_layers=['dem'],
+            overlays=[{
+                'colormap': road_colormap,
+                'source_layers': ['roads'],
+                'priority': 10,
+            }],
+        )
+        terrain.compute_colors()
+
     Args:
-        terrain: Terrain object (must have colors computed)
+        terrain: Terrain object (must have DEM data layer)
         roads_geojson: GeoJSON FeatureCollection with road LineStrings
         bbox: Bounding box as (south, west, north, east) in WGS84 degrees
-        colormap_name: Matplotlib colormap for road coloring (default: 'viridis')
         resolution: Pixel size in meters for rasterization (default: 30.0)
+        road_width_pixels: Width of roads in raster pixels (default: 3). Higher values
+            make roads more visible. At 30m resolution, 3 pixels ≈ 90m visual width.
 
     Raises:
-        ValueError: If terrain missing required attributes
+        ValueError: If terrain missing DEM data layer
     """
-    if not hasattr(terrain, "colors") or terrain.colors is None:
-        raise ValueError("Terrain colors must be computed first. Call compute_colors().")
-
     if not hasattr(terrain, "data_layers") or "dem" not in terrain.data_layers:
         raise ValueError("Terrain DEM data layer not found.")
 
     logger.info("Adding roads as data layer...")
 
     # Rasterize roads to grid with WGS84 transform
-    road_grid, road_transform = rasterize_roads_to_layer(roads_geojson, bbox, resolution)
+    road_grid, road_transform = rasterize_roads_to_layer(
+        roads_geojson, bbox, resolution, road_width_pixels
+    )
 
     if not np.any(road_grid):
         logger.warning("No roads were rasterized, skipping road layer")
@@ -301,23 +390,33 @@ def add_roads_layer(
         logger.error(f"Failed to add roads data layer: {e}")
         raise
 
-    # Now apply road colors to vertices using the aligned road layer
-    _color_vertices_from_road_layer(terrain, colormap_name)
-
 
 def _color_vertices_from_road_layer(
     terrain,
     colormap_name: str = "viridis",
 ) -> None:
     """
-    Color vertices based on road layer values.
+    Color vertices based on road layer values (DEPRECATED).
+
+    This function is deprecated. Use the multi-overlay color mapping system instead:
+
+        terrain.set_multi_color_mapping(
+            base_colormap=...,
+            base_source_layers=['dem'],
+            overlays=[{
+                'colormap': road_colormap,
+                'source_layers': ['roads'],
+                'priority': 10,
+            }],
+        )
+        terrain.compute_colors()
 
     Uses the transformed (downsampled/reprojected) road layer to color terrain
     vertices. Road pixels are colored using a colormap based on road type.
 
     Args:
         terrain: Terrain object with aligned road layer and computed colors
-        colormap_name: Matplotlib colormap name
+        colormap_name: Matplotlib colormap name (deprecated)
     """
     if "roads" not in terrain.data_layers:
         logger.warning("Roads layer not found in terrain")
