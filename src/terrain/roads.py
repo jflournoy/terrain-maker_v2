@@ -91,7 +91,8 @@ def road_colormap(road_grid, score=None):
             score_normalized = score_gamma / max_val
 
             # Invert: high score terrain (light) = low value roads (dark)
-            inverse_score = 1.0 - score_normalized
+            # Constrain to range 0.0-0.65 so roads are never too light (always visible)
+            inverse_score = (1.0 - score_normalized) * 0.65
 
             # Apply mako to all pixels, then mask to roads only
             all_colors = mako_cmap(inverse_score)[:, :, :3]
