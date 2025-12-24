@@ -2128,15 +2128,11 @@ class Terrain:
 
             water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
 
-            # Map water mask from grid space to vertex space
+            # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
-            water_vertex_count = 0
-            for i in range(num_surface_vertices):
-                y = self.y_valid[i]
-                x = self.x_valid[i]
-                if water_mask[y, x]:
-                    colors[i, :3] = water_color
-                    water_vertex_count += 1
+            water_at_vertices = water_mask[self.y_valid, self.x_valid]
+            colors[water_at_vertices, :3] = water_color
+            water_vertex_count = np.sum(water_at_vertices)
 
             self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
 
@@ -2307,14 +2303,11 @@ class Terrain:
 
             water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
 
-            # Map water mask from grid space to vertex space
-            for i in range(num_surface_vertices):
-                y = self.y_valid[i]
-                x = self.x_valid[i]
-                if water_mask[y, x]:
-                    vertex_colors[i, :3] = water_color
+            # Map water mask from grid space to vertex space (vectorized)
+            water_at_vertices = water_mask[self.y_valid, self.x_valid]
+            vertex_colors[water_at_vertices, :3] = water_color
+            water_vertex_count = np.sum(water_at_vertices)
 
-            water_vertex_count = np.sum([water_mask[self.y_valid[i], self.x_valid[i]] for i in range(num_surface_vertices)])
             self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
 
         self.colors = vertex_colors

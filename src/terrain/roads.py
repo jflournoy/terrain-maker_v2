@@ -299,14 +299,16 @@ def _draw_line_on_layer(
             if 0 <= y < height and 0 <= x < width:
                 grid[y, x] = max(grid[y, x], value)
         else:
-            # Draw thick line: mark perpendicular strip
-            # For simplicity, mark square around center point
-            for dy_offset in range(-half_width, half_width + 1):
-                for dx_offset in range(-half_width, half_width + 1):
-                    yy = y + dy_offset
-                    xx = x + dx_offset
-                    if 0 <= yy < height and 0 <= xx < width:
-                        grid[yy, xx] = max(grid[yy, xx], value)
+            # Draw thick line using numpy slicing (vectorized)
+            # Calculate bounds with clipping to grid
+            y_start = max(0, y - half_width)
+            y_end = min(height, y + half_width + 1)
+            x_start = max(0, x - half_width)
+            x_end = min(width, x + half_width + 1)
+            if y_start < y_end and x_start < x_end:
+                grid[y_start:y_end, x_start:x_end] = np.maximum(
+                    grid[y_start:y_end, x_start:x_end], value
+                )
 
         if x == x1 and y == y1:
             break

@@ -220,8 +220,10 @@ def sort_boundary_points(boundary_coords):
     # Initialize result with start point
     ordered = [start_point]
 
+    # Find start index using numpy (O(n) comparison, but vectorized)
+    start_idx = np.where((points_array == start_point).all(axis=1))[0][0]
     # Track points we've already used - faster lookups
-    used_indices = set([boundary_coords.index(start_point)])
+    used_indices = set([start_idx])
 
     current = start_point
 

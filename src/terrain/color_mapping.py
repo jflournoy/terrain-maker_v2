@@ -9,7 +9,6 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from tqdm import tqdm
 
 
 # =============================================================================
@@ -159,33 +158,11 @@ def slope_colormap(slopes, cmap_name="terrain", min_slope=0, max_slope=45):
     valid_indices = np.where(valid_mask)
     total_valid = np.sum(valid_mask)
 
-    with tqdm(total=total_valid, desc="Generating slope colors") as pbar:
-        # Process in chunks to manage memory
-        chunk_size = min(10000, total_valid)
-        num_chunks = (total_valid + chunk_size - 1) // chunk_size
-
-        for chunk_idx in range(num_chunks):
-            start_idx = chunk_idx * chunk_size
-            end_idx = min(start_idx + chunk_size, total_valid)
-
-            # Get indices for this chunk
-            chunk_indices = (
-                valid_indices[0][start_idx:end_idx],
-                valid_indices[1][start_idx:end_idx],
-            )
-
-            # Get slope values for this chunk
-            chunk_slopes = normalized_slopes[chunk_indices]
-
-            # Apply colormap to get RGBA values (keep alpha channel)
-            chunk_colors = cmap(chunk_slopes)  # This returns RGBA by default
-
-            # Assign colors to output array
-            for i in range(len(chunk_slopes)):
-                y, x = chunk_indices[0][i], chunk_indices[1][i]
-                colors[y, x] = chunk_colors[i]
-
-            pbar.update(end_idx - start_idx)
+    # Vectorized colormap application - apply to all valid pixels at once
+    # cmap() handles the entire array efficiently
+    all_colors = cmap(normalized_slopes[valid_mask])  # Returns RGBA for all valid pixels
+    colors[valid_indices] = all_colors
+    logger.debug(f"Applied colormap to {total_valid} valid pixels")
 
     # Set invalid (NaN) areas to transparent black
     colors[~valid_mask] = (0, 0, 0, 0)
