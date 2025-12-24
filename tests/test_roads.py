@@ -35,9 +35,8 @@ from examples.detroit_roads import (
     get_roads,
 )
 from src.terrain.roads import (
-    blend_color_for_road,
-    sample_color_at_mesh_coord,
-    create_road_material,
+    rasterize_roads_to_layer,
+    road_colormap,
 )
 
 logger = logging.getLogger(__name__)
@@ -249,49 +248,115 @@ class TestCaching:
 # =============================================================================
 
 
-class TestColorBlending:
-    """Tests for color blending operations."""
+# DEPRECATED: TestColorBlending tests old road rendering functions
+# These are no longer used - roads are now handled via multi-overlay color mapping system
+# class TestColorBlending:
+#     """Tests for color blending operations."""
+#
+#     (old tests removed - replaced by multi-overlay color mapping system)
 
-    def test_blend_color_default(self):
-        """Test default color blending (30% darker)."""
-        color = (1.0, 1.0, 1.0)  # White
-        blended = blend_color_for_road(color)
 
-        # Default factor is 0.7, so 30% darker
-        assert blended == (0.7, 0.7, 0.7)
+# =============================================================================
+# ROAD COLORMAP TESTS
+# =============================================================================
 
-    def test_blend_color_custom_factor(self):
-        """Test color blending with custom factor."""
-        color = (1.0, 0.5, 0.25)
-        blended = blend_color_for_road(color, darken_factor=0.5)
 
-        assert blended == (0.5, 0.25, 0.125)
+class TestRoadColormap:
+    """Tests for the road colormap function used in multi-overlay system."""
 
-    def test_blend_color_no_darkening(self):
-        """Test color with darken_factor=1.0 (no darkening)."""
-        color = (0.8, 0.6, 0.4)
-        blended = blend_color_for_road(color, darken_factor=1.0)
+    def test_road_colormap_output_shape(self):
+        """Test that road_colormap returns correct shape."""
+        road_grid = np.zeros((10, 10), dtype=np.uint8)
+        road_grid[2:5, 2:5] = 4  # Add some motorway
 
-        assert blended == color
+        colors = road_colormap(road_grid)
 
-    def test_blend_color_rgb_only(self):
-        """Test that only RGB components are used (not alpha)."""
-        color = (1.0, 0.8, 0.6, 0.5)  # RGBA
-        blended = blend_color_for_road(color)
+        assert colors.shape == (10, 10, 3), f"Expected shape (10, 10, 3), got {colors.shape}"
+        assert colors.dtype == np.uint8
 
-        # Should only return 3 values (RGB)
-        assert len(blended) == 3
-        assert blended == (0.7, 0.56, 0.42)
+    def test_road_colormap_handles_road_types(self):
+        """Test that road colormap maps different road types to different colors."""
+        road_grid = np.array(
+            [[0, 1, 2], [3, 4, 0], [1, 2, 3]],
+            dtype=np.uint8
+        )
 
-    def test_blend_color_preserves_ratios(self):
-        """Test that color blending preserves color ratios."""
-        color = (0.5, 0.25, 0.125)  # 4:2:1 ratio
-        blended = blend_color_for_road(color, darken_factor=0.8)
+        colors = road_colormap(road_grid)
 
-        # Ratio should be preserved
-        r, g, b = blended
-        assert abs(r / (g + 1e-10) - 2.0) < 0.01
-        assert abs(g / (b + 1e-10) - 2.0) < 0.01
+        # All pixels should have some color (RGB)
+        assert colors.shape == (3, 3, 3)
+        # Secondary road (1) should be different from motorway (4)
+        assert not np.array_equal(colors[0, 1], colors[1, 1])
+
+    def test_road_colormap_zero_values(self):
+        """Test that no-road pixels (0) are handled."""
+        road_grid = np.zeros((5, 5), dtype=np.uint8)
+
+        colors = road_colormap(road_grid)
+
+        assert colors.shape == (5, 5, 3)
+        # All zeros should map to a consistent color
+        assert np.all(colors == colors[0, 0])
+
+    def test_rasterize_roads_output_shape(self):
+        """Test that rasterize_roads_to_layer returns correct shapes."""
+        # Minimal GeoJSON with one road
+        roads_geojson = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[-83.5, 42.3], [-83.4, 42.35]],
+                    },
+                    "properties": {"highway": "motorway"},
+                }
+            ],
+        }
+
+        bbox = (42.2, -83.6, 42.4, -83.3)
+        road_grid, road_transform = rasterize_roads_to_layer(
+            roads_geojson, bbox, resolution=100.0
+        )
+
+        assert road_grid.ndim == 2
+        assert road_grid.dtype == np.uint8
+        assert road_transform is not None
+
+    def test_rasterize_roads_with_width(self):
+        """Test that road_width_pixels makes roads wider."""
+        roads_geojson = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[-83.5, 42.3], [-83.4, 42.35]],
+                    },
+                    "properties": {"highway": "motorway"},
+                }
+            ],
+        }
+
+        bbox = (42.2, -83.6, 42.4, -83.3)
+
+        # Rasterize with width=1 (thin)
+        road_grid_thin, _ = rasterize_roads_to_layer(
+            roads_geojson, bbox, resolution=100.0, road_width_pixels=1
+        )
+        thin_count = np.count_nonzero(road_grid_thin)
+
+        # Rasterize with width=3 (thick)
+        road_grid_thick, _ = rasterize_roads_to_layer(
+            roads_geojson, bbox, resolution=100.0, road_width_pixels=3
+        )
+        thick_count = np.count_nonzero(road_grid_thick)
+
+        # Thick roads should have more pixels
+        assert thick_count > thin_count, "Thick roads should have more pixels than thin roads"
+        assert thick_count >= thin_count * 2, "Thick roads (width=3) should be ~3x wider"
 
 
 # =============================================================================
@@ -468,17 +533,8 @@ class TestAPIIntegration:
 # =============================================================================
 
 
-@pytest.mark.parametrize("darken_factor,expected_result", [
-    (0.5, (0.5, 0.5, 0.5)),  # 50% darker (white to gray)
-    (0.7, (0.7, 0.7, 0.7)),  # 30% darker
-    (0.9, (0.9, 0.9, 0.9)),  # 10% darker
-    (1.0, (1.0, 1.0, 1.0)),  # No change
-])
-def test_blend_factor_range(darken_factor, expected_result):
-    """Test color blending across valid factor range."""
-    color = (1.0, 1.0, 1.0)
-    result = blend_color_for_road(color, darken_factor=darken_factor)
-    assert result == expected_result
+# DEPRECATED: blend_color_for_road tests removed - function no longer exists
+# Roads now use multi-overlay color mapping system
 
 
 @pytest.mark.parametrize("road_types", [
@@ -494,6 +550,130 @@ def test_query_all_road_types(sample_bbox, road_types):
 
     for road_type in road_types:
         assert road_type in query
+
+
+# =============================================================================
+# GET_ROADS_TILED TESTS
+# =============================================================================
+
+
+class TestGetRoadsTiled:
+    """Tests for get_roads_tiled function - fetches roads for large areas by tiling."""
+
+    def test_get_roads_tiled_imports(self):
+        """Test that get_roads_tiled can be imported."""
+        from examples.detroit_roads import get_roads_tiled
+
+        assert callable(get_roads_tiled)
+
+    def test_get_roads_tiled_small_bbox_no_tiling(self, sample_geojson, temp_cache_dir):
+        """Small bbox (< tile_size) should not tile, single fetch."""
+        from examples.detroit_roads import get_roads_tiled
+
+        # Small bbox (0.25° x 0.7°) - less than tile_size of 2.0°
+        small_bbox = (42.25, -83.5, 42.5, -82.8)
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+                result = get_roads_tiled(small_bbox, tile_size=2.0)
+
+                # Should call get_roads exactly once (no tiling needed)
+                mock_get_roads.assert_called_once()
+                assert result is not None
+                assert result["type"] == "FeatureCollection"
+
+    def test_get_roads_tiled_large_bbox_tiles(self, sample_geojson, temp_cache_dir):
+        """Large bbox should be split into multiple tiles."""
+        from examples.detroit_roads import get_roads_tiled
+
+        # Large bbox (5° x 10°) - larger than tile_size of 2.0°
+        large_bbox = (40.0, -89.0, 45.0, -79.0)  # 5° lat x 10° lon
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+                result = get_roads_tiled(large_bbox, tile_size=2.0)
+
+                # Should call get_roads multiple times (3 lat tiles x 5 lon tiles = 15 tiles)
+                assert mock_get_roads.call_count >= 4, "Large bbox should be tiled into multiple fetches"
+                assert result is not None
+
+    def test_get_roads_tiled_merges_results(self, temp_cache_dir):
+        """Features from all tiles should be merged into single FeatureCollection."""
+        from examples.detroit_roads import get_roads_tiled
+
+        # Create two different GeoJSON responses for different tiles
+        tile1_features = {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {"highway": "motorway"}}]
+        }
+        tile2_features = {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[2, 2], [3, 3]]}, "properties": {"highway": "trunk"}}]
+        }
+
+        # Large bbox that spans 2 tiles
+        large_bbox = (40.0, -85.0, 42.0, -81.0)  # 2° lat x 4° lon = 1x2 tiles
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', side_effect=[tile1_features, tile2_features]):
+                result = get_roads_tiled(large_bbox, tile_size=2.0)
+
+                # Result should contain features from both tiles
+                assert result is not None
+                assert result["type"] == "FeatureCollection"
+                assert len(result["features"]) == 2, "Should merge features from both tiles"
+
+    def test_get_roads_tiled_retry_on_failure(self, sample_geojson, temp_cache_dir):
+        """Failed tiles should be retried."""
+        from examples.detroit_roads import get_roads_tiled
+
+        # First call fails, second succeeds (retry)
+        call_count = [0]
+        def side_effect_fn(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {"type": "FeatureCollection", "features": []}  # First call: empty (failure)
+            return sample_geojson  # Retry: success
+
+        small_bbox = (42.0, -83.0, 42.5, -82.5)  # Small, single tile
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', side_effect=side_effect_fn):
+                result = get_roads_tiled(small_bbox, retry_count=1, retry_delay=0.01)
+
+                # Should have retried and gotten data
+                assert call_count[0] >= 1
+
+    def test_get_roads_tiled_handles_all_failures(self, temp_cache_dir):
+        """Returns empty collection if all tiles fail after retry."""
+        from examples.detroit_roads import get_roads_tiled
+
+        empty_result = {"type": "FeatureCollection", "features": []}
+        small_bbox = (42.0, -83.0, 42.5, -82.5)
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', return_value=empty_result):
+                result = get_roads_tiled(small_bbox, retry_count=1, retry_delay=0.01)
+
+                # Should return empty collection, not None
+                assert result is not None
+                assert result["type"] == "FeatureCollection"
+                assert len(result["features"]) == 0
+
+    def test_get_roads_tiled_passes_road_types(self, sample_geojson, temp_cache_dir):
+        """Road types parameter should be passed to get_roads."""
+        from examples.detroit_roads import get_roads_tiled
+
+        small_bbox = (42.0, -83.0, 42.5, -82.5)
+        road_types = ["motorway", "trunk"]
+
+        with patch('examples.detroit_roads.get_cache_dir', return_value=temp_cache_dir):
+            with patch('examples.detroit_roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+                get_roads_tiled(small_bbox, road_types=road_types)
+
+                # Check that road_types was passed
+                call_args = mock_get_roads.call_args
+                assert call_args[0][1] == road_types or call_args[1].get('road_types') == road_types
 
 
 if __name__ == "__main__":

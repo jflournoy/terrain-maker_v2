@@ -334,6 +334,118 @@ def get_roads(
     return geojson
 
 
+def get_roads_tiled(
+    bbox: tuple,
+    road_types: list[str] = None,
+    tile_size: float = 2.0,
+    retry_count: int = 1,
+    retry_delay: float = 2.0,
+    force_refresh: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetch roads for large areas by tiling and merging results.
+
+    Works globally - anywhere OpenStreetMap has road coverage.
+    Automatically tiles large bounding boxes to respect Overpass API limits
+    and handles retries for failed tiles.
+
+    Args:
+        bbox: (south, west, north, east) in WGS84 - works for any location worldwide
+        road_types: OSM highway tags to include. Default: ['motorway', 'trunk', 'primary']
+        tile_size: Size of tiles in degrees (default: 2.0° recommended for Overpass API)
+        retry_count: Number of retries for failed tiles (default: 1)
+        retry_delay: Delay in seconds before retrying (default: 2.0)
+        force_refresh: Force fresh fetch, skip cache (default: False)
+
+    Returns:
+        Merged GeoJSON FeatureCollection with all road segments from all tiles,
+        or empty FeatureCollection if all fetches fail.
+
+    Example:
+        >>> # Large area covering multiple US states
+        >>> bbox = (37.0, -95.0, 45.0, -85.0)
+        >>> roads = get_roads_tiled(bbox, road_types=["motorway", "trunk"])
+        >>> print(f"Found {len(roads['features'])} road segments")
+
+        >>> # Works globally - Alps region
+        >>> alps_bbox = (45.5, 6.0, 47.5, 14.0)
+        >>> roads = get_roads_tiled(alps_bbox, tile_size=1.5)
+    """
+    if road_types is None:
+        road_types = ["motorway", "trunk", "primary"]
+
+    south, west, north, east = bbox
+    lat_span = north - south
+    lon_span = east - west
+
+    logger.info(f"Fetching roads for bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+    logger.info(f"  Coverage: {lat_span:.1f}° lat × {lon_span:.1f}° lon")
+
+    # Check if tiling is needed
+    if lat_span <= tile_size and lon_span <= tile_size:
+        # Small bbox - single fetch
+        logger.info(f"  Small area - single fetch (no tiling needed)")
+        result = get_roads(bbox, road_types, force_refresh=force_refresh)
+        return result if result else {"type": "FeatureCollection", "features": []}
+
+    # Large bbox - tile and merge
+    import math
+
+    lat_tiles = int(math.ceil(lat_span / tile_size))
+    lon_tiles = int(math.ceil(lon_span / tile_size))
+    total_tiles = lat_tiles * lon_tiles
+
+    logger.info(f"  Large area - fetching in {tile_size}° tiles ({lat_tiles}×{lon_tiles} = {total_tiles} tiles)")
+
+    all_features = []
+    failed_tiles = []
+
+    # Fetch all tiles
+    for lat_idx in range(lat_tiles):
+        for lon_idx in range(lon_tiles):
+            tile_south = south + lat_idx * tile_size
+            tile_north = min(tile_south + tile_size, north)
+            tile_west = west + lon_idx * tile_size
+            tile_east = min(tile_west + tile_size, east)
+
+            tile_bbox = (tile_south, tile_west, tile_north, tile_east)
+            tile_num = lat_idx * lon_tiles + lon_idx + 1
+
+            logger.info(f"  Tile {tile_num}/{total_tiles}: lat [{tile_south:.2f}, {tile_north:.2f}], lon [{tile_west:.2f}, {tile_east:.2f}]")
+
+            tile_roads = get_roads(tile_bbox, road_types, force_refresh=force_refresh)
+            if tile_roads and tile_roads.get("features"):
+                feature_count = len(tile_roads["features"])
+                all_features.extend(tile_roads["features"])
+                logger.info(f"    ✓ {feature_count} road segments")
+            else:
+                failed_tiles.append((tile_num, tile_bbox))
+                logger.warning(f"    ✗ No roads returned (timeout or error)")
+
+    # Retry failed tiles
+    if failed_tiles and retry_count > 0:
+        logger.info(f"  Retrying {len(failed_tiles)} failed tiles...")
+        time.sleep(retry_delay)
+
+        still_failed = []
+        for tile_num, tile_bbox in failed_tiles:
+            logger.info(f"  Retry tile {tile_num}...")
+            tile_roads = get_roads(tile_bbox, road_types, force_refresh=True)
+            if tile_roads and tile_roads.get("features"):
+                feature_count = len(tile_roads["features"])
+                all_features.extend(tile_roads["features"])
+                logger.info(f"    ✓ Retry succeeded: {feature_count} segments")
+            else:
+                still_failed.append(tile_num)
+                logger.warning(f"    ✗ Retry failed")
+
+        if still_failed:
+            logger.warning(f"  {len(still_failed)} tiles failed after retry: {still_failed}")
+
+    logger.info(f"  Loaded {len(all_features)} total road segments from {total_tiles} tiles")
+    return {"type": "FeatureCollection", "features": all_features}
+
+
 if __name__ == "__main__":
     # Simple test
     import argparse
