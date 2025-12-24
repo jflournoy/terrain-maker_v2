@@ -993,6 +993,124 @@ def sample_dem_file(tmp_path):
     )
 
 
+class TestGetBboxWgs84:
+    """Test suite for Terrain.get_bbox_wgs84 method - returns bbox in WGS84 coordinates."""
+
+    def test_get_bbox_wgs84_method_exists(self):
+        """Terrain class should have get_bbox_wgs84 method."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        assert hasattr(terrain, "get_bbox_wgs84"), "Terrain should have get_bbox_wgs84 method"
+        assert callable(getattr(terrain, "get_bbox_wgs84"))
+
+    def test_get_bbox_wgs84_returns_tuple(self):
+        """get_bbox_wgs84 should return (south, west, north, east) tuple."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        # Simple transform: 0.1 degree resolution, origin at (-83, 43)
+        transform = Affine.translation(-83, 43) * Affine.scale(0.1, -0.1)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        result = terrain.get_bbox_wgs84()
+
+        assert isinstance(result, tuple), "Should return tuple"
+        assert len(result) == 4, "Should return 4-element tuple (south, west, north, east)"
+
+    def test_get_bbox_wgs84_from_wgs84_dem(self):
+        """get_bbox_wgs84 should return correct bounds when DEM is already WGS84."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        # DEM from (-83, 43) to (-82, 42) - 10 pixels at 0.1 degree resolution
+        # In raster coords: origin at (-83, 43), scale (0.1, -0.1), shape (10, 10)
+        # So bounds are: west=-83, east=-83+10*0.1=-82, north=43, south=43-10*0.1=42
+        transform = Affine.translation(-83, 43) * Affine.scale(0.1, -0.1)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        south, west, north, east = terrain.get_bbox_wgs84()
+
+        assert west == pytest.approx(-83.0, rel=0.01)
+        assert east == pytest.approx(-82.0, rel=0.01)
+        assert south == pytest.approx(42.0, rel=0.01)
+        assert north == pytest.approx(43.0, rel=0.01)
+
+    def test_get_bbox_wgs84_from_utm_dem(self):
+        """get_bbox_wgs84 should convert UTM bbox back to WGS84."""
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        # UTM Zone 17N (EPSG:32617) coordinates for approximately Detroit area
+        # UTM origin at (280000, 4700000), 100m resolution, 100x100 pixels
+        transform = Affine.translation(280000, 4710000) * Affine.scale(100, -100)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:32617")
+
+        south, west, north, east = terrain.get_bbox_wgs84()
+
+        # Should return coordinates in WGS84 (approximately 42-43°N, 83-84°W for Detroit)
+        assert south != 0, "Should not return zero south"
+        assert 41.5 < south < 43.5, f"South should be ~42°N, got {south}"
+        assert 41.5 < north < 43.5, f"North should be ~42°N, got {north}"
+        assert -84.5 < west < -82.5, f"West should be ~83°W, got {west}"
+        assert -84.5 < east < -82.5, f"East should be ~83°W, got {east}"
+        assert north > south, "North should be greater than south"
+        assert east > west, "East should be greater than west"
+
+    def test_get_bbox_wgs84_after_transforms(self):
+        """get_bbox_wgs84 should use transformed bounds, not original."""
+        from scipy.ndimage import zoom as scipy_zoom
+
+        dem_data = np.ones((100, 100), dtype=np.float32)
+        transform = Affine.translation(-83, 43) * Affine.scale(0.01, -0.01)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        # Add downsampling transform (50% zoom)
+        def downsample_transform(data, trans):
+            downsampled = scipy_zoom(data, 0.5, order=1)
+            new_trans = Affine(
+                trans.a * 2, trans.b, trans.c, trans.d, trans.e * 2, trans.f
+            )
+            return downsampled, new_trans, None
+
+        terrain.add_transform(downsample_transform)
+        terrain.apply_transforms()
+
+        south, west, north, east = terrain.get_bbox_wgs84()
+
+        # Bounds should still represent the same geographic area
+        assert west == pytest.approx(-83.0, rel=0.01)
+        assert east == pytest.approx(-82.0, rel=0.01)
+        assert south == pytest.approx(42.0, rel=0.01)
+        assert north == pytest.approx(43.0, rel=0.01)
+
+    def test_get_bbox_wgs84_format(self):
+        """get_bbox_wgs84 should return (south, west, north, east) matching OSM convention."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.translation(-83, 43) * Affine.scale(0.1, -0.1)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        south, west, north, east = terrain.get_bbox_wgs84()
+
+        # Standard bbox format validation
+        assert south < north, "South should be less than north"
+        assert west < east, "West should be less than east"
+        # Values should be valid lat/lon
+        assert -90 <= south <= 90, "South should be valid latitude"
+        assert -90 <= north <= 90, "North should be valid latitude"
+        assert -180 <= west <= 180, "West should be valid longitude"
+        assert -180 <= east <= 180, "East should be valid longitude"
+
+    def test_get_bbox_wgs84_specific_layer(self):
+        """get_bbox_wgs84 should accept layer parameter."""
+        dem_data = np.ones((10, 10), dtype=np.float32)
+        transform = Affine.translation(-83, 43) * Affine.scale(0.1, -0.1)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        # Should work with explicit layer="dem"
+        south, west, north, east = terrain.get_bbox_wgs84(layer="dem")
+
+        assert isinstance(south, float)
+        assert isinstance(west, float)
+        assert isinstance(north, float)
+        assert isinstance(east, float)
+
+
 def create_sample_geotiff(filepath: Path, data: np.ndarray, bounds: tuple) -> Path:
     """
     Helper function to create a sample GeoTIFF file.

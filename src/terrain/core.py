@@ -1116,6 +1116,73 @@ class Terrain:
             }
             self.logger.info(f"Added layer '{name}' (no reprojection needed)")
 
+    def get_bbox_wgs84(self, layer: str = "dem") -> tuple[float, float, float, float]:
+        """
+        Get bounding box in WGS84 coordinates (EPSG:4326).
+
+        Returns bbox in standard format used by OSM, web mapping APIs, etc.
+        Handles reprojection from any source CRS back to WGS84.
+
+        Args:
+            layer: Layer name to get bbox for (default: "dem")
+
+        Returns:
+            Tuple of (south, west, north, east) in WGS84 degrees
+
+        Raises:
+            KeyError: If specified layer doesn't exist
+
+        Example:
+            >>> terrain = Terrain(dem_data, transform, dem_crs="EPSG:32617")  # UTM
+            >>> south, west, north, east = terrain.get_bbox_wgs84()
+            >>> print(f"Bounds: {south:.4f}°N to {north:.4f}°N, {west:.4f}°E to {east:.4f}°E")
+        """
+        from rasterio.warp import transform_bounds
+
+        if layer not in self.data_layers:
+            raise KeyError(f"Layer '{layer}' not found")
+
+        layer_info = self.data_layers[layer]
+
+        # Use transformed data/transform if available, otherwise original
+        if layer_info.get("transformed") and "transformed_data" in layer_info:
+            data = layer_info["transformed_data"]
+            layer_transform = layer_info.get("transformed_transform", layer_info["transform"])
+            layer_crs = layer_info.get("transformed_crs", layer_info["crs"])
+        else:
+            data = layer_info["data"]
+            layer_transform = layer_info["transform"]
+            layer_crs = layer_info["crs"]
+
+        # Calculate bounds from transform and shape
+        height, width = data.shape
+        # Top-left corner
+        x_origin = layer_transform.c
+        y_origin = layer_transform.f
+        # Bottom-right corner
+        x_end = x_origin + layer_transform.a * width
+        y_end = y_origin + layer_transform.e * height
+
+        # Normalize bounds (west, south, east, north)
+        west = min(x_origin, x_end)
+        east = max(x_origin, x_end)
+        south = min(y_origin, y_end)
+        north = max(y_origin, y_end)
+
+        # If already WGS84, just return
+        if layer_crs in ("EPSG:4326", "epsg:4326", None):
+            return (south, west, north, east)
+
+        # Transform bounds to WGS84
+        transformed_bounds = transform_bounds(
+            layer_crs, "EPSG:4326", west, south, east, north
+        )
+
+        # transform_bounds returns (west, south, east, north)
+        t_west, t_south, t_east, t_north = transformed_bounds
+
+        return (t_south, t_west, t_north, t_east)
+
     def compute_data_layer(
         self,
         name: str,
@@ -1754,22 +1821,129 @@ class Terrain:
             f"({100.0 * np.sum(overlay_mask) / len(overlay_mask):.1f}%)"
         )
 
+    def set_multi_color_mapping(
+        self,
+        base_colormap: Callable[[np.ndarray, ...], np.ndarray],
+        base_source_layers: list[str],
+        overlays: list[dict],
+        *,
+        base_color_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Apply multiple data layers as overlays with different colormaps and priority.
+
+        This enables flexible data visualization where multiple geographic features
+        (roads, trails, land use, power lines, etc.) can each be colored independently
+        based on their own colormaps and source layers.
+
+        Args:
+            base_colormap: Function mapping base layer(s) to RGB/RGBA. Takes N arrays
+                (one per base_source_layers) and returns (H, W, 3) or (H, W, 4).
+            base_source_layers: Layer names for base_colormap, e.g., ['dem'].
+            overlays: List of overlay specifications. Each overlay dict contains:
+                - 'colormap': Function taking data arrays and returning (H, W, 3/4).
+                - 'source_layers': List of layer names for this overlay, e.g., ['roads'].
+                - 'colormap_kwargs': Optional dict of kwargs for the colormap function.
+                - 'threshold': Optional threshold value (default: 0.5). Only applies overlay
+                              where source layer value >= threshold. Important for interpolated
+                              discrete data (like roads) that may have fractional values after
+                              resampling. Use 0.5 for data that should be 0 or 1+ after rasterization.
+                - 'priority': Integer priority (lower = higher priority). First matching
+                              overlay is applied.
+            base_color_kwargs: Optional kwargs passed to base_colormap.
+
+        Returns:
+            None: Modifies internal color mapping to use multi-overlay approach.
+
+        Raises:
+            ValueError: If source layers don't exist or overlay specs are invalid.
+
+        Example:
+            >>> # Base elevation colors with roads and trails overlays
+            >>> terrain.set_multi_color_mapping(
+            ...     base_colormap=lambda elev: elevation_colormap(elev, "michigan"),
+            ...     base_source_layers=["dem"],
+            ...     overlays=[
+            ...         {
+            ...             "colormap": lambda roads: colormap_roads(roads),
+            ...             "source_layers": ["roads"],
+            ...             "priority": 10,  # High priority roads show on top
+            ...         },
+            ...         {
+            ...             "colormap": lambda trails: colormap_trails(trails),
+            ...             "source_layers": ["trails"],
+            ...             "priority": 20,  # Lower priority
+            ...         },
+            ...     ]
+            ... )
+            >>> terrain.compute_colors()
+        """
+        # Validate all source_layers exist
+        all_layers = set(base_source_layers)
+        for overlay in overlays:
+            all_layers.update(overlay.get("source_layers", []))
+
+        missing_layers = [name for name in all_layers if name not in self.data_layers]
+        if missing_layers:
+            raise ValueError(f"Source layers not found: {missing_layers}")
+
+        # Validate overlay specs
+        for i, overlay in enumerate(overlays):
+            if "colormap" not in overlay:
+                raise ValueError(f"Overlay {i} missing required 'colormap' key")
+            if "source_layers" not in overlay:
+                raise ValueError(f"Overlay {i} missing required 'source_layers' key")
+            if "priority" not in overlay:
+                raise ValueError(f"Overlay {i} missing required 'priority' key")
+
+        # Sort overlays by priority (lower number = higher priority = applied first)
+        sorted_overlays = sorted(overlays, key=lambda x: x["priority"])
+
+        # Default kwargs
+        if base_color_kwargs is None:
+            base_color_kwargs = {}
+
+        # Store multi-overlay configuration
+        self.color_mapping_mode = "multi_overlay"
+        self.base_colormap = base_colormap
+        self.base_color_sources = list(base_source_layers)
+        self.base_color_kwargs = base_color_kwargs
+        self.overlays = sorted_overlays
+
+        self.logger.info("Multi-overlay color mapping configured:")
+        self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
+        self.logger.info(f"  Number of overlays: {len(overlays)}")
+        for i, overlay in enumerate(sorted_overlays):
+            has_mask = "mask" in overlay
+            mask_info = f", has_mask={has_mask}" if has_mask else ""
+            threshold = overlay.get("threshold", "default")
+            self.logger.info(
+                f"    Overlay {i} (priority {overlay['priority']}): "
+                f"{overlay['colormap'].__name__} on {overlay['source_layers']}"
+                f" [threshold={threshold}{mask_info}]"
+            )
+
     def compute_colors(self, water_mask=None):
         """
         Compute colors using color_func and optionally mask_func.
 
-        Supports two modes:
+        Supports three modes:
         - Standard: Single colormap applied to all vertices
         - Blended: Two colormaps blended based on proximity mask
+        - Multi-overlay: Multiple overlays with different colormaps and priority
 
         Args:
             water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
                 For blended mode, water pixels will be colored blue in the final vertex colors.
-                For standard mode, water detection is handled in create_mesh().
+                For standard and multi-overlay modes, water detection is handled in create_mesh().
 
         Returns:
             np.ndarray: RGBA color array.
         """
+        # Check if multi-overlay mode
+        if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "multi_overlay":
+            return self._compute_multi_overlay_colors(water_mask=water_mask)
+
         # Check if blended mode
         if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "blended":
             return self._compute_blended_colors(water_mask=water_mask)
@@ -1969,6 +2143,184 @@ class Terrain:
         self.colors = colors
 
         return colors
+
+    def _compute_multi_overlay_colors(self, water_mask=None):
+        """
+        Compute colors using multi-overlay mode (internal method).
+
+        Combines base colormap with multiple overlays. For each grid pixel, applies the
+        first overlay (by priority) whose source data is non-zero and non-NaN. Falls back
+        to base colormap if no overlays match.
+
+        Args:
+            water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
+                If provided, water pixels will be colored blue in the final vertex colors.
+
+        Returns:
+            np.ndarray: RGBA color array with multi-overlay colors.
+        """
+        self.logger.info("Computing multi-overlay colors...")
+
+        # Get transformed DEM data to determine grid shape
+        dem_data = self.data_layers["dem"]["transformed_data"]
+        height, width = dem_data.shape
+
+        # Compute base colors for all pixels
+        base_arrays = [
+            (
+                self.data_layers[layer]["transformed_data"]
+                if self.data_layers[layer].get("transformed")
+                else self.data_layers[layer]["data"]
+            )
+            for layer in self.base_color_sources
+        ]
+
+        try:
+            base_colors_grid = self.base_colormap(*base_arrays, **self.base_color_kwargs)
+        except Exception as e:
+            self.logger.error(f"Error computing base colors: {str(e)}")
+            raise
+
+        # Ensure base colors are RGBA
+        if base_colors_grid.shape[-1] == 3:
+            if base_colors_grid.dtype == np.uint8:
+                alpha = np.full(base_colors_grid.shape[:2] + (1,), 255, dtype=base_colors_grid.dtype)
+            else:
+                alpha = np.ones(base_colors_grid.shape[:2] + (1,), dtype=base_colors_grid.dtype)
+            base_colors_grid = np.concatenate([base_colors_grid, alpha], axis=-1)
+
+        # Initialize result grid with base colors
+        result_colors_grid = np.copy(base_colors_grid)
+
+        # Apply overlays in priority order
+        for overlay_idx, overlay in enumerate(self.overlays):
+            overlay_colormap = overlay["colormap"]
+            overlay_sources = overlay["source_layers"]
+            overlay_kwargs = overlay.get("colormap_kwargs", {})
+            priority = overlay["priority"]
+
+            # Get overlay source data
+            overlay_arrays = [
+                (
+                    self.data_layers[layer]["transformed_data"]
+                    if self.data_layers[layer].get("transformed")
+                    else self.data_layers[layer]["data"]
+                )
+                for layer in overlay_sources
+            ]
+
+            try:
+                overlay_colors_grid = overlay_colormap(*overlay_arrays, **overlay_kwargs)
+            except Exception as e:
+                self.logger.error(f"Error computing overlay {overlay_idx} colors: {str(e)}")
+                raise
+
+            # Ensure overlay colors are RGBA
+            if overlay_colors_grid.shape[-1] == 3:
+                if overlay_colors_grid.dtype == np.uint8:
+                    alpha = np.full(overlay_colors_grid.shape[:2] + (1,), 255, dtype=overlay_colors_grid.dtype)
+                else:
+                    alpha = np.ones(overlay_colors_grid.shape[:2] + (1,), dtype=overlay_colors_grid.dtype)
+                overlay_colors_grid = np.concatenate([overlay_colors_grid, alpha], axis=-1)
+
+            # Create mask for where this overlay applies
+            # Option 1: Explicit mask provided (e.g., park_mask for proximity-based overlays)
+            # Option 2: Threshold-based mask from first source layer value
+            explicit_mask = overlay.get("mask", None)
+            use_explicit_mask = False
+
+            if explicit_mask is not None:
+                # Explicit mask provided - must be vertex-space boolean array
+                explicit_mask = np.asarray(explicit_mask)
+                self.logger.info(
+                    f"Overlay {overlay_idx}: explicit mask shape={explicit_mask.shape}, "
+                    f"y_valid len={len(self.y_valid)}, grid shape={overlay_arrays[0].shape}, "
+                    f"mask sum={np.sum(explicit_mask)}"
+                )
+                if explicit_mask.shape == (len(self.y_valid),):
+                    # Convert vertex mask to grid mask (exact match)
+                    overlay_mask = np.zeros(overlay_arrays[0].shape, dtype=bool)
+                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask
+                    use_explicit_mask = True
+                    self.logger.info(
+                        f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
+                        f"{np.sum(overlay_mask)} grid pixels"
+                    )
+                elif len(explicit_mask.shape) == 1 and len(explicit_mask) >= len(self.y_valid):
+                    # Vertex-space mask but might include boundary vertices
+                    # Use only the first len(y_valid) entries (surface vertices)
+                    self.logger.info(
+                        f"Overlay {overlay_idx}: mask has {len(explicit_mask)} entries, "
+                        f"using first {len(self.y_valid)} for surface vertices"
+                    )
+                    overlay_mask = np.zeros(overlay_arrays[0].shape, dtype=bool)
+                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask[:len(self.y_valid)]
+                    use_explicit_mask = True
+                    self.logger.info(
+                        f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
+                        f"{np.sum(overlay_mask)} grid pixels"
+                    )
+                elif explicit_mask.shape == overlay_arrays[0].shape:
+                    # Already grid-space
+                    overlay_mask = explicit_mask.astype(bool)
+                    use_explicit_mask = True
+                    self.logger.info(f"Overlay {overlay_idx}: using grid-space mask directly")
+                else:
+                    self.logger.warning(
+                        f"Overlay {overlay_idx}: mask shape {explicit_mask.shape} doesn't match "
+                        f"vertex count {len(self.y_valid)} or grid shape {overlay_arrays[0].shape}. "
+                        f"Falling back to threshold-based mask."
+                    )
+
+            if not use_explicit_mask:
+                # Use threshold-based mask from source layer values
+                overlay_mask_data = overlay_arrays[0]
+                threshold = overlay.get("threshold", 0.5)
+                overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
+                self.logger.info(
+                    f"Overlay {overlay_idx}: using threshold={threshold}, "
+                    f"{np.sum(overlay_mask)} grid pixels"
+                )
+
+            # Apply overlay colors where mask is True
+            result_colors_grid[overlay_mask] = overlay_colors_grid[overlay_mask]
+
+            self.logger.debug(
+                f"Overlay {overlay_idx} (priority {priority}): "
+                f"applied to {np.sum(overlay_mask)} grid pixels"
+            )
+
+        # Map grid colors to vertex colors using y_valid, x_valid
+        vertex_colors = result_colors_grid[self.y_valid, self.x_valid]
+
+        # Apply water mask if provided
+        if water_mask is not None:
+            num_surface_vertices = len(self.y_valid)
+
+            self.logger.debug(
+                f"Applying water mask to {num_surface_vertices} surface vertices"
+            )
+            self.logger.debug(f"  DEM shape: {dem_data.shape}")
+            self.logger.debug(f"  Num surface vertices: {num_surface_vertices}")
+            self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
+            self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
+
+            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
+
+            # Map water mask from grid space to vertex space
+            for i in range(num_surface_vertices):
+                y = self.y_valid[i]
+                x = self.x_valid[i]
+                if water_mask[y, x]:
+                    vertex_colors[i, :3] = water_color
+
+            water_vertex_count = np.sum([water_mask[self.y_valid[i], self.x_valid[i]] for i in range(num_surface_vertices)])
+            self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
+
+        self.colors = vertex_colors
+
+        self.logger.info(f"Multi-overlay colors computed: {len(self.overlays)} overlays applied")
+        return vertex_colors
 
     def create_mesh(
         self,
