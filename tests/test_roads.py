@@ -275,7 +275,7 @@ class TestRoadColormap:
         assert colors.dtype == np.uint8
 
     def test_road_colormap_handles_road_types(self):
-        """Test that road colormap maps different road types to different colors."""
+        """Test that road colormap gives all roads a dark color."""
         road_grid = np.array(
             [[0, 1, 2], [3, 4, 0], [1, 2, 3]],
             dtype=np.uint8
@@ -285,8 +285,10 @@ class TestRoadColormap:
 
         # All pixels should have some color (RGB)
         assert colors.shape == (3, 3, 3)
-        # Secondary road (1) should be different from motorway (4)
-        assert not np.array_equal(colors[0, 1], colors[1, 1])
+        # All roads should be dark (RGB values < 50)
+        road_mask = road_grid > 0
+        road_colors = colors[road_mask]
+        assert np.all(road_colors < 50), "Roads should be dark"
 
     def test_road_colormap_zero_values(self):
         """Test that no-road pixels (0) are handled."""
