@@ -52,7 +52,10 @@ logger = logging.getLogger(__name__)
 
 def road_colormap(road_grid, score=None):
     """
-    Map roads to a dark color for visibility.
+    Map roads to a distinctive red color for special material treatment.
+
+    The red color (180, 30, 30) is used as a marker so the Blender material
+    shader can identify road pixels and apply a glassy/emissive effect.
 
     Args:
         road_grid: 2D array of road values (0=no road, >0=road)
@@ -67,9 +70,9 @@ def road_colormap(road_grid, score=None):
     height, width = road_grid.shape
     colors = np.zeros((height, width, 3), dtype=np.uint8)
 
-    # Dark gray/charcoal for all roads - visible on any terrain
-    dark_road_color = (40, 40, 45)
-    colors[road_mask] = dark_road_color
+    # Deep red for roads - will be made glassy/emissive by material shader
+    road_red_color = (180, 30, 30)
+    colors[road_mask] = road_red_color
 
     return colors
 
@@ -88,6 +91,117 @@ def get_viridis_colormap():
     except ImportError:
         logger.warning("matplotlib not available, using simple grayscale colormap")
         return lambda x: (x, x, x)
+
+
+def smooth_dem_along_roads(
+    dem: np.ndarray,
+    road_mask: np.ndarray,
+    smoothing_radius: int = 2,
+) -> np.ndarray:
+    """
+    Smooth the DEM along roads to reduce elevation detail.
+
+    Applies Gaussian smoothing only to road pixels. Non-road pixels
+    are unchanged. The smoothing kernel should be about half the road width.
+
+    Args:
+        dem: 2D array of elevation values
+        road_mask: 2D boolean or float array where >0.5 = road
+        smoothing_radius: Radius for Gaussian smoothing (default: 2 pixels)
+
+    Returns:
+        Smoothed DEM array (same shape as input)
+    """
+    from scipy.ndimage import gaussian_filter
+
+    logger.info(f"Smoothing DEM along roads (radius={smoothing_radius})...")
+
+    # Create binary road mask
+    road_binary = road_mask > 0.5
+
+    # Apply Gaussian smoothing to entire DEM
+    smoothed_dem = gaussian_filter(dem.astype(np.float64), sigma=smoothing_radius)
+
+    # Only replace road pixels with smoothed values
+    result = dem.copy()
+    result[road_binary] = smoothed_dem[road_binary]
+
+    road_pixels = np.sum(road_binary)
+    logger.info(f"✓ Smoothed {road_pixels} road pixels")
+
+    return result.astype(dem.dtype)
+
+
+def smooth_road_vertices(
+    vertices: np.ndarray,
+    road_mask: np.ndarray,
+    y_valid: np.ndarray,
+    x_valid: np.ndarray,
+    smoothing_radius: int = 2,
+) -> np.ndarray:
+    """
+    Smooth Z coordinates of mesh vertices that are on roads.
+
+    This function operates on mesh vertices directly after mesh creation,
+    avoiding the coordinate alignment issues of DEM-based smoothing.
+
+    Args:
+        vertices: Mesh vertex positions (N, 3) array with [x, y, z] coords
+        road_mask: 2D array (H, W) where >0.5 indicates road pixels
+        y_valid: Array (N,) of y indices mapping vertices to road_mask rows
+        x_valid: Array (N,) of x indices mapping vertices to road_mask columns
+        smoothing_radius: Gaussian smoothing sigma (default: 2, use 0 to disable)
+
+    Returns:
+        Modified vertices array with smoothed Z values on roads.
+        X and Y coordinates are never modified.
+    """
+    from scipy.ndimage import gaussian_filter1d
+
+    # Return unchanged if no smoothing
+    if smoothing_radius <= 0:
+        return vertices.copy()
+
+    result = vertices.copy()
+    n_vertices = len(vertices)
+    n_surface_vertices = len(y_valid)  # Only surface vertices have grid mappings
+
+    # Vectorized: Find which surface vertices are on roads
+    # Check bounds first (only for surface vertices that have y_valid/x_valid mappings)
+    in_bounds = (
+        (y_valid >= 0) & (y_valid < road_mask.shape[0]) &
+        (x_valid >= 0) & (x_valid < road_mask.shape[1])
+    )
+
+    # For in-bounds surface vertices, check road mask
+    # Note: Only first n_surface_vertices have grid mappings; boundary vertices are skipped
+    road_vertex_mask = np.zeros(n_surface_vertices, dtype=bool)
+    road_vertex_mask[in_bounds] = road_mask[y_valid[in_bounds], x_valid[in_bounds]] > 0.5
+
+    road_indices = np.where(road_vertex_mask)[0]
+    if len(road_indices) == 0:
+        return result
+
+    # Get Z values of road vertices
+    road_z = result[road_indices, 2].copy()
+
+    # Handle NaN values by interpolation
+    nan_mask = np.isnan(road_z)
+    if np.any(nan_mask):
+        valid_mask = ~nan_mask
+        if np.any(valid_mask):
+            # Linear interpolation to fill NaNs
+            valid_indices = np.where(valid_mask)[0]
+            nan_indices = np.where(nan_mask)[0]
+            road_z[nan_mask] = np.interp(nan_indices, valid_indices, road_z[valid_mask])
+
+    # Apply 1D Gaussian smoothing to the road Z values
+    if len(road_z) > 1:
+        smoothed_z = gaussian_filter1d(road_z, sigma=smoothing_radius, mode='nearest')
+        result[road_indices, 2] = smoothed_z
+    # else: single vertex, nothing to smooth
+
+    return result
 
 
 # =============================================================================
