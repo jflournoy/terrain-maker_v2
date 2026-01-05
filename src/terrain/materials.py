@@ -294,3 +294,314 @@ def create_background_plane(
     except Exception as e:
         logger.error(f"Background plane creation failed: {str(e)}")
         raise
+
+
+def apply_terrain_with_obsidian_roads(
+    material: bpy.types.Material,
+    terrain_style: Optional[str] = None,
+) -> None:
+    """
+    Create a material with obsidian roads and terrain colors/test material.
+
+    Reads from two vertex color layers:
+    - "TerrainColors": The actual terrain colors (used for non-road areas)
+    - "RoadMask": R channel marks road pixels (R > 0.5 = road)
+
+    Roads always render as obsidian (glossy black glass).
+    Non-road areas use either vertex colors or a test material.
+
+    Args:
+        material: Blender material to configure
+        terrain_style: Optional test material for terrain ("chrome", "clay", etc.)
+                      If None, uses vertex colors with emission.
+    """
+    logger.info(f"Setting up terrain + obsidian roads material for {material.name}")
+    if terrain_style:
+        logger.info(f"  Terrain style: {terrain_style}")
+    else:
+        logger.info("  Terrain style: vertex colors (score-based)")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    try:
+        # === OUTPUT ===
+        output = nodes.new("ShaderNodeOutputMaterial")
+        output.location = (800, 0)
+
+        # === ROAD MASK INPUT ===
+        road_mask = nodes.new("ShaderNodeVertexColor")
+        road_mask.layer_name = "RoadMask"
+        road_mask.location = (-400, -200)
+
+        # === MIXER (roads vs terrain) ===
+        mix_shader = nodes.new("ShaderNodeMixShader")
+        mix_shader.location = (600, 0)
+
+        # === OBSIDIAN ROAD SHADER ===
+        road_shader = nodes.new("ShaderNodeBsdfPrincipled")
+        road_shader.location = (200, -200)
+        road_shader.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
+        road_shader.inputs["Roughness"].default_value = 0.0
+        road_shader.inputs["Metallic"].default_value = 1.0
+        road_shader.inputs["IOR"].default_value = 1.5
+        road_shader.inputs["Specular IOR Level"].default_value = 1.0
+
+        # === TERRAIN SHADER ===
+        if terrain_style and terrain_style.lower() != "none":
+            # Use test material for terrain
+            terrain_shader = nodes.new("ShaderNodeBsdfPrincipled")
+            terrain_shader.location = (200, 200)
+            _configure_principled_for_style(terrain_shader, terrain_style)
+        else:
+            # Use vertex colors with emission for terrain
+            terrain_colors = nodes.new("ShaderNodeVertexColor")
+            terrain_colors.layer_name = "TerrainColors"
+            terrain_colors.location = (-400, 200)
+
+            terrain_principled = nodes.new("ShaderNodeBsdfPrincipled")
+            terrain_principled.location = (0, 300)
+            terrain_principled.inputs["Roughness"].default_value = 0.8
+
+            terrain_emission = nodes.new("ShaderNodeEmission")
+            terrain_emission.location = (0, 100)
+            terrain_emission.inputs["Strength"].default_value = 1.5
+
+            terrain_mix = nodes.new("ShaderNodeMixShader")
+            terrain_mix.location = (200, 200)
+            terrain_mix.inputs[0].default_value = 0.3  # 70% emission, 30% principled
+
+            # Connect terrain vertex colors
+            links.new(terrain_colors.outputs["Color"], terrain_principled.inputs["Base Color"])
+            links.new(terrain_colors.outputs["Color"], terrain_emission.inputs["Color"])
+            links.new(terrain_principled.outputs["BSDF"], terrain_mix.inputs[1])
+            links.new(terrain_emission.outputs["Emission"], terrain_mix.inputs[2])
+
+            terrain_shader = terrain_mix
+
+        # === CONNECT EVERYTHING ===
+        # Road mask R channel controls mixing (R=1 → road, R=0 → terrain)
+        links.new(road_mask.outputs["Color"], mix_shader.inputs[0])  # Use R channel as mix factor
+
+        # Input 1 = terrain (when mask is 0)
+        # Input 2 = road (when mask is 1)
+        if terrain_style and terrain_style.lower() != "none":
+            links.new(terrain_shader.outputs["BSDF"], mix_shader.inputs[1])
+        else:
+            links.new(terrain_shader.outputs["Shader"], mix_shader.inputs[1])
+        links.new(road_shader.outputs["BSDF"], mix_shader.inputs[2])
+
+        # Connect to output
+        links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+
+        logger.info("✓ Terrain + obsidian roads material applied")
+
+    except Exception as e:
+        logger.error(f"Error setting up terrain + roads material: {str(e)}")
+        raise
+
+
+def _configure_principled_for_style(shader_node, style: str) -> None:
+    """Configure a Principled BSDF node for a specific test material style."""
+    style_lower = style.lower()
+
+    if style_lower == "obsidian":
+        shader_node.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.0
+        shader_node.inputs["Metallic"].default_value = 1.0
+        shader_node.inputs["IOR"].default_value = 1.5
+        shader_node.inputs["Specular IOR Level"].default_value = 1.0
+    elif style_lower == "chrome":
+        shader_node.inputs["Base Color"].default_value = (0.9, 0.9, 0.92, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.05
+        shader_node.inputs["Metallic"].default_value = 1.0
+    elif style_lower == "clay":
+        shader_node.inputs["Base Color"].default_value = (0.5, 0.48, 0.45, 1.0)
+        shader_node.inputs["Roughness"].default_value = 1.0
+        shader_node.inputs["Metallic"].default_value = 0.0
+        shader_node.inputs["Specular IOR Level"].default_value = 0.0
+    elif style_lower == "plastic":
+        shader_node.inputs["Base Color"].default_value = (0.95, 0.95, 0.95, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.2
+        shader_node.inputs["Metallic"].default_value = 0.0
+        shader_node.inputs["Specular IOR Level"].default_value = 0.5
+    elif style_lower == "gold":
+        shader_node.inputs["Base Color"].default_value = (1.0, 0.766, 0.336, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.1
+        shader_node.inputs["Metallic"].default_value = 1.0
+    else:
+        # Default to gray
+        shader_node.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.5
+
+
+# Keep for backwards compatibility
+def apply_glassy_road_material(material: bpy.types.Material) -> None:
+    """Deprecated: Use apply_terrain_with_obsidian_roads() instead."""
+    apply_terrain_with_obsidian_roads(material, terrain_style=None)
+
+
+# =============================================================================
+# TEST MATERIALS - For visualization testing without vertex colors
+# =============================================================================
+
+
+def apply_test_material(material: bpy.types.Material, style: str) -> None:
+    """
+    Apply a test material to the entire terrain mesh.
+
+    Test materials ignore vertex colors and apply a uniform material style
+    for testing lighting, shadows, and mesh geometry.
+
+    Args:
+        material: Blender material to configure
+        style: Material style name - one of:
+            - "obsidian": Glossy black glass (metallic, mirror-smooth)
+            - "chrome": Metallic chrome with reflections
+            - "clay": Matte gray clay (diffuse, no reflections)
+            - "plastic": Glossy white plastic
+            - "gold": Metallic gold with warm tones
+            - "terrain": Normal terrain with vertex colors (default)
+
+    Raises:
+        ValueError: If style is not recognized
+    """
+    style_lower = style.lower()
+
+    if style_lower == "obsidian":
+        _apply_test_material_obsidian(material)
+    elif style_lower == "chrome":
+        _apply_test_material_chrome(material)
+    elif style_lower == "clay":
+        _apply_test_material_clay(material)
+    elif style_lower == "plastic":
+        _apply_test_material_plastic(material)
+    elif style_lower == "gold":
+        _apply_test_material_gold(material)
+    elif style_lower == "terrain":
+        apply_colormap_material(material)
+    else:
+        raise ValueError(
+            f"Unknown test material style: {style}. "
+            f"Valid options: obsidian, chrome, clay, plastic, gold, terrain"
+        )
+
+
+def _apply_test_material_obsidian(material: bpy.types.Material) -> None:
+    """Glossy black obsidian glass - metallic, mirror-smooth."""
+    logger.info(f"Applying obsidian test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Dark obsidian glass
+    principled.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
+    principled.inputs["Roughness"].default_value = 0.0
+    principled.inputs["Metallic"].default_value = 1.0
+    principled.inputs["IOR"].default_value = 1.5
+    principled.inputs["Specular IOR Level"].default_value = 1.0
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Obsidian test material applied")
+
+
+def _apply_test_material_chrome(material: bpy.types.Material) -> None:
+    """Metallic chrome - highly reflective silver metal."""
+    logger.info(f"Applying chrome test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Bright chrome metal
+    principled.inputs["Base Color"].default_value = (0.9, 0.9, 0.92, 1.0)
+    principled.inputs["Roughness"].default_value = 0.05  # Slight roughness for realism
+    principled.inputs["Metallic"].default_value = 1.0
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Chrome test material applied")
+
+
+def _apply_test_material_clay(material: bpy.types.Material) -> None:
+    """Matte clay - diffuse gray, no reflections, shows form clearly."""
+    logger.info(f"Applying clay test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Neutral gray clay
+    principled.inputs["Base Color"].default_value = (0.5, 0.48, 0.45, 1.0)
+    principled.inputs["Roughness"].default_value = 1.0  # Fully matte
+    principled.inputs["Metallic"].default_value = 0.0
+    principled.inputs["Specular IOR Level"].default_value = 0.0  # No specular
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Clay test material applied")
+
+
+def _apply_test_material_plastic(material: bpy.types.Material) -> None:
+    """Glossy white plastic - shows highlights and shadows well."""
+    logger.info(f"Applying plastic test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # White glossy plastic
+    principled.inputs["Base Color"].default_value = (0.95, 0.95, 0.95, 1.0)
+    principled.inputs["Roughness"].default_value = 0.2  # Smooth but not mirror
+    principled.inputs["Metallic"].default_value = 0.0
+    principled.inputs["Specular IOR Level"].default_value = 0.5
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Plastic test material applied")
+
+
+def _apply_test_material_gold(material: bpy.types.Material) -> None:
+    """Metallic gold - warm reflective metal."""
+    logger.info(f"Applying gold test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Gold metal color
+    principled.inputs["Base Color"].default_value = (1.0, 0.766, 0.336, 1.0)
+    principled.inputs["Roughness"].default_value = 0.1
+    principled.inputs["Metallic"].default_value = 1.0
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Gold test material applied")

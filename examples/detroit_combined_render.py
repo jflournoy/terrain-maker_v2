@@ -76,12 +76,15 @@ from src.terrain.core import (
     reproject_raster,
     flip_raster,
     scale_elevation,
+    feature_preserving_smooth,
 )
 from src.terrain.scene_setup import create_background_plane
-from src.terrain.blender_integration import apply_vertex_colors
+from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask
+from src.terrain.materials import apply_terrain_with_obsidian_roads, apply_test_material
 from src.terrain.data_loading import load_dem_files, load_score_grid
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_layer, road_colormap
+from src.terrain.roads import add_roads_layer, smooth_road_vertices
+from src.terrain.water import identify_water_by_slope
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
 
@@ -338,45 +341,42 @@ def setup_dual_camera(
 
 
 def setup_lighting(
-    sun_angle_pitch: float = 75.0,
-    sun_angle_direction: float = -45.0,
+    sun_azimuth: float = 225.0,
+    sun_elevation: float = 30.0,
     sun_energy: float = 7.0,
     sun_angle: float = 1.0,
-    fill_angle_pitch: float = 60.0,
-    fill_angle_direction: float = 135.0,
+    fill_azimuth: float = 45.0,
+    fill_elevation: float = 60.0,
     fill_energy: float = 1.0,
     fill_angle: float = 3.0,
 ) -> list:
-    """Setup Blender lighting with sunset-style positioning.
+    """Setup Blender lighting with intuitive sun positioning.
 
-    Creates a low-angle sun for dramatic shadows and warm fill light.
+    Creates a primary sun for shadows and a fill light for softer contrast.
 
     Args:
-        sun_angle_pitch: Sun pitch angle in degrees (0=horizon, 90=overhead)
-        sun_angle_direction: Sun direction in degrees (0=north, 90=east, -45=southwest)
+        sun_azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W)
+        sun_elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead)
         sun_energy: Sun light strength/energy
         sun_angle: Sun angular size in degrees (smaller=sharper shadows)
-        fill_angle_pitch: Fill light pitch angle in degrees
-        fill_angle_direction: Fill light direction in degrees
+        fill_azimuth: Direction fill light comes FROM in degrees
+        fill_elevation: Fill light angle above horizon in degrees
         fill_energy: Fill light strength/energy
         fill_angle: Fill light angular size in degrees (softer than sun)
 
     Returns:
         List of light objects
     """
-    from math import radians
-
-    logger.info("Setting up sunset lighting...")
+    logger.info(f"Setting up lighting (sun: azimuth={sun_azimuth}°, elevation={sun_elevation}°)...")
 
     lights = []
 
-    # Primary sun - low angle from the west/southwest for sunset shadows
-    # rotation_euler: (pitch down from horizon, yaw direction, roll)
+    # Primary sun - uses intuitive azimuth/elevation positioning
     sun_light = setup_light(
-        location=(10, -5, 2),  # Position doesn't matter much for sun type
         angle=sun_angle,  # Sharper shadows (smaller angle = harder shadows)
         energy=sun_energy,
-        rotation_euler=(radians(sun_angle_pitch), 0, radians(sun_angle_direction)),
+        azimuth=sun_azimuth,
+        elevation=sun_elevation,
     )
     # Set warm sunset color (golden/orange)
     sun_light.data.color = (1.0, 0.85, 0.6)  # Warm golden
@@ -384,16 +384,16 @@ def setup_lighting(
 
     # Fill light - cooler blue from opposite side for contrast
     fill_light = setup_light(
-        location=(-10, 5, 5),
         angle=fill_angle,  # Softer
         energy=fill_energy,
-        rotation_euler=(radians(fill_angle_pitch), 0, radians(fill_angle_direction)),
+        azimuth=fill_azimuth,
+        elevation=fill_elevation,
     )
     # Cool blue fill to contrast with warm sun
     fill_light.data.color = (0.7, 0.8, 1.0)  # Cool blue
     lights.append(fill_light)
 
-    logger.info("✓ Sunset lighting setup complete")
+    logger.info("✓ Lighting setup complete")
     return lights
 
 
@@ -666,19 +666,26 @@ Examples:
         help="Orthographic camera scale (default: 0.9, smaller=zoomed in)",
     )
 
+    parser.add_argument(
+        "--camera-elevation",
+        type=float,
+        default=0.3,
+        help="Camera height as fraction of mesh diagonal (default: 0.3, higher=more overhead view)",
+    )
+
     # Lighting options
     parser.add_argument(
-        "--sun-angle-pitch",
+        "--sun-azimuth",
         type=float,
-        default=75.0,
-        help="Sun light pitch angle in degrees (default: 75.0, 0=horizon, 90=overhead)",
+        default=225.0,
+        help="Direction sun comes FROM in degrees (default: 225=SW, 0=N, 90=E, 180=S, 270=W)",
     )
 
     parser.add_argument(
-        "--sun-angle-direction",
+        "--sun-elevation",
         type=float,
-        default=-45.0,
-        help="Sun light direction angle in degrees (default: -45.0, 0=north, 90=east, -45=southwest)",
+        default=30.0,
+        help="Sun angle above horizon in degrees (default: 30, 0=horizon, 90=overhead)",
     )
 
     parser.add_argument(
@@ -696,17 +703,17 @@ Examples:
     )
 
     parser.add_argument(
-        "--fill-angle-pitch",
+        "--fill-azimuth",
         type=float,
-        default=60.0,
-        help="Fill light pitch angle in degrees (default: 60.0)",
+        default=45.0,
+        help="Direction fill light comes FROM in degrees (default: 45=NE, opposite sun)",
     )
 
     parser.add_argument(
-        "--fill-angle-direction",
+        "--fill-elevation",
         type=float,
-        default=135.0,
-        help="Fill light direction angle in degrees (default: 135.0, northeast)",
+        default=60.0,
+        help="Fill light angle above horizon in degrees (default: 60)",
     )
 
     parser.add_argument(
@@ -762,6 +769,51 @@ Examples:
         type=int,
         default=3,
         help="Road width in pixels (default: 3, try 5-10 for thicker roads)",
+    )
+
+    parser.add_argument(
+        "--test-material",
+        type=str,
+        choices=["none", "obsidian", "chrome", "clay", "plastic", "gold"],
+        default="none",
+        help="Test material for entire terrain (ignores vertex colors): none=normal terrain colors, "
+             "obsidian=glossy black, chrome=reflective metal, clay=matte gray, plastic=glossy white, gold=metallic gold",
+    )
+
+    # Terrain smoothing options
+    parser.add_argument(
+        "--smooth",
+        action="store_true",
+        default=False,
+        help="Apply feature-preserving terrain smoothing (removes DEM noise, preserves ridges)",
+    )
+
+    parser.add_argument(
+        "--smooth-spatial",
+        type=float,
+        default=3.0,
+        help="Terrain smoothing spatial sigma in pixels (default: 3.0, larger = more smoothing)",
+    )
+
+    parser.add_argument(
+        "--smooth-intensity",
+        type=float,
+        default=None,
+        help="Terrain smoothing intensity sigma (default: auto = 5%% of elevation range)",
+    )
+
+    parser.add_argument(
+        "--road-smoothing",
+        action="store_true",
+        default=False,
+        help="Smooth road vertex elevations to reduce bumpiness (default: False)",
+    )
+
+    parser.add_argument(
+        "--road-smoothing-radius",
+        type=int,
+        default=2,
+        help="Smoothing radius for road vertices (default: 2, larger = smoother)",
     )
 
     args = parser.parse_args()
@@ -964,7 +1016,7 @@ Examples:
             road_data = get_roads_tiled(road_bbox, args.road_types)
 
             if road_data and road_data.get("features"):
-                logger.info(f"  Loaded {len(road_data['features'])} road segments")
+                logger.info(f"  Loaded {len(road_data['features'])} road segments (obsidian material)")
             else:
                 logger.warning("  No roads found or fetch failed")
                 road_data = None
@@ -1013,10 +1065,20 @@ Examples:
     terrain_combined.add_transform(flip_raster(axis="horizontal"))
     terrain_combined.add_transform(scale_elevation(scale_factor=0.0001))
 
-    # Configure downsampling
+    # Configure downsampling (BEFORE smoothing - smoothing on 5M pixels is 200x faster than 1B)
     if target_vertices:
         logger.debug(f"Configuring for target vertices: {target_vertices:,}")
         terrain_combined.configure_for_target_vertices(target_vertices=target_vertices)
+
+    # Apply feature-preserving smoothing AFTER downsample (runs on ~5M pixels, not 1B)
+    if args.smooth:
+        logger.info(f"Adding feature-preserving smoothing (spatial={args.smooth_spatial}, intensity={args.smooth_intensity or 'auto'})")
+        terrain_combined.add_transform(
+            feature_preserving_smooth(
+                sigma_spatial=args.smooth_spatial,
+                sigma_intensity=args.smooth_intensity,
+            )
+        )
 
     # Apply transforms to DEM
     logger.debug("Applying transforms to DEM...")
@@ -1099,47 +1161,29 @@ Examples:
         except Exception as e:
             logger.warning(f"Failed to add roads layer: {e}")
 
-    # Set up color mapping with overlays
-    if args.roads and road_data and road_bbox:
-        # Multi-overlay mode: base sledding/xc + roads on top
-        if parks:
-            logger.info("Setting multi-overlay color mapping:")
-            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
-            logger.info("  Overlay 1: XC skiing scores near parks (rocket colormap)")
-            logger.info("  Overlay 2: Roads (inverse mako - contrasts with terrain)")
-            # Get sledding scores for road coloring (inverse creates contrast)
-            scores_for_roads = terrain_combined.data_layers["sledding"]["data"]
+    # Road smoothing is now applied after mesh creation (on vertices, not DEM)
+    # This avoids the coordinate alignment issues that plagued the old approach
 
-            overlays = [
-                {
-                    "colormap": lambda score: elevation_colormap(
-                        score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
-                    ),
-                    "source_layers": ["xc_skiing"],
-                    "priority": 20,  # Lower priority than roads
-                    "mask": park_mask,  # Only apply near parks
-                },
-                {
-                    "colormap": lambda roads, s=scores_for_roads: road_colormap(roads, score=s),
-                    "source_layers": ["roads"],
-                    "priority": 10,  # Higher priority - roads on top
-                    "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
-                },
-            ]
-        else:
-            logger.info("Setting multi-overlay color mapping:")
-            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
-            logger.info("  Overlay: Roads (inverse mako - contrasts with terrain)")
-            # Get sledding scores for road coloring (inverse creates contrast)
-            scores_for_roads = terrain_combined.data_layers["sledding"]["data"]
-            overlays = [
-                {
-                    "colormap": lambda roads, s=scores_for_roads: road_colormap(roads, score=s),
-                    "source_layers": ["roads"],
-                    "priority": 10,
-                    "threshold": 0.5,  # Only show where roads value >= 0.5 (filters interpolation artifacts)
-                },
-            ]
+    # Set up color mapping with overlays
+    # Note: Roads are NOT included in color overlays - they keep terrain colors
+    # but get glassy material applied via separate RoadMask vertex color layer
+    if args.roads and road_data and road_bbox and parks:
+        # With parks: base sledding + XC skiing overlay (no road color overlay)
+        logger.info("Setting multi-overlay color mapping:")
+        logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+        logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+        logger.info("  Roads: Keep terrain color, apply glassy material via mask")
+
+        overlays = [
+            {
+                "colormap": lambda score: elevation_colormap(
+                    score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
+                ),
+                "source_layers": ["xc_skiing"],
+                "priority": 20,
+                "mask": park_mask,  # Only apply near parks
+            },
+        ]
 
         terrain_combined.set_multi_color_mapping(
             base_colormap=lambda score: elevation_colormap(
@@ -1147,6 +1191,15 @@ Examples:
             ),
             base_source_layers=["sledding"],
             overlays=overlays,
+        )
+    elif args.roads and road_data and road_bbox:
+        # Roads but no parks: just base sledding (no overlays, roads get glassy material)
+        logger.info("Setting color mapping:")
+        logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+        logger.info("  Roads: Keep terrain color, apply glassy material via mask")
+        terrain_combined.set_color_mapping(
+            lambda score: elevation_colormap(np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+            source_layers=["sledding"],
         )
     else:
         # No roads - use original blended or standard color mapping
@@ -1172,12 +1225,15 @@ Examples:
                 source_layers=["sledding"],
             )
 
-    # Detect water
-    logger.debug("Detecting water bodies...")
-    water_mask = terrain_combined.detect_water_highres(
-        slope_threshold=0.01,
+    # Detect water on downsampled DEM (fast - ~170x faster than highres detection)
+    # Unscale DEM back to meters before slope detection (was scaled by 0.0001)
+    logger.debug("Detecting water bodies on downsampled DEM...")
+    dem_data = terrain_combined.data_layers["dem"]["transformed_data"]
+    unscaled_dem = dem_data / 0.0001  # Back to meters
+    water_mask = identify_water_by_slope(
+        unscaled_dem,
+        slope_threshold=0.01,  # Very flat areas only (water is slope ≈ 0)
         fill_holes=True,
-        scale_factor=0.0001,
     )
 
     # Compute colors
@@ -1205,6 +1261,50 @@ Examples:
     logger.debug("Applying vertex colors...")
     apply_vertex_colors(mesh_combined, terrain_combined.colors, terrain_combined.y_valid, terrain_combined.x_valid)
 
+    # Apply road mask and material if roads are enabled
+    # Roads are ALWAYS obsidian, terrain uses vertex colors or test material
+    has_roads = args.roads and road_data and "roads" in terrain_combined.data_layers
+    road_layer_data = None
+
+    if has_roads:
+        logger.info("Applying road mask...")
+        road_layer_data = terrain_combined.data_layers["roads"]["data"]
+        apply_road_mask(mesh_combined, road_layer_data, terrain_combined.y_valid, terrain_combined.x_valid, logger)
+
+        # Apply road smoothing if requested (smooths vertex Z coords along roads)
+        if args.road_smoothing:
+            logger.info(f"Smoothing road vertex elevations (radius={args.road_smoothing_radius})...")
+            mesh_data = mesh_combined.data
+            vertices = np.array([v.co[:] for v in mesh_data.vertices])
+
+            smoothed_vertices = smooth_road_vertices(
+                vertices=vertices,
+                road_mask=road_layer_data,
+                y_valid=terrain_combined.y_valid,
+                x_valid=terrain_combined.x_valid,
+                smoothing_radius=args.road_smoothing_radius,
+            )
+
+            for i, v in enumerate(mesh_data.vertices):
+                v.co = smoothed_vertices[i]
+
+            mesh_data.update()
+            logger.info("✓ Road vertex elevations smoothed")
+
+    # Apply material based on roads and test_material settings
+    # Roads are always obsidian; terrain uses vertex colors or test material
+    if mesh_combined.data.materials:
+        if has_roads:
+            # Use mixed material: obsidian roads + terrain (vertex colors or test material)
+            terrain_style = args.test_material if args.test_material != "none" else None
+            logger.info(f"Applying material: obsidian roads + {terrain_style or 'vertex colors'} terrain")
+            apply_terrain_with_obsidian_roads(mesh_combined.data.materials[0], terrain_style=terrain_style)
+        elif args.test_material != "none":
+            # No roads, but test material requested
+            logger.info(f"Applying test material: {args.test_material}")
+            apply_test_material(mesh_combined.data.materials[0], args.test_material)
+        # else: keep default colormap material (already applied by create_mesh)
+
     logger.info("✓ Combined terrain mesh created successfully")
 
     # Add skiing bumps if requested
@@ -1228,19 +1328,21 @@ Examples:
     logger.info(f"  Camera direction: {args.camera_direction}")
     logger.info(f"  Height scale: {args.height_scale}")
     logger.info(f"  Ortho scale: {args.ortho_scale}")
+    logger.info(f"  Camera elevation: {args.camera_elevation}")
     camera = position_camera_relative(
         mesh_obj=mesh_combined,
         direction=args.camera_direction,
         camera_type="ORTHO",
         ortho_scale=args.ortho_scale,
+        elevation=args.camera_elevation,
     )
     lights = setup_lighting(
-        sun_angle_pitch=args.sun_angle_pitch,
-        sun_angle_direction=args.sun_angle_direction,
+        sun_azimuth=args.sun_azimuth,
+        sun_elevation=args.sun_elevation,
         sun_energy=args.sun_energy,
         sun_angle=args.sun_angle,
-        fill_angle_pitch=args.fill_angle_pitch,
-        fill_angle_direction=args.fill_angle_direction,
+        fill_azimuth=args.fill_azimuth,
+        fill_elevation=args.fill_elevation,
         fill_energy=args.fill_energy,
         fill_angle=args.fill_angle,
     )
