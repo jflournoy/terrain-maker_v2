@@ -113,6 +113,26 @@ Examples of honest responses:
 
 **Import bpy directly** - When a script uses terrain maker's Blender rendering capabilities, import bpy at the module level, just like any other dependency.
 
+### Installing bpy (Blender Python Module)
+
+To run rendering scripts with regular Python (instead of inside Blender), install the `bpy` package:
+
+```bash
+# Install with uv (recommended)
+uv pip install bpy
+
+# Or install optional blender dependencies
+uv sync --extra blender
+
+# Verify installation
+uv run python -c "import bpy; print(f'Blender {bpy.app.version_string}')"
+```
+
+**Requirements:**
+- Python 3.11+ (matches Blender's Python version)
+- ~400MB disk space (bpy includes Blender's core)
+- Linux, macOS, or Windows
+
 ### Guidelines for Scripts with Blender Rendering
 
 When creating scripts that use Blender's Python API via terrain maker:
