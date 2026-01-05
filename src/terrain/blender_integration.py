@@ -75,6 +75,72 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
         logger.debug(f"✓ Applied colors to {len(color_layer.data)} loops")
 
 
+def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
+    """
+    Apply a road mask as a separate vertex color layer for material detection.
+
+    Creates a "RoadMask" vertex color layer where road vertices have R=1.0
+    and non-road vertices have R=0.0. This allows the material shader to
+    detect roads without changing the terrain colors.
+
+    Args:
+        mesh_obj (bpy.types.Object): The Blender mesh object
+        road_mask (np.ndarray): 2D boolean or float array (height, width) where >0.5 = road
+        y_valid (np.ndarray): Y indices mapping vertices to grid positions
+        x_valid (np.ndarray): X indices mapping vertices to grid positions
+        logger (logging.Logger, optional): Logger for progress messages
+    """
+    mesh = mesh_obj.data
+
+    # Create road mask layer using vertex_colors API for ShaderNodeVertexColor compatibility
+    # This matches how TerrainColors is created for consistent shader access
+    try:
+        road_layer = mesh.vertex_colors.new(name="RoadMask")
+    except Exception as e:
+        if logger:
+            logger.warning(f"Failed to create road mask layer: {e}")
+        return
+
+    if len(road_layer.data) == 0:
+        if logger:
+            logger.warning("Mesh has no color data for road mask")
+        return
+
+    # Debug: check road mask statistics
+    if logger:
+        road_pixels = np.sum(road_mask > 0.5)
+        logger.info(f"Road mask stats: shape={road_mask.shape}, road_pixels={road_pixels}, max={road_mask.max():.2f}")
+
+    n_positions = len(y_valid)
+    n_loops = len(road_layer.data)
+    road_count = 0
+
+    # First, initialize ALL loops to non-road (prevents undefined values)
+    for i in range(n_loops):
+        road_layer.data[i].color = (0.0, 0.0, 0.0, 1.0)
+
+    # Then mark road vertices
+    for poly in mesh.polygons:
+        for loop_idx in poly.loop_indices:
+            vertex_idx = mesh.loops[loop_idx].vertex_index
+
+            if vertex_idx < n_positions:
+                y, x = y_valid[vertex_idx], x_valid[vertex_idx]
+
+                # Check bounds and road mask value
+                if 0 <= y < road_mask.shape[0] and 0 <= x < road_mask.shape[1]:
+                    if road_mask[y, x] > 0.5:
+                        # Mark as road: R=1, G=0, B=0, A=1
+                        road_layer.data[loop_idx].color = (1.0, 0.0, 0.0, 1.0)
+                        road_count += 1
+
+    # Update mesh to apply changes
+    mesh.update()
+
+    if logger:
+        logger.info(f"✓ Applied road mask to {road_count}/{n_loops} vertex loops")
+
+
 def create_blender_mesh(
     vertices,
     faces,
