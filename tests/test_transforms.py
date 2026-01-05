@@ -252,3 +252,128 @@ class TestScaleElevation:
 
         assert isinstance(result, tuple)
         assert len(result) == 3
+
+
+class TestFeaturePreservingSmooth:
+    """Tests for feature_preserving_smooth bilateral filter function."""
+
+    def test_feature_preserving_smooth_imports(self):
+        """Test that feature_preserving_smooth can be imported."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        assert callable(feature_preserving_smooth)
+
+    def test_feature_preserving_smooth_returns_three_tuple(self):
+        """Test that function returns (data, transform, crs) tuple."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        data = np.random.rand(20, 20)
+        transform_func = feature_preserving_smooth(sigma_spatial=2.0)
+        result = transform_func(data)
+
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+
+    def test_feature_preserving_smooth_preserves_shape(self):
+        """Test that smoothing preserves array shape."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        data = np.random.rand(30, 40)
+        transform_func = feature_preserving_smooth(sigma_spatial=2.0)
+        smoothed, _, _ = transform_func(data)
+
+        assert smoothed.shape == data.shape
+
+    def test_feature_preserving_smooth_reduces_noise(self):
+        """Test that smoothing reduces high-frequency noise in flat areas."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        # Create flat terrain with noise
+        np.random.seed(42)
+        flat_terrain = np.ones((50, 50)) * 100  # Flat at 100m
+        noisy_terrain = flat_terrain + np.random.randn(50, 50) * 5  # +/- 5m noise
+
+        transform_func = feature_preserving_smooth(sigma_spatial=3.0)
+        smoothed, _, _ = transform_func(noisy_terrain)
+
+        # Smoothed data should have lower variance (noise reduced)
+        assert np.std(smoothed) < np.std(noisy_terrain)
+
+    def test_feature_preserving_smooth_preserves_edges(self):
+        """Test that sharp elevation changes (edges) are preserved."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        # Create terrain with sharp ridge (cliff)
+        terrain = np.zeros((100, 100))
+        terrain[:, 50:] = 100  # Sharp 100m cliff at column 50
+
+        # Add some noise
+        np.random.seed(42)
+        noisy_terrain = terrain + np.random.randn(100, 100) * 2
+
+        transform_func = feature_preserving_smooth(sigma_spatial=3.0, sigma_intensity=10.0)
+        smoothed, _, _ = transform_func(noisy_terrain)
+
+        # The edge gradient at column 50 should still be steep
+        # (bilateral filter preserves edges)
+        edge_gradient = np.abs(smoothed[:, 52] - smoothed[:, 48]).mean()
+        assert edge_gradient > 80, f"Edge should be preserved, got gradient {edge_gradient}"
+
+    def test_feature_preserving_smooth_handles_nodata(self):
+        """Test that nodata values are preserved."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        data = np.ones((30, 30)) * 50
+        data[10:20, 10:20] = np.nan  # NaN region
+
+        transform_func = feature_preserving_smooth(sigma_spatial=2.0, nodata_value=np.nan)
+        smoothed, _, _ = transform_func(data)
+
+        # Core NaN region should still have NaN
+        assert np.all(np.isnan(smoothed[12:18, 12:18]))
+
+    def test_feature_preserving_smooth_auto_intensity_sigma(self):
+        """Test that intensity sigma is auto-calculated when None."""
+        from src.terrain.transforms import feature_preserving_smooth
+
+        # Create terrain with known elevation range
+        data = np.linspace(0, 100, 400).reshape(20, 20)
+
+        # Should not raise, should auto-calculate sigma_intensity
+        transform_func = feature_preserving_smooth(sigma_spatial=2.0, sigma_intensity=None)
+        smoothed, _, _ = transform_func(data)
+
+        # Should return valid data
+        assert not np.any(np.isnan(smoothed))
+        assert smoothed.shape == data.shape
+
+    def test_feature_preserving_smooth_with_transform(self):
+        """Test that affine transform is passed through unchanged."""
+        from src.terrain.transforms import feature_preserving_smooth
+        from rasterio import Affine
+
+        data = np.random.rand(20, 20)
+        input_transform = Affine(30.0, 0, 500000, 0, -30.0, 5000000)
+
+        transform_func = feature_preserving_smooth(sigma_spatial=2.0)
+        _, output_transform, _ = transform_func(data, input_transform)
+
+        # Transform should be unchanged by smoothing
+        assert output_transform == input_transform
+
+    def test_feature_preserving_smooth_large_sigma_capped(self):
+        """Test that excessively large sigma values are capped to prevent memory issues."""
+        from src.terrain.transforms import feature_preserving_smooth
+        import logging
+
+        data = np.random.rand(30, 30)
+
+        # Create transform with very large sigma (should be capped)
+        transform_func = feature_preserving_smooth(sigma_spatial=100.0)
+
+        # Should not raise, should complete without memory error
+        smoothed, _, _ = transform_func(data)
+
+        # Should return valid data of same shape
+        assert smoothed.shape == data.shape
+        assert not np.any(np.isnan(smoothed))
