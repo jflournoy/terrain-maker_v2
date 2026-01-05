@@ -14,6 +14,9 @@ authors = [
 dependencies = [
     "numpy<2.0",
     "scipy",
+    "scikit-image",
+    "scikit-learn",  # Required for proximity mask clustering (DBSCAN)
+    "opencv-python-headless",  # 500x faster bilateral filter than skimage
     "rasterio",
     "geopandas",
     "shapely",
@@ -24,6 +27,7 @@ dependencies = [
     "tqdm",
     "pyproj",
     "zarr",
+    "bpy>=4.0",  # Blender Python module for rendering
 ]
 
 [project.optional-dependencies]
@@ -36,7 +40,6 @@ dev = [
 ]
 ml = [
     "lightgbm",
-    "scikit-learn",
 ]
 all = [
     "richdem",
