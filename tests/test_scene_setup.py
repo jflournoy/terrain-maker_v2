@@ -208,6 +208,141 @@ class TestPositionCameraRelative:
             position_camera_relative(mesh_obj, direction="invalid_direction")
 
 
+class TestSunPosition:
+    """Tests for sun positioning with azimuth and elevation (TDD)."""
+
+    def test_setup_light_accepts_azimuth_elevation(self):
+        """Test that setup_light accepts azimuth and elevation parameters."""
+        import bpy
+        from src.terrain.scene_setup import setup_light
+
+        # Clear lights
+        for obj in list(bpy.data.objects):
+            if obj.type == "LIGHT":
+                bpy.data.objects.remove(obj)
+
+        # Should accept azimuth (degrees from north) and elevation (degrees above horizon)
+        light = setup_light(azimuth=180, elevation=45)
+
+        assert light is not None
+        assert light.data.type == "SUN"
+
+    def test_sun_from_south_elevation_45(self):
+        """Test sun from south (azimuth=180) at 45 degrees elevation."""
+        import bpy
+        from math import radians, sin, cos
+        from src.terrain.scene_setup import setup_light
+
+        for obj in list(bpy.data.objects):
+            if obj.type == "LIGHT":
+                bpy.data.objects.remove(obj)
+
+        # Sun from south at 45 deg elevation
+        # Sun direction vector should point toward +Y (north) and down from above
+        light = setup_light(azimuth=180, elevation=45)
+
+        # Get the direction the sun is shining (local -Z axis of sun)
+        import mathutils
+        rotation = light.rotation_euler
+        direction = mathutils.Vector((0, 0, -1))
+        direction.rotate(rotation)
+
+        # Azimuth 180 (from south) means light shines toward north (+Y)
+        # With elevation 45, there should be downward component too
+        assert direction.y > 0.5, f"Sun from south should shine north (+Y), got {direction}"
+        assert direction.z < 0, f"Sun should shine downward, got {direction}"
+
+    def test_sun_from_east_elevation_30(self):
+        """Test sun from east (azimuth=90) at 30 degrees elevation."""
+        import bpy
+        import mathutils
+        from src.terrain.scene_setup import setup_light
+
+        for obj in list(bpy.data.objects):
+            if obj.type == "LIGHT":
+                bpy.data.objects.remove(obj)
+
+        # Sun from east at 30 deg elevation
+        light = setup_light(azimuth=90, elevation=30)
+
+        rotation = light.rotation_euler
+        direction = mathutils.Vector((0, 0, -1))
+        direction.rotate(rotation)
+
+        # Azimuth 90 (from east) means light shines toward west (-X)
+        assert direction.x < -0.5, f"Sun from east should shine west (-X), got {direction}"
+        assert direction.z < 0, f"Sun should shine downward, got {direction}"
+
+    def test_sun_directly_overhead(self):
+        """Test sun directly overhead (elevation=90)."""
+        import bpy
+        import mathutils
+        from src.terrain.scene_setup import setup_light
+
+        for obj in list(bpy.data.objects):
+            if obj.type == "LIGHT":
+                bpy.data.objects.remove(obj)
+
+        # Elevation 90 = straight down, azimuth shouldn't matter
+        light = setup_light(azimuth=0, elevation=90)
+
+        rotation = light.rotation_euler
+        direction = mathutils.Vector((0, 0, -1))
+        direction.rotate(rotation)
+
+        # Should be pointing straight down
+        assert abs(direction.x) < 0.1, f"Overhead sun X should be ~0, got {direction}"
+        assert abs(direction.y) < 0.1, f"Overhead sun Y should be ~0, got {direction}"
+        assert direction.z < -0.9, f"Overhead sun should shine straight down, got {direction}"
+
+    def test_sun_from_north_low_angle(self):
+        """Test sun from north (azimuth=0) at low angle (10 degrees)."""
+        import bpy
+        import mathutils
+        from src.terrain.scene_setup import setup_light
+
+        for obj in list(bpy.data.objects):
+            if obj.type == "LIGHT":
+                bpy.data.objects.remove(obj)
+
+        # Sun from north at 10 deg elevation (low sun, long shadows)
+        light = setup_light(azimuth=0, elevation=10)
+
+        rotation = light.rotation_euler
+        direction = mathutils.Vector((0, 0, -1))
+        direction.rotate(rotation)
+
+        # Azimuth 0 (from north) means light shines toward south (-Y)
+        assert direction.y < -0.5, f"Sun from north should shine south (-Y), got {direction}"
+        # Low elevation = mostly horizontal, small Z component
+        assert direction.z < 0, f"Sun should shine downward, got {direction}"
+
+    def test_position_camera_relative_accepts_sun_azimuth_elevation(self):
+        """Test that position_camera_relative accepts sun_azimuth and sun_elevation."""
+        import bpy
+        from src.terrain.scene_setup import position_camera_relative
+
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+
+        bpy.ops.mesh.primitive_cube_add()
+        mesh_obj = bpy.context.active_object
+
+        # Should accept sun_azimuth and sun_elevation parameters
+        camera = position_camera_relative(
+            mesh_obj,
+            direction="south",
+            sun_azimuth=135,  # From SE
+            sun_elevation=45,
+        )
+
+        assert camera is not None
+
+        # Check that a sun light was created
+        sun_lights = [obj for obj in bpy.data.objects if obj.type == "LIGHT"]
+        assert len(sun_lights) > 0, "Should create sun light"
+
+
 class TestSetupWorldAtmosphere:
     """Tests for setup_world_atmosphere function."""
 

@@ -464,26 +464,75 @@ def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_t
     return cam_obj
 
 
-def setup_light(location=(1, 1, 2), angle=2, energy=3, rotation_euler=(0, radians(315), 0)):
+def setup_light(
+    location=(1, 1, 2),
+    angle=2,
+    energy=3,
+    rotation_euler=None,
+    azimuth=None,
+    elevation=None,
+):
     """Create and configure sun light for terrain visualization.
+
+    Sun position can be specified either with rotation_euler (raw Blender angles)
+    or with the more intuitive azimuth/elevation system:
+
+    - azimuth: Direction the sun comes FROM, in degrees clockwise from North
+      (0=North, 90=East, 180=South, 270=West)
+    - elevation: Angle above horizon in degrees (0=horizon, 90=directly overhead)
+
+    If azimuth and elevation are provided, they override rotation_euler.
 
     Args:
         location: Tuple of (x,y,z) light position (default: (1, 1, 2))
-        angle: Angle of sun light in degrees (default: 2)
+        angle: Angular diameter of sun in degrees (default: 2, affects shadow softness)
         energy: Energy/intensity of sun light (default: 3)
-        rotation_euler: Tuple of (x,y,z) rotation angles in radians (default: sun from NW)
+        rotation_euler: Tuple of (x,y,z) rotation angles in radians (legacy, use azimuth/elevation)
+        azimuth: Direction sun comes FROM in degrees (0=North, 90=East, 180=South, 270=West)
+        elevation: Angle above horizon in degrees (0=horizon, 90=overhead)
 
     Returns:
         Sun light object
     """
+    from math import sin, cos
+    from mathutils import Vector
+
     logger = logging.getLogger(__name__)
     logger.debug("Creating sun light...")
+
     sun = bpy.data.lights.new(name="Sun", type="SUN")
     sun_obj = bpy.data.objects.new("Sun", sun)
     bpy.context.scene.collection.objects.link(sun_obj)
 
     sun_obj.location = location
-    sun_obj.rotation_euler = rotation_euler
+
+    # Calculate rotation from azimuth/elevation if provided
+    if azimuth is not None and elevation is not None:
+        # Convert to radians
+        az_rad = radians(azimuth)
+        el_rad = radians(elevation)
+
+        # Calculate direction vector (where light shines TO, not FROM)
+        # Sun comes FROM azimuth, so light travels in opposite direction
+        # In Blender: +Y = North, +X = East, +Z = Up
+        x = -sin(az_rad) * cos(el_rad)
+        y = -cos(az_rad) * cos(el_rad)
+        z = -sin(el_rad)
+
+        direction = Vector((x, y, z)).normalized()
+
+        # Convert direction to Euler rotation
+        # Sun's local -Z axis should point in this direction
+        rotation = direction.to_track_quat("-Z", "Y").to_euler()
+        sun_obj.rotation_euler = rotation
+
+        logger.debug(f"Sun from azimuth {azimuth}° elevation {elevation}° → direction {direction}")
+    elif rotation_euler is not None:
+        sun_obj.rotation_euler = rotation_euler
+    else:
+        # Default: sun from northwest (azimuth ~315°)
+        sun_obj.rotation_euler = (0, radians(315), 0)
+
     sun.angle = angle
     sun.energy = energy
 
@@ -534,6 +583,8 @@ def position_camera_relative(
     camera_type="ORTHO",
     sun_angle=2,
     sun_energy=3,
+    sun_azimuth=None,
+    sun_elevation=None,
     focal_length=50,
     ortho_scale=1.2,
 ):
@@ -562,8 +613,10 @@ def position_camera_relative(
         look_at: Where camera points - 'center' to point at mesh center,
             or tuple (x, y, z) for custom target. Default: 'center'
         camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
-        sun_angle: Angle of sun light in degrees. Default: 2
+        sun_angle: Angular diameter of sun in degrees (affects shadow softness). Default: 2
         sun_energy: Intensity of sun light. Default: 3
+        sun_azimuth: Direction sun comes FROM in degrees (0=North, 90=East, 180=South, 270=West)
+        sun_elevation: Angle of sun above horizon in degrees (0=horizon, 90=overhead)
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
         ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
             Higher values zoom out (show more area), lower values zoom in.
@@ -680,7 +733,12 @@ def position_camera_relative(
 
     # Create light if sun parameters are provided
     if sun_angle > 0 or sun_energy > 0:
-        setup_light(angle=sun_angle, energy=sun_energy)
+        setup_light(
+            angle=sun_angle,
+            energy=sun_energy,
+            azimuth=sun_azimuth,
+            elevation=sun_elevation,
+        )
 
     return camera
 
