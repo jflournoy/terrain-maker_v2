@@ -30,6 +30,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -193,12 +195,6 @@ def fetch_roads_from_osm(
     Returns:
         GeoJSON FeatureCollection or None if fetch fails
     """
-    try:
-        import requests
-    except ImportError:
-        logger.warning("requests library not available for road fetching")
-        return None
-
     south, west, north, east = bbox
     logger.info("Fetching road data from OpenStreetMap Overpass API...")
     logger.info(f"  Extent: lat [{south:.3f}, {north:.3f}], lon [{west:.3f}, {east:.3f}]")

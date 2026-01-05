@@ -117,7 +117,10 @@ class TestOverpassQueryBuilding:
 
         assert "[out:json]" in query
         assert "motorway" in query
-        assert "bbox" in query
+        # Query contains bounding box coordinates, not literal "bbox"
+        south, west, north, east = sample_bbox
+        assert str(south) in query
+        assert str(west) in query
 
     def test_build_query_multiple_types(self, sample_bbox, sample_road_types):
         """Test building query for multiple road types."""
@@ -275,7 +278,7 @@ class TestRoadColormap:
         assert colors.dtype == np.uint8
 
     def test_road_colormap_handles_road_types(self):
-        """Test that road colormap gives all roads a dark color."""
+        """Test that road colormap gives all roads a distinctive red color for material detection."""
         road_grid = np.array(
             [[0, 1, 2], [3, 4, 0], [1, 2, 3]],
             dtype=np.uint8
@@ -285,10 +288,13 @@ class TestRoadColormap:
 
         # All pixels should have some color (RGB)
         assert colors.shape == (3, 3, 3)
-        # All roads should be dark (RGB values < 50)
+        # All roads should be red (180, 30, 30) for glassy material detection
         road_mask = road_grid > 0
         road_colors = colors[road_mask]
-        assert np.all(road_colors < 50), "Roads should be dark"
+        # Check that red channel is high (> 150) and green/blue are low (< 50)
+        assert np.all(road_colors[:, 0] > 150), "Roads should have high red channel"
+        assert np.all(road_colors[:, 1] < 50), "Roads should have low green channel"
+        assert np.all(road_colors[:, 2] < 50), "Roads should have low blue channel"
 
     def test_road_colormap_zero_values(self):
         """Test that no-road pixels (0) are handled."""
@@ -503,6 +509,7 @@ class TestAPIIntegration:
                 {
                     "type": "way",
                     "id": 123456,
+                    "nodes": [1, 2],  # OSM node IDs (required by parser)
                     "tags": {
                         "name": "Interstate 75",
                         "ref": "I-75",
@@ -676,6 +683,184 @@ class TestGetRoadsTiled:
                 # Check that road_types was passed
                 call_args = mock_get_roads.call_args
                 assert call_args[0][1] == road_types or call_args[1].get('road_types') == road_types
+
+
+# =============================================================================
+# ROAD VERTEX SMOOTHING TESTS (TDD)
+# =============================================================================
+
+
+class TestSmoothRoadVertices:
+    """Tests for smooth_road_vertices function - smooths mesh Z coords on roads."""
+
+    def test_smooth_road_vertices_exists(self):
+        """Test that smooth_road_vertices function can be imported."""
+        from src.terrain.roads import smooth_road_vertices
+        assert callable(smooth_road_vertices)
+
+    def test_smooth_road_vertices_returns_array(self):
+        """Test that function returns numpy array of same shape."""
+        from src.terrain.roads import smooth_road_vertices
+
+        # Simple 3x3 grid of vertices
+        vertices = np.array([
+            [0, 0, 10],
+            [1, 0, 20],
+            [2, 0, 15],
+            [0, 1, 12],
+            [1, 1, 25],  # Road vertex
+            [2, 1, 18],
+            [0, 2, 11],
+            [1, 2, 22],
+            [2, 2, 16],
+        ], dtype=np.float64)
+
+        # Road mask - only center pixel is road
+        road_mask = np.array([
+            [0, 0, 0],
+            [0, 1, 0],
+            [0, 0, 0],
+        ], dtype=np.float64)
+
+        # y_valid, x_valid map vertices to grid positions
+        y_valid = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2])
+        x_valid = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == vertices.shape
+
+    def test_smooth_road_vertices_only_modifies_road_vertices(self):
+        """Test that non-road vertices are unchanged."""
+        from src.terrain.roads import smooth_road_vertices
+
+        vertices = np.array([
+            [0, 0, 100.0],  # Not on road
+            [1, 0, 200.0],  # On road
+            [2, 0, 150.0],  # Not on road
+        ], dtype=np.float64)
+
+        road_mask = np.array([[0, 1, 0]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        # Non-road vertices should be exactly unchanged
+        assert result[0, 2] == 100.0, "First vertex Z should be unchanged"
+        assert result[2, 2] == 150.0, "Third vertex Z should be unchanged"
+
+    def test_smooth_road_vertices_smooths_z_values(self):
+        """Test that road vertex Z values are actually smoothed."""
+        from src.terrain.roads import smooth_road_vertices
+
+        # Road with a spike in the middle
+        vertices = np.array([
+            [0, 0, 10.0],   # Road
+            [1, 0, 100.0],  # Road - spike!
+            [2, 0, 10.0],   # Road
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)  # All road
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        # Middle vertex should be smoothed down from 100
+        assert result[1, 2] < 100.0, "Middle spike should be smoothed down"
+        # Edge vertices might change slightly due to smoothing
+        # but the spike should definitely be reduced
+
+    def test_smooth_road_vertices_handles_nan(self):
+        """Test that NaN values are handled properly."""
+        from src.terrain.roads import smooth_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],
+            [1, 0, np.nan],  # NaN on road
+            [2, 0, 20.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        # NaN should be replaced with interpolated value
+        assert not np.isnan(result[1, 2]), "NaN should be filled"
+        # Filled value should be reasonable (between neighbors)
+        assert 10.0 <= result[1, 2] <= 20.0, "Filled value should be interpolated"
+
+    def test_smooth_road_vertices_preserves_xy(self):
+        """Test that X and Y coordinates are never modified."""
+        from src.terrain.roads import smooth_road_vertices
+
+        vertices = np.array([
+            [0.5, 1.5, 10.0],
+            [1.5, 2.5, 20.0],
+            [2.5, 3.5, 30.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        # X and Y must be exactly preserved
+        np.testing.assert_array_equal(result[:, 0], vertices[:, 0], "X coords must be unchanged")
+        np.testing.assert_array_equal(result[:, 1], vertices[:, 1], "Y coords must be unchanged")
+
+    def test_smooth_road_vertices_with_zero_radius(self):
+        """Test that radius=0 returns vertices unchanged."""
+        from src.terrain.roads import smooth_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],
+            [1, 0, 100.0],
+            [2, 0, 10.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=0)
+
+        # With radius=0, no smoothing should occur
+        np.testing.assert_array_equal(result, vertices, "Radius 0 should return unchanged")
+
+    def test_smooth_road_vertices_with_boundary_extension(self):
+        """Test that boundary extension vertices (more vertices than y_valid entries) are handled."""
+        from src.terrain.roads import smooth_road_vertices
+
+        # 5 vertices total, but only 3 have grid mappings (simulates boundary extension)
+        vertices = np.array([
+            [0, 0, 10.0],   # Surface vertex on road
+            [1, 0, 100.0],  # Surface vertex on road (spike)
+            [2, 0, 10.0],   # Surface vertex on road
+            [0, -1, 5.0],   # Boundary extension vertex (no grid mapping)
+            [2, -1, 5.0],   # Boundary extension vertex (no grid mapping)
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        # Only 3 entries in y_valid/x_valid (surface vertices only)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        # This should NOT raise IndexError
+        result = smooth_road_vertices(vertices, road_mask, y_valid, x_valid, smoothing_radius=1)
+
+        # Should return same shape
+        assert result.shape == vertices.shape
+        # Boundary vertices should be unchanged
+        assert result[3, 2] == 5.0, "Boundary vertex should be unchanged"
+        assert result[4, 2] == 5.0, "Boundary vertex should be unchanged"
+        # Surface road vertices should be smoothed (spike reduced)
+        assert result[1, 2] < 100.0, "Surface spike should be smoothed"
 
 
 if __name__ == "__main__":
