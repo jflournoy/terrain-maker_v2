@@ -92,21 +92,37 @@ def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_t
     return _setup_camera(camera_angle, camera_location, scale, focal_length, camera_type)
 
 
-def setup_light(location=(1, 1, 2), angle=2, energy=3, rotation_euler=(0, radians(315), 0)):
+def setup_light(
+    location=(1, 1, 2),
+    angle=2,
+    energy=3,
+    rotation_euler=None,
+    azimuth=None,
+    elevation=None,
+):
     """Create and configure sun light for terrain visualization.
+
+    Sun position can be specified either with rotation_euler (raw Blender angles)
+    or with the more intuitive azimuth/elevation system:
+
+    - azimuth: Direction the sun comes FROM, in degrees clockwise from North
+      (0=North, 90=East, 180=South, 270=West)
+    - elevation: Angle above horizon in degrees (0=horizon, 90=directly overhead)
 
     Args:
         location: Tuple of (x,y,z) light position (default: (1, 1, 2))
         angle: Angle of sun light in degrees (default: 2)
         energy: Energy/intensity of sun light (default: 3)
         rotation_euler: Tuple of (x,y,z) rotation angles in radians (default: sun from NW)
+        azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W)
+        elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead)
 
     Returns:
         Sun light object
     """
     from src.terrain.scene_setup import setup_light as _setup_light
 
-    return _setup_light(location, angle, energy, rotation_euler)
+    return _setup_light(location, angle, energy, rotation_euler, azimuth, elevation)
 
 
 def setup_camera_and_light(
@@ -432,6 +448,29 @@ def scale_elevation(scale_factor=1.0, nodata_value=np.nan):
     from src.terrain.transforms import scale_elevation as _scale_elevation
 
     return _scale_elevation(scale_factor, nodata_value)
+
+
+def feature_preserving_smooth(sigma_spatial=3.0, sigma_intensity=None, nodata_value=np.nan):
+    """
+    Create a feature-preserving smoothing transform using bilateral filtering.
+
+    Removes high-frequency noise while preserving ridges, valleys, and drainage patterns.
+    Uses bilateral filtering: spatial Gaussian weighted by intensity similarity.
+
+    Args:
+        sigma_spatial: Spatial smoothing extent in pixels (default: 3.0).
+            Larger = more smoothing. Typical range: 1-10 pixels.
+        sigma_intensity: Intensity similarity threshold in elevation units.
+            Larger = more smoothing across elevation differences.
+            If None, auto-calculated as 5% of elevation range.
+        nodata_value: Value to treat as no data (default: np.nan)
+
+    Returns:
+        function: Transform function compatible with terrain.add_transform()
+    """
+    from src.terrain.transforms import feature_preserving_smooth as _feature_preserving_smooth
+
+    return _feature_preserving_smooth(sigma_spatial, sigma_intensity, nodata_value)
 
 
 def slope_colormap(slopes, cmap_name="terrain", min_slope=0, max_slope=45):
@@ -1332,6 +1371,7 @@ class Terrain:
                 cached_layer = self.cache.load(layer_target)
 
                 if cached_layer is None:
+                    import time as _time
                     self.logger.info(f"Cache miss for {layer_target}, computing transforms...")
                     layer_data = layer["data"].copy()
                     current_transform = layer["transform"]
@@ -1339,8 +1379,20 @@ class Terrain:
 
                     # Track transforms that were applied
                     applied_transforms = []
+                    n_transforms = len(self.transforms)
+                    pipeline_start = _time.time()
 
-                    for transform_func in self.transforms:
+                    for i, transform_func in enumerate(self.transforms, 1):
+                        transform_name = transform_func.__name__
+                        input_shape = layer_data.shape
+                        n_pixels = layer_data.size
+
+                        self.logger.info(
+                            f"  [{i}/{n_transforms}] Applying {transform_name}... "
+                            f"(input: {input_shape[0]}×{input_shape[1]} = {n_pixels/1e6:.1f}M pixels)"
+                        )
+                        transform_start = _time.time()
+
                         # Apply transform (wrapper always returns 3-tuple)
                         try:
                             layer_data, current_transform, new_crs = transform_func(
@@ -1351,12 +1403,24 @@ class Terrain:
                             if new_crs is not None:
                                 current_crs = new_crs
 
-                            applied_transforms.append(transform_func.__name__)
+                            applied_transforms.append(transform_name)
+
+                            transform_elapsed = _time.time() - transform_start
+                            output_shape = layer_data.shape
+                            self.logger.info(
+                                f"  [{i}/{n_transforms}] ✓ {transform_name} complete in {transform_elapsed:.1f}s "
+                                f"→ {output_shape[0]}×{output_shape[1]}"
+                            )
                         except Exception as e:
                             self.logger.error(
-                                f"Failed applying transform {transform_func.__name__}: {str(e)}"
+                                f"Failed applying transform {transform_name}: {str(e)}"
                             )
                             raise
+
+                    pipeline_elapsed = _time.time() - pipeline_start
+                    self.logger.info(
+                        f"  All {n_transforms} transforms complete in {pipeline_elapsed:.1f}s total"
+                    )
 
                     # Save result with comprehensive metadata
                     metadata = {
@@ -2791,36 +2855,28 @@ class Terrain:
             f"Meters per mesh unit: {meters_per_mesh_unit:.2f}m"
         )
 
-        # Optional: cluster nearby points using DBSCAN (if sklearn available)
+        # Cluster nearby points using DBSCAN
         if cluster_threshold_meters is not None:
-            try:
-                from sklearn.cluster import DBSCAN
+            from sklearn.cluster import DBSCAN
 
-                # Convert cluster threshold from meters to mesh units
-                cluster_threshold_mesh = cluster_threshold_meters / meters_per_mesh_unit
+            # Convert cluster threshold from meters to mesh units
+            cluster_threshold_mesh = cluster_threshold_meters / meters_per_mesh_unit
 
-                self.logger.info(
-                    f"  Clustering points with threshold {cluster_threshold_meters}m "
-                    f"({cluster_threshold_mesh:.3f} mesh units)..."
-                )
+            self.logger.info(
+                f"  Clustering points with threshold {cluster_threshold_meters}m "
+                f"({cluster_threshold_mesh:.3f} mesh units)..."
+            )
 
-                clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
-                labels = clustering.fit_predict(point_coords)
-                num_clusters = labels.max() + 1
+            clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
+            labels = clustering.fit_predict(point_coords)
+            num_clusters = labels.max() + 1
 
-                # Use cluster centroids instead of individual points
-                point_coords = np.array(
-                    [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
-                )
+            # Use cluster centroids instead of individual points
+            point_coords = np.array(
+                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+            )
 
-                self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
-
-            except ImportError:
-                self.logger.warning(
-                    f"  sklearn not available - skipping clustering. "
-                    f"Install scikit-learn for point clustering: pip install scikit-learn"
-                )
-                self.logger.info(f"  Using {len(lons)} individual points (no clustering)")
+            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
 
         # Build KDTree for efficient spatial queries
         tree = KDTree(point_coords)
