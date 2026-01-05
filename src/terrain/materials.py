@@ -335,6 +335,11 @@ def apply_terrain_with_obsidian_roads(
         road_mask.layer_name = "RoadMask"
         road_mask.location = (-400, -200)
 
+        # Separate RGB to extract just the R channel for mix factor
+        # (Color output averages RGB → ~0.33 for R=1,G=0,B=0, we need 1.0)
+        separate_rgb = nodes.new("ShaderNodeSeparateColor")
+        separate_rgb.location = (-200, -200)
+
         # === MIXER (roads vs terrain) ===
         mix_shader = nodes.new("ShaderNodeMixShader")
         mix_shader.location = (600, 0)
@@ -382,7 +387,8 @@ def apply_terrain_with_obsidian_roads(
 
         # === CONNECT EVERYTHING ===
         # Road mask R channel controls mixing (R=1 → road, R=0 → terrain)
-        links.new(road_mask.outputs["Color"], mix_shader.inputs[0])  # Use R channel as mix factor
+        links.new(road_mask.outputs["Color"], separate_rgb.inputs["Color"])
+        links.new(separate_rgb.outputs["Red"], mix_shader.inputs[0])  # Use R channel as mix factor
 
         # Input 1 = terrain (when mask is 0)
         # Input 2 = road (when mask is 1)
