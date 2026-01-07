@@ -22,15 +22,23 @@ Requirements:
 
 Output:
 - docs/images/combined_render/sledding_with_xc_parks_3d.png (1920×1080, 2048 samples)
+- docs/images/combined_render/sledding_with_xc_parks_3d_histogram.png (RGB histogram)
 - docs/images/combined_render/sledding_with_xc_parks_3d_print.png (3000×2400 @ 300 DPI, 8192 samples)
+- docs/images/combined_render/sledding_with_xc_parks_3d_print_histogram.png (RGB histogram)
 - docs/images/combined_render/sledding_with_xc_parks_3d.blend (Blender file)
 
 Usage:
     # Run with computed scores (standard quality)
     python examples/detroit_combined_render.py
 
-    # Run at print quality (10x8 inches @ 300 DPI)
+    # Run at print quality (default: 10x8 inches @ 300 DPI)
     python examples/detroit_combined_render.py --print-quality
+
+    # Custom print size: 12x9 inches @ 150 DPI
+    python examples/detroit_combined_render.py --print-quality --print-width 12 --print-height 9 --print-dpi 150
+
+    # Large print with GPU memory-saving options (essential for limited VRAM)
+    python examples/detroit_combined_render.py --print-quality --auto-tile --tile-size 1024
 
     # Test different height scales from south view
     python examples/detroit_combined_render.py --camera-direction south --height-scale 20
@@ -70,23 +78,32 @@ from src.terrain.core import (
     clear_scene,
     setup_camera,
     position_camera_relative,
-    setup_light,
+    setup_two_point_lighting,
     setup_render_settings,
     render_scene_to_file,
+    print_render_settings_report,
     reproject_raster,
     flip_raster,
     scale_elevation,
     feature_preserving_smooth,
+    setup_hdri_lighting,
+    setup_world_atmosphere,
 )
+from src.terrain.transforms import smooth_score_data, despeckle_scores
 from src.terrain.scene_setup import create_background_plane
-from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask
+from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_vertex_positions
 from src.terrain.materials import apply_terrain_with_obsidian_roads, apply_test_material
-from src.terrain.data_loading import load_dem_files, load_score_grid
+from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files, load_score_grid
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_layer, smooth_road_vertices
+from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices
 from src.terrain.water import identify_water_by_slope
+from src.terrain.cache import PipelineCache
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for headless rendering
+import matplotlib.pyplot as plt
+from PIL import Image
 
 # Configure logging
 LOG_FILE = Path(__file__).parent / "detroit_combined_render.log"
@@ -208,193 +225,6 @@ def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
 # =============================================================================
 # BLENDER RENDERING
 # =============================================================================
-
-
-def calculate_mesh_width(mesh_obj) -> float:
-    """
-    Calculate mesh width from bound_box (X dimension).
-
-    Args:
-        mesh_obj: Blender mesh object
-
-    Returns:
-        Width in Blender units
-    """
-    bounds = mesh_obj.bound_box
-    xs = [v[0] for v in bounds]
-    return max(xs) - min(xs)
-
-
-def calculate_dual_terrain_spacing(
-    width_left: float,
-    width_right: float,
-    gap_ratio: float = 0.10,
-    min_gap: float = 0.5,
-) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-    """
-    Calculate symmetric positions for two terrains with dynamic spacing.
-
-    Args:
-        width_left: Width of left terrain mesh
-        width_right: Width of right terrain mesh
-        gap_ratio: Gap as fraction of combined width (default: 10%)
-        min_gap: Minimum gap in Blender units (default: 0.5)
-
-    Returns:
-        Tuple of (left_position, right_position) as (x, y, z) tuples
-    """
-    combined_width = width_left + width_right
-    gap = max(combined_width * gap_ratio, min_gap)
-
-    left_x = -(width_left / 2 + gap / 2)
-    right_x = (width_right / 2 + gap / 2)
-
-    return (left_x, 0, 0), (right_x, 0, 0)
-
-
-def validate_spacing(
-    gap: float,
-    width_left: float,
-    width_right: float,
-    min_gap_warn: float = 0.3,
-    max_gap_warn: float = 5.0,
-) -> None:
-    """
-    Validate spacing and log warnings if suboptimal.
-
-    Args:
-        gap: Calculated gap between meshes
-        width_left: Width of left mesh
-        width_right: Width of right mesh
-        min_gap_warn: Warn if gap below this threshold (default: 0.3)
-        max_gap_warn: Warn if gap above this threshold (default: 5.0)
-    """
-    if gap < min_gap_warn:
-        logger.warning(
-            f"Terrain spacing is tight: gap={gap:.2f} < {min_gap_warn:.2f}. "
-            f"Meshes may appear to overlap from certain angles."
-        )
-
-    if gap > max_gap_warn:
-        logger.warning(
-            f"Terrain spacing is wide: gap={gap:.2f} > {max_gap_warn:.2f}. "
-            f"Consider adjusting camera to frame both terrains."
-        )
-
-    logger.info(
-        f"Terrain spacing: left_width={width_left:.2f}, "
-        f"right_width={width_right:.2f}, gap={gap:.2f}"
-    )
-
-
-def setup_dual_camera(
-    mesh_left,
-    mesh_right,
-    direction: str = "above",
-    distance: float = 3.5,
-    elevation: float = 5,
-    camera_type: str = "ORTHO",
-    ortho_scale: float = 1.5,
-) -> Optional[object]:
-    """
-    Setup camera to view both terrains side-by-side.
-
-    Uses position_camera_relative with multi-mesh support to automatically
-    compute a combined bounding box and position the camera to see both terrains.
-
-    Args:
-        mesh_left: Left terrain object
-        mesh_right: Right terrain object
-        direction: Cardinal direction for camera (default: 'above')
-        distance: Distance multiplier relative to combined mesh diagonal
-        elevation: Height as fraction of mesh diagonal
-        camera_type: 'ORTHO' or 'PERSP' (default: 'ORTHO')
-        ortho_scale: Orthographic scale multiplier (default: 1.5)
-
-    Returns:
-        Camera object positioned to view both terrains
-    """
-    logger.info("Setting up dual camera...")
-
-    # Collect meshes (filter out None values)
-    meshes = [m for m in [mesh_left, mesh_right] if m is not None]
-
-    if not meshes:
-        logger.error("No valid meshes provided for camera setup")
-        return None
-
-    # Use position_camera_relative with list of meshes
-    # This automatically computes combined bounding box and positions camera
-    camera = position_camera_relative(
-        meshes,
-        direction=direction,
-        distance=distance,
-        elevation=elevation,
-        camera_type=camera_type,
-        ortho_scale=ortho_scale,
-        sun_angle=0,  # We setup lighting separately
-        sun_energy=0,
-    )
-
-    logger.info(f"✓ Camera positioned {direction} of both terrains ({camera_type})")
-    return camera
-
-
-def setup_lighting(
-    sun_azimuth: float = 225.0,
-    sun_elevation: float = 30.0,
-    sun_energy: float = 7.0,
-    sun_angle: float = 1.0,
-    fill_azimuth: float = 45.0,
-    fill_elevation: float = 60.0,
-    fill_energy: float = 1.0,
-    fill_angle: float = 3.0,
-) -> list:
-    """Setup Blender lighting with intuitive sun positioning.
-
-    Creates a primary sun for shadows and a fill light for softer contrast.
-
-    Args:
-        sun_azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W)
-        sun_elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead)
-        sun_energy: Sun light strength/energy
-        sun_angle: Sun angular size in degrees (smaller=sharper shadows)
-        fill_azimuth: Direction fill light comes FROM in degrees
-        fill_elevation: Fill light angle above horizon in degrees
-        fill_energy: Fill light strength/energy
-        fill_angle: Fill light angular size in degrees (softer than sun)
-
-    Returns:
-        List of light objects
-    """
-    logger.info(f"Setting up lighting (sun: azimuth={sun_azimuth}°, elevation={sun_elevation}°)...")
-
-    lights = []
-
-    # Primary sun - uses intuitive azimuth/elevation positioning
-    sun_light = setup_light(
-        angle=sun_angle,  # Sharper shadows (smaller angle = harder shadows)
-        energy=sun_energy,
-        azimuth=sun_azimuth,
-        elevation=sun_elevation,
-    )
-    # Set warm sunset color (golden/orange)
-    sun_light.data.color = (1.0, 0.85, 0.6)  # Warm golden
-    lights.append(sun_light)
-
-    # Fill light - cooler blue from opposite side for contrast
-    fill_light = setup_light(
-        angle=fill_angle,  # Softer
-        energy=fill_energy,
-        azimuth=fill_azimuth,
-        elevation=fill_elevation,
-    )
-    # Cool blue fill to contrast with warm sun
-    fill_light.data.color = (0.7, 0.8, 1.0)  # Cool blue
-    lights.append(fill_light)
-
-    logger.info("✓ Lighting setup complete")
-    return lights
 
 
 def add_skiing_bumps_to_mesh(
@@ -521,42 +351,81 @@ def add_skiing_bumps_to_mesh(
     logger.info(f"✓ Created {spheres_created} sphere markers for ski parks")
 
 
-def render_dual_terrain(
-    output_path: Path,
-    width: int = 1920,
-    height: int = 1080,
-) -> bool:
+def generate_rgb_histogram(image_path: Path, output_path: Path) -> Optional[Path]:
     """
-    Render the scene to file using library function.
+    Generate and save an RGB histogram of the rendered image.
+
+    Creates a figure with histograms for each color channel (R, G, B)
+    overlaid on the same axes with transparency.
 
     Args:
-        output_path: Output PNG path
-        width: Render width
-        height: Render height
+        image_path: Path to the rendered PNG image
+        output_path: Path to save the histogram image
 
     Returns:
-        True if successful
+        Path to saved histogram image, or None if failed
     """
-    logger.info(f"Rendering to {output_path} ({width}x{height})...")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Use library function to render
     try:
-        render_scene_to_file(
-            str(output_path),
-            width=width,
-            height=height,
-        )
+        # Load image
+        img = Image.open(image_path)
+        img_array = np.array(img)
 
-        if output_path.exists():
-            logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
-            return True
+        logger.info(f"Generating RGB histogram for {image_path.name}...")
+        logger.info(f"  Image shape: {img_array.shape}")
+
+        # Handle RGBA vs RGB
+        if img_array.ndim == 3 and img_array.shape[2] >= 3:
+            r_channel = img_array[:, :, 0].flatten()
+            g_channel = img_array[:, :, 1].flatten()
+            b_channel = img_array[:, :, 2].flatten()
         else:
-            logger.warning("Render output not created")
-            return False
+            logger.warning("Image is not RGB/RGBA, skipping histogram")
+            return None
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Plot histograms with transparency
+        bins = 256
+        alpha = 0.5
+
+        ax.hist(r_channel, bins=bins, range=(0, 255), color='red',
+                alpha=alpha, label='Red', density=True)
+        ax.hist(g_channel, bins=bins, range=(0, 255), color='green',
+                alpha=alpha, label='Green', density=True)
+        ax.hist(b_channel, bins=bins, range=(0, 255), color='blue',
+                alpha=alpha, label='Blue', density=True)
+
+        # Style
+        ax.set_xlabel('Pixel Value', fontsize=12)
+        ax.set_ylabel('Density', fontsize=12)
+        ax.set_title(f'RGB Histogram: {image_path.name}', fontsize=14)
+        ax.legend(loc='upper right')
+        ax.set_xlim(0, 255)
+        ax.grid(True, alpha=0.3)
+
+        # Add stats annotation
+        stats_text = (
+            f"R: μ={np.mean(r_channel):.1f}, σ={np.std(r_channel):.1f}\n"
+            f"G: μ={np.mean(g_channel):.1f}, σ={np.std(g_channel):.1f}\n"
+            f"B: μ={np.mean(b_channel):.1f}, σ={np.std(b_channel):.1f}"
+        )
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+                fontsize=10, verticalalignment='top',
+                fontfamily='monospace',
+                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+        # Save
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        plt.close(fig)
+
+        logger.info(f"✓ RGB histogram saved: {output_path}")
+        return output_path
+
     except Exception as e:
-        logger.error(f"Render failed: {e}")
-        return False
+        logger.warning(f"Failed to generate RGB histogram: {e}")
+        return None
 
 
 # =============================================================================
@@ -621,7 +490,28 @@ Examples:
     parser.add_argument(
         "--print-quality",
         action="store_true",
-        help="Render at print quality: 10x8 inches @ 300 DPI (3000x2400 px) with 8192 samples",
+        help="Render at print quality with configurable DPI and size (default: 10x8 inches @ 300 DPI)",
+    )
+
+    parser.add_argument(
+        "--print-dpi",
+        type=int,
+        default=300,
+        help="DPI for print quality renders (default: 300). Only used with --print-quality.",
+    )
+
+    parser.add_argument(
+        "--print-width",
+        type=float,
+        default=10.0,
+        help="Width in inches for print quality renders (default: 10.0). Only used with --print-quality.",
+    )
+
+    parser.add_argument(
+        "--print-height",
+        type=float,
+        default=8.0,
+        help="Height in inches for print quality renders (default: 8.0). Only used with --print-quality.",
     )
 
     parser.add_argument(
@@ -642,6 +532,13 @@ Examples:
         type=float,
         default=50.0,
         help="Distance below terrain to place background plane (default: 50.0 units, use 0 for drop shadows)",
+    )
+
+    parser.add_argument(
+        "--background-flat",
+        action="store_true",
+        help="Use flat color (emission) for background that ignores lighting. "
+             "Without this, background responds to scene lighting and dark colors appear lighter.",
     )
 
     parser.add_argument(
@@ -719,8 +616,8 @@ Examples:
     parser.add_argument(
         "--fill-energy",
         type=float,
-        default=1.0,
-        help="Fill light strength/energy (default: 1.0)",
+        default=0.0,
+        help="Fill light strength/energy (default: 0 = no fill light)",
     )
 
     parser.add_argument(
@@ -780,6 +677,14 @@ Examples:
              "obsidian=glossy black, chrome=reflective metal, clay=matte gray, plastic=glossy white, gold=metallic gold",
     )
 
+    parser.add_argument(
+        "--road-color",
+        type=str,
+        default="azurite",
+        help="Road color preset: obsidian (black), azurite (deep blue), azurite-light (richer blue), "
+             "malachite (deep green), hematite (dark iron gray). Default: azurite",
+    )
+
     # Terrain smoothing options
     parser.add_argument(
         "--smooth",
@@ -816,13 +721,153 @@ Examples:
         help="Smoothing radius for road vertices (default: 2, larger = smoother)",
     )
 
+    parser.add_argument(
+        "--road-offset",
+        type=float,
+        default=0.0,
+        help="Fixed Z offset for road vertices. Positive = raise, negative = lower. "
+             "Alternative to --road-smoothing. Default: 0.0 (no offset)",
+    )
+
+    # Score smoothing options
+    parser.add_argument(
+        "--smooth-scores",
+        action="store_true",
+        default=False,
+        help="Apply bilateral smoothing to score data to reduce blockiness from low-res SNODAS",
+    )
+
+    parser.add_argument(
+        "--smooth-scores-spatial",
+        type=float,
+        default=5.0,
+        help="Score smoothing spatial sigma in pixels (default: 5.0, larger = more smoothing)",
+    )
+
+    parser.add_argument(
+        "--smooth-scores-intensity",
+        type=float,
+        default=None,
+        help="Score smoothing intensity sigma (default: auto = 15%% of score range)",
+    )
+
+    # Score despeckle options (median filter - removes isolated outliers)
+    parser.add_argument(
+        "--despeckle-scores",
+        action="store_true",
+        default=False,
+        help="Apply median filter to remove isolated speckles from score data. "
+             "Better than bilateral smoothing for removing isolated low-score pixels "
+             "in high-score regions (common with upsampled SNODAS data).",
+    )
+
+    parser.add_argument(
+        "--despeckle-kernel",
+        type=int,
+        default=3,
+        help="Despeckle kernel size (default: 3 for 3x3). Larger kernels remove "
+             "larger speckle clusters. Common values: 3, 5, 7.",
+    )
+
+    parser.add_argument(
+        "--vertex-multiplier",
+        type=float,
+        default=2.5,
+        help="Vertices per pixel multiplier (default: 2.5). Higher = more detail, slower render. "
+             "Example: 3.0 gives ~20%% more vertices than default.",
+    )
+
+    # Atmosphere/fog options (EXPERIMENTAL - currently causes black renders)
+    parser.add_argument(
+        "--atmosphere",
+        action="store_true",
+        default=False,
+        help="[EXPERIMENTAL] Enable atmospheric fog effect (currently broken - causes black renders)",
+    )
+
+    parser.add_argument(
+        "--atmosphere-density",
+        type=float,
+        default=0.0002,
+        help="[EXPERIMENTAL] Fog density (default: 0.0002). Currently causes black renders.",
+    )
+
+    # HDRI sky lighting (invisible but adds ambient light)
+    parser.add_argument(
+        "--hdri-lighting",
+        action="store_true",
+        default=True,
+        help="Enable HDRI sky lighting for realistic ambient illumination (default: True)",
+    )
+
+    parser.add_argument(
+        "--no-hdri-lighting",
+        action="store_false",
+        dest="hdri_lighting",
+        help="Disable HDRI sky lighting",
+    )
+
+    # GPU memory-saving options for large renders
+    parser.add_argument(
+        "--auto-tile",
+        action="store_true",
+        default=False,
+        help="Enable automatic tiling to reduce GPU VRAM usage (essential for large prints)",
+    )
+
+    parser.add_argument(
+        "--tile-size",
+        type=int,
+        default=2048,
+        help="Tile size in pixels when --auto-tile is enabled (default: 2048). "
+             "Smaller tiles = less VRAM but slower. Try 512-1024 for limited VRAM.",
+    )
+
+    parser.add_argument(
+        "--persistent-data",
+        action="store_true",
+        default=False,
+        help="Keep scene data in VRAM between frames (useful for multiple renders)",
+    )
+
+    # Pipeline caching options
+    parser.add_argument(
+        "--cache",
+        action="store_true",
+        default=False,
+        help="Enable pipeline caching to speed up repeated renders. "
+             "Caches DEM transforms, color computation, etc. Cache is invalidated "
+             "when upstream parameters change.",
+    )
+
+    parser.add_argument(
+        "--no-cache",
+        action="store_false",
+        dest="cache",
+        help="Disable pipeline caching (default)",
+    )
+
+    parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        default=False,
+        help="Clear all cached data before running",
+    )
+
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=Path(".pipeline_cache"),
+        help="Directory for pipeline cache files (default: .pipeline_cache/)",
+    )
+
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set resolution and quality based on mode
     if args.print_quality:
-        render_width = 3000  # 10 inches @ 300 DPI
-        render_height = 2400  # 8 inches @ 300 DPI
+        render_width = int(args.print_width * args.print_dpi)
+        render_height = int(args.print_height * args.print_dpi)
         render_samples = 8192  # High quality for print
         quality_mode = "PRINT"
     else:
@@ -837,12 +882,70 @@ Examples:
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Scores directory: {args.scores_dir}")
     logger.info(f"Quality mode: {quality_mode}")
-    logger.info(f"  Resolution: {render_width}×{render_height} ({render_width/300:.1f}×{render_height/300:.1f} inches @ 300 DPI)")
+    if args.print_quality:
+        logger.info(f"  Resolution: {render_width}×{render_height} ({args.print_width}×{args.print_height} inches @ {args.print_dpi} DPI)")
+    else:
+        logger.info(f"  Resolution: {render_width}×{render_height} (screen)")
     logger.info(f"  Samples: {render_samples:,}")
     if args.background:
         logger.info(f"Background plane: ENABLED")
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
+
+    # Initialize pipeline cache
+    cache = PipelineCache(cache_dir=args.cache_dir, enabled=args.cache)
+    if args.cache:
+        logger.info(f"Pipeline caching: ENABLED (dir: {args.cache_dir})")
+        if args.clear_cache:
+            deleted = cache.clear_all()
+            logger.info(f"  Cleared {deleted} cached files")
+    else:
+        logger.info("Pipeline caching: DISABLED (use --cache to enable)")
+
+    # Define pipeline targets with their parameters
+    # This allows cache keys to change when parameters change
+    dem_dir = Path("data/dem/detroit")
+    dem_params = {
+        "directory": str(dem_dir),
+        "min_latitude": 41,
+        "mock_data": args.mock_data,
+    }
+
+    transform_params = {
+        "src_crs": "EPSG:4326",
+        "dst_crs": "EPSG:32617",
+        "flip": "horizontal",
+        "scale_factor": 0.0001,
+        "target_vertices": int(np.floor(render_width * render_height * args.vertex_multiplier)),
+        "smooth": args.smooth,
+        "smooth_spatial": args.smooth_spatial,
+        "smooth_intensity": args.smooth_intensity,
+    }
+
+    color_params = {
+        "colormap": "mako",
+        "gamma": 0.5,
+        "smooth_scores": args.smooth_scores,
+        "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
+        "despeckle_scores": args.despeckle_scores,
+        "despeckle_kernel": args.despeckle_kernel if args.despeckle_scores else None,
+        "roads_enabled": args.roads,
+        "road_types": tuple(args.road_types) if args.roads else (),
+        "road_width": args.road_width if args.roads else 0,
+    }
+
+    mesh_params = {
+        "height_scale": args.height_scale,
+        "scale_factor": 100,
+        "center_model": True,
+        "boundary_extension": True,
+    }
+
+    # Register targets with cache (defines dependency graph)
+    cache.define_target("dem_loaded", params=dem_params)
+    cache.define_target("dem_transformed", params=transform_params, dependencies=["dem_loaded"])
+    cache.define_target("colors_computed", params=color_params, dependencies=["dem_transformed"])
+    cache.define_target("mesh_created", params=mesh_params, dependencies=["colors_computed"])
 
     # Load data
     logger.info("\n" + "=" * 70)
@@ -862,66 +965,15 @@ Examples:
     else:
         dem_dir = Path("data/dem/detroit")
         if dem_dir.exists():
-            # Filter HGT files to load only northern tiles (N41 and above)
+            # Load HGT files filtered to northern tiles (N41 and above)
             # This focuses on areas with better snow coverage (Detroit metro and north)
             # Tiles range from N37-N46; loading N41+ removes the southern ~40% of extent
-            import re
-            import rasterio
-            from rasterio.merge import merge
-            from tqdm import tqdm
-
-            min_latitude = 41  # Load N41 and above (N41, N42, N43, N44, N45, N46)
-
-            all_hgt_files = sorted(dem_dir.glob("*.hgt"))
-            logger.info(f"Found {len(all_hgt_files)} total HGT files in {dem_dir}")
-
-            # Filter by latitude from filename (e.g., N42W083.hgt -> lat=42)
-            filtered_files = []
-            for f in all_hgt_files:
-                match = re.match(r'N(\d+)W\d+\.hgt', f.name)
-                if match:
-                    lat = int(match.group(1))
-                    if lat >= min_latitude:
-                        filtered_files.append(f)
-
-            logger.info(f"Loading {len(filtered_files)} HGT files with latitude >= N{min_latitude}")
+            dem, transform = load_filtered_hgt_files(
+                dem_dir,
+                min_latitude=41,  # Load N41 and above (N41, N42, N43, N44, N45, N46)
+            )
+            dem_crs = "EPSG:4326"  # Real data is typically WGS84
             logger.info(f"  (focusing on Detroit metro and northern areas with better snow)")
-
-            if not filtered_files:
-                raise ValueError(f"No HGT files found with latitude >= N{min_latitude}")
-
-            # Open filtered files
-            dem_datasets = []
-            with tqdm(filtered_files, desc="Opening filtered DEM files") as pbar:
-                for file in pbar:
-                    try:
-                        ds = rasterio.open(file)
-                        dem_datasets.append(ds)
-                        pbar.set_postfix({"opened": len(dem_datasets)})
-                    except Exception as e:
-                        logger.warning(f"Failed to open {file}: {e}")
-                        continue
-
-            if not dem_datasets:
-                raise ValueError("No valid DEM files could be opened")
-
-            logger.info(f"Successfully opened {len(dem_datasets)} DEM files")
-
-            # Merge datasets
-            try:
-                with rasterio.Env():
-                    merged_dem, transform = merge(dem_datasets)
-                    dem = merged_dem[0]  # Extract first band
-                    dem_crs = "EPSG:4326"  # Real data is typically WGS84
-
-                    logger.info(f"Successfully merged filtered DEMs:")
-                    logger.info(f"  Shape: {dem.shape}")
-                    logger.info(f"  Value range: {np.nanmin(dem):.2f} to {np.nanmax(dem):.2f}")
-                    logger.info(f"  Transform: {transform}")
-            finally:
-                # Clean up
-                for ds in dem_datasets:
-                    ds.close()
         else:
             logger.info("Generating mock DEM (DEM directory not found)...")
             dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
@@ -1045,8 +1097,8 @@ Examples:
 
     # Calculate target vertices for mesh creation
     # Match render resolution for optimal detail
-    target_vertices = int(np.floor(render_width * render_height * 2.5))
-    logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution)")
+    target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier))
+    logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution, {args.vertex_multiplier}x multiplier)")
 
     # Create single terrain mesh with dual colormaps
     # Base: Mako colormap for sledding suitability scores (with gamma=0.5)
@@ -1084,6 +1136,17 @@ Examples:
     logger.debug("Applying transforms to DEM...")
     terrain_combined.apply_transforms()
 
+    # Log cache status for transforms
+    if args.cache:
+        transform_key = cache.compute_target_key("dem_transformed")
+        cached_transform = cache.get_cached("dem_transformed")
+        if cached_transform is not None:
+            logger.info(f"  Cache HIT: dem_transformed (key: {transform_key[:12]}...)")
+        else:
+            logger.info(f"  Cache MISS: dem_transformed (key: {transform_key[:12]}..., will cache on save)")
+            # Save transformed DEM state for future runs
+            cache.save_target("dem_transformed", terrain_combined.dem)
+
     # Add sledding scores as base layer
     logger.debug("Adding sledding scores layer...")
     if score_transform is not None:
@@ -1117,6 +1180,45 @@ Examples:
             xc_scores,
             same_extent_as="dem",
         )
+
+    # Apply score smoothing if requested (reduces blockiness from low-res SNODAS data)
+    if args.smooth_scores:
+        logger.info(
+            f"Smoothing score data (spatial={args.smooth_scores_spatial}, "
+            f"intensity={args.smooth_scores_intensity or 'auto'})"
+        )
+        # Smooth sledding scores
+        sledding_data = terrain_combined.data_layers["sledding"]["data"]
+        terrain_combined.data_layers["sledding"]["data"] = smooth_score_data(
+            sledding_data,
+            sigma_spatial=args.smooth_scores_spatial,
+            sigma_intensity=args.smooth_scores_intensity,
+        )
+        # Smooth XC skiing scores
+        xc_data = terrain_combined.data_layers["xc_skiing"]["data"]
+        terrain_combined.data_layers["xc_skiing"]["data"] = smooth_score_data(
+            xc_data,
+            sigma_spatial=args.smooth_scores_spatial,
+            sigma_intensity=args.smooth_scores_intensity,
+        )
+        logger.info("✓ Score data smoothed")
+
+    # Apply despeckle if requested (removes isolated speckles via median filter)
+    if args.despeckle_scores:
+        logger.info(f"Despeckle score data (kernel_size={args.despeckle_kernel})")
+        # Despeckle sledding scores
+        sledding_data = terrain_combined.data_layers["sledding"]["data"]
+        terrain_combined.data_layers["sledding"]["data"] = despeckle_scores(
+            sledding_data,
+            kernel_size=args.despeckle_kernel,
+        )
+        # Despeckle XC skiing scores
+        xc_data = terrain_combined.data_layers["xc_skiing"]["data"]
+        terrain_combined.data_layers["xc_skiing"]["data"] = despeckle_scores(
+            xc_data,
+            kernel_size=args.despeckle_kernel,
+        )
+        logger.info("✓ Score data despeckled")
 
     # Create mesh for proximity calculations
     logger.debug("Creating temporary mesh for proximity calculations...")
@@ -1240,6 +1342,16 @@ Examples:
     logger.debug("Computing colors with water detection...")
     terrain_combined.compute_colors(water_mask=water_mask)
 
+    # Log cache status for colors
+    if args.cache:
+        color_key = cache.compute_target_key("colors_computed")
+        cached_colors = cache.get_cached("colors_computed")
+        if cached_colors is not None:
+            logger.info(f"  Cache HIT: colors_computed (key: {color_key[:12]}...)")
+        else:
+            logger.info(f"  Cache MISS: colors_computed (key: {color_key[:12]}..., caching)")
+            cache.save_target("colors_computed", terrain_combined.colors)
+
     # Remove temporary mesh
     bpy.data.objects.remove(mesh_temp, do_unlink=True)
 
@@ -1285,20 +1397,36 @@ Examples:
                 smoothing_radius=args.road_smoothing_radius,
             )
 
-            for i, v in enumerate(mesh_data.vertices):
-                v.co = smoothed_vertices[i]
+            apply_vertex_positions(mesh_combined, smoothed_vertices, logger)
 
-            mesh_data.update()
-            logger.info("✓ Road vertex elevations smoothed")
+        # Apply road offset (can be combined with smoothing or used alone)
+        if args.road_offset != 0.0:
+            logger.info(f"Applying road Z offset: {args.road_offset:+.1f} units...")
+            mesh_data = mesh_combined.data
+            vertices = np.array([v.co[:] for v in mesh_data.vertices])
+
+            offset_vertices = offset_road_vertices(
+                vertices=vertices,
+                road_mask=road_layer_data,
+                y_valid=terrain_combined.y_valid,
+                x_valid=terrain_combined.x_valid,
+                offset=args.road_offset,
+            )
+
+            apply_vertex_positions(mesh_combined, offset_vertices, logger)
 
     # Apply material based on roads and test_material settings
-    # Roads are always obsidian; terrain uses vertex colors or test material
+    # Roads use configurable color (default azurite); terrain uses vertex colors or test material
     if mesh_combined.data.materials:
         if has_roads:
-            # Use mixed material: obsidian roads + terrain (vertex colors or test material)
+            # Use mixed material: glossy roads + terrain (vertex colors or test material)
             terrain_style = args.test_material if args.test_material != "none" else None
-            logger.info(f"Applying material: obsidian roads + {terrain_style or 'vertex colors'} terrain")
-            apply_terrain_with_obsidian_roads(mesh_combined.data.materials[0], terrain_style=terrain_style)
+            logger.info(f"Applying material: {args.road_color} roads + {terrain_style or 'vertex colors'} terrain")
+            apply_terrain_with_obsidian_roads(
+                mesh_combined.data.materials[0],
+                terrain_style=terrain_style,
+                road_color=args.road_color,
+            )
         elif args.test_material != "none":
             # No roads, but test material requested
             logger.info(f"Applying test material: {args.test_material}")
@@ -1336,16 +1464,51 @@ Examples:
         ortho_scale=args.ortho_scale,
         elevation=args.camera_elevation,
     )
-    lights = setup_lighting(
-        sun_azimuth=args.sun_azimuth,
-        sun_elevation=args.sun_elevation,
-        sun_energy=args.sun_energy,
-        sun_angle=args.sun_angle,
-        fill_azimuth=args.fill_azimuth,
-        fill_elevation=args.fill_elevation,
-        fill_energy=args.fill_energy,
-        fill_angle=args.fill_angle,
-    )
+    # Setup HDRI sky lighting (invisible but adds realistic ambient illumination)
+    # HDRI sky includes a physically-simulated sun, so we use that instead of explicit lights
+    if args.hdri_lighting:
+        logger.info("Setting up HDRI sky lighting (provides sun + ambient)...")
+        # When atmosphere is enabled, use a light gray background so fog is visible
+        # (transparent background + volume = black scene)
+        camera_bg = (0.88, 0.88, 0.86) if args.atmosphere else None
+        setup_hdri_lighting(
+            sun_elevation=args.sun_elevation,
+            sun_rotation=args.sun_azimuth,
+            sun_intensity=args.sun_energy / 7.0,  # Scale relative to default energy=7
+            sun_size=args.sun_angle,  # Controls shadow softness (larger = softer)
+            visible_to_camera=False,
+            camera_background=camera_bg,
+        )
+        # Only create fill light if requested (HDRI sky provides main sun)
+        lights = setup_two_point_lighting(
+            sun_azimuth=args.sun_azimuth,
+            sun_elevation=args.sun_elevation,
+            sun_energy=0,  # Skip explicit sun - HDRI sky provides it
+            sun_angle=args.sun_angle,
+            fill_azimuth=args.fill_azimuth,
+            fill_elevation=args.fill_elevation,
+            fill_energy=args.fill_energy,
+            fill_angle=args.fill_angle,
+        )
+    else:
+        # No HDRI - use explicit sun light
+        lights = setup_two_point_lighting(
+            sun_azimuth=args.sun_azimuth,
+            sun_elevation=args.sun_elevation,
+            sun_energy=args.sun_energy,
+            sun_angle=args.sun_angle,
+            fill_azimuth=args.fill_azimuth,
+            fill_elevation=args.fill_elevation,
+            fill_energy=args.fill_energy,
+            fill_angle=args.fill_angle,
+        )
+
+    # Setup atmospheric fog if requested
+    if args.atmosphere:
+        logger.info(f"Setting up atmospheric fog (density={args.atmosphere_density})...")
+        setup_world_atmosphere(
+            density=args.atmosphere_density,
+        )
 
     # Create background plane if requested
     if args.background:
@@ -1357,7 +1520,8 @@ Examples:
             mesh_or_meshes=mesh_combined,
             distance_below=args.background_distance,
             color=args.background_color,
-            receive_shadows=True,  # Always receive shadows; distance controls shadow appearance
+            receive_shadows=not args.background_flat,  # Flat color ignores shadows
+            flat_color=args.background_flat,
         )
         logger.info("✓ Background plane created successfully")
 
@@ -1369,8 +1533,21 @@ Examples:
         logger.info("=" * 70)
 
         # Configure render settings
-        setup_render_settings(use_gpu=True, samples=render_samples, use_denoising=False)
-        logger.info(f"Render settings configured (GPU, {render_samples:,} samples, denoising off)")
+        setup_render_settings(
+            use_gpu=True,
+            samples=render_samples,
+            use_denoising=False,
+            use_persistent_data=args.persistent_data,
+            use_auto_tile=args.auto_tile,
+            tile_size=args.tile_size,
+        )
+        memory_opts = []
+        if args.auto_tile:
+            memory_opts.append(f"auto-tile {args.tile_size}px")
+        if args.persistent_data:
+            memory_opts.append("persistent data")
+        memory_info = f", {', '.join(memory_opts)}" if memory_opts else ""
+        logger.info(f"Render settings configured (GPU, {render_samples:,} samples, denoising off{memory_info})")
 
         # Set output filename based on quality mode
         if args.print_quality:
@@ -1379,7 +1556,25 @@ Examples:
             output_filename = "sledding_with_xc_parks_3d.png"
 
         output_path = args.output_dir / output_filename
-        render_dual_terrain(output_path, width=render_width, height=render_height)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Rendering to {output_path} ({render_width}x{render_height})...")
+
+        result = render_scene_to_file(
+            str(output_path),
+            width=render_width,
+            height=render_height,
+        )
+
+        if result:
+            logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
+
+            # Generate RGB histogram
+            histogram_filename = output_path.stem + "_histogram.png"
+            histogram_path = output_path.parent / histogram_filename
+            generate_rgb_histogram(output_path, histogram_path)
+
+        # Print actual Blender settings used for this render
+        print_render_settings_report(logger)
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Detroit Combined Terrain Rendering Complete!")
@@ -1399,8 +1594,9 @@ Examples:
         logger.info(f"  ✓ Created background plane ({args.background_color})")
     if not args.no_render:
         logger.info(f"  ✓ Rendered {render_width}×{render_height} PNG with {render_samples:,} samples")
+        logger.info(f"  ✓ Generated RGB histogram for color analysis")
         if args.print_quality:
-            logger.info(f"    ({render_width/300:.1f}×{render_height/300:.1f} inches @ 300 DPI - PRINT QUALITY)")
+            logger.info(f"    ({args.print_width}×{args.print_height} inches @ {args.print_dpi} DPI - PRINT QUALITY)")
     logger.info(f"\nOutput directory: {args.output_dir}")
     logger.info("=" * 70 + "\n")
 
