@@ -69,18 +69,24 @@ def create_matte_material(
     color: str | tuple = "#F5F5F0",
     material_roughness: float = 1.0,
     receive_shadows: bool = False,
+    flat_color: bool = False,
 ) -> "bpy.types.Material":
-    """Create a matte Principled BSDF material for backgrounds.
+    """Create a matte material for backgrounds.
 
-    Creates a physically-based matte material with configurable color and
-    shadow receiving behavior. Useful for background planes and other
-    non-reflective surfaces.
+    Creates either a physically-based matte material or a flat emission material.
+    The flat option is useful when you want an exact color that doesn't respond
+    to scene lighting (e.g., for studio-style backgrounds).
 
     Args:
         name: Name for the material (default: "BackgroundMaterial")
         color: Color as hex string (e.g., "#F5F5F0") or RGB tuple (default: eggshell white)
-        material_roughness: Roughness value 0.0-1.0, 1.0 = fully matte (default: 1.0)
-        receive_shadows: Whether the material receives shadows (default: False)
+        material_roughness: Roughness value 0.0-1.0, 1.0 = fully matte (default: 1.0).
+            Only used when flat_color=False.
+        receive_shadows: Whether the material receives shadows (default: False).
+            Only used when flat_color=False.
+        flat_color: If True, use pure emission shader for exact color regardless of
+            lighting. The rendered color will match the input color exactly.
+            If False (default), use Principled BSDF which responds to lighting.
 
     Returns:
         Blender Material object configured as specified
@@ -105,17 +111,26 @@ def create_matte_material(
     # Clear default nodes
     material.node_tree.nodes.clear()
 
-    # Create Principled BSDF shader
     nodes = material.node_tree.nodes
+    output = nodes.new(type="ShaderNodeOutputMaterial")
+
+    if flat_color:
+        # Pure emission shader - exact color regardless of lighting
+        emission = nodes.new(type="ShaderNodeEmission")
+        emission.inputs["Color"].default_value = (*color, 1.0)
+        emission.inputs["Strength"].default_value = 1.0
+
+        material.node_tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+        logger.info(f"✓ Created flat color material '{name}' (emission, ignores lighting)")
+        return material
+
+    # Physically-based material using Principled BSDF
     bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
 
     # Set Principled BSDF properties
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)  # RGBA
     bsdf.inputs["Roughness"].default_value = material_roughness
     bsdf.inputs["Metallic"].default_value = 0.0  # Not metallic
-
-    # Create output node
-    output = nodes.new(type="ShaderNodeOutputMaterial")
 
     if receive_shadows:
         # Simple pass-through: just connect BSDF to output
@@ -233,6 +248,7 @@ def create_background_plane(
     color: str | tuple = "#F5F5F0",
     size_multiplier: float = 2.0,
     receive_shadows: bool = False,
+    flat_color: bool = False,
 ) -> "bpy.types.Object":
     """Create a background plane for Blender terrain renders.
 
@@ -255,6 +271,9 @@ def create_background_plane(
             for safety margin (default: 2.0, makes plane 2x frustum size)
         receive_shadows: Whether the plane receives shadows from objects
             (default: False for clean background)
+        flat_color: If True, use emission shader for exact color that ignores
+            scene lighting. If False (default), use Principled BSDF that responds
+            to lighting (darker colors may appear lighter due to ambient light).
 
     Returns:
         Blender plane object with material applied and positioned
@@ -376,6 +395,7 @@ def create_background_plane(
         color=color,
         material_roughness=1.0,
         receive_shadows=receive_shadows,
+        flat_color=flat_color,
     )
 
     if mesh_data.materials:
@@ -459,6 +479,11 @@ def setup_camera(camera_angle, camera_location, scale, focal_length=50, camera_t
         cam_data.ortho_scale = scale
         logger.debug(f"Orthographic camera configured at {camera_location} with scale {scale}")
 
+    # Set clipping planes to handle large scenes with background planes
+    # Default clip_end of 100 is too small for terrain visualization
+    cam_data.clip_start = 0.1
+    cam_data.clip_end = 10000  # Sufficient for most terrain scenes
+
     bpy.context.scene.camera = cam_obj
 
     return cam_obj
@@ -541,6 +566,95 @@ def setup_light(
     return sun_obj
 
 
+def setup_two_point_lighting(
+    sun_azimuth: float = 225.0,
+    sun_elevation: float = 30.0,
+    sun_energy: float = 7.0,
+    sun_angle: float = 1.0,
+    sun_color: tuple = (1.0, 0.85, 0.6),
+    fill_azimuth: float = 45.0,
+    fill_elevation: float = 60.0,
+    fill_energy: float = 0.0,
+    fill_angle: float = 3.0,
+    fill_color: tuple = (0.7, 0.8, 1.0),
+) -> list:
+    """Set up two-point lighting with primary sun and optional fill light.
+
+    Creates professional-quality lighting for terrain visualization:
+    - Primary sun: Creates shadows and defines form (warm color by default)
+    - Fill light: Softens shadows, adds depth (cool color by default)
+
+    The warm/cool color contrast creates a natural outdoor lighting look
+    similar to golden hour photography.
+
+    Args:
+        sun_azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W).
+            Default: 225° (southwest, afternoon sun)
+        sun_elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead).
+            Default: 30° (mid-afternoon)
+        sun_energy: Sun light strength. Default: 7.0
+        sun_angle: Sun angular size in degrees (smaller=sharper shadows).
+            Default: 1.0°
+        sun_color: RGB tuple for sun color. Default: (1.0, 0.85, 0.6) warm golden
+        fill_azimuth: Direction fill light comes FROM in degrees.
+            Default: 45° (northeast, opposite sun)
+        fill_elevation: Fill light angle above horizon in degrees.
+            Default: 60° (higher angle for even fill)
+        fill_energy: Fill light strength. Default: 0.0 (no fill light).
+            Set to ~1-3 for subtle fill, ~5+ for strong fill.
+        fill_angle: Fill light angular size in degrees.
+            Default: 3.0° (softer than sun)
+        fill_color: RGB tuple for fill color. Default: (0.7, 0.8, 1.0) cool blue
+
+    Returns:
+        List of created light objects (1-2 lights depending on fill_energy)
+
+    Examples:
+        >>> # Basic sun-only lighting
+        >>> lights = setup_two_point_lighting(sun_azimuth=180, sun_elevation=45)
+
+        >>> # Sun with fill for softer shadows
+        >>> lights = setup_two_point_lighting(
+        ...     sun_azimuth=225, sun_elevation=30, sun_energy=7,
+        ...     fill_energy=2, fill_azimuth=45, fill_elevation=60
+        ... )
+
+        >>> # Low sun for dramatic shadows
+        >>> lights = setup_two_point_lighting(sun_elevation=10)
+    """
+    logger = logging.getLogger(__name__)
+    logger.info(f"Setting up two-point lighting (sun: azimuth={sun_azimuth}°, elevation={sun_elevation}°)...")
+
+    lights = []
+
+    # Primary sun - only create if energy > 0
+    if sun_energy > 0:
+        sun_light = setup_light(
+            angle=sun_angle,
+            energy=sun_energy,
+            azimuth=sun_azimuth,
+            elevation=sun_elevation,
+        )
+        sun_light.data.color = sun_color
+        lights.append(sun_light)
+        logger.debug(f"  Sun: azimuth={sun_azimuth}°, elevation={sun_elevation}°, energy={sun_energy}")
+
+    # Fill light - only create if energy > 0
+    if fill_energy > 0:
+        fill_light = setup_light(
+            angle=fill_angle,
+            energy=fill_energy,
+            azimuth=fill_azimuth,
+            elevation=fill_elevation,
+        )
+        fill_light.data.color = fill_color
+        lights.append(fill_light)
+        logger.info(f"  Fill: azimuth={fill_azimuth}°, elevation={fill_elevation}°, energy={fill_energy}")
+
+    logger.info("✓ Two-point lighting setup complete")
+    return lights
+
+
 def setup_camera_and_light(
     camera_angle,
     camera_location,
@@ -581,8 +695,8 @@ def position_camera_relative(
     elevation=0.5,
     look_at="center",
     camera_type="ORTHO",
-    sun_angle=2,
-    sun_energy=3,
+    sun_angle=0,
+    sun_energy=0,
     sun_azimuth=None,
     sun_elevation=None,
     focal_length=50,
@@ -613,8 +727,8 @@ def position_camera_relative(
         look_at: Where camera points - 'center' to point at mesh center,
             or tuple (x, y, z) for custom target. Default: 'center'
         camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
-        sun_angle: Angular diameter of sun in degrees (affects shadow softness). Default: 2
-        sun_energy: Intensity of sun light. Default: 3
+        sun_angle: Angular diameter of sun in degrees (affects shadow softness). Default: 0 (no light)
+        sun_energy: Intensity of sun light. Default: 0 (no light created unless > 0)
         sun_azimuth: Direction sun comes FROM in degrees (0=North, 90=East, 180=South, 270=West)
         sun_elevation: Angle of sun above horizon in degrees (0=horizon, 90=overhead)
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
@@ -743,13 +857,22 @@ def position_camera_relative(
     return camera
 
 
-def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=0.0):
+def setup_world_atmosphere(density=0.0002, scatter_color=(1, 1, 1, 1), anisotropy=0.8):
     """Set up world volume for atmospheric effects.
 
+    This function is additive - it preserves any existing Surface shader
+    (like HDRI lighting) and only adds a Volume shader for atmospheric fog.
+
+    Note: Density is per-Blender-unit. For terrain scenes that are 100-500 units
+    across, use very low values (0.0001-0.001). Higher values will make the
+    scene very dark or completely black.
+
     Args:
-        density: Density of the atmospheric volume (default: 0.02)
+        density: Density of the atmospheric volume (default: 0.0002, very subtle)
+                 For stronger fog: 0.001. For barely visible haze: 0.0001
         scatter_color: RGBA color tuple for scatter (default: white)
-        anisotropy: Direction of scatter from -1 to 1 (default: 0 for uniform)
+        anisotropy: Direction of scatter from -1 to 1 (default: 0.8 for forward scatter,
+                    creates sun halo effect similar to real atmosphere)
 
     Returns:
         bpy.types.World: The configured world object
@@ -767,22 +890,40 @@ def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=
         nodes = world.node_tree.nodes
         links = world.node_tree.links
 
-        logger.debug("Clearing existing world nodes...")
-        nodes.clear()
+        # Find existing World Output node, or create one
+        output = None
+        for node in nodes:
+            if node.type == "OUTPUT_WORLD":
+                output = node
+                break
 
-        # Create node network
-        logger.debug("Creating atmosphere node network...")
-        output = nodes.new("ShaderNodeOutputWorld")
-        background = nodes.new("ShaderNodeBackground")
-        volume = nodes.new("ShaderNodeVolumePrincipled")
+        if output is None:
+            # No existing world setup - create full setup
+            logger.debug("Creating new world node network...")
+            nodes.clear()
+            output = nodes.new("ShaderNodeOutputWorld")
+            background = nodes.new("ShaderNodeBackground")
+            links.new(background.outputs["Background"], output.inputs["Surface"])
+        else:
+            logger.debug("Adding atmosphere to existing world setup...")
+
+        # Create or find volume node
+        volume = None
+        for node in nodes:
+            if node.type == "VOLUME_PRINCIPLED":
+                volume = node
+                break
+
+        if volume is None:
+            volume = nodes.new("ShaderNodeVolumePrincipled")
+            volume.location = (output.location.x - 200, output.location.y - 200)
 
         # Configure volume properties
         volume.inputs["Density"].default_value = density
         volume.inputs["Anisotropy"].default_value = anisotropy
         volume.inputs["Color"].default_value = scatter_color
 
-        # Connect nodes
-        links.new(background.outputs["Background"], output.inputs["Surface"])
+        # Connect volume to output (this only affects the Volume slot, not Surface)
         links.new(volume.outputs["Volume"], output.inputs["Volume"])
 
         logger.info(f"World atmosphere configured with density {density}")
@@ -790,4 +931,153 @@ def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=
 
     except Exception as e:
         logger.error(f"Failed to setup world atmosphere: {str(e)}")
+        raise
+
+
+def setup_hdri_lighting(
+    sun_elevation: float = 30.0,
+    sun_rotation: float = 225.0,
+    sun_intensity: float = 1.0,
+    sun_size: float = 0.545,
+    air_density: float = 1.0,
+    visible_to_camera: bool = False,
+    camera_background: tuple = None,
+):
+    """Set up HDRI-style sky lighting using Blender's Nishita sky model.
+
+    Creates realistic sky lighting that contributes to ambient illumination
+    without being visible in the final render (by default).
+
+    The Nishita sky model provides physically-based atmospheric scattering
+    for natural-looking outdoor lighting.
+
+    Args:
+        sun_elevation: Sun elevation angle in degrees (0=horizon, 90=overhead)
+        sun_rotation: Sun rotation/azimuth in degrees (0=front, 180=back)
+        sun_intensity: Multiplier for sun intensity (default: 1.0)
+        sun_size: Angular diameter of sun disc in degrees (default: 0.545 = real sun).
+                  Larger values create softer shadows, smaller values create sharper shadows.
+        air_density: Atmospheric density (default: 1.0, higher=hazier)
+        visible_to_camera: If False, sky is invisible but still lights scene
+        camera_background: RGB tuple for background color when sky is invisible.
+                          Default None = use transparent (black behind scene).
+                          Use (0.9, 0.9, 0.9) for light gray if using atmosphere.
+
+    Returns:
+        bpy.types.World: The configured world object
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("Setting up HDRI sky lighting...")
+
+    try:
+        world = bpy.context.scene.world
+        if world is None:
+            world = bpy.data.worlds.new("World")
+            bpy.context.scene.world = world
+
+        world.use_nodes = True
+        nodes = world.node_tree.nodes
+        links = world.node_tree.links
+
+        # Clear existing nodes
+        nodes.clear()
+
+        # Create node network
+        output = nodes.new("ShaderNodeOutputWorld")
+        background = nodes.new("ShaderNodeBackground")
+        sky_texture = nodes.new("ShaderNodeTexSky")
+
+        # Position nodes
+        output.location = (400, 0)
+        background.location = (200, 0)
+        sky_texture.location = (0, 0)
+
+        # Configure sky model for realistic atmospheric scattering
+        # Blender 5.0+ renamed NISHITA to MULTIPLE_SCATTERING/SINGLE_SCATTERING
+        # Try modern names first, then fall back to older versions
+        sky_configured = False
+
+        # Blender 5.0+: MULTIPLE_SCATTERING (best quality, multiple atmospheric scattering)
+        if not sky_configured:
+            try:
+                sky_texture.sky_type = "MULTIPLE_SCATTERING"
+                sky_texture.sun_elevation = radians(sun_elevation)
+                sky_texture.sun_rotation = radians(sun_rotation)
+                sky_texture.sun_intensity = sun_intensity
+                sky_texture.sun_size = radians(sun_size)  # Angular size in radians
+                sky_texture.air_density = air_density
+                sky_configured = True
+                logger.info(f"  Using MULTIPLE_SCATTERING sky (elevation={sun_elevation}°, rotation={sun_rotation}°, size={sun_size}°)")
+            except (TypeError, AttributeError):
+                pass
+
+        # Blender 2.90-4.x: NISHITA
+        if not sky_configured:
+            try:
+                sky_texture.sky_type = "NISHITA"
+                sky_texture.sun_elevation = radians(sun_elevation)
+                sky_texture.sun_rotation = radians(sun_rotation)
+                sky_texture.sun_intensity = sun_intensity
+                sky_texture.sun_size = radians(sun_size)  # Angular size in radians
+                sky_texture.air_density = air_density
+                sky_configured = True
+                logger.info(f"  Using NISHITA sky (elevation={sun_elevation}°, rotation={sun_rotation}°, size={sun_size}°)")
+            except (TypeError, AttributeError):
+                pass
+
+        # Fallback: HOSEK_WILKIE (older but widely supported)
+        if not sky_configured:
+            sky_texture.sky_type = "HOSEK_WILKIE"
+            sky_texture.sun_elevation = radians(sun_elevation)
+            sky_texture.sun_rotation = radians(sun_rotation)
+            sky_texture.turbidity = 2.5  # Atmospheric haziness
+            logger.info(f"  Using HOSEK_WILKIE sky (elevation={sun_elevation}°, rotation={sun_rotation}°)")
+
+        # Connect nodes
+        links.new(sky_texture.outputs["Color"], background.inputs["Color"])
+        links.new(background.outputs["Background"], output.inputs["Surface"])
+
+        # Configure ray visibility - sky lights scene but isn't visible to camera
+        if not visible_to_camera:
+            # In Cycles, we can use a Light Path node to make the background
+            # invisible to camera rays while still contributing to lighting
+            light_path = nodes.new("ShaderNodeLightPath")
+            mix_shader = nodes.new("ShaderNodeMixShader")
+
+            light_path.location = (0, -200)
+            mix_shader.location = (400, 0)
+
+            if camera_background is not None:
+                # Use solid color for camera rays (works with atmosphere/volume)
+                camera_bg = nodes.new("ShaderNodeBackground")
+                camera_bg.location = (200, -200)
+                camera_bg.inputs["Color"].default_value = (*camera_background, 1.0)
+                camera_bg.inputs["Strength"].default_value = 1.0
+
+                # Reconnect: if camera ray, use solid bg; otherwise use sky
+                links.new(light_path.outputs["Is Camera Ray"], mix_shader.inputs["Fac"])
+                links.new(background.outputs["Background"], mix_shader.inputs[1])
+                links.new(camera_bg.outputs["Background"], mix_shader.inputs[2])
+                links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+
+                logger.info(f"✓ HDRI sky lighting configured (camera sees {camera_background})")
+            else:
+                # Use transparent for camera rays (original behavior)
+                transparent = nodes.new("ShaderNodeBsdfTransparent")
+                transparent.location = (200, -200)
+
+                # Reconnect: if camera ray, use transparent; otherwise use background
+                links.new(light_path.outputs["Is Camera Ray"], mix_shader.inputs["Fac"])
+                links.new(background.outputs["Background"], mix_shader.inputs[1])
+                links.new(transparent.outputs["BSDF"], mix_shader.inputs[2])
+                links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+
+                logger.info("✓ HDRI sky lighting configured (invisible to camera)")
+        else:
+            logger.info("✓ HDRI sky lighting configured (visible)")
+
+        return world
+
+    except Exception as e:
+        logger.error(f"Failed to setup HDRI lighting: {str(e)}")
         raise

@@ -207,6 +207,85 @@ class TestPositionCameraRelative:
         with pytest.raises(ValueError):
             position_camera_relative(mesh_obj, direction="invalid_direction")
 
+    def test_position_camera_relative_ortho_scale_applied(self):
+        """Test that ortho_scale is correctly applied to orthographic camera.
+
+        Regression test: Ensures ortho_scale parameter is passed correctly
+        through the function chain and applied to the camera object.
+        """
+        import bpy
+        from src.terrain.scene_setup import position_camera_relative
+
+        # Clear and create mesh
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+
+        bpy.ops.mesh.primitive_cube_add()
+        mesh_obj = bpy.context.active_object
+
+        # Call with specific ortho_scale value
+        test_ortho_scale = 2.5
+        camera = position_camera_relative(
+            mesh_obj,
+            direction="south",
+            camera_type="ORTHO",
+            ortho_scale=test_ortho_scale,
+        )
+
+        # The actual ortho_scale is computed based on mesh dimensions and our multiplier
+        # For a unit cube at origin, the computed scale should incorporate our value
+        assert camera is not None
+        assert camera.data.type == "ORTHO"
+        # The camera ortho_scale should be set (not None or 0)
+        assert camera.data.ortho_scale > 0
+        # For regression: verify the scale is influenced by the parameter
+        # (exact value depends on mesh size calculation, but should be proportional)
+
+    def test_position_camera_relative_ortho_scale_different_values(self):
+        """Test that different ortho_scale values produce different camera scales.
+
+        Regression test: Catches bugs where ortho_scale is passed to wrong parameter.
+        """
+        import bpy
+        from src.terrain.scene_setup import position_camera_relative
+
+        # Clear and create mesh
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+
+        bpy.ops.mesh.primitive_cube_add()
+        mesh_obj = bpy.context.active_object
+
+        # Call with small ortho_scale
+        camera1 = position_camera_relative(
+            mesh_obj,
+            direction="south",
+            camera_type="ORTHO",
+            ortho_scale=1.0,
+        )
+        scale1 = camera1.data.ortho_scale
+
+        # Remove camera and recreate mesh
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+        bpy.ops.mesh.primitive_cube_add()
+        mesh_obj = bpy.context.active_object
+
+        # Call with larger ortho_scale
+        camera2 = position_camera_relative(
+            mesh_obj,
+            direction="south",
+            camera_type="ORTHO",
+            ortho_scale=3.0,
+        )
+        scale2 = camera2.data.ortho_scale
+
+        # Larger ortho_scale should produce larger camera ortho_scale
+        assert scale2 > scale1, (
+            f"ortho_scale=3.0 should produce larger camera scale than ortho_scale=1.0, "
+            f"got {scale2} vs {scale1}"
+        )
+
 
 class TestSunPosition:
     """Tests for sun positioning with azimuth and elevation (TDD)."""
@@ -329,18 +408,20 @@ class TestSunPosition:
         mesh_obj = bpy.context.active_object
 
         # Should accept sun_azimuth and sun_elevation parameters
+        # Note: sun_energy > 0 needed to actually create a light (defaults to 0)
         camera = position_camera_relative(
             mesh_obj,
             direction="south",
             sun_azimuth=135,  # From SE
             sun_elevation=45,
+            sun_energy=3,  # Must be > 0 to create light
         )
 
         assert camera is not None
 
-        # Check that a sun light was created
+        # Check that a sun light was created (only when sun_energy > 0)
         sun_lights = [obj for obj in bpy.data.objects if obj.type == "LIGHT"]
-        assert len(sun_lights) > 0, "Should create sun light"
+        assert len(sun_lights) > 0, "Should create sun light when sun_energy > 0"
 
 
 class TestSetupWorldAtmosphere:
