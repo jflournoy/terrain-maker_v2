@@ -608,3 +608,129 @@ def _bilateral_filter_2d_fallback(data, sigma_spatial, sigma_intensity, mask, st
         f"({throughput:.0f} pixels/sec)"
     )
     return result
+
+
+def smooth_score_data(
+    scores: np.ndarray,
+    sigma_spatial: float = 3.0,
+    sigma_intensity: float = None,
+) -> np.ndarray:
+    """
+    Smooth score data using bilateral filtering.
+
+    Applies feature-preserving smoothing to reduce blocky pixelation from
+    low-resolution source data (e.g., SNODAS ~925m) when displayed on
+    high-resolution terrain (~30m DEM).
+
+    Uses bilateral filtering: smooths within similar-intensity regions while
+    preserving edges between different score zones.
+
+    Args:
+        scores: 2D numpy array of score values (typically 0-1 range)
+        sigma_spatial: Spatial smoothing extent in pixels (default: 3.0).
+            Larger = more smoothing. Typical range: 1-10 pixels.
+        sigma_intensity: Intensity similarity threshold in score units.
+            Larger = more smoothing across score differences.
+            If None, auto-calculated as 15% of score range (good for 0-1 data).
+
+    Returns:
+        Smoothed score array with same shape as input.
+        NaN values are preserved. Output is clipped to [0, 1] range.
+
+    Example:
+        >>> # Smooth blocky SNODAS-derived scores
+        >>> sledding_scores = load_score_grid("sledding_scores.npz")
+        >>> smoothed = smooth_score_data(sledding_scores, sigma_spatial=5.0)
+    """
+    logger = logging.getLogger(__name__)
+
+    # Create mask for NaN values
+    mask = np.isnan(scores)
+
+    # Calculate sigma_intensity if not provided
+    # For score data (0-1 range), use ~15% of range for good edge preservation
+    if sigma_intensity is None:
+        valid_data = scores[~mask]
+        if len(valid_data) > 0:
+            score_range = np.nanmax(valid_data) - np.nanmin(valid_data)
+            sigma_intensity = max(score_range * 0.15, 0.05)  # At least 0.05
+        else:
+            sigma_intensity = 0.15  # Default for 0-1 range
+        logger.debug(f"Auto-calculated sigma_intensity: {sigma_intensity:.3f}")
+
+    logger.info(
+        f"Smoothing score data (sigma_spatial={sigma_spatial}, sigma_intensity={sigma_intensity:.3f})"
+    )
+
+    # Apply bilateral filter
+    smoothed = _bilateral_filter_2d(
+        scores.astype(np.float64),
+        sigma_spatial=sigma_spatial,
+        sigma_intensity=sigma_intensity,
+        mask=mask,
+    )
+
+    # Clip to valid score range [0, 1] (bilateral can slightly exceed bounds)
+    smoothed = np.clip(smoothed, 0.0, 1.0)
+
+    # Restore NaN values
+    smoothed[mask] = np.nan
+
+    return smoothed
+
+
+def despeckle_scores(
+    scores: np.ndarray,
+    kernel_size: int = 3,
+) -> np.ndarray:
+    """
+    Remove isolated speckles from score data using median filtering.
+
+    Unlike bilateral filtering which preserves edges, median filtering
+    replaces each pixel with the median of its neighborhood. This effectively
+    removes isolated outlier pixels (speckles) while preserving larger regions.
+
+    Use case: SNODAS snow data upsampled to high-res DEM often has isolated
+    low-score pixels (speckles) in otherwise high-score regions due to
+    resolution mismatch. These appear as visual noise in the rendered terrain.
+
+    Args:
+        scores: 2D array of score values (typically 0-1 range)
+        kernel_size: Size of median filter kernel (default: 3 for 3x3).
+            Larger kernels remove larger speckle clusters but may affect
+            legitimate small features. Common values: 3, 5, 7.
+
+    Returns:
+        Despeckled score array with same shape as input.
+        NaN values are preserved.
+
+    Example:
+        >>> # Remove single-pixel speckles
+        >>> despeckled = despeckle_scores(scores, kernel_size=3)
+        >>> # Remove up to 2x2 speckle clusters
+        >>> despeckled = despeckle_scores(scores, kernel_size=5)
+    """
+    from scipy.ndimage import median_filter
+
+    logger = logging.getLogger(__name__)
+
+    if scores.ndim != 2:
+        raise ValueError(f"scores must be 2D, got {scores.ndim}D")
+
+    # Handle NaN values - replace with 0 temporarily for filtering
+    mask = np.isnan(scores)
+    scores_filled = scores.copy()
+    scores_filled[mask] = 0.0
+
+    logger.info(f"Despeckle score data (kernel_size={kernel_size})")
+
+    # Apply median filter
+    despeckled = median_filter(scores_filled.astype(np.float64), size=kernel_size)
+
+    # Clip to valid range (median should preserve range but ensure it)
+    despeckled = np.clip(despeckled, 0.0, 1.0)
+
+    # Restore NaN values
+    despeckled[mask] = np.nan
+
+    return despeckled.astype(np.float32)
