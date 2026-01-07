@@ -371,3 +371,83 @@ class TestPositionCameraRelativeMultiMesh:
         assert abs(cam_single.location[0] - cam_list.location[0]) < 0.01
         assert abs(cam_single.location[1] - cam_list.location[1]) < 0.01
         assert abs(cam_single.location[2] - cam_list.location[2]) < 0.01
+
+
+class TestWrapperParameterPassthrough:
+    """Regression tests for core.py wrapper passing parameters to scene_setup.py.
+
+    These tests catch bugs where wrapper functions pass arguments positionally
+    and become misaligned when the underlying function signature changes.
+    """
+
+    def test_ortho_scale_passed_through_wrapper(self, mock_mesh):
+        """Verify ortho_scale is correctly passed through core.py wrapper.
+
+        Regression test: Catches bugs where ortho_scale is passed to wrong param
+        due to positional argument mismatch between wrapper and underlying function.
+        """
+        from src.terrain.core import position_camera_relative
+
+        # Call with small ortho_scale
+        cam1 = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            camera_type="ORTHO",
+            ortho_scale=1.0,
+        )
+        scale1 = cam1.data.ortho_scale
+
+        # Call with larger ortho_scale (need fresh mesh to avoid camera reuse)
+        for obj in list(bpy.data.objects):
+            if obj.type == "CAMERA":
+                bpy.data.objects.remove(obj)
+
+        cam2 = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            camera_type="ORTHO",
+            ortho_scale=3.0,
+        )
+        scale2 = cam2.data.ortho_scale
+
+        # Different ortho_scale values must produce different camera scales
+        assert scale2 > scale1, (
+            f"Wrapper bug: ortho_scale=3.0 should produce larger scale than 1.0, "
+            f"got {scale2:.2f} vs {scale1:.2f}. "
+            f"ortho_scale may be passed to wrong parameter."
+        )
+
+    def test_focal_length_passed_through_wrapper(self, mock_mesh):
+        """Verify focal_length is correctly passed through core.py wrapper."""
+        from src.terrain.core import position_camera_relative
+
+        cam = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            camera_type="PERSP",
+            focal_length=85,  # Portrait lens
+        )
+
+        # Camera should have the specified focal length
+        assert cam.data.lens == pytest.approx(85, abs=0.1), (
+            f"focal_length not passed correctly: expected 85mm, got {cam.data.lens}mm"
+        )
+
+    def test_sun_azimuth_elevation_passed_through_wrapper(self, mock_mesh):
+        """Verify sun_azimuth and sun_elevation are correctly passed through."""
+        from src.terrain.core import position_camera_relative
+
+        # Need sun_energy > 0 to create light
+        cam = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            sun_azimuth=180,  # From south
+            sun_elevation=45,
+            sun_energy=3,
+        )
+
+        # Should have created a sun light
+        sun_lights = [obj for obj in bpy.data.objects if obj.type == "LIGHT"]
+        assert len(sun_lights) > 0, (
+            "sun_azimuth/sun_elevation not passed correctly: no sun light created"
+        )

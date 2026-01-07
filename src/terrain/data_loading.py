@@ -248,6 +248,7 @@ def load_filtered_hgt_files(
     max_latitude: int = None,
     min_longitude: int = None,
     max_longitude: int = None,
+    bbox: tuple = None,
     pattern: str = "*.hgt",
 ) -> tuple[np.ndarray, rasterio.Affine]:
     """
@@ -262,6 +263,9 @@ def load_filtered_hgt_files(
         max_latitude: Northern bound (e.g., 60 for N60)
         min_longitude: Western bound (e.g., -120 for W120)
         max_longitude: Eastern bound (e.g., 30 for E30)
+        bbox: Bounding box as (west, south, east, north) tuple. If provided,
+            overrides individual min/max parameters. Uses standard GIS convention:
+            (min_lon, min_lat, max_lon, max_lat).
         pattern: File pattern to match (default: "*.hgt")
 
     Returns:
@@ -271,20 +275,28 @@ def load_filtered_hgt_files(
         ValueError: If no matching files found after filtering
 
     Example:
-        >>> # Load only tiles in Michigan area
+        >>> # Load only tiles in Michigan area using individual params
         >>> dem, transform = load_filtered_hgt_files(
         ...     "/path/to/srtm",
         ...     min_latitude=41, max_latitude=47,
         ...     min_longitude=-90, max_longitude=-82
         ... )
 
+        >>> # Same area using bbox (west, south, east, north)
+        >>> dem, transform = load_filtered_hgt_files(
+        ...     "/path/to/srtm",
+        ...     bbox=(-90, 41, -82, 47)
+        ... )
+
         >>> # Alps region (Switzerland/Austria)
         >>> dem, transform = load_filtered_hgt_files(
         ...     "/path/to/srtm",
-        ...     min_latitude=45, max_latitude=48,
-        ...     min_longitude=5, max_longitude=15
+        ...     bbox=(5, 45, 15, 48)
         ... )
     """
+    # If bbox provided, unpack into individual params
+    if bbox is not None:
+        min_longitude, min_latitude, max_longitude, max_latitude = bbox
     dem_dir = Path(dem_dir)
 
     logger.info(f"Loading HGT files from {dem_dir}")

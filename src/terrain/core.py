@@ -56,6 +56,45 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 
+def calculate_target_vertices(
+    width: int,
+    height: int,
+    multiplier: float = 2.0,
+) -> int:
+    """
+    Calculate target vertex count for optimal mesh density at a given render resolution.
+
+    This helper calculates an appropriate number of vertices for terrain meshes
+    based on the intended output resolution. Using ~2 vertices per output pixel
+    ensures good detail without excessive geometry.
+
+    Args:
+        width: Render width in pixels
+        height: Render height in pixels
+        multiplier: Vertices per pixel (default: 2.0).
+                   Higher values = more detail but slower renders.
+                   - 1.0: Minimum detail (1 vertex per pixel)
+                   - 2.0: Good balance for most renders (recommended)
+                   - 3.0+: High detail for print or zoomed views
+
+    Returns:
+        int: Target vertex count for terrain mesh creation
+
+    Example:
+        ```python
+        # For 1920x1080 render
+        target = calculate_target_vertices(1920, 1080)  # ~4.1M vertices
+
+        # For print quality (3000x2400 @ 300 DPI)
+        target = calculate_target_vertices(3000, 2400, multiplier=2.5)  # ~18M vertices
+
+        # Use with Terrain
+        terrain.configure_for_target_vertices(target_vertices=target)
+        ```
+    """
+    return int(width * height * multiplier)
+
+
 def clear_scene():
     """
     Clear all objects from the Blender scene.
@@ -157,6 +196,55 @@ def setup_camera_and_light(
     )
 
 
+def setup_two_point_lighting(
+    sun_azimuth: float = 225.0,
+    sun_elevation: float = 30.0,
+    sun_energy: float = 7.0,
+    sun_angle: float = 1.0,
+    sun_color: tuple = (1.0, 0.85, 0.6),
+    fill_azimuth: float = 45.0,
+    fill_elevation: float = 60.0,
+    fill_energy: float = 0.0,
+    fill_angle: float = 3.0,
+    fill_color: tuple = (0.7, 0.8, 1.0),
+) -> list:
+    """Set up two-point lighting with primary sun and optional fill light.
+
+    Creates professional-quality lighting for terrain visualization:
+    - Primary sun: Creates shadows and defines form (warm color by default)
+    - Fill light: Softens shadows, adds depth (cool color by default)
+
+    Args:
+        sun_azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W)
+        sun_elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead)
+        sun_energy: Sun light strength (default: 7.0)
+        sun_angle: Sun angular size in degrees (default: 1.0)
+        sun_color: RGB tuple for sun color (default: warm golden)
+        fill_azimuth: Direction fill light comes FROM in degrees
+        fill_elevation: Fill light angle above horizon in degrees
+        fill_energy: Fill light strength (default: 0.0 = no fill)
+        fill_angle: Fill light angular size in degrees
+        fill_color: RGB tuple for fill color (default: cool blue)
+
+    Returns:
+        List of created light objects
+    """
+    from src.terrain.scene_setup import setup_two_point_lighting as _setup_two_point_lighting
+
+    return _setup_two_point_lighting(
+        sun_azimuth=sun_azimuth,
+        sun_elevation=sun_elevation,
+        sun_energy=sun_energy,
+        sun_angle=sun_angle,
+        sun_color=sun_color,
+        fill_azimuth=fill_azimuth,
+        fill_elevation=fill_elevation,
+        fill_energy=fill_energy,
+        fill_angle=fill_angle,
+        fill_color=fill_color,
+    )
+
+
 def position_camera_relative(
     mesh_obj,
     direction="south",
@@ -164,8 +252,10 @@ def position_camera_relative(
     elevation=0.5,
     look_at="center",
     camera_type="ORTHO",
-    sun_angle=2,
-    sun_energy=3,
+    sun_angle=0,
+    sun_energy=0,
+    sun_azimuth=None,
+    sun_elevation=None,
     focal_length=50,
     ortho_scale=1.2,
 ):
@@ -189,8 +279,10 @@ def position_camera_relative(
         look_at: Where camera points - 'center' to point at mesh center,
             or tuple (x, y, z) for custom target. Default: 'center'
         camera_type: 'ORTHO' (orthographic) or 'PERSP' (perspective). Default: 'ORTHO'
-        sun_angle: Angle of sun light in degrees. Default: 2
-        sun_energy: Intensity of sun light. Default: 3
+        sun_angle: Angle of sun light in degrees. Default: 0 (no light)
+        sun_energy: Intensity of sun light. Default: 0 (no light created unless > 0)
+        sun_azimuth: Direction sun comes FROM in degrees (0=N, 90=E, 180=S, 270=W).
+        sun_elevation: Sun angle above horizon in degrees (0=horizon, 90=overhead).
         focal_length: Camera focal length in mm (perspective cameras only). Default: 50
         ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
             Higher values zoom out (show more area), lower values zoom in.
@@ -205,7 +297,18 @@ def position_camera_relative(
     from src.terrain.scene_setup import position_camera_relative as _position_camera_relative
 
     return _position_camera_relative(
-        mesh_obj, direction, distance, elevation, look_at, camera_type, sun_angle, sun_energy, focal_length, ortho_scale
+        mesh_obj=mesh_obj,
+        direction=direction,
+        distance=distance,
+        elevation=elevation,
+        look_at=look_at,
+        camera_type=camera_type,
+        sun_angle=sun_angle,
+        sun_energy=sun_energy,
+        sun_azimuth=sun_azimuth,
+        sun_elevation=sun_elevation,
+        focal_length=focal_length,
+        ortho_scale=ortho_scale,
     )
 
 
@@ -225,6 +328,47 @@ def setup_world_atmosphere(density=0.02, scatter_color=(1, 1, 1, 1), anisotropy=
     return _setup_world_atmosphere(density, scatter_color, anisotropy)
 
 
+def setup_hdri_lighting(
+    sun_elevation: float = 30.0,
+    sun_rotation: float = 225.0,
+    sun_intensity: float = 1.0,
+    sun_size: float = 0.545,
+    air_density: float = 1.0,
+    visible_to_camera: bool = False,
+    camera_background: tuple = None,
+):
+    """Set up HDRI-style sky lighting using Blender's Nishita sky model.
+
+    Creates realistic sky lighting that contributes to ambient illumination
+    without being visible in the final render (by default).
+
+    Args:
+        sun_elevation: Sun elevation angle in degrees (0=horizon, 90=overhead)
+        sun_rotation: Sun rotation/azimuth in degrees (0=front, 180=back)
+        sun_intensity: Multiplier for sun intensity (default: 1.0)
+        sun_size: Angular diameter of sun disc in degrees (default: 0.545 = real sun).
+                  Larger values create softer shadows, smaller values create sharper.
+        air_density: Atmospheric density (default: 1.0, higher=hazier)
+        visible_to_camera: If False, sky is invisible but still lights scene
+        camera_background: RGB tuple for background when sky invisible.
+                          Use (0.9, 0.9, 0.9) for atmosphere to work.
+
+    Returns:
+        bpy.types.World: The configured world object
+    """
+    from src.terrain.scene_setup import setup_hdri_lighting as _setup_hdri_lighting
+
+    return _setup_hdri_lighting(
+        sun_elevation=sun_elevation,
+        sun_rotation=sun_rotation,
+        sun_intensity=sun_intensity,
+        sun_size=sun_size,
+        air_density=air_density,
+        visible_to_camera=visible_to_camera,
+        camera_background=camera_background,
+    )
+
+
 def setup_render_settings(
     use_gpu: bool = True,
     samples: int = 128,
@@ -232,6 +376,9 @@ def setup_render_settings(
     use_denoising: bool = True,
     denoiser: str = "OPTIX",
     compute_device: str = "OPTIX",
+    use_persistent_data: bool = False,
+    use_auto_tile: bool = False,
+    tile_size: int = 2048,
 ) -> None:
     """
     Configure Blender render settings for high-quality terrain visualization.
@@ -243,11 +390,25 @@ def setup_render_settings(
         use_denoising: Whether to enable denoising
         denoiser: Type of denoiser to use ('OPTIX', 'OPENIMAGEDENOISE', 'NLM')
         compute_device: Compute device type ('OPTIX', 'CUDA', 'HIP', 'METAL')
+        use_persistent_data: Keep scene data in memory between frames (default: False)
+        use_auto_tile: Enable automatic tiling for large renders (default: False).
+            Splits large images into smaller GPU-friendly tiles to reduce VRAM usage.
+            Essential for print-quality renders (3000x2400+ pixels).
+        tile_size: Tile size in pixels when auto_tile is enabled (default: 2048).
+            Smaller tiles = less VRAM but slower rendering. Try 512-1024 for limited VRAM.
     """
     from src.terrain.rendering import setup_render_settings as _setup_render_settings
 
     return _setup_render_settings(
-        use_gpu, samples, preview_samples, use_denoising, denoiser, compute_device
+        use_gpu=use_gpu,
+        samples=samples,
+        preview_samples=preview_samples,
+        use_denoising=use_denoising,
+        denoiser=denoiser,
+        compute_device=compute_device,
+        use_persistent_data=use_persistent_data,
+        use_auto_tile=use_auto_tile,
+        tile_size=tile_size,
     )
 
 
@@ -259,6 +420,7 @@ def render_scene_to_file(
     color_mode="RGBA",
     compression=90,
     save_blend_file=True,
+    show_progress=True,
 ):
     """
     Render the current Blender scene to file.
@@ -271,6 +433,8 @@ def render_scene_to_file(
         color_mode (str): 'RGBA' or 'RGB' (default: 'RGBA')
         compression (int): PNG compression level 0-100 (default: 90)
         save_blend_file (bool): Also save .blend project file (default: True)
+        show_progress (bool): Show render progress updates (default: True).
+            Logs elapsed time every 5 seconds during rendering.
 
     Returns:
         Path: Path to rendered file if successful, None otherwise
@@ -278,8 +442,45 @@ def render_scene_to_file(
     from src.terrain.rendering import render_scene_to_file as _render_scene_to_file
 
     return _render_scene_to_file(
-        output_path, width, height, file_format, color_mode, compression, save_blend_file
+        output_path=output_path,
+        width=width,
+        height=height,
+        file_format=file_format,
+        color_mode=color_mode,
+        compression=compression,
+        save_blend_file=save_blend_file,
+        show_progress=show_progress,
     )
+
+
+def get_render_settings_report() -> dict:
+    """
+    Query Blender for the actual render settings used.
+
+    Returns a dictionary of all render-relevant settings, useful for
+    debugging, reproducibility, and verification.
+
+    Returns:
+        dict: Dictionary containing all render settings from Blender
+    """
+    from src.terrain.rendering import get_render_settings_report as _get_render_settings_report
+
+    return _get_render_settings_report()
+
+
+def print_render_settings_report(log=None) -> None:
+    """
+    Print a formatted report of all Blender render settings.
+
+    Queries Blender for actual settings and prints them in a readable format.
+    Useful for debugging and ensuring settings are correctly applied.
+
+    Args:
+        log: Logger to use (defaults to module logger)
+    """
+    from src.terrain.rendering import print_render_settings_report as _print_render_settings_report
+
+    return _print_render_settings_report(log)
 
 
 def apply_colormap_material(material: bpy.types.Material) -> None:
@@ -364,6 +565,52 @@ def load_dem_files(
     from src.terrain.data_loading import load_dem_files as _load_dem_files
 
     return _load_dem_files(directory_path, pattern, recursive)
+
+
+def load_filtered_hgt_files(
+    dem_dir,
+    min_latitude: int = None,
+    max_latitude: int = None,
+    min_longitude: int = None,
+    max_longitude: int = None,
+    bbox: tuple = None,
+    pattern: str = "*.hgt",
+):
+    """
+    Load SRTM HGT files filtered by latitude/longitude range or bounding box.
+
+    Filters files before loading to reduce memory usage for large DEM directories.
+
+    Args:
+        dem_dir: Directory containing HGT files
+        min_latitude: Southern bound (e.g., 41 for N41)
+        max_latitude: Northern bound (e.g., 47 for N47)
+        min_longitude: Western bound (e.g., -90 for W090)
+        max_longitude: Eastern bound (e.g., -82 for W082)
+        bbox: Bounding box as (west, south, east, north). Overrides individual params.
+        pattern: File pattern (default: "*.hgt")
+
+    Returns:
+        Tuple of (merged_dem, transform)
+
+    Example:
+        >>> # Load Detroit area using bbox
+        >>> dem, transform = load_filtered_hgt_files(
+        ...     "data/dem/detroit",
+        ...     bbox=(-84, 41, -82, 43)
+        ... )
+    """
+    from src.terrain.data_loading import load_filtered_hgt_files as _load_filtered_hgt_files
+
+    return _load_filtered_hgt_files(
+        dem_dir,
+        min_latitude=min_latitude,
+        max_latitude=max_latitude,
+        min_longitude=min_longitude,
+        max_longitude=max_longitude,
+        bbox=bbox,
+        pattern=pattern,
+    )
 
 
 def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.nan, num_threads=4):
@@ -473,6 +720,39 @@ def feature_preserving_smooth(sigma_spatial=3.0, sigma_intensity=None, nodata_va
     return _feature_preserving_smooth(sigma_spatial, sigma_intensity, nodata_value)
 
 
+def smooth_score_data(scores, sigma_spatial=3.0, sigma_intensity=None):
+    """
+    Smooth score data using bilateral filtering.
+
+    Applies feature-preserving smoothing to reduce blocky pixelation from
+    low-resolution source data (e.g., SNODAS ~925m) when displayed on
+    high-resolution terrain (~30m DEM).
+
+    Uses bilateral filtering: smooths within similar-intensity regions while
+    preserving edges between different score zones.
+
+    Args:
+        scores: 2D numpy array of score values (typically 0-1 range)
+        sigma_spatial: Spatial smoothing extent in pixels (default: 3.0).
+            Larger = more smoothing. Typical range: 1-10 pixels.
+        sigma_intensity: Intensity similarity threshold in score units.
+            Larger = more smoothing across score differences.
+            If None, auto-calculated as 15% of score range (good for 0-1 data).
+
+    Returns:
+        Smoothed score array with same shape as input.
+        NaN values are preserved. Output is clipped to [0, 1] range.
+
+    Example:
+        >>> # Smooth blocky SNODAS-derived scores
+        >>> sledding_scores = load_score_grid("sledding_scores.npz")
+        >>> smoothed = smooth_score_data(sledding_scores, sigma_spatial=5.0)
+    """
+    from src.terrain.transforms import smooth_score_data as _smooth_score_data
+
+    return _smooth_score_data(scores, sigma_spatial, sigma_intensity)
+
+
 def slope_colormap(slopes, cmap_name="terrain", min_slope=0, max_slope=45):
     """
     Create a simple colormap based solely on terrain slopes.
@@ -491,7 +771,7 @@ def slope_colormap(slopes, cmap_name="terrain", min_slope=0, max_slope=45):
     return _slope_colormap(slopes, cmap_name, min_slope, max_slope)
 
 
-def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None):
+def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None, gamma=1.0):
     """
     Create a colormap based on elevation values.
 
@@ -503,13 +783,15 @@ def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=No
         cmap_name: Matplotlib colormap name (default: 'viridis')
         min_elev: Minimum elevation for normalization (default: use data min)
         max_elev: Maximum elevation for normalization (default: use data max)
+        gamma: Gamma correction exponent (default: 1.0 = no correction).
+               Values < 1.0 brighten midtones, values > 1.0 darken midtones.
 
     Returns:
         Array of RGB colors with shape (height, width, 3) as uint8
     """
     from src.terrain.color_mapping import elevation_colormap as _elevation_colormap
 
-    return _elevation_colormap(dem_data, cmap_name, min_elev, max_elev)
+    return _elevation_colormap(dem_data, cmap_name, min_elev, max_elev, gamma)
 
 
 def transform_wrapper(transform_func):
@@ -1663,6 +1945,87 @@ class Terrain:
         )
 
         return water_mask_downsampled
+
+    def detect_water(
+        self,
+        slope_threshold: float = 0.01,
+        fill_holes: bool = True,
+    ) -> np.ndarray:
+        """
+        Detect water bodies on the transformed (downsampled) DEM.
+
+        This is a fast, simple water detection method that works on the already-
+        transformed DEM. It automatically handles elevation scale factor unscaling.
+
+        For higher accuracy at the cost of speed, use detect_water_highres() instead,
+        which detects water on the full-resolution DEM before downsampling.
+
+        Args:
+            slope_threshold: Maximum slope magnitude to classify as water (default: 0.01).
+                            Water bodies have nearly zero slope.
+            fill_holes: Whether to apply morphological hole filling (default: True)
+
+        Returns:
+            np.ndarray: Boolean water mask matching transformed_data shape
+
+        Raises:
+            ValueError: If transforms haven't been applied yet
+
+        Example:
+            ```python
+            terrain = Terrain(dem, transform)
+            terrain.apply_transforms()
+            water_mask = terrain.detect_water()
+            terrain.compute_colors(water_mask=water_mask)
+            ```
+        """
+        if "dem" not in self.data_layers:
+            raise ValueError("DEM layer not found. Cannot detect water without DEM.")
+
+        if not self.data_layers["dem"].get("transformed", False):
+            raise ValueError(
+                "Transforms have not been applied yet. Call apply_transforms() first."
+            )
+
+        from src.terrain.water import identify_water_by_slope
+
+        self.logger.info("Detecting water bodies on transformed DEM...")
+
+        # Get the transformed DEM
+        dem_data = self.data_layers["dem"]["transformed_data"]
+
+        # Auto-detect elevation scale factor from model_params or estimate from data range
+        scale_factor = self.model_params.get("elevation_scale", None)
+
+        if scale_factor is None:
+            # Estimate: if max elevation is << 1, it was probably scaled
+            max_elev = np.nanmax(dem_data)
+            if max_elev < 1.0:
+                # Likely scaled by 0.0001 (max ~0.03 for 300m terrain)
+                scale_factor = 0.0001
+                self.logger.debug(f"Auto-detected scale factor: {scale_factor}")
+            else:
+                scale_factor = 1.0  # Already in meters
+
+        # Unscale to meters for proper slope calculation
+        if scale_factor != 1.0:
+            unscaled_dem = dem_data / scale_factor
+            self.logger.debug(f"Unscaled DEM from {np.nanmax(dem_data):.4f} to {np.nanmax(unscaled_dem):.1f}m")
+        else:
+            unscaled_dem = dem_data
+
+        # Detect water
+        water_mask = identify_water_by_slope(
+            unscaled_dem,
+            slope_threshold=slope_threshold,
+            fill_holes=fill_holes,
+        )
+
+        water_pixels = np.sum(water_mask)
+        water_percent = 100 * water_pixels / water_mask.size
+        self.logger.info(f"  Water detected: {water_pixels:,} pixels ({water_percent:.1f}%)")
+
+        return water_mask
 
     def set_color_mapping(
         self,

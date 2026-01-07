@@ -51,7 +51,7 @@ except (AttributeError, TypeError):
     plt.register_cmap(cmap=michigan_cmap)
 
 
-def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None):
+def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None, gamma=1.0):
     """
     Create a colormap based on elevation values.
 
@@ -63,12 +63,16 @@ def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=No
         cmap_name: Matplotlib colormap name (default: 'viridis')
         min_elev: Minimum elevation for normalization (default: use data min)
         max_elev: Maximum elevation for normalization (default: use data max)
+        gamma: Gamma correction exponent (default: 1.0 = no correction).
+               Values < 1.0 brighten midtones, values > 1.0 darken midtones.
+               Common values: 0.5 = brighten, 2.2 = darken (sRGB gamma)
 
     Returns:
         Array of RGB colors with shape (height, width, 3) as uint8
     """
     logger = logging.getLogger(__name__)
-    logger.info(f"Creating elevation colormap using {cmap_name}")
+    logger.info(f"Creating elevation colormap using {cmap_name}" +
+                (f" (gamma={gamma})" if gamma != 1.0 else ""))
 
     # Handle NaN values
     valid_mask = ~np.isnan(dem_data)
@@ -87,6 +91,10 @@ def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=No
     else:
         normalized = np.zeros_like(dem_data, dtype=np.float32)
         normalized[valid_mask] = (dem_data[valid_mask] - min_elev) / (max_elev - min_elev + 1e-8)
+
+    # Apply gamma correction if specified
+    if gamma != 1.0:
+        normalized[valid_mask] = np.power(normalized[valid_mask], gamma)
 
     # Get colormap from matplotlib
     try:

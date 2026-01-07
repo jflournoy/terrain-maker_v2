@@ -141,6 +141,56 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
         logger.info(f"✓ Applied road mask to {road_count}/{n_loops} vertex loops")
 
 
+def apply_vertex_positions(
+    mesh_obj,
+    new_positions: np.ndarray,
+    logger=None,
+) -> None:
+    """
+    Apply new 3D positions to mesh vertices.
+
+    Useful for applying smoothed vertex coordinates to an existing mesh,
+    e.g., after road smoothing or terrain filtering.
+
+    Args:
+        mesh_obj: Blender mesh object to modify
+        new_positions: Array of shape (n_vertices, 3) with new [x, y, z] positions
+        logger: Optional logger for progress messages
+
+    Raises:
+        ValueError: If new_positions shape doesn't match mesh vertex count
+
+    Example:
+        >>> # Smooth road vertices and apply to mesh
+        >>> from src.terrain.roads import smooth_road_vertices
+        >>>
+        >>> vertices = np.array([v.co[:] for v in mesh.data.vertices])
+        >>> smoothed = smooth_road_vertices(vertices, road_mask, y_valid, x_valid)
+        >>> apply_vertex_positions(mesh, smoothed)
+    """
+    mesh = mesh_obj.data
+    n_vertices = len(mesh.vertices)
+
+    if new_positions.shape[0] != n_vertices:
+        raise ValueError(
+            f"Position array size {new_positions.shape[0]} doesn't match "
+            f"mesh vertex count {n_vertices}"
+        )
+
+    if new_positions.shape[1] != 3:
+        raise ValueError(f"Expected (n, 3) positions, got shape {new_positions.shape}")
+
+    # Apply new positions to all vertices
+    for i, v in enumerate(mesh.vertices):
+        v.co = new_positions[i]
+
+    # Update mesh to recalculate normals etc.
+    mesh.update()
+
+    if logger:
+        logger.info(f"✓ Applied new positions to {n_vertices} vertices")
+
+
 def create_blender_mesh(
     vertices,
     faces,
