@@ -863,5 +863,184 @@ class TestSmoothRoadVertices:
         assert result[1, 2] < 100.0, "Surface spike should be smoothed"
 
 
+class TestOffsetRoadVertices:
+    """Tests for offset_road_vertices function - raises/lowers road Z coords by fixed offset."""
+
+    def test_offset_road_vertices_exists(self):
+        """Test that offset_road_vertices function can be imported."""
+        from src.terrain.roads import offset_road_vertices
+        assert callable(offset_road_vertices)
+
+    def test_offset_road_vertices_returns_array(self):
+        """Test that function returns numpy array of same shape."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],
+            [1, 0, 20.0],
+            [2, 0, 15.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[0, 1, 0]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=5.0)
+
+        assert isinstance(result, np.ndarray)
+        assert result.shape == vertices.shape
+
+    def test_offset_road_vertices_raises_roads(self):
+        """Test that positive offset raises road vertices."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],  # Not on road
+            [1, 0, 20.0],  # On road
+            [2, 0, 15.0],  # Not on road
+        ], dtype=np.float64)
+
+        road_mask = np.array([[0, 1, 0]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=5.0)
+
+        # Road vertex should be raised by 5
+        assert result[1, 2] == 25.0, f"Road vertex should be 20+5=25, got {result[1, 2]}"
+
+    def test_offset_road_vertices_lowers_roads(self):
+        """Test that negative offset lowers road vertices."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],  # Not on road
+            [1, 0, 20.0],  # On road
+            [2, 0, 15.0],  # Not on road
+        ], dtype=np.float64)
+
+        road_mask = np.array([[0, 1, 0]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=-3.0)
+
+        # Road vertex should be lowered by 3
+        assert result[1, 2] == 17.0, f"Road vertex should be 20-3=17, got {result[1, 2]}"
+
+    def test_offset_road_vertices_only_modifies_roads(self):
+        """Test that non-road vertices are unchanged."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 100.0],  # Not on road
+            [1, 0, 200.0],  # On road
+            [2, 0, 150.0],  # Not on road
+        ], dtype=np.float64)
+
+        road_mask = np.array([[0, 1, 0]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=10.0)
+
+        # Non-road vertices should be exactly unchanged
+        assert result[0, 2] == 100.0, "First vertex Z should be unchanged"
+        assert result[2, 2] == 150.0, "Third vertex Z should be unchanged"
+
+    def test_offset_road_vertices_preserves_xy(self):
+        """Test that X and Y coordinates are never modified."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0.5, 1.5, 10.0],
+            [1.5, 2.5, 20.0],
+            [2.5, 3.5, 30.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=5.0)
+
+        # X and Y must be exactly preserved
+        np.testing.assert_array_equal(result[:, 0], vertices[:, 0], "X coords must be unchanged")
+        np.testing.assert_array_equal(result[:, 1], vertices[:, 1], "Y coords must be unchanged")
+
+    def test_offset_road_vertices_zero_offset(self):
+        """Test that offset=0 returns vertices unchanged."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],
+            [1, 0, 20.0],
+            [2, 0, 30.0],
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=0.0)
+
+        np.testing.assert_array_equal(result, vertices, "Offset 0 should return unchanged")
+
+    def test_offset_road_vertices_with_boundary_extension(self):
+        """Test that boundary extension vertices (more vertices than y_valid entries) are handled."""
+        from src.terrain.roads import offset_road_vertices
+
+        # 5 vertices total, but only 3 have grid mappings
+        vertices = np.array([
+            [0, 0, 10.0],   # Surface vertex on road
+            [1, 0, 20.0],   # Surface vertex on road
+            [2, 0, 30.0],   # Surface vertex on road
+            [0, -1, 5.0],   # Boundary extension vertex (no grid mapping)
+            [2, -1, 5.0],   # Boundary extension vertex (no grid mapping)
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 1, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0])
+        x_valid = np.array([0, 1, 2])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=5.0)
+
+        # Should return same shape
+        assert result.shape == vertices.shape
+        # Boundary vertices should be unchanged (no grid mapping)
+        assert result[3, 2] == 5.0, "Boundary vertex should be unchanged"
+        assert result[4, 2] == 5.0, "Boundary vertex should be unchanged"
+        # Surface road vertices should be offset
+        assert result[0, 2] == 15.0, "First road vertex should be offset"
+        assert result[1, 2] == 25.0, "Second road vertex should be offset"
+        assert result[2, 2] == 35.0, "Third road vertex should be offset"
+
+    def test_offset_road_vertices_multiple_road_segments(self):
+        """Test offsetting works with multiple separate road segments."""
+        from src.terrain.roads import offset_road_vertices
+
+        vertices = np.array([
+            [0, 0, 10.0],  # Road 1
+            [1, 0, 20.0],  # Not road
+            [2, 0, 30.0],  # Road 2
+            [3, 0, 40.0],  # Not road
+            [4, 0, 50.0],  # Road 3
+        ], dtype=np.float64)
+
+        road_mask = np.array([[1, 0, 1, 0, 1]], dtype=np.float64)
+        y_valid = np.array([0, 0, 0, 0, 0])
+        x_valid = np.array([0, 1, 2, 3, 4])
+
+        result = offset_road_vertices(vertices, road_mask, y_valid, x_valid, offset=2.0)
+
+        # Road vertices should be offset
+        assert result[0, 2] == 12.0, "Road vertex 1 should be offset"
+        assert result[2, 2] == 32.0, "Road vertex 2 should be offset"
+        assert result[4, 2] == 52.0, "Road vertex 3 should be offset"
+        # Non-road vertices should be unchanged
+        assert result[1, 2] == 20.0, "Non-road vertex should be unchanged"
+        assert result[3, 2] == 40.0, "Non-road vertex should be unchanged"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

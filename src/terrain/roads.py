@@ -204,6 +204,56 @@ def smooth_road_vertices(
     return result
 
 
+def offset_road_vertices(
+    vertices: np.ndarray,
+    road_mask: np.ndarray,
+    y_valid: np.ndarray,
+    x_valid: np.ndarray,
+    offset: float = 0.0,
+) -> np.ndarray:
+    """
+    Offset Z coordinates of mesh vertices that are on roads by a fixed amount.
+
+    A simpler alternative to smooth_road_vertices. Raises or lowers all road
+    vertices by a constant offset, making roads visually distinct from terrain.
+
+    Args:
+        vertices: Mesh vertex positions (N, 3) array with [x, y, z] coords
+        road_mask: 2D array (H, W) where >0.5 indicates road pixels
+        y_valid: Array (N,) of y indices mapping vertices to road_mask rows
+        x_valid: Array (N,) of x indices mapping vertices to road_mask columns
+        offset: Z offset to apply to road vertices. Positive = raise, negative = lower.
+                Default: 0.0 (no change)
+
+    Returns:
+        Modified vertices array with offset Z values on roads.
+        X and Y coordinates are never modified.
+    """
+    # Return unchanged if no offset
+    if offset == 0.0:
+        return vertices.copy()
+
+    result = vertices.copy()
+    n_surface_vertices = len(y_valid)
+
+    # Find which surface vertices are on roads
+    in_bounds = (
+        (y_valid >= 0) & (y_valid < road_mask.shape[0]) &
+        (x_valid >= 0) & (x_valid < road_mask.shape[1])
+    )
+
+    # Only surface vertices (with grid mappings) can be on roads
+    road_vertex_mask = np.zeros(n_surface_vertices, dtype=bool)
+    road_vertex_mask[in_bounds] = road_mask[y_valid[in_bounds], x_valid[in_bounds]] > 0.5
+
+    # Apply offset to road vertices
+    road_indices = np.where(road_vertex_mask)[0]
+    if len(road_indices) > 0:
+        result[road_indices, 2] += offset
+
+    return result
+
+
 # =============================================================================
 # DATA LAYER API
 # =============================================================================
