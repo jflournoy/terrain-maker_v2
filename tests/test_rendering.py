@@ -198,3 +198,119 @@ class TestRenderSceneToFile:
 
             # Should return None or Path
             assert result is None or isinstance(result, Path)
+
+
+class TestSetupRenderSettingsMemory:
+    """Tests for GPU memory-saving options in setup_render_settings (TDD).
+
+    These options help render large images without running out of GPU VRAM.
+    """
+
+    def test_setup_render_settings_accepts_persistent_data(self):
+        """Test that use_persistent_data parameter is accepted."""
+        from src.terrain.rendering import setup_render_settings
+
+        # Should not raise error when persistent_data is passed
+        setup_render_settings(use_persistent_data=True)
+
+    def test_setup_render_settings_persistent_data_enabled(self):
+        """Test that persistent data is enabled when requested."""
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        setup_render_settings(use_persistent_data=True)
+
+        # scene.render.use_persistent_data should be True
+        assert bpy.context.scene.render.use_persistent_data is True
+
+    def test_setup_render_settings_persistent_data_disabled_by_default(self):
+        """Test that persistent data is not enabled by default."""
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        # Reset to known state
+        bpy.context.scene.render.use_persistent_data = False
+        setup_render_settings()
+
+        # Default behavior should not change persistent data (keep disabled)
+        assert bpy.context.scene.render.use_persistent_data is False
+
+    def test_setup_render_settings_accepts_auto_tile(self):
+        """Test that use_auto_tile parameter is accepted."""
+        from src.terrain.rendering import setup_render_settings
+
+        # Should not raise error when auto_tile is passed
+        setup_render_settings(use_auto_tile=True)
+
+    def test_setup_render_settings_auto_tile_enabled(self):
+        """Test that auto tiling is enabled when requested.
+
+        Auto-tiling renders the image in smaller tiles to reduce VRAM usage.
+        This is essential for large print-quality renders (3000x2400+).
+        """
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        setup_render_settings(use_auto_tile=True)
+
+        # In Blender 4.0+, this is scene.cycles.use_auto_tile
+        assert bpy.context.scene.cycles.use_auto_tile is True
+
+    def test_setup_render_settings_accepts_tile_size(self):
+        """Test that tile_size parameter is accepted."""
+        from src.terrain.rendering import setup_render_settings
+
+        # Should not raise error when tile_size is passed
+        setup_render_settings(use_auto_tile=True, tile_size=1024)
+
+    def test_setup_render_settings_tile_size_applied(self):
+        """Test that tile size is applied when auto_tile is enabled.
+
+        Smaller tiles = less VRAM but slower rendering.
+        Typical values: 512, 1024, 2048 pixels.
+        """
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        tile_size = 1024
+        setup_render_settings(use_auto_tile=True, tile_size=tile_size)
+
+        # Tile size should be applied
+        assert bpy.context.scene.cycles.tile_size == tile_size
+
+    def test_setup_render_settings_auto_tile_disabled_by_default(self):
+        """Test that auto-tile is not enabled by default.
+
+        Auto-tiling adds overhead for small renders, so it should only
+        be enabled when explicitly requested for large images.
+        """
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        # Reset to known state
+        bpy.context.scene.cycles.use_auto_tile = False
+        setup_render_settings()
+
+        # Default behavior should not enable auto-tiling
+        assert bpy.context.scene.cycles.use_auto_tile is False
+
+    def test_setup_render_settings_combined_memory_options(self):
+        """Test that all memory-saving options can be combined.
+
+        For large renders, users typically want all memory-saving options:
+        - persistent_data: Reuses scene data between frames
+        - auto_tile: Splits large image into smaller GPU-friendly tiles
+        """
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        setup_render_settings(
+            use_persistent_data=True,
+            use_auto_tile=True,
+            tile_size=512,  # Smaller tiles for limited VRAM
+        )
+
+        # All settings should be applied
+        assert bpy.context.scene.render.use_persistent_data is True
+        assert bpy.context.scene.cycles.use_auto_tile is True
+        assert bpy.context.scene.cycles.tile_size == 512
