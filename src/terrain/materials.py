@@ -13,11 +13,26 @@ import bpy
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# ROAD COLOR PRESETS
+# =============================================================================
+
+# Named color presets for roads (same glossy metallic properties, different colors)
+ROAD_COLORS = {
+    "obsidian": (0.02, 0.02, 0.02),      # Near-black glass
+    "azurite": (0.04, 0.09, 0.16),       # Deep blue mineral (#0A1628)
+    "azurite-light": (0.06, 0.15, 0.25), # Richer azurite (#0F2540)
+    "malachite": (0.02, 0.08, 0.05),     # Deep green copper mineral
+    "hematite": (0.08, 0.06, 0.06),      # Dark iron red-gray
+}
+
 
 def apply_colormap_material(material: bpy.types.Material) -> None:
     """
-    Create a simple material setup for terrain visualization using vertex colors.
-    Uses emission to guarantee colors are visible regardless of lighting.
+    Create a physically-based material for terrain visualization using vertex colors.
+
+    Uses pure Principled BSDF for proper lighting response - no emission.
+    Terrain responds realistically to sun direction and casts proper shadows.
 
     Args:
         material: Blender material to configure
@@ -30,50 +45,34 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
     links = material.node_tree.links
 
     try:
-        # Create simple shader nodes with vertex color + emission
+        # Create shader nodes - pure Principled BSDF (no emission)
         output = nodes.new("ShaderNodeOutputMaterial")
         principled = nodes.new("ShaderNodeBsdfPrincipled")
-        emission = nodes.new("ShaderNodeEmission")
-        mix_shader = nodes.new("ShaderNodeMixShader")
         vertex_color = nodes.new("ShaderNodeVertexColor")
 
         # Position nodes
-        output.location = (600, 300)
-        mix_shader.location = (400, 300)
-        principled.location = (200, 400)
-        emission.location = (200, 200)
+        output.location = (400, 300)
+        principled.location = (200, 300)
         vertex_color.location = (0, 300)
 
         # Set vertex color layer
         vertex_color.layer_name = "TerrainColors"
 
-        # Configure principled shader for reflectance
-        principled.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1.0)
+        # Configure principled shader for natural terrain appearance
+        # Roughness 0.8 = mostly matte with subtle highlights
         principled.inputs["Roughness"].default_value = 0.8
-
-        # Configure emission to use vertex colors
-        # Use vertex color directly as emission color with moderate strength
-        emission.inputs["Strength"].default_value = 1.5
+        principled.inputs["Metallic"].default_value = 0.0
+        principled.inputs["Specular IOR Level"].default_value = 0.3  # Subtle specular
 
         # Create connections
         logger.debug("Creating node connections")
-        # Vertex color drives both emission and base color
-        links.new(vertex_color.outputs["Color"], emission.inputs["Color"])
+        # Vertex color drives base color directly
         links.new(vertex_color.outputs["Color"], principled.inputs["Base Color"])
 
-        # Mix between principled shader (reflected light) and emission (self-illuminated)
-        # Use mostly emission with some reflected light for better color visibility
-        links.new(principled.outputs["BSDF"], mix_shader.inputs[1])
-        links.new(emission.outputs["Emission"], mix_shader.inputs[2])
-
-        # Set mix factor to favor emission (70% emission, 30% principled)
-        # This ensures vertex colors are visible and properly colored
-        mix_shader.inputs[0].default_value = 0.3
-
         # Connect to output
-        links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+        links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
-        logger.info("Material setup completed successfully")
+        logger.info("Material setup completed successfully (pure Principled BSDF)")
 
     except Exception as e:
         logger.error(f"Error setting up material: {str(e)}")
@@ -299,23 +298,40 @@ def create_background_plane(
 def apply_terrain_with_obsidian_roads(
     material: bpy.types.Material,
     terrain_style: Optional[str] = None,
+    road_color: str | Tuple[float, float, float] = "obsidian",
 ) -> None:
     """
-    Create a material with obsidian roads and terrain colors/test material.
+    Create a material with glossy roads and terrain colors/test material.
 
     Reads from two vertex color layers:
     - "TerrainColors": The actual terrain colors (used for non-road areas)
     - "RoadMask": R channel marks road pixels (R > 0.5 = road)
 
-    Roads always render as obsidian (glossy black glass).
+    Roads render with glossy metallic properties (like polished stone).
     Non-road areas use either vertex colors or a test material.
 
     Args:
         material: Blender material to configure
         terrain_style: Optional test material for terrain ("chrome", "clay", etc.)
                       If None, uses vertex colors with emission.
+        road_color: Road color - either a preset name from ROAD_COLORS
+                   ("obsidian", "azurite", "azurite-light", "malachite", "hematite")
+                   or an RGB tuple (0-1 range). Default: "obsidian" (near-black).
     """
-    logger.info(f"Setting up terrain + obsidian roads material for {material.name}")
+    # Resolve road color
+    if isinstance(road_color, str):
+        if road_color.lower() in ROAD_COLORS:
+            road_rgb = ROAD_COLORS[road_color.lower()]
+            road_color_name = road_color.lower()
+        else:
+            logger.warning(f"Unknown road color preset '{road_color}', using obsidian")
+            road_rgb = ROAD_COLORS["obsidian"]
+            road_color_name = "obsidian"
+    else:
+        road_rgb = road_color
+        road_color_name = f"RGB{road_color}"
+
+    logger.info(f"Setting up terrain + {road_color_name} roads material for {material.name}")
     if terrain_style:
         logger.info(f"  Terrain style: {terrain_style}")
     else:
@@ -344,14 +360,14 @@ def apply_terrain_with_obsidian_roads(
         mix_shader = nodes.new("ShaderNodeMixShader")
         mix_shader.location = (600, 0)
 
-        # === OBSIDIAN ROAD SHADER ===
+        # === MATTE ROAD SHADER (brushed stone appearance) ===
         road_shader = nodes.new("ShaderNodeBsdfPrincipled")
         road_shader.location = (200, -200)
-        road_shader.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
-        road_shader.inputs["Roughness"].default_value = 0.0
-        road_shader.inputs["Metallic"].default_value = 1.0
+        road_shader.inputs["Base Color"].default_value = (*road_rgb, 1.0)
+        road_shader.inputs["Roughness"].default_value = 0.5  # Semi-matte finish
+        road_shader.inputs["Metallic"].default_value = 0.8   # Slightly less metallic
         road_shader.inputs["IOR"].default_value = 1.5
-        road_shader.inputs["Specular IOR Level"].default_value = 1.0
+        road_shader.inputs["Specular IOR Level"].default_value = 0.5
 
         # === TERRAIN SHADER ===
         if terrain_style and terrain_style.lower() != "none":
@@ -360,30 +376,22 @@ def apply_terrain_with_obsidian_roads(
             terrain_shader.location = (200, 200)
             _configure_principled_for_style(terrain_shader, terrain_style)
         else:
-            # Use vertex colors with emission for terrain
+            # Use vertex colors with pure Principled BSDF for terrain
             terrain_colors = nodes.new("ShaderNodeVertexColor")
             terrain_colors.layer_name = "TerrainColors"
             terrain_colors.location = (-400, 200)
 
+            # Pure Principled BSDF - no emission for proper lighting response
             terrain_principled = nodes.new("ShaderNodeBsdfPrincipled")
             terrain_principled.location = (0, 300)
             terrain_principled.inputs["Roughness"].default_value = 0.8
+            terrain_principled.inputs["Metallic"].default_value = 0.0
+            terrain_principled.inputs["Specular IOR Level"].default_value = 0.3
 
-            terrain_emission = nodes.new("ShaderNodeEmission")
-            terrain_emission.location = (0, 100)
-            terrain_emission.inputs["Strength"].default_value = 1.5
-
-            terrain_mix = nodes.new("ShaderNodeMixShader")
-            terrain_mix.location = (200, 200)
-            terrain_mix.inputs[0].default_value = 0.3  # 70% emission, 30% principled
-
-            # Connect terrain vertex colors
+            # Connect terrain vertex colors directly to principled shader
             links.new(terrain_colors.outputs["Color"], terrain_principled.inputs["Base Color"])
-            links.new(terrain_colors.outputs["Color"], terrain_emission.inputs["Color"])
-            links.new(terrain_principled.outputs["BSDF"], terrain_mix.inputs[1])
-            links.new(terrain_emission.outputs["Emission"], terrain_mix.inputs[2])
 
-            terrain_shader = terrain_mix
+            terrain_shader = terrain_principled
 
         # === CONNECT EVERYTHING ===
         # Road mask R channel controls mixing (R=1 → road, R=0 → terrain)
@@ -392,16 +400,13 @@ def apply_terrain_with_obsidian_roads(
 
         # Input 1 = terrain (when mask is 0)
         # Input 2 = road (when mask is 1)
-        if terrain_style and terrain_style.lower() != "none":
-            links.new(terrain_shader.outputs["BSDF"], mix_shader.inputs[1])
-        else:
-            links.new(terrain_shader.outputs["Shader"], mix_shader.inputs[1])
+        links.new(terrain_shader.outputs["BSDF"], mix_shader.inputs[1])
         links.new(road_shader.outputs["BSDF"], mix_shader.inputs[2])
 
         # Connect to output
         links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
 
-        logger.info("✓ Terrain + obsidian roads material applied")
+        logger.info(f"✓ Terrain + {road_color_name} roads material applied")
 
     except Exception as e:
         logger.error(f"Error setting up terrain + roads material: {str(e)}")
