@@ -124,6 +124,17 @@ def load_drive_time_data(
 
     # Transform from UTM coordinates to pixel coordinates using the affine transform
     def transform_to_pixels(geom):
+        """Transform geometry from UTM coordinates to pixel coordinates.
+
+        Converts UTM coordinates to pixel coordinates using the affine transform.
+        Handles both Polygon and MultiPolygon geometries recursively.
+
+        Args:
+            geom: Shapely geometry in UTM coordinates (Polygon or MultiPolygon)
+
+        Returns:
+            Shapely geometry with coordinates transformed to pixel space
+        """
         if geom.geom_type == "MultiPolygon":
             polygons = [transform_to_pixels(poly) for poly in geom.geoms]
             return shapely.geometry.MultiPolygon(polygons)

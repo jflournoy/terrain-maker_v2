@@ -7,7 +7,8 @@ Welcome to the **terrain-maker** documentation. This library makes it easy to cr
 1. **[Install](PYTHON_SETUP.md)** - Set up Python environment
 2. **[Quick Start Tutorial](QUICK_START.md)** - Get your first terrain in 5 minutes
 3. **[Examples](EXAMPLES.md)** - See it in action with real data
-4. **[API Reference](API_REFERENCE.md)** - Detailed method documentation
+4. **[Combined Render Guide](COMBINED_RENDER.md)** - Advanced rendering with all features
+5. **[API Reference](API_REFERENCE.md)** - Detailed method documentation
 
 ## What is terrain-maker?
 
@@ -146,6 +147,12 @@ Blender rendering → PNG/GLTF/etc.
 
 ## Documentation Structure
 
+- **[COMBINED\_RENDER.md](COMBINED_RENDER.md)**
+  - Complete CLI reference for combined render
+  - All smoothing and enhancement options
+  - Camera, lighting, and material settings
+  - Pipeline caching and memory management
+
 - **[API\_REFERENCE.md](API_REFERENCE.md)**
   - Complete reference for all methods
   - Parameter documentation
@@ -168,4 +175,4 @@ For issues or questions:
 ---
 
 **Version:** 1.0
-**Last Updated:** 2025-11-20
+**Last Updated:** 2026-01-12

@@ -349,6 +349,17 @@ class TransformCache:
         """
         # Convert params to deterministic string representation
         def serialize_value(v):
+            """Convert a parameter value to a deterministic string for hashing.
+
+            Handles numpy arrays specially by including shape, dtype, and content hash.
+            Other values are converted to their string representation.
+
+            Args:
+                v: Parameter value (can be ndarray, scalar, string, etc.)
+
+            Returns:
+                Deterministic string representation of the value
+            """
             if isinstance(v, np.ndarray):
                 return f"ndarray:{v.shape}:{v.dtype}:{hash(v.tobytes())}"
             return str(v)

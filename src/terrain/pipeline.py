@@ -578,6 +578,14 @@ class TerrainPipeline:
         order = []
 
         def visit(task: str):
+            """Recursively visit a task and its dependencies for topological sort.
+
+            Depth-first traversal that visits all dependencies before the task itself,
+            building execution order for the task dependency graph.
+
+            Args:
+                task: Name of the task to visit
+            """
             if task in visited:
                 return
             visited.add(task)
