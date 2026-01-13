@@ -17,13 +17,13 @@ DEM Loading
 Score Data
 ----------
 
-.. autofunction:: src.terrain.scoring.calculate_sledding_score
+.. autofunction:: src.terrain.scoring.compute_sledding_score
 
    Used in :doc:`../examples/sledding`.
 
    Example::
 
-       score = calculate_sledding_score(
+       score = compute_sledding_score(
            terrain,
            depth_weight=0.4,
            coverage_weight=0.3,

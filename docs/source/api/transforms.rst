@@ -64,12 +64,12 @@ Score Data Transforms
 Caching
 -------
 
-.. autoclass:: src.terrain.transforms.TransformCache
+.. autoclass:: src.terrain.cache.TransformCache
    :members:
 
    Example::
 
-       from src.terrain.transforms import TransformCache
+       from src.terrain.cache import TransformCache
 
        cache = TransformCache(cache_dir='.cache')
        result = cache.get_or_compute(

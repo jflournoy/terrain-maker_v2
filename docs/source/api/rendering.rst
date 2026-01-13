@@ -53,7 +53,7 @@ Rendering
 Materials
 ---------
 
-.. autofunction:: src.terrain.materials.apply_vertex_colors
+.. autofunction:: src.terrain.blender_integration.apply_vertex_colors
 
 .. autofunction:: src.terrain.materials.apply_terrain_with_obsidian_roads
 

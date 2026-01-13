@@ -41,19 +41,16 @@ Loading Functions
 Color Mapping
 -------------
 
-.. autofunction:: src.terrain.core.Terrain.set_color_mapping
+See :meth:`~src.terrain.core.Terrain.set_color_mapping` for single colormap usage.
 
-.. autofunction:: src.terrain.core.Terrain.set_blended_color_mapping
-
-   Used in :doc:`../examples/combined_render` for dual-colormap visualization.
+See :meth:`~src.terrain.core.Terrain.set_blended_color_mapping` for dual-colormap visualization,
+used in :doc:`../examples/combined_render`.
 
 Data Layers
 -----------
 
-.. autofunction:: src.terrain.core.Terrain.add_data_layer
+See :meth:`~src.terrain.core.Terrain.add_data_layer` for adding georeferenced data layers,
+used in :doc:`../examples/sledding` for adding snow data.
 
-   Used in :doc:`../examples/sledding` for adding snow data.
-
-.. autofunction:: src.terrain.core.Terrain.compute_proximity_mask
-
-   Used in :doc:`../examples/combined_render` for park proximity zones.
+See :meth:`~src.terrain.core.Terrain.compute_proximity_mask` for creating proximity zones,
+used in :doc:`../examples/combined_render` for park proximity zones.
