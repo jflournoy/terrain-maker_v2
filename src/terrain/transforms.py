@@ -1299,9 +1299,9 @@ def slope_adaptive_smooth(
     artifacts, while slopes and hills are preserved with minimal smoothing.
 
     How it works:
+
     1. Compute local slope at each pixel using gradient magnitude
-    2. Create a smooth weight mask: 1.0 (full smoothing) where flat,
-       0.0 (no smoothing) where steep
+    2. Create a smooth weight mask: 1.0 where flat, 0.0 where steep
     3. Apply Gaussian blur to entire DEM
     4. Blend: output = original * (1-weight) + smoothed * weight
 

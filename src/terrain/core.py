@@ -565,7 +565,7 @@ def load_dem_files(
 
     Args:
         directory_path: Path to directory containing DEM files
-        pattern: File pattern to match (default: "*.hgt")
+        pattern: File pattern to match (default: ``*.hgt``)
         recursive: Whether to search subdirectories recursively (default: False)
 
     Returns:
@@ -1871,8 +1871,8 @@ class Terrain:
             ValueError: If transforms haven't been applied yet
             ImportError: If water detection module is not available
 
-        Example:
-            ```python
+        Example::
+
             terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
             terrain.add_transform(reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617"))
             terrain.add_transform(flip_raster(axis="horizontal"))
@@ -1883,7 +1883,6 @@ class Terrain:
             # Detect water on high-res BEFORE it was downsampled
             water_mask = terrain.detect_water_highres(slope_threshold=0.01)
             # water_mask shape matches downsampled terrain
-            ```
 
         Note:
             This method requires that:
@@ -2308,16 +2307,11 @@ class Terrain:
             base_colormap: Function mapping base layer(s) to RGB/RGBA. Takes N arrays
                 (one per base_source_layers) and returns (H, W, 3) or (H, W, 4).
             base_source_layers: Layer names for base_colormap, e.g., ['dem'].
-            overlays: List of overlay specifications. Each overlay dict contains:
-                - 'colormap': Function taking data arrays and returning (H, W, 3/4).
-                - 'source_layers': List of layer names for this overlay, e.g., ['roads'].
-                - 'colormap_kwargs': Optional dict of kwargs for the colormap function.
-                - 'threshold': Optional threshold value (default: 0.5). Only applies overlay
-                              where source layer value >= threshold. Important for interpolated
-                              discrete data (like roads) that may have fractional values after
-                              resampling. Use 0.5 for data that should be 0 or 1+ after rasterization.
-                - 'priority': Integer priority (lower = higher priority). First matching
-                              overlay is applied.
+            overlays: List of overlay specifications. Each overlay dict contains
+                ``colormap`` (function returning H,W,3/4), ``source_layers`` (list of
+                layer names), ``colormap_kwargs`` (optional dict), ``threshold`` (value
+                above which overlay applies, default 0.5), and ``priority`` (lower =
+                higher priority).
             base_color_kwargs: Optional kwargs passed to base_colormap.
 
         Returns:

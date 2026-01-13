@@ -24,7 +24,7 @@ def load_dem_files(
 
     Args:
         directory_path: Path to directory containing DEM files
-        pattern: File pattern to match (default: "*.hgt")
+        pattern: File pattern to match (default: ``*.hgt``)
         recursive: Whether to search subdirectories recursively (default: False)
 
     Returns:
@@ -378,7 +378,7 @@ def load_filtered_hgt_files(
         bbox: Bounding box as (west, south, east, north) tuple. If provided,
             overrides individual min/max parameters. Uses standard GIS convention:
             (min_lon, min_lat, max_lon, max_lat).
-        pattern: File pattern to match (default: "*.hgt")
+        pattern: File pattern to match (default: ``*.hgt``)
 
     Returns:
         Tuple of (merged_dem, transform)
