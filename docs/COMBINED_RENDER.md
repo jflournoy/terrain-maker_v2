@@ -1,3 +1,8 @@
+---
+title: Combined Render
+nav_order: 4
+---
+
 # Combined Render Example
 
 The `detroit_combined_render.py` script is our most comprehensive example, demonstrating all major features of terrain-maker in a single pipeline. It combines sledding and cross-country skiing suitability scores into a dual-colormap visualization with roads, print-quality rendering, and advanced diagnostics.

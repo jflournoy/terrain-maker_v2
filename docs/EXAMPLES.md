@@ -1,3 +1,8 @@
+---
+title: Examples
+nav_order: 3
+---
+
 # Detroit Elevation Visualization
 
 A complete example showing how to create stunning 3D terrain visualizations from real SRTM elevation data with just a few lines of Python.

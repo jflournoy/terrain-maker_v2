@@ -1,3 +1,8 @@
+---
+title: Quick Start
+nav_order: 2
+---
+
 # Quick Start: Your First Terrain in 5 Minutes
 
 Get terrain-maker running and create your first 3D terrain visualization.

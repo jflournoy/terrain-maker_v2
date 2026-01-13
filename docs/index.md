@@ -1,3 +1,9 @@
+---
+title: Home
+layout: home
+nav_order: 1
+---
+
 # terrain-maker Documentation
 
 Welcome to the **terrain-maker** documentation. This library makes it easy to create 3D terrain visualizations with Blender from Digital Elevation Model (DEM) data.
