@@ -2,7 +2,7 @@
 
 The most comprehensive example demonstrating all terrain-maker features in one pipeline.
 
-![Combined Render](../_static/combined_render.png)
+![Combined Render](../../images/combined_render/sledding_with_xc_parks_3d_print.png)
 
 ## Overview
 
@@ -19,11 +19,34 @@ This example combines:
 # Fast preview
 python examples/detroit_combined_render.py
 
-# Print quality (18x12 inches @ 300 DPI)
+# Print quality (14x10 inches @ 72 DPI)
 python examples/detroit_combined_render.py --print-quality
 
 # With roads
 python examples/detroit_combined_render.py --roads --smooth
+```
+
+## Example Image Command
+
+The example image shown above was generated with:
+
+```bash
+uv run python examples/detroit_combined_render.py \
+    --print-quality \
+    --print-width 14 \
+    --print-height 10 \
+    --print-dpi 72 \
+    --ortho-scale 0.9 \
+    --height-scale 4.0 \
+    --sun-energy 0.5 \
+    --sky-intensity 0.9 \
+    --air-density 0.1 \
+    --camera-direction south \
+    --camera-elevation 2.5 \
+    --vertex-multiplier 1 \
+    --roads \
+    --road-color azurite \
+    --output-dir docs/images/combined_render
 ```
 
 ## Feature Categories
