@@ -942,6 +942,7 @@ def setup_hdri_lighting(
     air_density: float = 1.0,
     visible_to_camera: bool = False,
     camera_background: tuple = None,
+    sky_strength: float = None,
 ):
     """Set up HDRI-style sky lighting using Blender's Nishita sky model.
 
@@ -954,7 +955,7 @@ def setup_hdri_lighting(
     Args:
         sun_elevation: Sun elevation angle in degrees (0=horizon, 90=overhead)
         sun_rotation: Sun rotation/azimuth in degrees (0=front, 180=back)
-        sun_intensity: Multiplier for sun intensity (default: 1.0)
+        sun_intensity: Multiplier for sun disc brightness in sky texture (default: 1.0)
         sun_size: Angular diameter of sun disc in degrees (default: 0.545 = real sun).
                   Larger values create softer shadows, smaller values create sharper shadows.
         air_density: Atmospheric density (default: 1.0, higher=hazier)
@@ -962,6 +963,8 @@ def setup_hdri_lighting(
         camera_background: RGB tuple for background color when sky is invisible.
                           Default None = use transparent (black behind scene).
                           Use (0.9, 0.9, 0.9) for light gray if using atmosphere.
+        sky_strength: Overall sky emission strength (ambient light level).
+                     If None, defaults to sun_intensity for backwards compatibility.
 
     Returns:
         bpy.types.World: The configured world object
@@ -1033,8 +1036,11 @@ def setup_hdri_lighting(
             sky_texture.turbidity = 2.5  # Atmospheric haziness
             logger.info(f"  Using HOSEK_WILKIE sky (elevation={sun_elevation}°, rotation={sun_rotation}°)")
 
-        # Connect nodes
+        # Connect nodes and set overall sky brightness
         links.new(sky_texture.outputs["Color"], background.inputs["Color"])
+        # sky_strength controls overall ambient, sun_intensity controls sun disc
+        effective_sky_strength = sky_strength if sky_strength is not None else sun_intensity
+        background.inputs["Strength"].default_value = effective_sky_strength
         links.new(background.outputs["Background"], output.inputs["Surface"])
 
         # Configure ray visibility - sky lights scene but isn't visible to camera

@@ -18,6 +18,8 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
     When grid-space colors are provided with y_valid/x_valid indices, colors are extracted
     for each vertex using those coordinates.
 
+    Uses Blender's foreach_set for ~100x faster bulk operations.
+
     Args:
         mesh_obj (bpy.types.Object): The Blender mesh object to apply colors to
         vertex_colors (np.ndarray): Colors in one of two formats:
@@ -35,7 +37,8 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
     else:
         color_layer = mesh.vertex_colors[0]
 
-    if len(color_layer.data) == 0:
+    n_loops = len(color_layer.data)
+    if n_loops == 0:
         if logger:
             logger.warning("Mesh has no color data")
         return
@@ -62,17 +65,23 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
         alpha = np.ones((colors_normalized.shape[0], 1), dtype=np.float32)
         colors_normalized = np.concatenate([colors_normalized, alpha], axis=1)
 
-    # For each polygon loop, get vertex and set color
-    for poly in mesh.polygons:
-        for loop_idx in poly.loop_indices:
-            vertex_idx = mesh.loops[loop_idx].vertex_index
+    # FAST PATH: Use foreach_get/foreach_set for bulk operations
+    # Get all loop->vertex mappings at once
+    loop_vertex_indices = np.zeros(n_loops, dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
 
-            # Apply color if vertex index is in range
-            if vertex_idx < len(colors_normalized):
-                color_layer.data[loop_idx].color = colors_normalized[vertex_idx]
+    # Clamp indices to valid range
+    max_color_idx = len(colors_normalized) - 1
+    loop_vertex_indices = np.clip(loop_vertex_indices, 0, max_color_idx)
+
+    # Build flat color array for all loops (RGBA per loop)
+    loop_colors = colors_normalized[loop_vertex_indices].flatten()
+
+    # Apply all colors at once
+    color_layer.data.foreach_set("color", loop_colors)
 
     if logger:
-        logger.debug(f"✓ Applied colors to {len(color_layer.data)} loops")
+        logger.debug(f"✓ Applied colors to {n_loops} loops (vectorized)")
 
 
 def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
@@ -82,6 +91,8 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
     Creates a "RoadMask" vertex color layer where road vertices have R=1.0
     and non-road vertices have R=0.0. This allows the material shader to
     detect roads without changing the terrain colors.
+
+    Uses Blender's foreach_set for ~100x faster bulk operations.
 
     Args:
         mesh_obj (bpy.types.Object): The Blender mesh object
@@ -101,7 +112,8 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
             logger.warning(f"Failed to create road mask layer: {e}")
         return
 
-    if len(road_layer.data) == 0:
+    n_loops = len(road_layer.data)
+    if n_loops == 0:
         if logger:
             logger.warning("Mesh has no color data for road mask")
         return
@@ -112,33 +124,47 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
         logger.info(f"Road mask stats: shape={road_mask.shape}, road_pixels={road_pixels}, max={road_mask.max():.2f}")
 
     n_positions = len(y_valid)
-    n_loops = len(road_layer.data)
-    road_count = 0
 
-    # First, initialize ALL loops to non-road (prevents undefined values)
-    for i in range(n_loops):
-        road_layer.data[i].color = (0.0, 0.0, 0.0, 1.0)
+    # FAST PATH: Use foreach_get/foreach_set for bulk operations
+    # Get all loop->vertex mappings at once
+    loop_vertex_indices = np.zeros(n_loops, dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
 
-    # Then mark road vertices
-    for poly in mesh.polygons:
-        for loop_idx in poly.loop_indices:
-            vertex_idx = mesh.loops[loop_idx].vertex_index
+    # Build road mask values for each vertex
+    # First, create vertex-level road mask by sampling grid at valid positions
+    vertex_road_values = np.zeros(n_positions, dtype=np.float32)
 
-            if vertex_idx < n_positions:
-                y, x = y_valid[vertex_idx], x_valid[vertex_idx]
+    # Vectorized bounds check and road mask lookup
+    y_in_bounds = (y_valid >= 0) & (y_valid < road_mask.shape[0])
+    x_in_bounds = (x_valid >= 0) & (x_valid < road_mask.shape[1])
+    in_bounds = y_in_bounds & x_in_bounds
 
-                # Check bounds and road mask value
-                if 0 <= y < road_mask.shape[0] and 0 <= x < road_mask.shape[1]:
-                    if road_mask[y, x] > 0.5:
-                        # Mark as road: R=1, G=0, B=0, A=1
-                        road_layer.data[loop_idx].color = (1.0, 0.0, 0.0, 1.0)
-                        road_count += 1
+    # Sample road mask for in-bounds vertices
+    vertex_road_values[in_bounds] = road_mask[y_valid[in_bounds], x_valid[in_bounds]]
+
+    # Convert to binary (>0.5 = road)
+    vertex_is_road = (vertex_road_values > 0.5).astype(np.float32)
+
+    # Clamp loop indices to valid vertex range
+    loop_vertex_indices = np.clip(loop_vertex_indices, 0, n_positions - 1)
+
+    # Map vertex road values to loops
+    loop_road_values = vertex_is_road[loop_vertex_indices]
+
+    # Build RGBA color array: road = (1,0,0,1), non-road = (0,0,0,1)
+    loop_colors = np.zeros((n_loops, 4), dtype=np.float32)
+    loop_colors[:, 0] = loop_road_values  # R = road value
+    loop_colors[:, 3] = 1.0  # A = 1
+
+    # Apply all colors at once
+    road_layer.data.foreach_set("color", loop_colors.flatten())
 
     # Update mesh to apply changes
     mesh.update()
 
+    road_count = int(np.sum(loop_road_values > 0.5))
     if logger:
-        logger.info(f"✓ Applied road mask to {road_count}/{n_loops} vertex loops")
+        logger.info(f"✓ Applied road mask to {road_count}/{n_loops} vertex loops (vectorized)")
 
 
 def apply_vertex_positions(

@@ -336,6 +336,7 @@ def setup_hdri_lighting(
     air_density: float = 1.0,
     visible_to_camera: bool = False,
     camera_background: tuple = None,
+    sky_strength: float = None,
 ):
     """Set up HDRI-style sky lighting using Blender's Nishita sky model.
 
@@ -345,13 +346,15 @@ def setup_hdri_lighting(
     Args:
         sun_elevation: Sun elevation angle in degrees (0=horizon, 90=overhead)
         sun_rotation: Sun rotation/azimuth in degrees (0=front, 180=back)
-        sun_intensity: Multiplier for sun intensity (default: 1.0)
+        sun_intensity: Multiplier for sun disc brightness in sky texture (default: 1.0)
         sun_size: Angular diameter of sun disc in degrees (default: 0.545 = real sun).
                   Larger values create softer shadows, smaller values create sharper.
         air_density: Atmospheric density (default: 1.0, higher=hazier)
         visible_to_camera: If False, sky is invisible but still lights scene
         camera_background: RGB tuple for background when sky invisible.
                           Use (0.9, 0.9, 0.9) for atmosphere to work.
+        sky_strength: Overall sky emission strength (ambient light level).
+                     If None, defaults to sun_intensity for backwards compatibility.
 
     Returns:
         bpy.types.World: The configured world object
@@ -366,6 +369,7 @@ def setup_hdri_lighting(
         air_density=air_density,
         visible_to_camera=visible_to_camera,
         camera_background=camera_background,
+        sky_strength=sky_strength,
     )
 
 
@@ -421,9 +425,15 @@ def render_scene_to_file(
     compression=90,
     save_blend_file=True,
     show_progress=True,
+    max_retries=3,
+    retry_delay=5.0,
 ):
     """
     Render the current Blender scene to file.
+
+    Includes automatic retry logic for GPU memory errors. If rendering fails
+    due to CUDA/GPU memory exhaustion, the function will wait and retry up to
+    max_retries times before giving up.
 
     Args:
         output_path (str or Path): Path where output file will be saved
@@ -435,6 +445,10 @@ def render_scene_to_file(
         save_blend_file (bool): Also save .blend project file (default: True)
         show_progress (bool): Show render progress updates (default: True).
             Logs elapsed time every 5 seconds during rendering.
+        max_retries (int): Maximum number of retry attempts for GPU memory
+            errors (default: 3). Set to 0 to disable retries.
+        retry_delay (float): Seconds to wait between retry attempts (default: 5.0).
+            Allows GPU memory to be freed by other processes.
 
     Returns:
         Path: Path to rendered file if successful, None otherwise
@@ -450,6 +464,8 @@ def render_scene_to_file(
         compression=compression,
         save_blend_file=save_blend_file,
         show_progress=show_progress,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
     )
 
 
@@ -631,13 +647,17 @@ def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.
     return _reproject_raster(src_crs, dst_crs, nodata_value, num_threads)
 
 
-def downsample_raster(zoom_factor=0.1, order=4, nodata_value=np.nan):
+def downsample_raster(zoom_factor=0.1, method="average", nodata_value=np.nan):
     """
     Create a raster downsampling transform function with specified parameters.
 
     Args:
         zoom_factor: Scaling factor for downsampling (default: 0.1)
-        order: Interpolation order (default: 4)
+        method: Downsampling method (default: "average")
+            - "average": Area averaging - best for DEMs, no overshoot
+            - "lanczos": Lanczos resampling - sharp, minimal aliasing
+            - "cubic": Cubic spline interpolation
+            - "bilinear": Bilinear interpolation - safe fallback
         nodata_value: Value to treat as no data (default: np.nan)
 
     Returns:
@@ -645,7 +665,7 @@ def downsample_raster(zoom_factor=0.1, order=4, nodata_value=np.nan):
     """
     from src.terrain.transforms import downsample_raster as _downsample_raster
 
-    return _downsample_raster(zoom_factor, order, nodata_value)
+    return _downsample_raster(zoom_factor, method, nodata_value)
 
 
 def smooth_raster(window_size=None, nodata_value=np.nan):
@@ -1051,6 +1071,12 @@ class Terrain:
         # Initialize list of transforms and data layers
         self.transforms = []
         self.data_layers = {}
+
+        # Track cumulative transform metadata (e.g., elevation scale factors)
+        # This allows algorithms to compensate for prior transforms
+        self.transform_metadata = {
+            "elevation_scale": 1.0,  # Cumulative scale factor applied to elevation
+        }
 
         # Initialize containers for processed data
         self.processed_dem = None  # Will hold transformed DEM data
@@ -1687,6 +1713,14 @@ class Terrain:
 
                             applied_transforms.append(transform_name)
 
+                            # Track elevation scale factor if this transform has one
+                            if hasattr(transform_func, '_elevation_scale_factor'):
+                                scale = transform_func._elevation_scale_factor
+                                self.transform_metadata["elevation_scale"] *= scale
+                                self.logger.debug(
+                                    f"  Updated elevation_scale: {self.transform_metadata['elevation_scale']}"
+                                )
+
                             transform_elapsed = _time.time() - transform_start
                             output_shape = layer_data.shape
                             self.logger.info(
@@ -1748,7 +1782,9 @@ class Terrain:
 
         self.logger.info("Transforms applied successfully")
 
-    def configure_for_target_vertices(self, target_vertices: int, order: int = 4) -> float:
+    def configure_for_target_vertices(
+        self, target_vertices: int, method: str = "average"
+    ) -> float:
         """
         Configure downsampling to achieve approximately target_vertices.
 
@@ -1758,7 +1794,11 @@ class Terrain:
 
         Args:
             target_vertices: Desired vertex count for final mesh (e.g., 500_000)
-            order: Interpolation order for downsampling (0=nearest, 1=linear, 4=bicubic)
+            method: Downsampling method (default: "average")
+                - "average": Area averaging - best for DEMs, no overshoot
+                - "lanczos": Lanczos resampling - sharp, minimal aliasing
+                - "cubic": Cubic spline interpolation
+                - "bilinear": Bilinear interpolation - safe fallback
 
         Returns:
             Calculated zoom_factor that was added to transforms
@@ -1768,7 +1808,7 @@ class Terrain:
 
         Example:
             terrain = Terrain(dem, transform)
-            zoom = terrain.configure_for_target_vertices(500_000)
+            zoom = terrain.configure_for_target_vertices(500_000, method="average")
             print(f"Calculated zoom_factor: {zoom:.4f}")
             terrain.apply_transforms()
             mesh = terrain.create_mesh(scale_factor=400.0)
@@ -1794,11 +1834,12 @@ class Terrain:
             f"Configuring for {target_vertices:,} target vertices\n"
             f"  Original DEM: {original_h} × {original_w} ({original_vertices:,} vertices)\n"
             f"  Calculated zoom_factor: {zoom_factor:.6f}\n"
+            f"  Downsampling method: {method}\n"
             f"  Resulting grid: {int(original_h * zoom_factor)} × {int(original_w * zoom_factor)}"
         )
 
         # Add downsampling transform to the pipeline
-        self.transforms.append(downsample_raster(zoom_factor=zoom_factor, order=order))
+        self.transforms.append(downsample_raster(zoom_factor=zoom_factor, method=method))
 
         return zoom_factor
 
@@ -3192,9 +3233,40 @@ class Terrain:
         if lons.shape != lats.shape:
             raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
 
+        # Filter out NaN coordinates (missing park locations, etc.)
+        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
+        if not np.all(valid_mask):
+            num_invalid = np.sum(~valid_mask)
+            self.logger.warning(
+                f"Filtering out {num_invalid} points with NaN coordinates "
+                f"({len(lons) - num_invalid} valid points remaining)"
+            )
+            lons = lons[valid_mask]
+            lats = lats[valid_mask]
+
+        # Handle edge case: no valid points
+        if len(lons) == 0:
+            self.logger.warning("No valid points remaining after filtering NaN coordinates")
+            return np.zeros(len(self.vertices), dtype=bool)
+
         # Convert geographic coords to mesh space (x, y only, ignore z)
         xs, ys, _ = self.geo_to_mesh_coords(lons, lats, input_crs=input_crs)
         point_coords = np.column_stack([xs, ys])
+
+        # Filter out points that ended up with NaN mesh coordinates (outside DEM bounds)
+        mesh_valid_mask = ~(np.isnan(point_coords[:, 0]) | np.isnan(point_coords[:, 1]))
+        if not np.all(mesh_valid_mask):
+            num_invalid = np.sum(~mesh_valid_mask)
+            self.logger.warning(
+                f"Filtering out {num_invalid} points outside DEM bounds "
+                f"({np.sum(mesh_valid_mask)} valid points remaining)"
+            )
+            point_coords = point_coords[mesh_valid_mask]
+
+        # Handle edge case: no valid points after mesh coordinate conversion
+        if len(point_coords) == 0:
+            self.logger.warning("No points within DEM bounds for proximity mask")
+            return np.zeros(len(self.vertices), dtype=bool)
 
         self.logger.info(f"Computing proximity mask for {len(point_coords)} points...")
 

@@ -3,11 +3,41 @@ Mesh generation operations for terrain visualization.
 
 This module contains functions for creating and manipulating terrain meshes,
 extracted from the core Terrain class for better modularity and testability.
+
+Performance optimizations:
+- Numba JIT compilation for hot loops (face generation)
+- Vectorized NumPy operations where possible
 """
 
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy import ndimage
+
+# Try to import numba for JIT compilation
+try:
+    from numba import jit, prange
+    HAS_NUMBA = True
+except ImportError:
+    HAS_NUMBA = False
+    # Fallback decorator that does nothing
+    def jit(*args, **kwargs):
+        """No-op JIT decorator fallback when numba is not available.
+
+        When numba is not installed, this decorator simply returns the function
+        unchanged, allowing code to run without JIT compilation.
+
+        Args:
+            *args: Ignored positional arguments (for numba compatibility)
+            **kwargs: Ignored keyword arguments (for numba compatibility)
+
+        Returns:
+            Decorator function that returns the original function unchanged
+        """
+        def decorator(func):
+            """Inner decorator that returns the function unchanged."""
+            return func
+        return decorator
+    prange = range
 
 
 def find_boundary_points(valid_mask):
@@ -77,6 +107,64 @@ def generate_vertex_positions(dem_data, valid_mask, scale_factor=100.0, height_s
     return positions, y_valid, x_valid
 
 
+@jit(nopython=True, parallel=True, cache=True)
+def _generate_faces_numba(height, width, index_grid):
+    """
+    Numba-accelerated face generation.
+
+    Args:
+        height: Grid height
+        width: Grid width
+        index_grid: 2D array where index_grid[y,x] = vertex index, or -1 if invalid
+
+    Returns:
+        faces: Array of face vertex indices (n_faces, 4), padded with -1 for triangles
+        n_faces: Number of valid faces
+    """
+    # Pre-allocate maximum possible faces (each cell can have 1 quad)
+    max_faces = (height - 1) * (width - 1)
+    faces = np.full((max_faces, 4), -1, dtype=np.int64)
+    face_count = 0
+
+    # Process each potential quad
+    for y in prange(height - 1):
+        for x in range(width - 1):
+            # Get indices for quad corners
+            i0 = index_grid[y, x]
+            i1 = index_grid[y, x + 1]
+            i2 = index_grid[y + 1, x + 1]
+            i3 = index_grid[y + 1, x]
+
+            # Count valid corners
+            valid_count = (i0 >= 0) + (i1 >= 0) + (i2 >= 0) + (i3 >= 0)
+
+            if valid_count >= 3:
+                # Store face (quads have 4 indices, triangles have 3 with -1 padding)
+                idx = y * (width - 1) + x  # Unique index for this quad position
+                if valid_count == 4:
+                    faces[idx, 0] = i0
+                    faces[idx, 1] = i1
+                    faces[idx, 2] = i2
+                    faces[idx, 3] = i3
+                else:
+                    # Triangle - collect valid indices
+                    j = 0
+                    if i0 >= 0:
+                        faces[idx, j] = i0
+                        j += 1
+                    if i1 >= 0:
+                        faces[idx, j] = i1
+                        j += 1
+                    if i2 >= 0:
+                        faces[idx, j] = i2
+                        j += 1
+                    if i3 >= 0:
+                        faces[idx, j] = i3
+                        j += 1
+
+    return faces
+
+
 def generate_faces(height, width, coord_to_index, batch_size=10000):
     """
     Generate mesh faces from a grid of valid points.
@@ -95,15 +183,31 @@ def generate_faces(height, width, coord_to_index, batch_size=10000):
     Returns:
         list: List of face tuples, where each tuple contains vertex indices
     """
-    # Generate all potential quad faces
+    if HAS_NUMBA:
+        # Convert dict to 2D index grid for Numba
+        index_grid = np.full((height, width), -1, dtype=np.int64)
+        for (y, x), idx in coord_to_index.items():
+            index_grid[y, x] = idx
+
+        # Run Numba-accelerated version
+        faces_array = _generate_faces_numba(height, width, index_grid)
+
+        # Filter out unused slots and convert to list of tuples
+        faces = []
+        for i in range(faces_array.shape[0]):
+            if faces_array[i, 0] >= 0:  # Valid face
+                if faces_array[i, 3] >= 0:  # Quad
+                    faces.append(tuple(faces_array[i]))
+                else:  # Triangle
+                    faces.append(tuple(faces_array[i, :3]))
+        return faces
+
+    # Fallback: Original Python implementation
     y_quads, x_quads = np.mgrid[0 : height - 1, 0 : width - 1]
     y_quads = y_quads.flatten()
     x_quads = x_quads.flatten()
 
-    # Collect faces efficiently
     faces = []
-
-    # Use batch processing to reduce Python loop overhead
     n_quads = len(y_quads)
 
     for batch_start in range(0, n_quads, batch_size):
@@ -111,18 +215,15 @@ def generate_faces(height, width, coord_to_index, batch_size=10000):
         batch_y = y_quads[batch_start:batch_end]
         batch_x = x_quads[batch_start:batch_end]
 
-        # For each quad, check if corners exist in valid points
         for i in range(batch_end - batch_start):
             y, x = batch_y[i], batch_x[i]
             quad_points = [(y, x), (y, x + 1), (y + 1, x + 1), (y + 1, x)]
 
-            # Get indices for each corner that exists
             valid_indices = []
             for point in quad_points:
                 if point in coord_to_index:
                     valid_indices.append(coord_to_index[point])
 
-            # Only create faces with at least 3 points
             if len(valid_indices) >= 3:
                 faces.append(tuple(valid_indices))
 

@@ -41,8 +41,12 @@ dev = [
 ml = [
     "lightgbm",
 ]
+upscale = [
+    "realesrgan",  # AI super-resolution for score upscaling
+]
 all = [
     "richdem",
+    "realesrgan",
 ]
 
 [tool.black]

@@ -197,6 +197,118 @@ def load_score_grid(
     return data_array, transform
 
 
+def save_score_grid(
+    file_path: Path,
+    data: np.ndarray,
+    transform: "rasterio.Affine | None" = None,
+    data_key: str = "data",
+    **metadata,
+) -> Path:
+    """
+    Save georeferenced raster data to an NPZ file.
+
+    Creates an NPZ file compatible with load_score_grid(). The transform
+    is stored as a 6-element array that can be reconstructed as an Affine.
+
+    Args:
+        file_path: Output path for .npz file
+        data: 2D numpy array with raster data
+        transform: Optional Affine transform for georeferencing
+        data_key: Key name for the data array (default: "data")
+        **metadata: Additional key=value pairs to store in the file
+
+    Returns:
+        Path to the saved file
+
+    Example:
+        >>> from rasterio import Affine
+        >>> scores = compute_sledding_scores(dem)
+        >>> transform = Affine.translation(-83.5, 42.5) * Affine.scale(0.01, -0.01)
+        >>> save_score_grid("scores.npz", scores, transform, crs="EPSG:4326")
+
+        >>> # Load it back
+        >>> loaded_scores, loaded_transform = load_score_grid("scores.npz")
+    """
+    file_path = Path(file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build save dict
+    save_dict = {data_key: data}
+
+    # Add transform as array
+    if transform is not None:
+        save_dict["transform"] = [
+            transform.a, transform.b, transform.c,
+            transform.d, transform.e, transform.f,
+        ]
+
+    # Add any additional metadata
+    save_dict.update(metadata)
+
+    # Save
+    np.savez(file_path, **save_dict)
+
+    logger.info(f"Saved score grid to {file_path}")
+    logger.info(f"  Shape: {data.shape}, dtype: {data.dtype}")
+    if transform:
+        logger.info(f"  Transform: origin=({transform.c:.4f}, {transform.f:.4f})")
+
+    return file_path
+
+
+def find_score_file(
+    name: str,
+    search_dirs: list[Path] = None,
+    subdirs: list[str] = None,
+) -> Path | None:
+    """
+    Search for a score file in common locations.
+
+    Useful for finding pre-computed score files that may be in various
+    locations depending on how the pipeline was run.
+
+    Args:
+        name: Base filename to search for (e.g., "sledding_scores.npz")
+        search_dirs: List of directories to search. Defaults to common locations.
+        subdirs: Subdirectories to check within each search_dir
+            (e.g., ["sledding", "xc_skiing"])
+
+    Returns:
+        Path to found file, or None if not found
+
+    Example:
+        >>> path = find_score_file("sledding_scores.npz",
+        ...                         search_dirs=[Path("docs/images"), Path("output")],
+        ...                         subdirs=["sledding", ""])
+        >>> if path:
+        ...     scores, transform = load_score_grid(path)
+    """
+    if search_dirs is None:
+        search_dirs = [
+            Path("docs/images"),
+            Path("examples/output"),
+            Path("output"),
+            Path("."),
+        ]
+
+    if subdirs is None:
+        subdirs = [""]  # Just search in the directory itself
+
+    for search_dir in search_dirs:
+        for subdir in subdirs:
+            if subdir:
+                check_path = search_dir / subdir / name
+            else:
+                check_path = search_dir / name
+
+            if check_path.exists():
+                logger.debug(f"Found score file: {check_path}")
+                return check_path
+
+    logger.debug(f"Score file not found: {name}")
+    return None
+
+
 # =============================================================================
 # HGT FILE UTILITIES
 # =============================================================================

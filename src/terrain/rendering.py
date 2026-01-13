@@ -259,6 +259,30 @@ def setup_render_settings(
     logger.info("Render settings configured successfully")
 
 
+def _is_gpu_memory_error(error: Exception) -> bool:
+    """Check if an exception is related to GPU/CUDA memory exhaustion.
+
+    Args:
+        error: The exception to check
+
+    Returns:
+        True if the error appears to be a GPU memory error
+    """
+    error_str = str(error).lower()
+    gpu_memory_patterns = [
+        "cuda out of memory",
+        "out of memory",
+        "gpu memory",
+        "vram",
+        "memory allocation failed",
+        "insufficient memory",
+        "ran out of memory",
+        "cuda error",
+        "optix",  # OptiX denoiser can also fail with memory issues
+    ]
+    return any(pattern in error_str for pattern in gpu_memory_patterns)
+
+
 def render_scene_to_file(
     output_path,
     width=1920,
@@ -268,9 +292,15 @@ def render_scene_to_file(
     compression=90,
     save_blend_file=True,
     show_progress=True,
+    max_retries=3,
+    retry_delay=5.0,
 ):
     """
     Render the current Blender scene to file.
+
+    Includes automatic retry logic for GPU memory errors. If rendering fails
+    due to CUDA/GPU memory exhaustion, the function will wait and retry up to
+    max_retries times before giving up.
 
     Args:
         output_path (str or Path): Path where output file will be saved
@@ -282,6 +312,10 @@ def render_scene_to_file(
         save_blend_file (bool): Also save .blend project file (default: True)
         show_progress (bool): Show render progress updates (default: True).
             Logs elapsed time every 5 seconds during rendering.
+        max_retries (int): Maximum number of retry attempts for GPU memory
+            errors (default: 3). Set to 0 to disable retries.
+        retry_delay (float): Seconds to wait between retry attempts (default: 5.0).
+            Allows GPU memory to be freed by other processes.
 
     Returns:
         Path: Path to rendered file if successful, None otherwise
@@ -328,31 +362,61 @@ def render_scene_to_file(
         else:
             logger.info(f"Render: {width}×{height} {file_format} ({color_mode})")
 
-        # Execute render
-        bpy.ops.render.render(write_still=True)
+        # Execute render with retry logic for GPU memory errors
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(f"Render retry attempt {attempt}/{max_retries}")
 
-        # Verify output
-        if output_path.exists():
-            file_size_mb = output_path.stat().st_size / (1024 * 1024)
-            logger.info(f"Rendered successfully: {file_size_mb:.1f} MB")
+                bpy.ops.render.render(write_still=True)
 
-            # Save Blender file if requested
-            if save_blend_file:
-                blend_path = output_path.parent / output_path.stem
-                blend_path = blend_path.with_suffix(".blend")
-                try:
-                    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
-                    logger.info(f"Saved Blender file: {blend_path.name}")
-                except Exception as e:
-                    logger.warning(f"Could not save Blender file: {e}")
+                # Verify output
+                if output_path.exists():
+                    file_size_mb = output_path.stat().st_size / (1024 * 1024)
+                    logger.info(f"Rendered successfully: {file_size_mb:.1f} MB")
 
-            return output_path
-        else:
-            logger.error("Render file was not created")
-            return None
+                    # Save Blender file if requested
+                    if save_blend_file:
+                        blend_path = output_path.parent / output_path.stem
+                        blend_path = blend_path.with_suffix(".blend")
+                        try:
+                            bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+                            logger.info(f"Saved Blender file: {blend_path.name}")
+                        except Exception as e:
+                            logger.warning(f"Could not save Blender file: {e}")
 
-    except Exception as e:
-        logger.error(f"Render failed: {str(e)}")
+                    return output_path
+                else:
+                    logger.error("Render file was not created")
+                    return None
+
+            except Exception as e:
+                last_error = e
+                if _is_gpu_memory_error(e) and attempt < max_retries:
+                    logger.warning(
+                        f"GPU memory error on attempt {attempt + 1}: {e}"
+                    )
+                    logger.info(
+                        f"Waiting {retry_delay}s before retry "
+                        f"({max_retries - attempt} attempts remaining)..."
+                    )
+                    time.sleep(retry_delay)
+                    # Exponential backoff: double delay each retry
+                    retry_delay = min(retry_delay * 2, 60.0)
+                else:
+                    # Non-GPU error or out of retries
+                    break
+
+        # All retries exhausted or non-retryable error
+        if last_error:
+            if _is_gpu_memory_error(last_error):
+                logger.error(
+                    f"Render failed after {max_retries + 1} attempts "
+                    f"due to GPU memory: {last_error}"
+                )
+            else:
+                logger.error(f"Render failed: {last_error}")
         return None
 
     finally:

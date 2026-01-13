@@ -314,3 +314,116 @@ class TestSetupRenderSettingsMemory:
         assert bpy.context.scene.render.use_persistent_data is True
         assert bpy.context.scene.cycles.use_auto_tile is True
         assert bpy.context.scene.cycles.tile_size == 512
+
+
+class TestGPUMemoryErrorDetection:
+    """Tests for GPU memory error detection in render retry logic."""
+
+    def test_is_gpu_memory_error_detects_cuda_out_of_memory(self):
+        """Test detection of CUDA out of memory errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_detects_generic_out_of_memory(self):
+        """Test detection of generic out of memory errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("Out of memory allocating render buffer")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_detects_gpu_memory(self):
+        """Test detection of GPU memory errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("GPU memory exhausted during rendering")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_detects_vram(self):
+        """Test detection of VRAM errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("Insufficient VRAM for tile size")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_detects_cuda_error(self):
+        """Test detection of general CUDA errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("CUDA error: device-side assert triggered")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_detects_optix(self):
+        """Test detection of OptiX denoiser errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("OptiX denoiser failed to allocate memory")
+        assert _is_gpu_memory_error(error) is True
+
+    def test_is_gpu_memory_error_ignores_other_errors(self):
+        """Test that non-GPU errors are not flagged."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("File not found: scene.blend")
+        assert _is_gpu_memory_error(error) is False
+
+    def test_is_gpu_memory_error_ignores_network_errors(self):
+        """Test that network errors are not flagged as GPU errors."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("Connection timeout reading asset")
+        assert _is_gpu_memory_error(error) is False
+
+    def test_is_gpu_memory_error_case_insensitive(self):
+        """Test that error detection is case insensitive."""
+        from src.terrain.rendering import _is_gpu_memory_error
+
+        error = RuntimeError("cuda OUT OF MEMORY error occurred")
+        assert _is_gpu_memory_error(error) is True
+
+
+class TestRenderRetryParameters:
+    """Tests for render retry parameters."""
+
+    def test_render_scene_to_file_accepts_max_retries(self):
+        """Test that max_retries parameter is accepted."""
+        from src.terrain.rendering import render_scene_to_file
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "test.png"
+            # Should not raise error when max_retries is passed
+            result = render_scene_to_file(output_path, max_retries=0, save_blend_file=False)
+            assert result is None or isinstance(result, Path)
+
+    def test_render_scene_to_file_accepts_retry_delay(self):
+        """Test that retry_delay parameter is accepted."""
+        from src.terrain.rendering import render_scene_to_file
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "test.png"
+            # Should not raise error when retry_delay is passed
+            result = render_scene_to_file(
+                output_path, retry_delay=1.0, max_retries=0, save_blend_file=False
+            )
+            assert result is None or isinstance(result, Path)
+
+    def test_render_scene_to_file_default_max_retries(self):
+        """Test that default max_retries is 3."""
+        import inspect
+        from src.terrain.rendering import render_scene_to_file
+
+        sig = inspect.signature(render_scene_to_file)
+        assert sig.parameters["max_retries"].default == 3
+
+    def test_render_scene_to_file_default_retry_delay(self):
+        """Test that default retry_delay is 5.0 seconds."""
+        import inspect
+        from src.terrain.rendering import render_scene_to_file
+
+        sig = inspect.signature(render_scene_to_file)
+        assert sig.parameters["retry_delay"].default == 5.0

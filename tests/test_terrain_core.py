@@ -1111,6 +1111,74 @@ class TestGetBboxWgs84:
         assert isinstance(east, float)
 
 
+@pytest.mark.skipif(not HAS_BLENDER, reason="Blender not available")
+class TestComputeProximityMask:
+    """Test suite for compute_proximity_mask with NaN handling."""
+
+    def test_compute_proximity_mask_filters_nan_input_coords(self):
+        """compute_proximity_mask should filter out NaN input coordinates."""
+        dem_data = np.ones((50, 50), dtype=np.float32) * 100
+        transform = Affine.translation(-83, 43) * Affine.scale(0.01, -0.01)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        # Apply identity transform and create mesh
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+        terrain.create_mesh(scale_factor=100, height_scale=1)
+
+        # Mix of valid and NaN coordinates
+        lons = np.array([-82.9, np.nan, -82.8, -82.7, np.nan])
+        lats = np.array([42.9, 42.8, np.nan, 42.7, np.nan])
+
+        # Should not raise, should filter out invalid coords
+        mask = terrain.compute_proximity_mask(lons, lats, radius_meters=1000)
+
+        assert isinstance(mask, np.ndarray)
+        assert mask.dtype == bool
+        assert len(mask) == len(terrain.vertices)
+
+    def test_compute_proximity_mask_handles_all_nan_coords(self):
+        """compute_proximity_mask should return empty mask when all coords are NaN."""
+        dem_data = np.ones((50, 50), dtype=np.float32) * 100
+        transform = Affine.translation(-83, 43) * Affine.scale(0.01, -0.01)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+        terrain.create_mesh(scale_factor=100, height_scale=1)
+
+        # All NaN coordinates
+        lons = np.array([np.nan, np.nan, np.nan])
+        lats = np.array([np.nan, np.nan, np.nan])
+
+        mask = terrain.compute_proximity_mask(lons, lats, radius_meters=1000)
+
+        # Should return all-False mask (no valid points)
+        assert isinstance(mask, np.ndarray)
+        assert not mask.any(), "Mask should be all False when no valid coords"
+
+    def test_compute_proximity_mask_filters_out_of_bounds_points(self):
+        """compute_proximity_mask should filter points outside DEM bounds."""
+        dem_data = np.ones((50, 50), dtype=np.float32) * 100
+        # Small DEM centered at -83, 43
+        transform = Affine.translation(-83, 43) * Affine.scale(0.01, -0.01)
+        terrain = Terrain(dem_data, transform, dem_crs="EPSG:4326")
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+        terrain.create_mesh(scale_factor=100, height_scale=1)
+
+        # Points far outside DEM bounds (different continent)
+        lons = np.array([0.0, 10.0, 20.0])  # Europe, not North America
+        lats = np.array([50.0, 51.0, 52.0])
+
+        # Should not raise, should return mask (possibly empty)
+        mask = terrain.compute_proximity_mask(lons, lats, radius_meters=1000)
+
+        assert isinstance(mask, np.ndarray)
+        assert mask.dtype == bool
+
+
 def create_sample_geotiff(filepath: Path, data: np.ndarray, bounds: tuple) -> Path:
     """
     Helper function to create a sample GeoTIFF file.

@@ -21,10 +21,10 @@ Requirements:
 - Pre-computed XC skiing scores + parks from detroit_xc_skiing.py
 
 Output:
-- docs/images/combined_render/sledding_with_xc_parks_3d.png (1920×1080, 2048 samples)
+- docs/images/combined_render/sledding_with_xc_parks_3d.png (640×360 preview)
 - docs/images/combined_render/sledding_with_xc_parks_3d_histogram.png (RGB histogram)
-- docs/images/combined_render/sledding_with_xc_parks_3d_print.png (3000×2400 @ 300 DPI, 8192 samples)
-- docs/images/combined_render/sledding_with_xc_parks_3d_print_histogram.png (RGB histogram)
+- docs/images/combined_render/sledding_with_xc_parks_3d_luminance.png (B&W histogram)
+- docs/images/combined_render/sledding_with_xc_parks_3d_print.png (print quality @ DPI)
 - docs/images/combined_render/sledding_with_xc_parks_3d.blend (Blender file)
 
 Usage:
@@ -89,15 +89,32 @@ from src.terrain.core import (
     setup_hdri_lighting,
     setup_world_atmosphere,
 )
-from src.terrain.transforms import smooth_score_data, despeckle_scores
+from src.terrain.transforms import (
+    smooth_score_data,
+    despeckle_scores,
+    despeckle_dem,
+    wavelet_denoise_dem,
+    slope_adaptive_smooth,
+    remove_bumps,
+    cached_reproject,
+    upscale_scores,
+)
 from src.terrain.scene_setup import create_background_plane
 from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_vertex_positions
 from src.terrain.materials import apply_terrain_with_obsidian_roads, apply_test_material
 from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files, load_score_grid
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices
+from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
 from src.terrain.water import identify_water_by_slope
 from src.terrain.cache import PipelineCache
+from src.terrain.diagnostics import (
+    generate_full_wavelet_diagnostics,
+    generate_full_adaptive_smooth_diagnostics,
+    generate_bump_removal_diagnostics,
+    generate_upscale_diagnostics,
+    generate_rgb_histogram,
+    generate_luminance_histogram,
+)
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
 import matplotlib
@@ -223,214 +240,9 @@ def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
 
 
 # =============================================================================
-# BLENDER RENDERING
-# =============================================================================
-
-
-def add_skiing_bumps_to_mesh(
-    mesh_obj: 'bpy.types.Object',
-    terrain: 'Terrain',
-    parks: list,
-    park_radius: float = 2500.0,
-) -> None:
-    """
-    Add sphere markers at ski parks using average terrain height and color.
-
-    Creates UV spheres positioned at each park location. The sphere center
-    is placed at the average Z coordinate of all terrain vertices within the
-    park radius, and colored with the average color of those vertices.
-
-    Args:
-        mesh_obj: Blender mesh object (terrain) to sample heights/colors from
-        terrain: Terrain object with coordinate conversion
-        parks: List of park dicts with 'lon', 'lat', and 'skiing_score' fields
-        park_radius: Radius of spheres in meters (default: 2500m)
-    """
-    if not parks:
-        logger.warning("No parks provided, skipping skiing bumps")
-        return
-
-    import bpy
-    from mathutils import Vector, Color
-
-    mesh = mesh_obj.data
-    logger.info(f"Adding sphere markers for {len(parks)} parks (radius: {park_radius}m)...")
-
-    # Get mesh parameters
-    if not hasattr(terrain, 'model_params'):
-        logger.error("Terrain object missing model_params - was create_mesh() called?")
-        return
-
-    scale_factor = terrain.model_params.get('scale_factor', 100.0)
-
-    # Get pixel size for meter-to-mesh conversion
-    dem_info = terrain.data_layers.get("dem", {})
-    transformed_transform = dem_info.get("transformed_transform")
-    if transformed_transform is None:
-        logger.error("Transformed DEM transform not found")
-        return
-
-    pixel_size_meters = abs(transformed_transform.a)
-    meters_per_mesh_unit = scale_factor * pixel_size_meters
-    mesh_radius = park_radius / meters_per_mesh_unit
-    mesh_radius_sq = mesh_radius ** 2
-
-    logger.info(f"Coordinate conversion: 1 mesh unit = {meters_per_mesh_unit:.1f}m, "
-                f"sphere radius = {mesh_radius:.3f} mesh units")
-
-    # Extract park coordinates and terrain vertices
-    park_lons = np.array([park['lon'] for park in parks])
-    park_lats = np.array([park['lat'] for park in parks])
-
-    logger.info(f"Extracting {len(mesh.vertices)} vertex positions...")
-    vert_x = np.array([v.co.x for v in mesh.vertices])
-    vert_y = np.array([v.co.y for v in mesh.vertices])
-    vert_z = np.array([v.co.z for v in mesh.vertices])
-
-    # Convert park coordinates to mesh space
-    logger.info(f"Converting {len(park_lons)} park coordinates...")
-    park_x_arr, park_y_arr, _ = terrain.geo_to_mesh_coords(park_lons, park_lats)
-
-    # Filter parks within mesh bounds
-    mesh_minx, mesh_maxx = vert_x.min(), vert_x.max()
-    mesh_miny, mesh_maxy = vert_y.min(), vert_y.max()
-    in_bounds = (
-        (park_x_arr >= mesh_minx) & (park_x_arr <= mesh_maxx) &
-        (park_y_arr >= mesh_miny) & (park_y_arr <= mesh_maxy) &
-        ~np.isnan(park_x_arr) & ~np.isnan(park_y_arr)
-    )
-
-    logger.info(f"Creating spheres for {np.sum(in_bounds)} parks within bounds...")
-
-    spheres_created = 0
-
-    # For each park, create a sphere at average height with average color
-    for park_x, park_y in zip(park_x_arr[in_bounds], park_y_arr[in_bounds]):
-        # Find vertices within park radius
-        dx = vert_x - park_x
-        dy = vert_y - park_y
-        dist_sq = dx*dx + dy*dy
-        in_radius = dist_sq <= mesh_radius_sq
-
-        if np.any(in_radius):
-            # Calculate average Z and color
-            avg_z = np.mean(vert_z[in_radius])
-
-            # Create UV sphere at park location
-            bpy.ops.mesh.primitive_uv_sphere_add(
-                radius=mesh_radius,
-                location=(park_x, park_y, avg_z),
-            )
-            sphere = bpy.context.active_object
-            sphere.name = f"SkiPark_Sphere"
-
-            # Color the sphere with average terrain color
-            if hasattr(mesh, 'vertex_colors') and len(mesh.vertex_colors) > 0:
-                # Get average color from terrain vertices
-                colors = []
-                for idx in np.where(in_radius)[0]:
-                    if idx < len(mesh.vertex_colors):
-                        color = mesh.vertex_colors[idx].color
-                        colors.append(color)
-
-                if colors:
-                    avg_color = tuple(np.mean(colors, axis=0))
-                    # Create material with average color
-                    mat = bpy.data.materials.new(name="SkiParkMaterial")
-                    mat.use_nodes = True
-                    bsdf = mat.node_tree.nodes["Principled BSDF"]
-                    bsdf.inputs[0].default_value = avg_color  # Base color
-
-                    sphere.data.materials.append(mat)
-
-            spheres_created += 1
-
-            if spheres_created % 100 == 0:
-                logger.info(f"  Created {spheres_created} spheres...")
-
-    logger.info(f"✓ Created {spheres_created} sphere markers for ski parks")
-
-
-def generate_rgb_histogram(image_path: Path, output_path: Path) -> Optional[Path]:
-    """
-    Generate and save an RGB histogram of the rendered image.
-
-    Creates a figure with histograms for each color channel (R, G, B)
-    overlaid on the same axes with transparency.
-
-    Args:
-        image_path: Path to the rendered PNG image
-        output_path: Path to save the histogram image
-
-    Returns:
-        Path to saved histogram image, or None if failed
-    """
-    try:
-        # Load image
-        img = Image.open(image_path)
-        img_array = np.array(img)
-
-        logger.info(f"Generating RGB histogram for {image_path.name}...")
-        logger.info(f"  Image shape: {img_array.shape}")
-
-        # Handle RGBA vs RGB
-        if img_array.ndim == 3 and img_array.shape[2] >= 3:
-            r_channel = img_array[:, :, 0].flatten()
-            g_channel = img_array[:, :, 1].flatten()
-            b_channel = img_array[:, :, 2].flatten()
-        else:
-            logger.warning("Image is not RGB/RGBA, skipping histogram")
-            return None
-
-        # Create figure
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        # Plot histograms with transparency
-        bins = 256
-        alpha = 0.5
-
-        ax.hist(r_channel, bins=bins, range=(0, 255), color='red',
-                alpha=alpha, label='Red', density=True)
-        ax.hist(g_channel, bins=bins, range=(0, 255), color='green',
-                alpha=alpha, label='Green', density=True)
-        ax.hist(b_channel, bins=bins, range=(0, 255), color='blue',
-                alpha=alpha, label='Blue', density=True)
-
-        # Style
-        ax.set_xlabel('Pixel Value', fontsize=12)
-        ax.set_ylabel('Density', fontsize=12)
-        ax.set_title(f'RGB Histogram: {image_path.name}', fontsize=14)
-        ax.legend(loc='upper right')
-        ax.set_xlim(0, 255)
-        ax.grid(True, alpha=0.3)
-
-        # Add stats annotation
-        stats_text = (
-            f"R: μ={np.mean(r_channel):.1f}, σ={np.std(r_channel):.1f}\n"
-            f"G: μ={np.mean(g_channel):.1f}, σ={np.std(g_channel):.1f}\n"
-            f"B: μ={np.mean(b_channel):.1f}, σ={np.std(b_channel):.1f}"
-        )
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
-                fontsize=10, verticalalignment='top',
-                fontfamily='monospace',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-        # Save
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=150)
-        plt.close(fig)
-
-        logger.info(f"✓ RGB histogram saved: {output_path}")
-        return output_path
-
-    except Exception as e:
-        logger.warning(f"Failed to generate RGB histogram: {e}")
-        return None
-
-
-# =============================================================================
 # MAIN
 # =============================================================================
+
 
 def main():
     """Main entry point."""
@@ -442,7 +254,7 @@ Examples:
   # Render with pre-computed scores (1920x1080, 2048 samples)
   python examples/detroit_combined_render.py
 
-  # Render at print quality (3000x2400 @ 300 DPI, 8192 samples)
+  # Render at print quality (3000x2400 @ 300 DPI, 4096 samples)
   python examples/detroit_combined_render.py --print-quality
 
   # Test height scales from south view (for finding best vertical exaggeration)
@@ -491,6 +303,28 @@ Examples:
         "--print-quality",
         action="store_true",
         help="Render at print quality with configurable DPI and size (default: 10x8 inches @ 300 DPI)",
+    )
+
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=["png", "jpeg", "PNG", "JPEG"],
+        default="png",
+        help="Output format: png (lossless, no profile) or jpeg (lossy, better for print). Default: png",
+    )
+
+    parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=95,
+        help="JPEG quality 0-100 (default: 95). Only used with --format jpeg.",
+    )
+
+    parser.add_argument(
+        "--embed-profile",
+        action="store_true",
+        help="Embed sRGB ICC color profile in output image (requires ImageMagick). "
+             "Recommended for print to ensure colors are interpreted correctly.",
     )
 
     parser.add_argument(
@@ -628,16 +462,20 @@ Examples:
     )
 
     parser.add_argument(
-        "--skiing-bumps",
-        action="store_true",
-        help="Add dome bumps at XC skiing park locations to visualize their locations",
+        "--sky-intensity",
+        type=float,
+        default=1.0,
+        help="HDRI sky intensity multiplier (default: 1.0). Lower values dim the sky. "
+             "Try 0.3-0.5 for test materials like clay to avoid overexposure.",
     )
 
     parser.add_argument(
-        "--bump-radius",
+        "--air-density",
         type=float,
-        default=2500.0,
-        help="Radius of hemisphere bumps in meters (peak height = radius, default: 2500m, try 1000-5000)",
+        default=1.0,
+        help="Atmospheric density for sky scattering (default: 1.0). "
+             "Lower values (0.3-0.5) reduce haze for clearer renders. "
+             "Set to 0 for no atmospheric scattering.",
     )
 
     parser.add_argument(
@@ -729,6 +567,15 @@ Examples:
              "Alternative to --road-smoothing. Default: 0.0 (no offset)",
     )
 
+    parser.add_argument(
+        "--road-antialias",
+        type=float,
+        default=0.0,
+        help="Anti-alias road edges with Gaussian blur (sigma in pixels). "
+             "Reduces jagged stair-step edges. Typical values: 0.5-2.0. "
+             "0 = disabled (default), 1.0 = standard anti-aliasing.",
+    )
+
     # Score smoothing options
     parser.add_argument(
         "--smooth-scores",
@@ -769,12 +616,194 @@ Examples:
              "larger speckle clusters. Common values: 3, 5, 7.",
     )
 
+    # Score upscaling options (AI super-resolution)
+    parser.add_argument(
+        "--upscale-scores",
+        action="store_true",
+        default=False,
+        help="Upscale score data using AI super-resolution to reduce blockiness. "
+             "Uses Real-ESRGAN if available, otherwise bilateral upscaling.",
+    )
+
+    parser.add_argument(
+        "--upscale-factor",
+        type=int,
+        default=4,
+        choices=[2, 4, 8, 16],
+        help="Score upscaling factor (default: 4). Higher = smoother but slower. "
+             "Ignored if --upscale-to-dem is set.",
+    )
+
+    parser.add_argument(
+        "--upscale-to-dem",
+        action="store_true",
+        default=False,
+        help="Automatically calculate upscale factor to match SNODAS resolution "
+             "to the downsampled DEM resolution. Overrides --upscale-factor.",
+    )
+
+    parser.add_argument(
+        "--upscale-method",
+        type=str,
+        default="auto",
+        choices=["auto", "esrgan", "bilateral", "bicubic"],
+        help="Upscaling method: auto (try ESRGAN then bilateral), esrgan (AI), "
+             "bilateral (edge-preserving), bicubic (simple). Default: auto",
+    )
+
+    # DEM despeckle (uniform noise removal for elevation)
+    parser.add_argument(
+        "--despeckle-dem",
+        action="store_true",
+        default=False,
+        help="Apply median filter to remove isolated elevation noise/speckles. "
+             "More uniform than --smooth (bilateral) which can look patchy. "
+             "Good for DEM sensor noise or small artifacts.",
+    )
+
+    parser.add_argument(
+        "--despeckle-dem-kernel",
+        type=int,
+        default=3,
+        help="DEM despeckle kernel size (default: 3 for 3x3). "
+             "3 = removes single-pixel noise, 5 = removes 2x2 artifacts, "
+             "7 = stronger smoothing (may affect small terrain features).",
+    )
+
+    # Wavelet denoising (frequency-aware, structure-preserving)
+    parser.add_argument(
+        "--wavelet-denoise",
+        action="store_true",
+        default=False,
+        help="Apply wavelet denoising to DEM. Smarter than --despeckle-dem because "
+             "it separates terrain structure (ridges, valleys) from high-frequency noise. "
+             "Requires PyWavelets: pip install PyWavelets",
+    )
+
+    parser.add_argument(
+        "--wavelet-type",
+        type=str,
+        default="db4",
+        choices=["db4", "haar", "sym4", "coif2"],
+        help="Wavelet type (default: db4). db4=smooth terrain, haar=sharp edges, "
+             "sym4=balanced, coif2=very smooth.",
+    )
+
+    parser.add_argument(
+        "--wavelet-levels",
+        type=int,
+        default=3,
+        help="Wavelet decomposition levels (default: 3). Each level halves resolution. "
+             "2=fine detail, 3=balanced, 4=aggressive smoothing.",
+    )
+
+    parser.add_argument(
+        "--wavelet-sigma",
+        type=float,
+        default=2.0,
+        help="Noise threshold multiplier (default: 2.0). Higher = more denoising. "
+             "1.5=light, 2.0=standard, 3.0=aggressive.",
+    )
+
+    parser.add_argument(
+        "--wavelet-diagnostics",
+        action="store_true",
+        default=False,
+        help="Export diagnostic plots showing wavelet denoising effect on terrain. "
+             "Creates before/after comparison and coefficient analysis plots. "
+             "Requires --wavelet-denoise to be enabled.",
+    )
+
+    parser.add_argument(
+        "--diagnostic-dir",
+        type=str,
+        default=None,
+        help="Directory to save diagnostic plots (default: OUTPUT_DIR/diagnostics). "
+             "Created automatically if doesn't exist.",
+    )
+
+    # Morphological bump removal
+    parser.add_argument(
+        "--remove-bumps",
+        type=int,
+        default=None,
+        metavar="SIZE",
+        help="Remove bumps (buildings, trees) via morphological opening. SIZE is kernel radius "
+             "in pixels. Removes features up to ~SIZE*2 pixels across. For downsampled DEMs: "
+             "1=subtle, 2=small buildings, 3=medium, 5=large. This ONLY removes local maxima, "
+             "never creates new bumps. More targeted than adaptive-smooth.",
+    )
+    parser.add_argument(
+        "--remove-bumps-strength",
+        type=float,
+        default=1.0,
+        metavar="STRENGTH",
+        help="Strength of bump removal effect (default: 1.0). Range 0.0-1.0 where "
+             "0.0=no effect, 0.3=subtle, 0.5=half effect, 1.0=full effect. "
+             "Use with --remove-bumps 1 for fine control over small adjustments.",
+    )
+
+    # Slope-adaptive smoothing (smooths flat areas, preserves hills)
+    parser.add_argument(
+        "--adaptive-smooth",
+        action="store_true",
+        default=False,
+        help="Apply slope-adaptive smoothing: strong smoothing in flat areas (e.g., buildings "
+             "appearing as bumps), minimal smoothing on slopes/hills. Better than uniform "
+             "smoothing for removing flat-area artifacts while preserving terrain structure.",
+    )
+
+    parser.add_argument(
+        "--adaptive-slope-threshold",
+        type=float,
+        default=2.0,
+        help="Slope threshold in degrees (default: 2.0). Areas with slope below this "
+             "get full smoothing. 1.0=aggressive, 2.0=balanced, 5.0=smooth gentle slopes too.",
+    )
+
+    parser.add_argument(
+        "--adaptive-smooth-sigma",
+        type=float,
+        default=5.0,
+        help="Gaussian blur sigma in pixels for flat areas (default: 5.0). "
+             "3.0=light, 5.0=moderate, 10.0=strong smoothing.",
+    )
+
+    parser.add_argument(
+        "--adaptive-transition",
+        type=float,
+        default=1.0,
+        help="Transition width in degrees (default: 1.0). How quickly smoothing "
+             "fades off above threshold. 0.5=sharp, 1.0=smooth, 2.0=very gradual.",
+    )
+
+    parser.add_argument(
+        "--adaptive-edge-threshold",
+        type=float,
+        default=None,
+        help="Edge preservation threshold in meters (default: None=disabled). "
+             "Preserves sharp boundaries like lake edges. Areas with local elevation "
+             "range exceeding this threshold won't be smoothed. Recommended: 5-10m.",
+    )
+
     parser.add_argument(
         "--vertex-multiplier",
         type=float,
-        default=2.5,
-        help="Vertices per pixel multiplier (default: 2.5). Higher = more detail, slower render. "
-             "Example: 3.0 gives ~20%% more vertices than default.",
+        default=None,  # Set based on quality mode below
+        help="Vertices per pixel multiplier (auto: 0.5 for preview, 2.5 for print). Higher = more detail, slower. "
+             "Example: 3.0 gives ~6x more vertices than default 0.5 preview mode.",
+    )
+
+    parser.add_argument(
+        "--downsample-method",
+        type=str,
+        default="average",
+        choices=["average", "lanczos", "cubic", "bilinear"],
+        help="DEM downsampling method (default: average). "
+             "average: Area averaging - best for DEMs, no overshoot. "
+             "lanczos: Sharp with good anti-aliasing. "
+             "cubic: Cubic spline interpolation. "
+             "bilinear: Safe fallback.",
     )
 
     # Atmosphere/fog options (EXPERIMENTAL - currently causes black renders)
@@ -868,13 +897,20 @@ Examples:
     if args.print_quality:
         render_width = int(args.print_width * args.print_dpi)
         render_height = int(args.print_height * args.print_dpi)
-        render_samples = 8192  # High quality for print
+        render_samples = 4096  # High quality for print (with denoising)
         quality_mode = "PRINT"
-    else:
-        render_width = 1920  # Standard HD
-        render_height = 1080
-        render_samples = 2048  # Good quality for screen
-        quality_mode = "SCREEN"
+        default_vertex_mult = 2.5  # High detail for print
+    else:   
+        # FAST preview mode - optimized for quick iteration
+        render_width = 640  # Low res for speed
+        render_height = 360
+        render_samples = 64  # Minimal samples - biggest speed gain
+        quality_mode = "PREVIEW"
+        default_vertex_mult = 0.5  # Low detail for speed
+
+    # Apply vertex multiplier default if not explicitly set
+    if args.vertex_multiplier is None:
+        args.vertex_multiplier = default_vertex_mult
 
     logger.info("\n" + "=" * 70)
     logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")
@@ -887,6 +923,7 @@ Examples:
     else:
         logger.info(f"  Resolution: {render_width}×{render_height} (screen)")
     logger.info(f"  Samples: {render_samples:,}")
+    logger.info(f"  Vertex multiplier: {args.vertex_multiplier}")
     if args.background:
         logger.info(f"Background plane: ENABLED")
         logger.info(f"  Color: {args.background_color}")
@@ -920,6 +957,19 @@ Examples:
         "smooth": args.smooth,
         "smooth_spatial": args.smooth_spatial,
         "smooth_intensity": args.smooth_intensity,
+        "despeckle_dem": args.despeckle_dem,
+        "despeckle_dem_kernel": args.despeckle_dem_kernel if args.despeckle_dem else None,
+        "wavelet_denoise": args.wavelet_denoise,
+        "wavelet_type": args.wavelet_type if args.wavelet_denoise else None,
+        "wavelet_levels": args.wavelet_levels if args.wavelet_denoise else None,
+        "wavelet_sigma": args.wavelet_sigma if args.wavelet_denoise else None,
+        "adaptive_smooth": args.adaptive_smooth,
+        "adaptive_slope_threshold": args.adaptive_slope_threshold if args.adaptive_smooth else None,
+        "adaptive_smooth_sigma": args.adaptive_smooth_sigma if args.adaptive_smooth else None,
+        "adaptive_transition": args.adaptive_transition if args.adaptive_smooth else None,
+        "adaptive_edge_threshold": args.adaptive_edge_threshold if args.adaptive_smooth else None,
+        "remove_bumps": args.remove_bumps,
+        "remove_bumps_strength": args.remove_bumps_strength if args.remove_bumps else None,
     }
 
     color_params = {
@@ -932,6 +982,7 @@ Examples:
         "roads_enabled": args.roads,
         "road_types": tuple(args.road_types) if args.roads else (),
         "road_width": args.road_width if args.roads else 0,
+        "road_antialias": args.road_antialias if args.roads else 0,
     }
 
     mesh_params = {
@@ -1033,6 +1084,148 @@ Examples:
             xc_transform = score_transform
             logger.info("No transform in XC score file, using sledding transform")
 
+    # Despeckle scores BEFORE upscaling (removes isolated outliers at native resolution)
+    if args.despeckle_scores and not args.mock_data:
+        logger.info(f"Despeckle scores with kernel size {args.despeckle_kernel}...")
+        sledding_scores = despeckle_scores(sledding_scores, kernel_size=args.despeckle_kernel)
+        xc_scores = despeckle_scores(xc_scores, kernel_size=args.despeckle_kernel)
+        logger.info("Despeckled scores (before upscaling)")
+
+    # Upscale scores if requested (AI super-resolution to reduce blockiness)
+    if args.upscale_scores and not args.mock_data:
+        # Calculate upscale factor automatically if --upscale-to-dem is set
+        if args.upscale_to_dem and score_transform is not None:
+            # Calculate target DEM dimensions after downsampling
+            target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier))
+            dem_aspect = dem.shape[1] / dem.shape[0]  # width/height
+            target_height = int(np.sqrt(target_vertices / dem_aspect))
+            target_width = int(target_height * dem_aspect)
+
+            # Calculate DEM geographic extent (in degrees)
+            dem_extent_x = abs(transform.a) * dem.shape[1]  # degrees longitude
+            dem_extent_y = abs(transform.e) * dem.shape[0]  # degrees latitude
+
+            # DEM effective pixel size after downsampling (in degrees)
+            dem_pixel_deg_x = dem_extent_x / target_width
+            dem_pixel_deg_y = dem_extent_y / target_height
+
+            # SNODAS pixel size (in degrees) - use absolute values
+            snodas_pixel_deg_x = abs(score_transform.a)
+            snodas_pixel_deg_y = abs(score_transform.e)
+
+            # Calculate ratio (use average of x and y)
+            ratio_x = snodas_pixel_deg_x / dem_pixel_deg_x
+            ratio_y = snodas_pixel_deg_y / dem_pixel_deg_y
+            ratio = (ratio_x + ratio_y) / 2
+
+            # Pick smallest power of 2 that is >= ratio
+            if ratio <= 1:
+                computed_factor = 1  # No upscaling needed
+            elif ratio <= 2:
+                computed_factor = 2
+            elif ratio <= 4:
+                computed_factor = 4
+            elif ratio <= 8:
+                computed_factor = 8
+            else:
+                computed_factor = 16
+
+            logger.info(f"Auto-calculating upscale factor (--upscale-to-dem):")
+            logger.info(f"  DEM effective resolution: {target_width}×{target_height} pixels")
+            logger.info(f"  DEM pixel size: {dem_pixel_deg_x*111000:.0f}m × {dem_pixel_deg_y*111000:.0f}m")
+            logger.info(f"  SNODAS pixel size: {snodas_pixel_deg_x*111000:.0f}m × {snodas_pixel_deg_y*111000:.0f}m")
+            logger.info(f"  Resolution ratio: {ratio:.1f}x → upscale factor: {computed_factor}x")
+
+            if computed_factor == 1:
+                logger.info("  SNODAS resolution already matches DEM, skipping upscale")
+                args.upscale_scores = False  # Skip upscaling
+            else:
+                args.upscale_factor = computed_factor
+
+        if args.upscale_scores:  # Check again in case we disabled it above
+            logger.info(f"Upscaling scores by {args.upscale_factor}x using {args.upscale_method}...")
+
+            # Store originals for diagnostics
+            sledding_scores_original = sledding_scores.copy()
+            xc_scores_original = xc_scores.copy()
+
+            # Upscale sledding scores
+            sledding_scores = upscale_scores(
+                sledding_scores,
+                scale=args.upscale_factor,
+                method=args.upscale_method,
+            )
+            # Update transform to reflect new resolution
+            if score_transform is not None:
+                score_transform = Affine(
+                    score_transform.a / args.upscale_factor,  # pixel width
+                    score_transform.b,
+                    score_transform.c,  # origin unchanged
+                    score_transform.d,
+                    score_transform.e / args.upscale_factor,  # pixel height
+                    score_transform.f,  # origin unchanged
+                )
+
+            # Upscale XC scores
+            xc_scores = upscale_scores(
+                xc_scores,
+                scale=args.upscale_factor,
+                method=args.upscale_method,
+            )
+            # Update transform to reflect new resolution
+            if xc_transform is not None:
+                xc_transform = Affine(
+                    xc_transform.a / args.upscale_factor,
+                    xc_transform.b,
+                    xc_transform.c,
+                    xc_transform.d,
+                    xc_transform.e / args.upscale_factor,
+                    xc_transform.f,
+                )
+
+            logger.info(f"Upscaled scores: sledding {sledding_scores.shape}, XC {xc_scores.shape}")
+
+            # Always generate upscale diagnostics
+            # Use diagnostic_dir if set, otherwise use output_dir/diagnostics
+            if args.diagnostic_dir:
+                diagnostic_dir = Path(args.diagnostic_dir)
+            else:
+                diagnostic_dir = args.output_dir / "diagnostics"
+            diagnostic_dir.mkdir(parents=True, exist_ok=True)
+
+            # Determine which method was actually used
+            # (auto falls back to bilateral if esrgan not installed)
+            used_method = args.upscale_method
+            if args.upscale_method == "auto":
+                try:
+                    import realesrgan  # noqa: F401
+                    used_method = "esrgan"
+                except ImportError:
+                    used_method = "bilateral"
+
+            # Generate sledding upscale diagnostics
+            generate_upscale_diagnostics(
+                sledding_scores_original,
+                sledding_scores,
+                diagnostic_dir,
+                prefix="sledding_upscale",
+                scale=args.upscale_factor,
+                method=used_method,
+                cmap="plasma",
+            )
+
+            # Generate XC upscale diagnostics
+            generate_upscale_diagnostics(
+                xc_scores_original,
+                xc_scores,
+                diagnostic_dir,
+                prefix="xc_upscale",
+                scale=args.upscale_factor,
+                method=used_method,
+                cmap="viridis",
+            )
+            logger.info(f"Saved upscale diagnostics to {diagnostic_dir}")
+
     # Load parks for XC skiing markers
     parks = None
     if not args.mock_data:
@@ -1112,40 +1305,301 @@ Examples:
     logger.debug("Creating terrain with DEM...")
     terrain_combined = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Add standard transforms
-    terrain_combined.add_transform(reproject_raster(src_crs=dem_crs, dst_crs="EPSG:32617"))
+    # Add standard transforms (cached_reproject saves ~24s on subsequent runs)
+    terrain_combined.add_transform(cached_reproject(src_crs=dem_crs, dst_crs="EPSG:32617"))
     terrain_combined.add_transform(flip_raster(axis="horizontal"))
-    terrain_combined.add_transform(scale_elevation(scale_factor=0.0001))
+    # Note: scale_elevation is added AFTER adaptive_smooth so slope computation uses real elevations
 
-    # Configure downsampling (BEFORE smoothing - smoothing on 5M pixels is 200x faster than 1B)
+    # Configure downsampling FIRST (all smoothing runs on downsampled data for memory efficiency)
     if target_vertices:
-        logger.debug(f"Configuring for target vertices: {target_vertices:,}")
-        terrain_combined.configure_for_target_vertices(target_vertices=target_vertices)
-
-    # Apply feature-preserving smoothing AFTER downsample (runs on ~5M pixels, not 1B)
-    if args.smooth:
-        logger.info(f"Adding feature-preserving smoothing (spatial={args.smooth_spatial}, intensity={args.smooth_intensity or 'auto'})")
-        terrain_combined.add_transform(
-            feature_preserving_smooth(
-                sigma_spatial=args.smooth_spatial,
-                sigma_intensity=args.smooth_intensity,
-            )
+        logger.debug(f"Configuring for target vertices: {target_vertices:,} (method: {args.downsample_method})")
+        terrain_combined.configure_for_target_vertices(
+            target_vertices=target_vertices, method=args.downsample_method
         )
 
-    # Apply transforms to DEM
-    logger.debug("Applying transforms to DEM...")
-    terrain_combined.apply_transforms()
+    # =========================================================================
+    # PHASE 1: Apply geometry transforms (reproject, flip, downsample)
+    # Water detection happens AFTER this phase, BEFORE any smoothing
+    # =========================================================================
 
-    # Log cache status for transforms
+    # Configure diagnostic modes for transform visualization
+    adaptive_diagnostic_mode = args.adaptive_smooth
+    bump_diagnostic_mode = args.remove_bumps is not None
+    wavelet_diagnostic_mode = args.wavelet_diagnostics and args.wavelet_denoise
+    if args.wavelet_diagnostics and not args.wavelet_denoise:
+        logger.warning("--wavelet-diagnostics requires --wavelet-denoise to be enabled. Ignoring.")
+
+    # Debug: report which modes are active
+    logger.info(f"DEBUG: Transform modes: adaptive={adaptive_diagnostic_mode}, bump={bump_diagnostic_mode}, wavelet={wavelet_diagnostic_mode}")
+
+    # Apply geometry transforms to DEM (with caching)
     if args.cache:
         transform_key = cache.compute_target_key("dem_transformed")
-        cached_transform = cache.get_cached("dem_transformed")
-        if cached_transform is not None:
-            logger.info(f"  Cache HIT: dem_transformed (key: {transform_key[:12]}...)")
+        cached_data, cached_meta = cache.get_cached("dem_transformed", return_metadata=True)
+        if cached_data is not None and cached_meta:
+            logger.info(f"  Cache HIT: dem_transformed (key: {transform_key[:12]}...) - restoring from cache")
+            # Restore cached transform result including Affine transform
+            terrain_combined.data_layers["dem"]["transformed_data"] = cached_data
+            terrain_combined.data_layers["dem"]["transformed"] = True
+            # Restore the Affine transform and CRS (needed for coordinate conversions)
+            if "affine_transform" in cached_meta:
+                terrain_combined.data_layers["dem"]["transformed_transform"] = cached_meta["affine_transform"]
+            if "crs" in cached_meta:
+                terrain_combined.data_layers["dem"]["transformed_crs"] = cached_meta["crs"]
+            # Clear transforms since they're "applied"
+            terrain_combined.transforms = []
+            logger.debug("✓ Skipped apply_transforms() - loaded from cache")
         else:
-            logger.info(f"  Cache MISS: dem_transformed (key: {transform_key[:12]}..., will cache on save)")
-            # Save transformed DEM state for future runs
-            cache.save_target("dem_transformed", terrain_combined.dem)
+            logger.info(f"  Cache MISS: dem_transformed (key: {transform_key[:12]}...) - computing")
+            terrain_combined.apply_transforms()
+            # Save transformed DEM with Affine transform for future runs
+            dem_layer = terrain_combined.data_layers["dem"]
+            cache.save_target(
+                "dem_transformed",
+                dem_layer["transformed_data"],
+                metadata={
+                    "affine_transform": dem_layer.get("transformed_transform"),
+                    "crs": dem_layer.get("transformed_crs"),
+                },
+            )
+            logger.debug("✓ Saved dem_transformed to cache")
+    else:
+        logger.debug("Applying transforms to DEM...")
+        terrain_combined.apply_transforms()
+
+    # Debug: verify DEM state after geometry transforms (before smoothing)
+    dem_after_geom = terrain_combined.data_layers["dem"]["transformed_data"]
+    logger.info(f"DEM after geometry transforms: shape={dem_after_geom.shape}, "
+                f"min={np.nanmin(dem_after_geom):.4f}, max={np.nanmax(dem_after_geom):.4f}, "
+                f"std={np.nanstd(dem_after_geom):.4f}")
+
+    # =========================================================================
+    # WATER DETECTION: Detect water on pre-smoothed DEM (before any smoothing)
+    # This ensures accurate slope-based detection without smoothing artifacts
+    # =========================================================================
+    logger.debug("Detecting water bodies on pre-smoothed DEM...")
+    dem_for_water = terrain_combined.data_layers["dem"]["transformed_data"]
+    water_mask = identify_water_by_slope(
+        dem_for_water,
+        slope_threshold=0.01,  # Very flat areas only (water is slope ≈ 0)
+        fill_holes=True,
+    )
+    water_pixel_count = np.sum(water_mask) if water_mask is not None else 0
+    logger.info(f"Water detection: {water_pixel_count:,} pixels detected as water")
+
+    # =========================================================================
+    # PHASE 2: Apply smoothing transforms (after water detection)
+    # These operations may artificially flatten areas, so water is detected first
+    # =========================================================================
+
+    # Apply feature-preserving smoothing
+    if args.smooth:
+        logger.info(f"Applying feature-preserving smoothing (spatial={args.smooth_spatial}, intensity={args.smooth_intensity or 'auto'})")
+        smooth_transform = feature_preserving_smooth(
+            sigma_spatial=args.smooth_spatial,
+            sigma_intensity=args.smooth_intensity,
+        )
+        dem_layer = terrain_combined.data_layers["dem"]
+        smoothed_dem, _, _ = smooth_transform(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = smoothed_dem
+
+    # Apply DEM despeckle (uniform noise removal via median filter)
+    if args.despeckle_dem:
+        logger.info(f"Applying DEM despeckle (kernel_size={args.despeckle_dem_kernel})")
+        despeckle_transform = despeckle_dem(kernel_size=args.despeckle_dem_kernel)
+        dem_layer = terrain_combined.data_layers["dem"]
+        despeckled_dem, _, _ = despeckle_transform(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = despeckled_dem
+
+    # Apply wavelet denoising (normal mode - not diagnostic)
+    if args.wavelet_denoise and not wavelet_diagnostic_mode:
+        logger.info(
+            f"Applying wavelet denoising (wavelet={args.wavelet_type}, levels={args.wavelet_levels}, "
+            f"sigma={args.wavelet_sigma})"
+        )
+        wavelet_transform = wavelet_denoise_dem(
+            wavelet=args.wavelet_type,
+            levels=args.wavelet_levels,
+            threshold_sigma=args.wavelet_sigma,
+            preserve_structure=True,
+        )
+        dem_layer = terrain_combined.data_layers["dem"]
+        denoised_dem, _, _ = wavelet_transform(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = denoised_dem
+
+    # Apply wavelet denoising with diagnostics (if requested)
+    if wavelet_diagnostic_mode:
+        logger.info(
+            f"Wavelet diagnostic mode: capturing before/after state "
+            f"(wavelet={args.wavelet_type}, levels={args.wavelet_levels}, sigma={args.wavelet_sigma})"
+        )
+
+        # Get the transformed DEM (pre-wavelet)
+        dem_layer = terrain_combined.data_layers["dem"]
+        pre_wavelet_dem = dem_layer["transformed_data"].copy()
+
+        # Apply wavelet denoising manually
+        wavelet_transform = wavelet_denoise_dem(
+            wavelet=args.wavelet_type,
+            levels=args.wavelet_levels,
+            threshold_sigma=args.wavelet_sigma,
+            preserve_structure=True,
+        )
+        post_wavelet_dem, _, _ = wavelet_transform(pre_wavelet_dem)
+
+        # Update the terrain with the denoised DEM
+        dem_layer["transformed_data"] = post_wavelet_dem
+
+        # Generate diagnostic plots
+        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
+        logger.info(f"Generating wavelet diagnostic plots in {diagnostic_dir}")
+
+        comparison_path, coefficients_path = generate_full_wavelet_diagnostics(
+            original=pre_wavelet_dem,
+            denoised=post_wavelet_dem,
+            output_dir=diagnostic_dir,
+            prefix="dem_wavelet",
+            wavelet=args.wavelet_type,
+            levels=args.wavelet_levels,
+            threshold_sigma=args.wavelet_sigma,
+        )
+
+        logger.info(f"✓ Saved wavelet comparison: {comparison_path}")
+        if coefficients_path:
+            logger.info(f"✓ Saved coefficient analysis: {coefficients_path}")
+
+    # Apply adaptive smoothing with diagnostics (if requested)
+    if adaptive_diagnostic_mode:
+        edge_str = f", edge={args.adaptive_edge_threshold}m" if args.adaptive_edge_threshold else ""
+        logger.info(
+            f"Adaptive smooth diagnostic mode: capturing before/after state "
+            f"(threshold={args.adaptive_slope_threshold}°, sigma={args.adaptive_smooth_sigma}, "
+            f"transition={args.adaptive_transition}°{edge_str})"
+        )
+
+        # Get the transformed DEM (pre-smooth, already downsampled)
+        dem_layer = terrain_combined.data_layers["dem"]
+        pre_smooth_dem = dem_layer["transformed_data"].copy()
+        dem_affine = dem_layer.get("transformed_transform")
+
+        pixel_size = abs(dem_affine.a) if dem_affine is not None else None
+        if pixel_size is not None:
+            logger.info(f"  Pixel size (downsampled): {pixel_size:.1f}m")
+
+        # Apply adaptive smoothing manually
+        adaptive_transform = slope_adaptive_smooth(
+            slope_threshold=args.adaptive_slope_threshold,
+            smooth_sigma=args.adaptive_smooth_sigma,
+            transition_width=args.adaptive_transition,
+            edge_threshold=args.adaptive_edge_threshold,
+        )
+        post_smooth_dem, _, _ = adaptive_transform(pre_smooth_dem, dem_affine)
+
+        # Apply scale_elevation after smoothing (same as normal mode)
+        scale_transform = scale_elevation(scale_factor=0.0001)
+        scaled_dem, _, _ = scale_transform(post_smooth_dem)
+
+        # Update the terrain with the smoothed and scaled DEM
+        dem_layer["transformed_data"] = scaled_dem
+
+        # Debug: verify adaptive smooth saved correctly
+        verify_dem = terrain_combined.data_layers["dem"]["transformed_data"]
+        logger.info(f"DEBUG: After adaptive smooth save: std={np.nanstd(verify_dem):.6f}, "
+                    f"same_array={verify_dem is scaled_dem}, "
+                    f"pre_smooth_std={np.nanstd(pre_smooth_dem):.4f}, post_smooth_std={np.nanstd(post_smooth_dem):.4f}")
+
+        # Generate diagnostic plots (using unscaled data for meaningful elevation values)
+        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
+        logger.info(f"Generating adaptive smooth diagnostic plots in {diagnostic_dir}")
+
+        spatial_path, histogram_path = generate_full_adaptive_smooth_diagnostics(
+            original=pre_smooth_dem,
+            smoothed=post_smooth_dem,
+            output_dir=diagnostic_dir,
+            prefix="dem_adaptive_smooth",
+            slope_threshold=args.adaptive_slope_threshold,
+            smooth_sigma=args.adaptive_smooth_sigma,
+            transition_width=args.adaptive_transition,
+            pixel_size=pixel_size,
+            edge_threshold=args.adaptive_edge_threshold,
+        )
+
+        logger.info(f"✓ Saved adaptive smooth comparison: {spatial_path}")
+        logger.info(f"✓ Saved adaptive smooth histogram: {histogram_path}")
+
+    # Apply bump removal with diagnostics (if requested)
+    if bump_diagnostic_mode:
+        strength_str = f", strength={args.remove_bumps_strength}" if args.remove_bumps_strength < 1.0 else ""
+        logger.info(f"Bump removal diagnostic mode: capturing before/after state (kernel={args.remove_bumps}{strength_str})")
+
+        # Get the transformed DEM (pre-bump-removal, already downsampled)
+        dem_layer = terrain_combined.data_layers["dem"]
+        pre_bump_dem = dem_layer["transformed_data"].copy()
+
+        # Check if data is already scaled (from adaptive smooth mode)
+        already_scaled = adaptive_diagnostic_mode  # adaptive mode applies scale_elevation
+
+        # If already scaled, unscale for proper bump removal then rescale
+        if already_scaled:
+            logger.info("  Note: DEM already scaled from adaptive smooth - unscaling for bump removal")
+            pre_bump_dem_unscaled = pre_bump_dem / 0.0001
+            bump_transform = remove_bumps(kernel_size=args.remove_bumps, strength=args.remove_bumps_strength)
+            post_bump_dem_unscaled, _, _ = bump_transform(pre_bump_dem_unscaled, None)
+            # Scale back
+            scaled_dem = post_bump_dem_unscaled * 0.0001
+            post_bump_dem = post_bump_dem_unscaled  # For diagnostics (unscaled)
+        else:
+            # Apply bump removal to unscaled data
+            bump_transform = remove_bumps(kernel_size=args.remove_bumps, strength=args.remove_bumps_strength)
+            post_bump_dem, _, _ = bump_transform(pre_bump_dem, None)
+
+            # Apply scale_elevation after bump removal
+            scale_transform = scale_elevation(scale_factor=0.0001)
+            scaled_dem, _, _ = scale_transform(post_bump_dem)
+
+        # Update the terrain with the processed DEM
+        dem_layer["transformed_data"] = scaled_dem
+
+        # Debug: verify bump removal saved correctly
+        verify_dem = terrain_combined.data_layers["dem"]["transformed_data"]
+        logger.info(f"DEBUG: After bump removal save: std={np.nanstd(verify_dem):.6f}, "
+                    f"pre_bump_std={np.nanstd(pre_bump_dem):.6f}, post_bump_std={np.nanstd(post_bump_dem):.6f}")
+
+        # Generate diagnostic plots (using unscaled data for meaningful elevation values)
+        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
+        logger.info(f"Generating bump removal diagnostic plots in {diagnostic_dir}")
+
+        # Use unscaled data for diagnostics
+        if already_scaled:
+            diag_original = pre_bump_dem / 0.0001  # Unscale for meaningful elevation values
+            diag_after = post_bump_dem  # Already unscaled above
+        else:
+            diag_original = pre_bump_dem
+            diag_after = post_bump_dem
+
+        diag_path = generate_bump_removal_diagnostics(
+            original=diag_original,
+            after_removal=diag_after,
+            output_dir=diagnostic_dir,
+            prefix="dem_bump_removal",
+            kernel_size=args.remove_bumps,
+        )
+
+        logger.info(f"✓ Saved bump removal diagnostics: {diag_path}")
+
+    # Apply scale_elevation in normal mode (diagnostic modes handle it themselves)
+    if not adaptive_diagnostic_mode and not bump_diagnostic_mode:
+        logger.debug("Applying scale_elevation to DEM...")
+        scale_transform = scale_elevation(scale_factor=0.0001)
+        dem_layer = terrain_combined.data_layers["dem"]
+        scaled_dem, _, _ = scale_transform(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = scaled_dem
+
+    # Debug: verify DEM state before mesh creation
+    dem_for_debug = terrain_combined.data_layers["dem"]["transformed_data"]
+    logger.info(f"DEM state before mesh: shape={dem_for_debug.shape}, "
+                f"min={np.nanmin(dem_for_debug):.4f}, max={np.nanmax(dem_for_debug):.4f}, "
+                f"std={np.nanstd(dem_for_debug):.4f}")
 
     # Add sledding scores as base layer
     logger.debug("Adding sledding scores layer...")
@@ -1203,22 +1657,7 @@ Examples:
         )
         logger.info("✓ Score data smoothed")
 
-    # Apply despeckle if requested (removes isolated speckles via median filter)
-    if args.despeckle_scores:
-        logger.info(f"Despeckle score data (kernel_size={args.despeckle_kernel})")
-        # Despeckle sledding scores
-        sledding_data = terrain_combined.data_layers["sledding"]["data"]
-        terrain_combined.data_layers["sledding"]["data"] = despeckle_scores(
-            sledding_data,
-            kernel_size=args.despeckle_kernel,
-        )
-        # Despeckle XC skiing scores
-        xc_data = terrain_combined.data_layers["xc_skiing"]["data"]
-        terrain_combined.data_layers["xc_skiing"]["data"] = despeckle_scores(
-            xc_data,
-            kernel_size=args.despeckle_kernel,
-        )
-        logger.info("✓ Score data despeckled")
+    # Note: despeckle_scores is now applied earlier (before upscaling) for better results
 
     # Create mesh for proximity calculations
     logger.debug("Creating temporary mesh for proximity calculations...")
@@ -1260,6 +1699,15 @@ Examples:
                 resolution=30.0,  # 30m pixels
                 road_width_pixels=args.road_width,
             )
+
+            # Apply road anti-aliasing if requested (smooths jagged edges)
+            if args.road_antialias > 0 and "roads" in terrain_combined.data_layers:
+                logger.info(f"Anti-aliasing road edges (sigma={args.road_antialias})...")
+                road_data_layer = terrain_combined.data_layers["roads"]["data"]
+                smoothed_roads = smooth_road_mask(road_data_layer, sigma=args.road_antialias)
+                terrain_combined.data_layers["roads"]["data"] = smoothed_roads
+                logger.info("✓ Road anti-aliasing applied")
+
         except Exception as e:
             logger.warning(f"Failed to add roads layer: {e}")
 
@@ -1327,30 +1775,25 @@ Examples:
                 source_layers=["sledding"],
             )
 
-    # Detect water on downsampled DEM (fast - ~170x faster than highres detection)
-    # Unscale DEM back to meters before slope detection (was scaled by 0.0001)
-    logger.debug("Detecting water bodies on downsampled DEM...")
-    dem_data = terrain_combined.data_layers["dem"]["transformed_data"]
-    unscaled_dem = dem_data / 0.0001  # Back to meters
-    water_mask = identify_water_by_slope(
-        unscaled_dem,
-        slope_threshold=0.01,  # Very flat areas only (water is slope ≈ 0)
-        fill_holes=True,
-    )
+    # NOTE: Water mask was detected earlier (before smoothing) for accurate slope detection
+    # The water_mask variable is already defined and ready to use
 
-    # Compute colors
-    logger.debug("Computing colors with water detection...")
-    terrain_combined.compute_colors(water_mask=water_mask)
-
-    # Log cache status for colors
+    # Compute colors (with caching)
     if args.cache:
         color_key = cache.compute_target_key("colors_computed")
         cached_colors = cache.get_cached("colors_computed")
         if cached_colors is not None:
-            logger.info(f"  Cache HIT: colors_computed (key: {color_key[:12]}...)")
+            logger.info(f"  Cache HIT: colors_computed (key: {color_key[:12]}...) - restoring from cache")
+            terrain_combined.colors = cached_colors
+            logger.debug("✓ Skipped compute_colors() - loaded from cache")
         else:
-            logger.info(f"  Cache MISS: colors_computed (key: {color_key[:12]}..., caching)")
+            logger.info(f"  Cache MISS: colors_computed (key: {color_key[:12]}...) - computing")
+            terrain_combined.compute_colors(water_mask=water_mask)
             cache.save_target("colors_computed", terrain_combined.colors)
+            logger.debug("✓ Saved colors_computed to cache")
+    else:
+        logger.debug("Computing colors with water detection...")
+        terrain_combined.compute_colors(water_mask=water_mask)
 
     # Remove temporary mesh
     bpy.data.objects.remove(mesh_temp, do_unlink=True)
@@ -1435,16 +1878,6 @@ Examples:
 
     logger.info("✓ Combined terrain mesh created successfully")
 
-    # Add skiing bumps if requested
-    if args.skiing_bumps and parks:
-        logger.info("\nAdding skiing bumps...")
-        add_skiing_bumps_to_mesh(
-            mesh_combined,
-            terrain_combined,
-            parks,
-            park_radius=args.bump_radius,
-        )
-
     # Free the original DEM array from memory (it's no longer needed)
     # The Terrain objects have their own downsampled copies
     del dem
@@ -1474,11 +1907,17 @@ Examples:
         setup_hdri_lighting(
             sun_elevation=args.sun_elevation,
             sun_rotation=args.sun_azimuth,
-            sun_intensity=args.sun_energy / 7.0,  # Scale relative to default energy=7
+            sun_intensity=args.sun_energy / 7.0,  # Sun disc brightness
             sun_size=args.sun_angle,  # Controls shadow softness (larger = softer)
+            air_density=args.air_density,  # Atmospheric scattering (lower = clearer)
             visible_to_camera=False,
             camera_background=camera_bg,
+            sky_strength=args.sky_intensity,  # Overall sky ambient brightness
         )
+        if args.sky_intensity != 1.0:
+            logger.info(f"  Sky intensity: {args.sky_intensity} (ambient dimmed)")
+        if args.air_density != 1.0:
+            logger.info(f"  Air density: {args.air_density} (atmospheric scattering)")
         # Only create fill light if requested (HDRI sky provides main sun)
         lights = setup_two_point_lighting(
             sun_azimuth=args.sun_azimuth,
@@ -1492,6 +1931,20 @@ Examples:
         )
     else:
         # No HDRI - use explicit sun light
+        # Set world to BLACK to prevent Blender's default gray world from providing ambient light
+        world = bpy.context.scene.world
+        if world is None:
+            world = bpy.data.worlds.new("World")
+            bpy.context.scene.world = world
+        world.use_nodes = True
+        world.node_tree.nodes.clear()
+        output = world.node_tree.nodes.new("ShaderNodeOutputWorld")
+        background = world.node_tree.nodes.new("ShaderNodeBackground")
+        background.inputs["Color"].default_value = (0, 0, 0, 1)  # Pure black
+        background.inputs["Strength"].default_value = 0.0  # Zero emission
+        world.node_tree.links.new(background.outputs["Background"], output.inputs["Surface"])
+        logger.info("Set world background to black (no ambient light)")
+
         lights = setup_two_point_lighting(
             sun_azimuth=args.sun_azimuth,
             sun_elevation=args.sun_elevation,
@@ -1527,16 +1980,21 @@ Examples:
 
     logger.info("✓ Scene created successfully")
 
+    # Determine output format (defined outside render block for summary)
+    output_format = args.format.upper()
+    format_ext = "jpg" if output_format == "JPEG" else "png"
+    color_mode = "RGB" if output_format == "JPEG" else "RGBA"
+
     # Render if requested
     if not args.no_render:
-        logger.info("\n[4/4] Rendering to PNG...")
+        logger.info(f"\n[4/4] Rendering to {output_format}...")
         logger.info("=" * 70)
 
         # Configure render settings
         setup_render_settings(
             use_gpu=True,
             samples=render_samples,
-            use_denoising=False,
+            use_denoising=True,
             use_persistent_data=args.persistent_data,
             use_auto_tile=args.auto_tile,
             tile_size=args.tile_size,
@@ -1547,13 +2005,13 @@ Examples:
         if args.persistent_data:
             memory_opts.append("persistent data")
         memory_info = f", {', '.join(memory_opts)}" if memory_opts else ""
-        logger.info(f"Render settings configured (GPU, {render_samples:,} samples, denoising off{memory_info})")
+        logger.info(f"Render settings configured (GPU, {render_samples:,} samples, denoising on{memory_info})")
 
         # Set output filename based on quality mode
         if args.print_quality:
-            output_filename = "sledding_with_xc_parks_3d_print.png"
+            output_filename = f"sledding_with_xc_parks_3d_print.{format_ext}"
         else:
-            output_filename = "sledding_with_xc_parks_3d.png"
+            output_filename = f"sledding_with_xc_parks_3d.{format_ext}"
 
         output_path = args.output_dir / output_filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1563,15 +2021,58 @@ Examples:
             str(output_path),
             width=render_width,
             height=render_height,
+            file_format=output_format,
+            color_mode=color_mode,
+            compression=args.jpeg_quality if output_format == "JPEG" else 90,
         )
 
         if result:
             logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
 
+            # Embed sRGB color profile if requested (for print)
+            if args.embed_profile:
+                logger.info("Embedding sRGB ICC color profile...")
+                try:
+                    import subprocess
+                    # Find sRGB profile (common locations)
+                    profile_paths = [
+                        "/usr/share/color/icc/colord/sRGB.icc",
+                        "/usr/share/color/icc/sRGB.icc",
+                        "/usr/share/color/icc/OpenICC/sRGB.icc",
+                        "/usr/share/color/icc/ghostscript/srgb.icc",
+                    ]
+                    profile_path = None
+                    for p in profile_paths:
+                        if Path(p).exists():
+                            profile_path = p
+                            break
+
+                    if profile_path:
+                        # Use ImageMagick to embed the profile
+                        cmd = ["convert", str(output_path), "-profile", profile_path, str(output_path)]
+                        result_proc = subprocess.run(cmd, capture_output=True, text=True)
+                        if result_proc.returncode == 0:
+                            logger.info(f"✓ Embedded sRGB profile from {profile_path}")
+                        else:
+                            logger.warning(f"Failed to embed profile: {result_proc.stderr}")
+                    else:
+                        logger.warning("sRGB ICC profile not found. Install colord or icc-profiles package.")
+                        logger.info("  Alternative: convert image.jpg -profile /path/to/sRGB.icc output.jpg")
+                except FileNotFoundError:
+                    logger.warning("ImageMagick not found. Install with: sudo apt install imagemagick")
+                    logger.info("  Alternative: convert image.jpg -profile /path/to/sRGB.icc output.jpg")
+                except Exception as e:
+                    logger.warning(f"Failed to embed color profile: {e}")
+
             # Generate RGB histogram
             histogram_filename = output_path.stem + "_histogram.png"
             histogram_path = output_path.parent / histogram_filename
             generate_rgb_histogram(output_path, histogram_path)
+
+            # Generate luminance (B&W) histogram
+            lum_histogram_filename = output_path.stem + "_luminance.png"
+            lum_histogram_path = output_path.parent / lum_histogram_filename
+            generate_luminance_histogram(output_path, lum_histogram_path)
 
         # Print actual Blender settings used for this render
         print_render_settings_report(logger)
@@ -1585,16 +2086,16 @@ Examples:
     logger.info(f"    - Base colormap: mako (purple → yellow) for sledding scores (gamma=0.5)")
     logger.info(f"    - Overlay colormap: rocket for XC skiing scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
-    if args.skiing_bumps and parks:
-        logger.info(f"    - Added half-sphere bumps at {len(parks)} park locations (colored by skiing score)")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
     logger.info(f"  ✓ Set up orthographic camera and lighting")
     if args.background:
         logger.info(f"  ✓ Created background plane ({args.background_color})")
     if not args.no_render:
-        logger.info(f"  ✓ Rendered {render_width}×{render_height} PNG with {render_samples:,} samples")
-        logger.info(f"  ✓ Generated RGB histogram for color analysis")
+        logger.info(f"  ✓ Rendered {render_width}×{render_height} {output_format} with {render_samples:,} samples")
+        if args.embed_profile:
+            logger.info(f"    (with embedded sRGB ICC profile)")
+        logger.info(f"  ✓ Generated RGB + luminance histograms")
         if args.print_quality:
             logger.info(f"    ({args.print_width}×{args.print_height} inches @ {args.print_dpi} DPI - PRINT QUALITY)")
     logger.info(f"\nOutput directory: {args.output_dir}")

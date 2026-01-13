@@ -99,20 +99,16 @@ def apply_water_shader(
     links = material.node_tree.links
 
     try:
-        # Create nodes
+        # Create nodes - pure Principled BSDF (no emission)
         output = nodes.new("ShaderNodeOutputMaterial")
         principled = nodes.new("ShaderNodeBsdfPrincipled")
-        emission = nodes.new("ShaderNodeEmission")
-        mix_shader = nodes.new("ShaderNodeMixShader")
         vertex_color = nodes.new("ShaderNodeVertexColor")
         mix_rgb = nodes.new("ShaderNodeMixRGB")  # Mix colors based on alpha
 
         # Position nodes
-        output.location = (800, 300)
-        mix_shader.location = (600, 300)
-        mix_rgb.location = (400, 300)
-        principled.location = (200, 400)
-        emission.location = (200, 200)
+        output.location = (600, 300)
+        principled.location = (400, 300)
+        mix_rgb.location = (200, 300)
         vertex_color.location = (0, 300)
 
         # Set vertex color layer
@@ -121,12 +117,10 @@ def apply_water_shader(
         # Configure water color
         water_rgba = (*water_color, 1.0)
 
-        # Configure emission shader
-        emission.inputs["Strength"].default_value = 1.5
-
-        # Set principled shader
-        principled.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1.0)
+        # Set principled shader - no emission, proper lighting response
         principled.inputs["Roughness"].default_value = 0.6  # Water is slightly smoother
+        principled.inputs["Metallic"].default_value = 0.0
+        principled.inputs["Specular IOR Level"].default_value = 0.5
 
         # Configure mix RGB for blending land and water colors
         # Factor from alpha: 0 = land (use vertex color), 1 = water (use water color)
@@ -139,7 +133,7 @@ def apply_water_shader(
         )  # Default (overridden by vertex color)
 
         # Create connections
-        logger.debug("Creating node connections with water shader")
+        logger.debug("Creating node connections with water shader (no emission)")
 
         # Use alpha channel from vertex color to control water/land mixing
         # Alpha > 0.5 = water, Alpha < 0.5 = land
@@ -148,17 +142,11 @@ def apply_water_shader(
         # Use vertex color as the land color input (Color2)
         links.new(vertex_color.outputs["Color"], mix_rgb.inputs["Color2"])
 
-        # Use mixed color for both emission and principled
-        links.new(mix_rgb.outputs["Color"], emission.inputs["Color"])
+        # Use mixed color for principled shader base color
         links.new(mix_rgb.outputs["Color"], principled.inputs["Base Color"])
 
-        # Mix between principled and emission
-        links.new(principled.outputs["BSDF"], mix_shader.inputs[1])
-        links.new(emission.outputs["Emission"], mix_shader.inputs[2])
-        mix_shader.inputs[0].default_value = 0.3
-
-        # Connect to output
-        links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+        # Connect directly to output (no emission mixing)
+        links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
         logger.info("Water shader setup completed successfully")
 
@@ -197,8 +185,8 @@ def create_background_plane(
     default_material_params = {
         "base_color": (1, 1, 1, 1),
         "emission_color": (1, 1, 1, 1),
-        "emission_strength": 0.35,
-        "roughness": 0.0,
+        "emission_strength": 0.1,  # Subtle fill light
+        "roughness": 0.5,  # Mid roughness - diffuse reflection
         "metallic": 0.0,
         "ior": 1.0,
     }
@@ -313,7 +301,7 @@ def apply_terrain_with_obsidian_roads(
     Args:
         material: Blender material to configure
         terrain_style: Optional test material for terrain ("chrome", "clay", etc.)
-                      If None, uses vertex colors with emission.
+                      If None, uses vertex colors with pure Principled BSDF (no emission).
         road_color: Road color - either a preset name from ROAD_COLORS
                    ("obsidian", "azurite", "azurite-light", "malachite", "hematite")
                    or an RGB tuple (0-1 range). Default: "obsidian" (near-black).

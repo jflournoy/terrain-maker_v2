@@ -93,6 +93,52 @@ def get_viridis_colormap():
         return lambda x: (x, x, x)
 
 
+def smooth_road_mask(
+    road_mask: np.ndarray,
+    sigma: float = 1.0,
+) -> np.ndarray:
+    """
+    Apply Gaussian blur to road mask for anti-aliased edges.
+
+    The Bresenham line algorithm creates stair-step (aliased) edges.
+    Applying Gaussian smoothing creates soft anti-aliased boundaries that
+    render more smoothly, especially after the mask goes through resampling.
+
+    Args:
+        road_mask: 2D array of road values (0=no road, >0=road)
+        sigma: Gaussian blur sigma in pixels (default: 1.0).
+            Higher values = softer edges. Typical range: 0.5-2.0.
+            - 0.5: Minimal softening
+            - 1.0: Standard anti-aliasing (recommended)
+            - 2.0: Very soft/blurry edges
+
+    Returns:
+        Smoothed road mask as float32 array. Values are now continuous
+        (not binary) and may need thresholding if binary mask is needed.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    if sigma <= 0:
+        return road_mask.astype(np.float32)
+
+    logger.info(f"Anti-aliasing road mask (sigma={sigma})...")
+
+    # Convert to float for smooth blending
+    mask_float = road_mask.astype(np.float32)
+
+    # Apply Gaussian blur
+    smoothed = gaussian_filter(mask_float, sigma=sigma)
+
+    # Preserve original values where roads are strong, blend at edges
+    # This keeps road centers at original intensity while softening edges
+    road_pixels = np.sum(road_mask > 0.5)
+    edge_pixels = np.sum((smoothed > 0.1) & (smoothed < 0.9))
+
+    logger.info(f"✓ Road mask anti-aliased: {road_pixels} road pixels, {edge_pixels} edge pixels")
+
+    return smoothed
+
+
 def smooth_dem_along_roads(
     dem: np.ndarray,
     road_mask: np.ndarray,
