@@ -6,7 +6,6 @@ on:
     paths:
       - 'docs/**'
       - 'src/terrain/**'
-      - 'scripts/python-docs.py'
   workflow_dispatch:
 
 permissions:
@@ -29,8 +28,21 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Generate API docs
-        run: python scripts/python-docs.py
+      - name: Install dependencies
+        run: |
+          pip install -r docs/requirements.txt
+          pip install -e .
+
+      - name: Copy images to docs
+        run: |
+          mkdir -p docs/source/_static
+          cp docs/images/detroit_elevation_south.png docs/source/_static/ || true
+          cp docs/images/combined_render/sledding_with_xc_parks_3d.png docs/source/_static/combined_render.png || true
+
+      - name: Build Sphinx docs
+        run: |
+          cd docs
+          sphinx-build -b html source build/html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -38,7 +50,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './docs'
+          path: 'docs/build/html'
 
   deploy:
     environment:
