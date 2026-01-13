@@ -2,7 +2,7 @@
 
 Combine elevation data with SNODAS snow statistics to identify optimal sledding locations.
 
-![Sledding Scores](../_static/sledding_scores.png)
+![Sledding Scores](../_static/sledding_score.png)
 
 ## Overview
 
@@ -22,7 +22,49 @@ python examples/detroit_snow_sledding.py --mock-data
 python examples/detroit_snow_sledding.py
 ```
 
-## The Pipeline
+## Processing Pipeline
+
+The sledding score pipeline produces visual outputs at each stage, making it easy to debug and understand the analysis.
+
+### Step 1: Raw Input Data
+
+The pipeline starts with elevation (DEM) and snow depth data:
+
+| DEM Elevation | Snow Depth |
+|---------------|------------|
+| ![DEM](../_static/01_raw_dem.png) | ![Snow Depth](../_static/01_raw_snow_depth.png) |
+
+### Step 2: Slope Statistics
+
+High-resolution slope analysis computes various terrain metrics:
+
+| Mean Slope | Max Slope | Roughness |
+|------------|-----------|-----------|
+| ![Mean](../_static/02_slope_mean.png) | ![Max](../_static/02_slope_max.png) | ![Roughness](../_static/02_slope_roughness.png) |
+
+### Step 3: Slope Penalties
+
+Penalty factors are computed for hazardous terrain:
+
+| Cliff Penalty | Terrain Consistency | Combined Penalty |
+|---------------|---------------------|------------------|
+| ![Cliff](../_static/03_cliff_penalty.png) | ![Consistency](../_static/03_terrain_consistency.png) | ![Combined](../_static/03_combined_penalty.png) |
+
+### Step 4: Score Components
+
+Individual score components before combination:
+
+| Snow Score | Slope Score | Coverage Score |
+|------------|-------------|----------------|
+| ![Snow](../_static/04_snow_trapezoid_score.png) | ![Slope](../_static/04_slope_trapezoid_score.png) | ![Coverage](../_static/04_coverage_score.png) |
+
+### Step 5: Final Score
+
+The final sledding score combines all components:
+
+![Final Sledding Score](../_static/sledding_score.png)
+
+## The Code
 
 ```python
 from src.terrain.core import Terrain

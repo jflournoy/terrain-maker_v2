@@ -36,8 +36,27 @@ jobs:
       - name: Copy images to docs
         run: |
           mkdir -p docs/source/_static
+          # Elevation examples
           cp docs/images/detroit_elevation_south.png docs/source/_static/ || true
-          cp docs/images/combined_render/sledding_with_xc_parks_3d.png docs/source/_static/combined_render.png || true
+          # Combined render
+          cp docs/images/combined_render/sledding_with_xc_parks_3d_print.png docs/source/_static/combined_render.png || true
+          # Sledding pipeline - Step 1: Raw input
+          cp docs/images/01_raw/dem.png docs/source/_static/01_raw_dem.png || true
+          cp docs/images/01_raw/snow_depth.png docs/source/_static/01_raw_snow_depth.png || true
+          # Sledding pipeline - Step 2: Slope stats
+          cp docs/images/02_slope_stats/mean.png docs/source/_static/02_slope_mean.png || true
+          cp docs/images/02_slope_stats/max.png docs/source/_static/02_slope_max.png || true
+          cp docs/images/02_slope_stats/roughness.png docs/source/_static/02_slope_roughness.png || true
+          # Sledding pipeline - Step 3: Slope penalties
+          cp docs/images/03_slope_penalties/cliff_penalty.png docs/source/_static/03_cliff_penalty.png || true
+          cp docs/images/03_slope_penalties/terrain_consistency.png docs/source/_static/03_terrain_consistency.png || true
+          cp docs/images/03_slope_penalties/combined_penalty.png docs/source/_static/03_combined_penalty.png || true
+          # Sledding pipeline - Step 4: Score components
+          cp docs/images/04_score_components/snow_trapezoid_score.png docs/source/_static/04_snow_trapezoid_score.png || true
+          cp docs/images/04_score_components/slope_trapezoid_score.png docs/source/_static/04_slope_trapezoid_score.png || true
+          cp docs/images/04_score_components/coverage_score.png docs/source/_static/04_coverage_score.png || true
+          # Sledding pipeline - Step 5: Final score
+          cp docs/images/05_final/sledding_score.png docs/source/_static/sledding_score.png || true
 
       - name: Build Sphinx docs
         run: |
