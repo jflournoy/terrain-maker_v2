@@ -1,8 +1,3 @@
----
-title: Examples
-nav_order: 3
----
-
 # Examples
 
 Complete examples showing how to use terrain-maker for real-world visualizations.

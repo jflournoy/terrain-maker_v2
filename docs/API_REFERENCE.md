@@ -1,8 +1,3 @@
----
-title: API Reference
-nav_order: 5
----
-
 # terrain-maker API Reference
 
 Comprehensive documentation of all classes and functions in the terrain-maker library.

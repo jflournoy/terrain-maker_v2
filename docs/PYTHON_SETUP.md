@@ -1,8 +1,3 @@
----
-title: Setup
-nav_order: 6
----
-
 # Python Terrain-Maker Setup
 
 ## Overview
