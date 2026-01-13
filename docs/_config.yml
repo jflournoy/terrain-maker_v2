@@ -1,6 +1,8 @@
 title: terrain-maker
 description: 3D terrain visualization with Blender from DEM data
 remote_theme: just-the-docs/just-the-docs@v0.10.0
+baseurl: /terrain-maker_v2
+url: https://jflournoy.github.io
 
 # Color scheme
 color_scheme: light
