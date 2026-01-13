@@ -17,6 +17,7 @@ dependencies = [
     "scikit-image",
     "scikit-learn",  # Required for proximity mask clustering (DBSCAN)
     "opencv-python-headless",  # 500x faster bilateral filter than skimage
+    "torch",  # GPU-accelerated area averaging for downsampling
     "rasterio",
     "geopandas",
     "shapely",

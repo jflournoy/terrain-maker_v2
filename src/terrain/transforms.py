@@ -116,18 +116,25 @@ def _downsample_average(data: np.ndarray, out_shape: tuple) -> np.ndarray:
 
     This is the most physically accurate method for DEMs - it preserves the
     mean elevation and doesn't create values outside the original range.
-    """
-    from skimage.transform import resize
 
-    # Use anti_aliasing which does proper area averaging
-    return resize(
-        data,
-        out_shape,
-        order=0,  # Use nearest for the final step
-        anti_aliasing=True,  # This does the area averaging
-        anti_aliasing_sigma=None,  # Auto-calculate based on downscale factor
-        preserve_range=True,
-    )
+    Uses PyTorch's F.interpolate with mode='area' for true area averaging,
+    which is faster than skimage's anti-aliased resize (especially on GPU).
+    """
+    import torch
+    import torch.nn.functional as F
+
+    # Convert to torch tensor: (H, W) -> (1, 1, H, W)
+    tensor = torch.from_numpy(data).float().unsqueeze(0).unsqueeze(0)
+
+    # Use GPU if available
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    tensor = tensor.to(device)
+
+    # Area interpolation - true area averaging, O(n) regardless of scale
+    result = F.interpolate(tensor, size=out_shape, mode="area")
+
+    # Convert back to numpy
+    return result.squeeze().cpu().numpy()
 
 
 def _downsample_lanczos(data: np.ndarray, out_shape: tuple) -> np.ndarray:
