@@ -2,6 +2,14 @@
 
 Welcome to the **terrain-maker** documentation. This library makes it easy to create 3D terrain visualizations with Blender from Digital Elevation Model (DEM) data.
 
+## Table of Contents
+{: .no_toc }
+
+- TOC
+{:toc}
+
+---
+
 ## Quick Start
 
 1. **[Install](PYTHON_SETUP.md)** - Set up Python environment
