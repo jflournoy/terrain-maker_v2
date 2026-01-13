@@ -84,7 +84,11 @@ def downsample_raster(zoom_factor=0.1, method="average", nodata_value=np.nan):
 
         # Restore nodata values
         if np.any(mask):
-            mask_downsampled = zoom(mask.astype(float), zoom=zoom_factor, order=0, prefilter=False)
+            # Use resize to match exact output shape (zoom can differ by 1 pixel)
+            from skimage.transform import resize
+            mask_downsampled = resize(
+                mask.astype(float), downsampled.shape, order=0, preserve_range=True
+            )
             downsampled[mask_downsampled > 0.5] = nodata_value
 
         # Update transform if provided
