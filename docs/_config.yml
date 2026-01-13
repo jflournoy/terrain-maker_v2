@@ -27,8 +27,3 @@ back_to_top_text: "Back to top"
 
 # Heading anchor links
 heading_anchors: true
-
-# Exclude files
-exclude:
-  - images/*.png
-  - images/*.jpg
