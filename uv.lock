@@ -2315,6 +2315,7 @@ dependencies = [
     { name = "scipy" },
     { name = "seaborn" },
     { name = "shapely" },
+    { name = "torch" },
     { name = "tqdm" },
     { name = "zarr" },
 ]
@@ -2363,6 +2364,7 @@ requires-dist = [
     { name = "scipy" },
     { name = "seaborn" },
     { name = "shapely" },
+    { name = "torch" },
     { name = "tqdm" },
     { name = "zarr" },
 ]
