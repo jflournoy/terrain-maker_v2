@@ -20936,6 +20936,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -79.6067778,
+          43.6058123
+        ]
+      },
+      "properties": {
+        "name": "The small snow downhill tubing"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -85.4605529,
           44.7277211
         ]
@@ -21703,7 +21716,7 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -79.4912585,
+          -79.4912779,
           39.1022166
         ]
       },
@@ -21716,7 +21729,7 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -79.4970452,
+          -79.4970588,
           39.1045081
         ]
       },
@@ -21768,8 +21781,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -79.4768714,
-          39.0891736
+          -79.476895,
+          39.0891696
         ]
       },
       "properties": {
