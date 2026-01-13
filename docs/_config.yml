@@ -1,0 +1,30 @@
+title: terrain-maker
+description: 3D terrain visualization with Blender from DEM data
+theme: jekyll-theme-cayman
+remote_theme: pages-themes/cayman@v0.2.0
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+# Exclude files
+exclude:
+  - images/*.png
+  - images/*.jpg
+
+# Navigation (optional - for sidebar)
+nav:
+  - title: Home
+    url: /
+  - title: Quick Start
+    url: /QUICK_START
+  - title: Examples
+    url: /EXAMPLES
+  - title: Combined Render
+    url: /COMBINED_RENDER
+  - title: API Reference
+    url: /API_REFERENCE
+  - title: Setup
+    url: /PYTHON_SETUP
