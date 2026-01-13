@@ -20,6 +20,12 @@ terrain-maker Documentation
 
 .. toctree::
    :maxdepth: 2
+   :caption: Guides
+
+   guides/diagnostics
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference
 
    api/core
