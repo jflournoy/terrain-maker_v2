@@ -51,6 +51,101 @@ except (AttributeError, TypeError):
     plt.register_cmap(cmap=michigan_cmap)
 
 
+# =============================================================================
+# Boreal-Mako Colormap (Perceptually Uniform)
+# =============================================================================
+# Custom colormap for sledding/snow scores with boreal forest aesthetic:
+# - Boreal green at low end (forest)
+# - Transition through mako blue
+# - Edge effect (hue shift blue→teal) at 0.5-0.6
+# - Pale mint at high end
+# Built using CIELAB L* for perceptual uniformity.
+
+def _build_boreal_mako_cmap():
+    """Build the boreal_mako colormap using CIELAB for perceptual uniformity."""
+    from skimage import color as skcolor
+
+    def lab_to_rgb_clipped(L, a, b):
+        """Convert Lab to RGB, clipping to valid range."""
+        lab = np.array([[[L, a, b]]])
+        rgb = skcolor.lab2rgb(lab)[0, 0]
+        return np.clip(rgb, 0, 1)
+
+    def target_lightness(pos):
+        """Target L* value with PROMINENT purple outline."""
+        if pos <= 0.45:
+            # Linear rise to blue zone
+            return 10 + (50 - 10) * (pos / 0.45)
+        elif pos <= 0.52:
+            # PROMINENT DIP for purple outline (darker = outline effect)
+            return 50 - (50 - 35) * ((pos - 0.45) / 0.07)
+        elif pos <= 0.60:
+            # Fast rise from purple to teal
+            return 35 + (68 - 35) * ((pos - 0.52) / 0.08)
+        else:
+            # Linear rise to pale ice
+            return 68 + (95 - 68) * ((pos - 0.60) / 0.40)
+
+    # Define color zones in Lab space
+    # Boreal green: cool forest green (no yellow cast - b* near zero or negative)
+    # Mako blue: the signature blue from mako colormap
+    # Purple outline: subtle narrow purple band creates outline effect
+    # Mako teal: teal transition from mako
+    # Pale ice: light blue-teal for high scores (keeps blue, avoids brownish mint)
+    control_points = [
+        # (position, a*, b*)
+        (0.00, -30, -5),   # Cool forest green (blue-tinted, no yellow)
+        (0.20, -30, -5),   # End of boreal zone
+        (0.35, 8, -35),    # Transition to mako blue
+        (0.45, 8, -35),    # Mako blue (before purple)
+        (0.49, 25, -30),   # → BOLD shift toward purple (outline start)
+        (0.52, 30, -25),   # Purple peak (PROMINENT magenta, creates visible outline)
+        (0.55, 12, -20),   # → Back toward teal
+        (0.60, -18, -12),  # Teal (after outline)
+        (0.80, -12, -12),  # Pale teal (keep blue)
+        (1.00, -8, -10),   # Pale ice (stays bluer, avoids yellow/brown)
+    ]
+
+    # Generate 256 color samples
+    positions = np.linspace(0, 1, 256)
+    colors = []
+
+    for pos in positions:
+        L = target_lightness(pos)
+
+        # Interpolate a* and b* between control points
+        # Find surrounding control points
+        for i in range(len(control_points) - 1):
+            p0, a0, b0 = control_points[i]
+            p1, a1, b1 = control_points[i + 1]
+            if p0 <= pos <= p1:
+                t = (pos - p0) / (p1 - p0) if p1 > p0 else 0
+                a = a0 + t * (a1 - a0)
+                b = b0 + t * (b1 - b0)
+                break
+        else:
+            # At endpoint
+            _, a, b = control_points[-1]
+
+        rgb = lab_to_rgb_clipped(L, a, b)
+        colors.append(rgb)
+
+    colors = np.array(colors)
+
+    # Create LinearSegmentedColormap from the sampled colors
+    cmap = LinearSegmentedColormap.from_list('boreal_mako', colors, N=256)
+    return cmap
+
+
+# Build and register the boreal_mako colormap
+boreal_mako_cmap = _build_boreal_mako_cmap()
+try:
+    import matplotlib
+    matplotlib.colormaps.register(boreal_mako_cmap, force=True)
+except (AttributeError, TypeError):
+    plt.register_cmap(cmap=boreal_mako_cmap)
+
+
 def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None, gamma=1.0):
     """
     Create a colormap based on elevation values.

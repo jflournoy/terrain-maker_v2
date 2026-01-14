@@ -7,7 +7,7 @@ XC skiing locations highlighted using dual colormaps in Blender.
 
 Features:
 - Single terrain with dual colormaps blending sledding and XC skiing data
-- Base terrain: Mako colormap (purple → yellow) showing sledding suitability
+- Base terrain: Boreal-Mako colormap (forest green → blue → pale mint) for sledding
 - Overlay zones: Rocket colormap highlighting XC skiing scores near park clusters
 - Proximity-based coloring with automatic park clustering (10km radius)
 - Detects and colors water bodies blue (slope-based detection)
@@ -143,6 +143,52 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s: %(message)s",
     handlers=[file_handler]
 )
+
+
+# =============================================================================
+# COLOR COMPRESSION FORMULA
+# =============================================================================
+
+def compress_colormap_score(score, transition):
+    """
+    Apply two-segment compression formula to preserve colormap extremes.
+
+    This formula compresses the low end of the score range while expanding
+    the high end to ensure pale/white colors remain visible even with high
+    transition values.
+
+    The formula:
+    - [0, transition] maps to [0, 0.27] (compress low scores around transition)
+    - [transition, 1.0] maps to [0.27, 1.0] (expand high scores to show full colormap)
+
+    Args:
+        score: Numpy array or scalar of score values [0, 1]
+        transition: Transition point where green→blue occurs [0, 1]
+
+    Returns:
+        Compressed score in range [0, 1]
+    """
+    # Handle both scalar and array inputs
+    is_scalar = np.isscalar(score)
+    score_arr = np.asarray(score)
+
+    # Two-segment piecewise formula
+    result = np.zeros_like(score_arr, dtype=np.float64)
+
+    # Segment 1: [0, transition] → [0, 0.27]
+    mask_low = score_arr <= transition
+    result[mask_low] = score_arr[mask_low] * (0.27 / transition)
+
+    # Segment 2: [transition, 1.0] → [0.27, 1.0]
+    mask_high = score_arr > transition
+    result[mask_high] = 0.27 + (score_arr[mask_high] - transition) * (1.0 - 0.27) / (1.0 - transition)
+
+    # Clip to ensure we stay in [0, 1]
+    result = np.clip(result, 0.0, 1.0)
+
+    # Return scalar if input was scalar
+    return float(result) if is_scalar else result
+
 
 # =============================================================================
 # CONFIGURATION
@@ -670,6 +716,17 @@ Examples:
              "7 = stronger smoothing (may affect small terrain features).",
     )
 
+    # Colormap transition point
+    parser.add_argument(
+        "--colormap-transition",
+        type=float,
+        default=0.27,
+        help="Score value where colormap transitions from boreal green to mako blue (default: 0.27). "
+             "Lower values (0.15-0.25) = transition at low scores (very little dark boreal green). "
+             "Higher values (0.35-0.70) = transition at high scores (a lot of dark boreal green). "
+             "Useful for adjusting visual snow score threshold.",
+    )
+
     # Wavelet denoising (frequency-aware, structure-preserving)
     parser.add_argument(
         "--wavelet-denoise",
@@ -973,7 +1030,7 @@ Examples:
     }
 
     color_params = {
-        "colormap": "mako",
+        "colormap": "boreal_mako",
         "gamma": 0.5,
         "smooth_scores": args.smooth_scores,
         "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
@@ -1039,7 +1096,7 @@ Examples:
         sledding_scores = generate_mock_scores(dem.shape)
         # Mock scores cover same extent as DEM - let library calculate transform automatically
         score_transform = None
-    else:
+    else:   
         sledding_scores, loaded_transform = load_sledding_scores(args.scores_dir)
         if sledding_scores is None:
             logger.error("Sledding scores not found. Run detroit_snow_sledding.py first.")
@@ -1294,10 +1351,10 @@ Examples:
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution, {args.vertex_multiplier}x multiplier)")
 
     # Create single terrain mesh with dual colormaps
-    # Base: Mako colormap for sledding suitability scores (with gamma=0.5)
+    # Base: Boreal-Mako colormap for sledding suitability scores (with gamma=0.5)
     # Overlay: Rocket colormap for XC skiing scores near parks
     logger.info("\n[2/4] Creating Combined Terrain Mesh (Dual Colormap)...")
-    logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap - purple to yellow)")
+    logger.info("  Base: Sledding scores with gamma=0.5 (boreal_mako colormap - forest green → blue → mint)")
     logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
 
     # For combined rendering, we need a custom terrain creation process
@@ -1720,7 +1777,7 @@ Examples:
     if args.roads and road_data and road_bbox and parks:
         # With parks: base sledding + XC skiing overlay (no road color overlay)
         logger.info("Setting multi-overlay color mapping:")
-        logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+        logger.info("  Base: Sledding scores with gamma=0.5 (boreal_mako colormap)")
         logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
 
@@ -1737,7 +1794,7 @@ Examples:
 
         terrain_combined.set_multi_color_mapping(
             base_colormap=lambda score: elevation_colormap(
-                np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
+                np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
             ),
             base_source_layers=["sledding"],
             overlays=overlays,
@@ -1745,21 +1802,21 @@ Examples:
     elif args.roads and road_data and road_bbox:
         # Roads but no parks: just base sledding (no overlays, roads get glassy material)
         logger.info("Setting color mapping:")
-        logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+        logger.info("  Base: Sledding scores with gamma=0.5 (boreal_mako colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
-            lambda score: elevation_colormap(np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+            lambda score: elevation_colormap(np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
             source_layers=["sledding"],
         )
     else:
         # No roads - use original blended or standard color mapping
         if parks:
             logger.info("Setting blended color mapping:")
-            logger.info("  Base: Sledding scores with gamma=0.5 (mako colormap)")
+            logger.info("  Base: Sledding scores with gamma=0.5 (boreal_mako colormap)")
             logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
                 base_colormap=lambda score: elevation_colormap(
-                    np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
+                    np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
                 ),
                 base_source_layers=["sledding"],
                 overlay_colormap=lambda score: elevation_colormap(
@@ -1769,9 +1826,9 @@ Examples:
                 overlay_mask=park_mask,
             )
         else:
-            logger.info("No parks available - using sledding scores with gamma=0.5 (mako colormap)")
+            logger.info("No parks available - using sledding scores with gamma=0.5 (boreal_mako colormap)")
             terrain_combined.set_color_mapping(
-                lambda score: elevation_colormap(np.power(score, 0.5), cmap_name="mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+                lambda score: elevation_colormap(np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
                 source_layers=["sledding"],
             )
 
@@ -2083,7 +2140,7 @@ Examples:
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
     logger.info(f"  ✓ Created combined terrain mesh ({len(mesh_combined.data.vertices)} vertices)")
-    logger.info(f"    - Base colormap: mako (purple → yellow) for sledding scores (gamma=0.5)")
+    logger.info(f"    - Base colormap: boreal_mako (forest green → blue → mint) for sledding scores (gamma=0.5)")
     logger.info(f"    - Overlay colormap: rocket for XC skiing scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")

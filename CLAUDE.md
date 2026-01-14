@@ -192,6 +192,7 @@ See `examples/detroit_dual_render.py` for the proper pattern:
 
 **Custom terrain-maker colormaps:**
 - **Michigan elevation**: `michigan` - Perceptually uniform Michigan landscape (Great Lakes blue → forest green → upland meadow → sand dunes)
+- **Boreal-Mako**: `boreal_mako` - Perceptually uniform score colormap (boreal green → mako blue → pale mint) with edge effect for score visualizations
 
 **Terrain/Elevation (perceptually uniform):**
 - **michigan**: Custom Michigan natural landscape colormap (preferred for Detroit/Michigan examples)
@@ -203,6 +204,7 @@ See `examples/detroit_dual_render.py` for the proper pattern:
 - **viridis**, **plasma**, **inferno**, **magma**, **cividis**
 
 **Snow/Ice data:**
+- **boreal_mako**: Custom sledding/snow score colormap (boreal green → blue → mint with edge effect)
 - **cool**, **winter**, **ice** (snow-like colors)
 
 ### Colormap Selection Criteria
