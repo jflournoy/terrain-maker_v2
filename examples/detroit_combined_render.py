@@ -1751,25 +1751,30 @@ Examples:
             marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
             logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
 
-        # Create simple visualization: raw scores → gamma → colormap (NO compression)
+        # Create simple visualization: normalize → gamma → colormap
         fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-        fig.suptitle('Detroit Sledding Scores with Boreal-Mako Colormap\n(gamma=0.5, no compression)',
+        fig.suptitle('Detroit Sledding Scores with Boreal-Mako Colormap\n(normalized, then gamma=0.5)',
                      fontsize=14, fontweight='bold')
 
-        # Apply gamma correction directly to raw scores (NO compression)
-        gamma_corrected_scores = np.power(sledding_scores, 0.5)
+        # Normalize scores to 0-1.0 range (max score becomes 1.0)
+        max_score = np.nanmax(sledding_scores)
+        logger.info(f"Max score before normalization: {max_score:.3f}")
+        normalized_scores = sledding_scores / max_score
+
+        # Apply gamma correction to normalized scores
+        gamma_corrected_scores = np.power(normalized_scores, 0.5)
 
         # Apply colormap
         im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_cmap,
                       vmin=0, vmax=1.0,
                       origin='lower', aspect='auto')
 
-        ax.set_title('Raw scores with gamma=0.5 applied', fontsize=12, fontweight='bold')
+        ax.set_title('Normalized scores with gamma=0.5 applied', fontsize=12, fontweight='bold')
         ax.axis('off')
 
         # Add colorbar
         cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
-        cbar.set_label('Gamma-Corrected Score (raw score ^ 0.5)', fontsize=11, fontweight='bold')
+        cbar.set_label('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11, fontweight='bold')
 
         plt.tight_layout()
 
@@ -1780,7 +1785,7 @@ Examples:
 
         # Create histogram plot
         fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        fig.suptitle('Detroit Score Distribution (gamma=0.5, no compression)',
+        fig.suptitle('Detroit Score Distribution (normalized, then gamma=0.5)',
                      fontsize=14, fontweight='bold')
 
         valid_gamma = gamma_corrected_scores[~np.isnan(gamma_corrected_scores)]
@@ -1790,7 +1795,7 @@ Examples:
                                        color='steelblue', alpha=0.7,
                                        edgecolor='black', linewidth=0.3)
 
-        ax.set_xlabel('Gamma-Corrected Score (raw score ^ 0.5)', fontsize=11)
+        ax.set_xlabel('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11)
         ax.set_ylabel('Pixel Count', fontsize=11)
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlim(0, 1.0)
@@ -1889,7 +1894,7 @@ Examples:
 
         terrain_combined.set_multi_color_mapping(
             base_colormap=lambda score: elevation_colormap(
-                np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
+                np.power(score / np.nanmax(score), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
             ),
             base_source_layers=["sledding"],
             overlays=overlays,
@@ -1900,7 +1905,7 @@ Examples:
         logger.info("  Base: Sledding scores with gamma=0.5 (boreal_mako colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
-            lambda score: elevation_colormap(np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+            lambda score: elevation_colormap(np.power(score / np.nanmax(score), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0),
             source_layers=["sledding"],
         )
     else:
@@ -1911,7 +1916,7 @@ Examples:
             logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
                 base_colormap=lambda score: elevation_colormap(
-                    np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)
+                    np.power(score / np.nanmax(score), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
                 ),
                 base_source_layers=["sledding"],
                 overlay_colormap=lambda score: elevation_colormap(
@@ -1923,7 +1928,7 @@ Examples:
         else:
             logger.info("No parks available - using sledding scores with gamma=0.5 (boreal_mako colormap)")
             terrain_combined.set_color_mapping(
-                lambda score: elevation_colormap(np.power(compress_colormap_score(score, args.colormap_transition), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=np.power(1.5, 0.5)),
+                lambda score: elevation_colormap(np.power(score / np.nanmax(score), 0.5), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0),
                 source_layers=["sledding"],
             )
 
