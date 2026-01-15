@@ -1136,4 +1136,159 @@ The example demonstrates:
 
 ---
 
+## Two-Tier Edge Extrusion
+
+Professional terrain models need more than just a colored surface - they need a clean, intentional base. The two-tier edge extrusion feature creates a visual separation between terrain colors and a uniform material base, making models look polished for 3D printing and architectural visualizations.
+
+### The Problem
+
+Traditional single-tier edge extrusion extends terrain colors all the way down to the base, creating a "smeared" appearance where surface colors blur into the bottom:
+
+```
+Traditional single-tier:
+┌─────────────────┐  ← Terrain colors (blended/smeared)
+│                 │
+│    TERRAIN      │
+│   SURFACE       │
+└─────────────────┘  ← Colors extend all the way down
+```
+
+### The Solution: Two-Tier Extrusion
+
+The two-tier edge extrusion feature provides clean visual separation:
+
+```
+Two-tier mode:
+┌─────────────────┐  ← Terrain colors (blended)
+│     COLORED     │
+│      EDGE       │
+├─────────────────┤  ← Sharp transition
+│                 │
+│      CLEAN      │  ← Uniform material color (clay, gold, obsidian, etc.)
+│      BASE       │
+└─────────────────┘  ← Professional appearance
+```
+
+### What This Feature Offers
+
+✓ **Multiple Material Presets**: Choose from clay, obsidian, chrome, plastic, gold, ivory, or use custom RGB colors
+✓ **Configurable Depths**: Control both the colored edge depth and base depth independently
+✓ **Smooth Transitions**: Optional blending for smooth color graduation or sharp cut for high contrast
+✓ **3D Print Ready**: Models look intentional and professional for printing
+✓ **Backwards Compatible**: Existing code works unchanged (single-tier is the default)
+
+### Available Materials
+
+| Material | RGB Value | Use Case |
+|----------|-----------|----------|
+| `clay` | (0.5, 0.48, 0.45) | Default - neutral gray clay |
+| `obsidian` | (0.02, 0.02, 0.02) | High-contrast black base |
+| `chrome` | (0.9, 0.9, 0.92) | Metallic chrome look |
+| `plastic` | (0.95, 0.95, 0.95) | Glossy white plastic |
+| `gold` | (1.0, 0.766, 0.336) | Metallic gold accent |
+| `ivory` | (0.95, 0.93, 0.88) | Warm off-white base |
+| Custom RGB | (r, g, b) | Any color you want |
+
+### Usage Examples
+
+**Example 1: Default two-tier with clay base**
+```python
+terrain = Terrain(dem_data, transform)
+terrain.apply_transforms()
+
+# Two-tier with default clay material
+mesh = terrain.create_mesh(
+    two_tier_edge=True,  # Enable two-tier mode
+    base_depth=-0.2,     # Base at -0.2 units
+)
+```
+
+**Example 2: Two-tier with gold base**
+```python
+mesh = terrain.create_mesh(
+    two_tier_edge=True,
+    edge_base_material="gold",  # Use gold material
+    edge_mid_depth=-0.08,       # Colored edge from 0 to -0.08
+    base_depth=-0.3,            # Base from -0.08 to -0.3
+)
+```
+
+**Example 3: Sharp obsidian base (no blending)**
+```python
+mesh = terrain.create_mesh(
+    two_tier_edge=True,
+    edge_base_material="obsidian",  # Black base for high contrast
+    edge_blend_colors=False,        # Sharp transition (no blending)
+    base_depth=-0.25,
+)
+```
+
+**Example 4: Custom RGB color**
+```python
+mesh = terrain.create_mesh(
+    two_tier_edge=True,
+    edge_base_material=(0.6, 0.55, 0.5),  # Custom warm gray
+    edge_blend_colors=True,               # Smooth transition
+)
+```
+
+**Example 5: Single-tier (backwards compatible)**
+```python
+# Existing code still works - single-tier is the default
+mesh = terrain.create_mesh(
+    boundary_extension=True,
+    # two_tier_edge=False is the default
+)
+```
+
+### API Reference
+
+**create_mesh() parameters:**
+
+- `two_tier_edge` (bool): Enable two-tier extrusion mode (default: False)
+- `edge_mid_depth` (float): Depth of middle tier (auto: base_depth × 0.25)
+- `edge_base_material` (str | tuple): Material for base layer
+  - String: preset name ("clay", "gold", "ivory", "obsidian", "chrome", "plastic")
+  - Tuple: RGB values as floats (0-1 range), e.g., (0.5, 0.5, 0.5)
+- `edge_blend_colors` (bool): Blend surface colors to mid tier (default: True)
+  - True: Smooth color transition from terrain to base material
+  - False: Sharp transition with base material color used for mid tier
+
+### Run the Example
+
+The example script demonstrates all variations:
+
+```bash
+# Single-tier (default behavior)
+python examples/detroit_two_tier_edge.py --mode single
+
+# Two-tier with default clay base
+python examples/detroit_two_tier_edge.py --mode clay
+
+# Two-tier with gold base
+python examples/detroit_two_tier_edge.py --mode gold
+
+# Two-tier with sharp obsidian transition
+python examples/detroit_two_tier_edge.py --mode sharp
+
+# Two-tier with custom RGB color
+python examples/detroit_two_tier_edge.py --mode custom
+
+# Generate all comparison renders
+python examples/detroit_two_tier_edge.py --mode all
+```
+
+### Why This Matters
+
+Two-tier edge extrusion makes terrain models look **intentional and professional**:
+
+- **3D Printing**: Models have a stable, finished appearance ready for the printer
+- **Architectural Visualization**: Clean separation between landscape and base platform
+- **Product Photography**: Professional base that photographs well from any angle
+- **Design Flexibility**: Material choices match your brand or environment aesthetic
+
+The feature maintains full backwards compatibility - existing code continues to work unchanged with single-tier extrusion as the default.
+
+---
+
 **Want to try it yourself?** See [Quick Reference](QUICK_REFERENCE.md) for API documentation and [API Reference](API_REFERENCE.md) for detailed function signatures.

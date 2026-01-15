@@ -1048,14 +1048,15 @@ Raises:
     ValueError: If terrain_obj is None or has invalid bounds
     RuntimeError: If mesh or material creation fails
 
-#### `create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose, detect_water, water_slope_threshold, water_mask)`
+#### `create_mesh(self, base_depth, boundary_extension, scale_factor, height_scale, center_model, verbose, detect_water, water_slope_threshold, water_mask, two_tier_edge, edge_mid_depth, edge_base_material, edge_blend_colors)`
 
 Create a Blender mesh from transformed DEM data with both performance and control.
 
 Generates vertices from DEM elevation values and faces for connectivity. Optionally
 creates boundary faces to close the mesh into a solid. Supports coordinate scaling
 and elevation scaling for visualization. Can optionally detect and apply water bodies
-to vertex alpha channel for water rendering.
+to vertex alpha channel for water rendering. Supports two-tier edge extrusion for
+professional appearance with colored edge and uniform material base.
 
 Args:
     base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
@@ -1076,12 +1077,43 @@ Args:
     water_mask (np.ndarray): Pre-computed boolean water mask (True=water, False=land).
         If provided, this mask is used instead of computing water detection.
         Allows water detection on unscaled DEM before elevation scaling transforms.
+    two_tier_edge (bool): Enable two-tier edge extrusion (default: False).
+        Creates a small colored edge near the surface with a larger uniform base below.
+    edge_mid_depth (float): Depth of middle tier for two-tier edge (default: auto-calculated).
+        If None, automatically set to base_depth * 0.25 (25% down from surface).
+    edge_base_material (str | tuple): Material for base layer (default: "clay").
+        Either a preset name ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
+        or an RGB tuple (0-1 range).
+    edge_blend_colors (bool): Blend surface colors to mid tier in two-tier mode (default: True).
+        If False, mid tier uses the base_material color for sharper transition.
 
 Returns:
     bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
 
 Raises:
     ValueError: If transformed DEM layer is not available (apply_transforms() not called).
+    ValueError: If edge_base_material is an invalid material name (when two_tier_edge=True).
+
+Examples:
+    ```python
+    # Single-tier (default behavior)
+    mesh = terrain.create_mesh(boundary_extension=True)
+
+    # Two-tier with default clay base
+    mesh = terrain.create_mesh(two_tier_edge=True)
+
+    # Two-tier with gold base
+    mesh = terrain.create_mesh(
+        two_tier_edge=True,
+        edge_base_material="gold",
+    )
+
+    # Two-tier with custom RGB color
+    mesh = terrain.create_mesh(
+        two_tier_edge=True,
+        edge_base_material=(0.6, 0.55, 0.5),
+    )
+    ```
 
 #### `detect_water(self, slope_threshold, fill_holes)`
 
