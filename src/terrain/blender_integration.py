@@ -223,6 +223,7 @@ def create_blender_mesh(
     colors=None,
     y_valid=None,
     x_valid=None,
+    boundary_colors=None,
     name="TerrainMesh",
     logger=None,
 ):
@@ -236,8 +237,11 @@ def create_blender_mesh(
         vertices (np.ndarray): Array of (n, 3) vertex positions
         faces (list): List of tuples defining face connectivity
         colors (np.ndarray, optional): Array of RGB/RGBA colors (height, width, channels)
+            for surface vertices
         y_valid (np.ndarray, optional): Array of y indices for vertex colors
         x_valid (np.ndarray, optional): Array of x indices for vertex colors
+        boundary_colors (np.ndarray, optional): Array of RGB colors (n_boundary, 3)
+            for boundary vertices in two-tier mode
         name (str): Name for the mesh and object (default: "TerrainMesh")
         logger (logging.Logger, optional): Logger for progress messages
 
@@ -285,12 +289,23 @@ def create_blender_mesh(
                 # Get number of original positions (before boundary extension)
                 n_positions = len(y_valid)
 
+                # Normalize boundary_colors if provided
+                boundary_colors_normalized = None
+                if boundary_colors is not None:
+                    boundary_colors_normalized = boundary_colors.astype(np.float32)
+                    if boundary_colors_normalized.max() > 1.0:
+                        boundary_colors_normalized = boundary_colors_normalized / 255.0
+                    # Add alpha channel if needed
+                    if boundary_colors_normalized.shape[-1] == 3:
+                        alpha_boundary = np.ones((boundary_colors_normalized.shape[0], 1), dtype=np.float32)
+                        boundary_colors_normalized = np.concatenate([boundary_colors_normalized, alpha_boundary], axis=-1)
+
                 # For each polygon loop, get vertex and set color
                 for poly in mesh.polygons:
                     for loop_idx in poly.loop_indices:
                         vertex_idx = mesh.loops[loop_idx].vertex_index
 
-                        # Only apply colors to top vertices
+                        # Apply colors to surface vertices
                         if vertex_idx < n_positions:
                             y, x = y_valid[vertex_idx], x_valid[vertex_idx]
 
@@ -300,6 +315,11 @@ def create_blender_mesh(
                                 and 0 <= x < colors_normalized.shape[1]
                             ):
                                 color_data[loop_idx] = colors_normalized[y, x]
+                        # Apply boundary colors to boundary vertices (if available)
+                        elif boundary_colors_normalized is not None:
+                            boundary_idx = vertex_idx - n_positions
+                            if 0 <= boundary_idx < len(boundary_colors_normalized):
+                                color_data[loop_idx] = boundary_colors_normalized[boundary_idx]
 
                 # Batch assign all colors at once
                 try:

@@ -1179,6 +1179,170 @@ class TestComputeProximityMask:
         assert mask.dtype == bool
 
 
+@pytest.mark.skipif(not HAS_BLENDER, reason="Blender not available")
+class TestTwoTierEdgeExtrusion:
+    """Test suite for two-tier edge extrusion API in create_mesh().
+
+    Tests Phase 3 of the two-tier edge implementation - parameter propagation
+    from Terrain.create_mesh() API to create_boundary_extension().
+    """
+
+    def test_create_mesh_accepts_two_tier_edge_parameter(self):
+        """create_mesh should accept two_tier_edge parameter."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        # Apply identity transform
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with two_tier_edge parameter
+        result = terrain.create_mesh(two_tier_edge=True)
+        assert result is not None
+
+    def test_create_mesh_accepts_edge_mid_depth_parameter(self):
+        """create_mesh should accept edge_mid_depth parameter."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with edge_mid_depth parameter
+        result = terrain.create_mesh(two_tier_edge=True, edge_mid_depth=-0.1)
+        assert result is not None
+
+    def test_create_mesh_accepts_edge_base_material_string(self):
+        """create_mesh should accept edge_base_material as string."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with material name
+        result = terrain.create_mesh(two_tier_edge=True, edge_base_material="gold")
+        assert result is not None
+
+    def test_create_mesh_accepts_edge_base_material_rgb_tuple(self):
+        """create_mesh should accept edge_base_material as RGB tuple."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with RGB tuple
+        result = terrain.create_mesh(two_tier_edge=True, edge_base_material=(0.6, 0.55, 0.5))
+        assert result is not None
+
+    def test_create_mesh_accepts_edge_blend_colors_parameter(self):
+        """create_mesh should accept edge_blend_colors parameter."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with edge_blend_colors parameter
+        result = terrain.create_mesh(two_tier_edge=True, edge_blend_colors=False)
+        assert result is not None
+
+    def test_create_mesh_two_tier_edge_backwards_compatible(self):
+        """create_mesh with two_tier_edge=False should work as before."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Default (two_tier_edge=False) should work unchanged
+        result1 = terrain.create_mesh(boundary_extension=True)
+        assert result1 is not None
+
+        # Explicit two_tier_edge=False should also work
+        result2 = terrain.create_mesh(boundary_extension=True, two_tier_edge=False)
+        assert result2 is not None
+
+    def test_create_mesh_two_tier_edge_with_all_parameters(self):
+        """create_mesh should accept all two-tier parameters together."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should not raise with all parameters
+        result = terrain.create_mesh(
+            base_depth=-0.4,
+            boundary_extension=True,
+            two_tier_edge=True,
+            edge_mid_depth=-0.1,
+            edge_base_material="ivory",
+            edge_blend_colors=True,
+        )
+        assert result is not None
+
+    def test_create_mesh_two_tier_requires_boundary_extension(self):
+        """create_mesh with two_tier_edge=True should require boundary_extension=True."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # two_tier_edge=True with boundary_extension=False should raise or warn
+        # For now, let's verify it doesn't crash and produces a result
+        result = terrain.create_mesh(boundary_extension=False, two_tier_edge=True)
+        # If boundary_extension=False, two_tier should be ignored gracefully
+        assert result is not None
+
+    def test_create_mesh_invalid_material_name_raises_error(self):
+        """create_mesh should raise ValueError for invalid material name."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        # Should raise ValueError for invalid material
+        with pytest.raises(ValueError, match="Unknown base material"):
+            terrain.create_mesh(two_tier_edge=True, edge_base_material="invalid_material")
+
+    def test_create_mesh_stores_two_tier_parameters(self):
+        """create_mesh should store two-tier parameters in model_params."""
+        dem_data = np.ones((10, 10), dtype=np.float32) * 100
+        transform = Affine.identity()
+        terrain = Terrain(dem_data, transform)
+
+        terrain.add_transform(lambda d, t: (d, t, None))
+        terrain.apply_transforms()
+
+        terrain.create_mesh(
+            two_tier_edge=True,
+            edge_mid_depth=-0.1,
+            edge_base_material="gold",
+            edge_blend_colors=False,
+        )
+
+        # Check that parameters are stored
+        assert hasattr(terrain, "model_params")
+        assert "two_tier_edge" in terrain.model_params
+        assert terrain.model_params["two_tier_edge"] is True
+        assert terrain.model_params["edge_mid_depth"] == -0.1
+        assert terrain.model_params["edge_base_material"] == "gold"
+        assert terrain.model_params["edge_blend_colors"] is False
+
+
 def create_sample_geotiff(filepath: Path, data: np.ndarray, bounds: tuple) -> Path:
     """
     Helper function to create a sample GeoTIFF file.

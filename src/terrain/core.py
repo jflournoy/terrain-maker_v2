@@ -2790,6 +2790,10 @@ class Terrain:
         detect_water=False,
         water_slope_threshold=0.5,
         water_mask=None,
+        two_tier_edge=False,
+        edge_mid_depth=None,
+        edge_base_material="clay",
+        edge_blend_colors=True,
     ):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
@@ -2818,12 +2822,40 @@ class Terrain:
             water_mask (np.ndarray): Pre-computed boolean water mask (True=water, False=land).
                 If provided, this mask is used instead of computing water detection.
                 Allows water detection on unscaled DEM before elevation scaling transforms.
+            two_tier_edge (bool): Enable two-tier edge extrusion (default: False).
+                Creates a small colored edge near the surface with a larger uniform base below.
+            edge_mid_depth (float): Depth of middle tier for two-tier edge (default: auto-calculated).
+                If None, automatically set to base_depth * 0.25 (25% down from surface).
+            edge_base_material (str | tuple): Material for base layer (default: "clay").
+                Either a preset name ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
+                or an RGB tuple (0-1 range).
+            edge_blend_colors (bool): Blend surface colors to mid tier in two-tier mode (default: True).
+                If False, mid tier uses the base_material color for sharper transition.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
 
         Raises:
             ValueError: If transformed DEM layer is not available (apply_transforms() not called).
+
+        Examples:
+            # Default single-tier edge (backwards compatible)
+            mesh = terrain.create_mesh(boundary_extension=True)
+
+            # Two-tier edge with default clay base
+            mesh = terrain.create_mesh(two_tier_edge=True)
+
+            # Two-tier with gold base material
+            mesh = terrain.create_mesh(
+                two_tier_edge=True,
+                edge_base_material="gold",
+            )
+
+            # Two-tier with custom RGB color
+            mesh = terrain.create_mesh(
+                two_tier_edge=True,
+                edge_base_material=(0.6, 0.55, 0.5),
+            )
         """
         start_time = time.time()
         self.logger.info("Creating terrain mesh...")
@@ -2950,6 +2982,10 @@ class Terrain:
             "centered": center_model,
             "offset": self.model_offset.tolist(),
             "base_depth": base_depth,
+            "two_tier_edge": two_tier_edge,
+            "edge_mid_depth": edge_mid_depth,
+            "edge_base_material": edge_base_material,
+            "edge_blend_colors": edge_blend_colors,
         }
 
         # Create mapping from (y,x) coords to vertex indices - using dictionaries for O(1) lookups
@@ -2979,9 +3015,38 @@ class Terrain:
             self.logger.info("Creating optimized boundary extension...")
             from src.terrain.mesh_operations import create_boundary_extension
 
-            boundary_vertices, boundary_faces = create_boundary_extension(
-                positions, boundary_points, coord_to_index, base_depth
+            # Get surface colors for two-tier edge (if available and two_tier_edge enabled)
+            surface_colors = None
+            if two_tier_edge and hasattr(self, "colors") and self.colors is not None:
+                # Flatten colors if they're 2D grid (H, W, 3) to 1D (N, 3)
+                if self.colors.ndim == 3:
+                    surface_colors = self.colors[y_valid, x_valid, :]
+                else:
+                    surface_colors = self.colors
+
+            # Call create_boundary_extension with two-tier parameters
+            result = create_boundary_extension(
+                positions,
+                boundary_points,
+                coord_to_index,
+                base_depth,
+                two_tier=two_tier_edge,
+                mid_depth=edge_mid_depth,
+                base_material=edge_base_material,
+                blend_edge_colors=edge_blend_colors,
+                surface_colors=surface_colors,
             )
+
+            # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
+            if two_tier_edge:
+                boundary_vertices, boundary_faces, boundary_colors = result
+                # Store boundary_colors separately for Blender vertex coloring
+                # Don't extend self.colors - it stays as 2D grid for surface vertices
+                # Boundary colors will be applied directly to mesh vertices after creation
+                self.boundary_colors = boundary_colors
+            else:
+                boundary_vertices, boundary_faces = result
+                self.boundary_colors = None
 
             # Extend vertices with boundary vertices
             vertices = np.vstack([positions, boundary_vertices])
@@ -3002,6 +3067,7 @@ class Terrain:
 
             # Prepare colors if available
             colors = self.colors if hasattr(self, "colors") else None
+            boundary_colors = self.boundary_colors if hasattr(self, "boundary_colors") else None
 
             obj = create_blender_mesh(
                 vertices,
@@ -3009,6 +3075,7 @@ class Terrain:
                 colors=colors,
                 y_valid=y_valid,
                 x_valid=x_valid,
+                boundary_colors=boundary_colors,
                 name="TerrainMesh",
                 logger=self.logger,
             )
