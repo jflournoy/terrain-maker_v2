@@ -1756,7 +1756,7 @@ Examples:
 
         # Create side-by-side comparison plot
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        fig.suptitle('Detroit Sledding Scores with Boreal-Mako Colormap\nComparing --colormap-transition Values',
+        fig.suptitle('Detroit Sledding Scores with Boreal-Mako Colormap (gamma=0.5)\nComparing --colormap-transition Values',
                      fontsize=14, fontweight='bold')
 
         for idx, transition in enumerate(transitions):
@@ -1765,8 +1765,12 @@ Examples:
             # Apply compression formula
             compressed_scores = compress_colormap_score(sledding_scores, transition)
 
-            # Apply colormap
-            im = ax.imshow(compressed_scores, cmap=boreal_mako_cmap, vmin=0, vmax=1,
+            # Apply gamma correction (same as actual rendering: gamma=0.5)
+            gamma_corrected_scores = np.power(compressed_scores, 0.5)
+
+            # Apply colormap (same vmax as actual rendering)
+            im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_cmap,
+                          vmin=0, vmax=np.power(1.5, 0.5),
                           origin='lower', aspect='auto')
 
             ax.set_title(f'--colormap-transition={transition:.2f}', fontsize=12, fontweight='bold')
@@ -1802,13 +1806,17 @@ Examples:
         # Hide the 6th subplot
         axes[1, 2].axis('off')
 
-        # Add colorbar with purple zone marked
+        # Add colorbar with purple zone marked (gamma-corrected boundaries)
+        purple_min_gamma = np.power(0.40, 0.5)  # ≈ 0.632
+        purple_max_gamma = np.power(0.55, 0.5)  # ≈ 0.742
+        purple_center_gamma = (purple_min_gamma + purple_max_gamma) / 2
+
         cbar_ax = fig.add_axes([0.68, 0.15, 0.25, 0.02])
         cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal')
-        cbar.set_label('Colormap Position (after compression)', fontsize=11, fontweight='bold')
-        cbar.ax.axvline(0.40, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
-        cbar.ax.axvline(0.55, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
-        cbar.ax.text(0.475, 0.5, 'Purple', ha='center', va='center', color='yellow',
+        cbar.set_label('Gamma-Corrected Score (compression + gamma=0.5)', fontsize=11, fontweight='bold')
+        cbar.ax.axvline(purple_min_gamma, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.axvline(purple_max_gamma, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.text(purple_center_gamma, 0.5, 'Purple', ha='center', va='center', color='yellow',
                     fontweight='bold', fontsize=10,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
 
@@ -1821,42 +1829,49 @@ Examples:
 
         # Create histogram plot
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-        fig.suptitle('Detroit Score Distribution with Purple Zone',
+        fig.suptitle('Detroit Score Distribution with Purple Zone (gamma=0.5 applied)',
                      fontsize=14, fontweight='bold')
 
         for idx, transition in enumerate(transitions):
             ax = axes[idx // 3, idx % 3]
 
             compressed_scores = compress_colormap_score(sledding_scores, transition)
-            valid_compressed = compressed_scores[~np.isnan(compressed_scores)]
+            # Apply gamma correction (same as actual rendering)
+            gamma_corrected_scores = np.power(compressed_scores, 0.5)
+            valid_gamma = gamma_corrected_scores[~np.isnan(gamma_corrected_scores)]
 
-            # Histogram
-            counts, bins, patches = ax.hist(valid_compressed.flatten(), bins=100,
+            # Histogram (showing gamma-corrected values)
+            counts, bins, patches = ax.hist(valid_gamma.flatten(), bins=100,
                                            color='steelblue', alpha=0.7,
                                            edgecolor='black', linewidth=0.3)
 
+            # Purple zone boundaries after gamma correction
+            purple_min_gamma = np.power(0.40, 0.5)  # ≈ 0.632
+            purple_max_gamma = np.power(0.55, 0.5)  # ≈ 0.742
+
             # Color the bars that fall in purple zone
             for i, patch in enumerate(patches):
-                if bins[i] >= 0.40 and bins[i+1] <= 0.55:
+                if bins[i] >= purple_min_gamma and bins[i+1] <= purple_max_gamma:
                     patch.set_facecolor('magenta')
                     patch.set_alpha(0.9)
 
             # Mark purple zone
-            ax.axvspan(0.40, 0.55, alpha=0.15, color='magenta', zorder=0)
-            ax.axvline(0.40, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
-            ax.axvline(0.55, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+            ax.axvspan(purple_min_gamma, purple_max_gamma, alpha=0.15, color='magenta', zorder=0)
+            ax.axvline(purple_min_gamma, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+            ax.axvline(purple_max_gamma, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
 
             # Add label
             y_pos = ax.get_ylim()[1]*0.9
-            ax.text(0.475, y_pos, 'Purple\nZone', ha='center', va='top',
+            purple_center = (purple_min_gamma + purple_max_gamma) / 2
+            ax.text(purple_center, y_pos, 'Purple\nZone', ha='center', va='top',
                    fontsize=10, fontweight='bold', color='magenta',
                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
             ax.set_title(f'transition={transition:.2f}', fontsize=11, fontweight='bold')
-            ax.set_xlabel('Compressed Score (colormap position)', fontsize=10)
+            ax.set_xlabel('Gamma-Corrected Score (after compression + gamma=0.5)', fontsize=10)
             ax.set_ylabel('Pixel Count', fontsize=10)
             ax.grid(True, alpha=0.3, axis='y')
-            ax.set_xlim(0, 1)
+            ax.set_xlim(0, np.power(1.5, 0.5))  # Match rendering vmax
 
         axes[1, 2].axis('off')
 
