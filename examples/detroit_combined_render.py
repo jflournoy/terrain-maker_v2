@@ -1743,12 +1743,12 @@ Examples:
         logger.info(f"Score mean: {np.nanmean(sledding_scores):.3f}")
 
         # Score distribution
-        bins = [0, 0.2, 0.4, 0.45, 0.52, 0.6, 0.8, 1.0]
+        bins = [0, 0.2, 0.4, 0.40, 0.55, 0.6, 0.8, 1.0]
         hist, _ = np.histogram(sledding_scores[~np.isnan(sledding_scores)], bins=bins)
         logger.info("Score distribution:")
         for i in range(len(bins)-1):
             pct = 100 * hist[i] / np.sum(~np.isnan(sledding_scores))
-            marker = " ← PURPLE ZONE" if bins[i] == 0.45 else ""
+            marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
             logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
 
         # Test different transition values
@@ -1773,7 +1773,7 @@ Examples:
             ax.axis('off')
 
             # Calculate purple zone info
-            purple_min, purple_max = 0.45, 0.52
+            purple_min, purple_max = 0.40, 0.55
             in_purple = (compressed_scores >= purple_min) & (compressed_scores <= purple_max) & ~np.isnan(compressed_scores)
             purple_count = np.sum(in_purple)
             purple_pct = 100 * purple_count / np.sum(~np.isnan(compressed_scores))
@@ -1806,9 +1806,9 @@ Examples:
         cbar_ax = fig.add_axes([0.68, 0.15, 0.25, 0.02])
         cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal')
         cbar.set_label('Colormap Position (after compression)', fontsize=11, fontweight='bold')
-        cbar.ax.axvline(0.45, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
-        cbar.ax.axvline(0.52, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
-        cbar.ax.text(0.485, 0.5, 'Purple', ha='center', va='center', color='yellow',
+        cbar.ax.axvline(0.40, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.axvline(0.55, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.text(0.475, 0.5, 'Purple', ha='center', va='center', color='yellow',
                     fontweight='bold', fontsize=10,
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
 
@@ -1837,18 +1837,18 @@ Examples:
 
             # Color the bars that fall in purple zone
             for i, patch in enumerate(patches):
-                if bins[i] >= 0.45 and bins[i+1] <= 0.52:
+                if bins[i] >= 0.40 and bins[i+1] <= 0.55:
                     patch.set_facecolor('magenta')
                     patch.set_alpha(0.9)
 
             # Mark purple zone
-            ax.axvspan(0.45, 0.52, alpha=0.15, color='magenta', zorder=0)
-            ax.axvline(0.45, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
-            ax.axvline(0.52, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+            ax.axvspan(0.40, 0.55, alpha=0.15, color='magenta', zorder=0)
+            ax.axvline(0.40, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+            ax.axvline(0.55, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
 
             # Add label
             y_pos = ax.get_ylim()[1]*0.9
-            ax.text(0.485, y_pos, 'Purple\nZone', ha='center', va='top',
+            ax.text(0.475, y_pos, 'Purple\nZone', ha='center', va='top',
                    fontsize=10, fontweight='bold', color='magenta',
                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 

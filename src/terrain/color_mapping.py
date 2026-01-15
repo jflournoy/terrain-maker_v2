@@ -72,38 +72,40 @@ def _build_boreal_mako_cmap():
         return np.clip(rgb, 0, 1)
 
     def target_lightness(pos):
-        """Target L* value with PROMINENT purple outline."""
-        if pos <= 0.45:
-            # Linear rise to blue zone
-            return 10 + (50 - 10) * (pos / 0.45)
-        elif pos <= 0.52:
-            # PROMINENT DIP for purple outline (darker = outline effect)
-            return 50 - (50 - 35) * ((pos - 0.45) / 0.07)
-        elif pos <= 0.60:
-            # Fast rise from purple to teal
-            return 35 + (68 - 35) * ((pos - 0.52) / 0.08)
+        """Target L* value with WIDER purple outline sandwiched between blue zones."""
+        if pos <= 0.40:
+            # Linear rise to first blue zone
+            return 10 + (50 - 10) * (pos / 0.40)
+        elif pos <= 0.55:
+            # PROMINENT DIP for wider purple outline (darker = outline effect)
+            return 50 - (50 - 35) * ((pos - 0.40) / 0.15)
+        elif pos <= 0.70:
+            # Rise from purple back to second blue zone
+            return 35 + (60 - 35) * ((pos - 0.55) / 0.15)
         else:
-            # Linear rise to pale ice
-            return 68 + (95 - 68) * ((pos - 0.60) / 0.40)
+            # Rise to pale white
+            return 60 + (95 - 60) * ((pos - 0.70) / 0.30)
 
     # Define color zones in Lab space
     # Boreal green: cool forest green (no yellow cast - b* near zero or negative)
-    # Mako blue: the signature blue from mako colormap
-    # Purple outline: subtle narrow purple band creates outline effect
-    # Mako teal: teal transition from mako
-    # Pale ice: light blue-teal for high scores (keeps blue, avoids brownish mint)
+    # First blue zone: mako blue leading into purple
+    # Purple outline: WIDER purple band creates prominent outline effect
+    # Second blue zone: return to blue after purple
+    # Pale white: high scores end in pale white
     control_points = [
         # (position, a*, b*)
         (0.00, -30, -5),   # Cool forest green (blue-tinted, no yellow)
         (0.20, -30, -5),   # End of boreal zone
-        (0.35, 8, -35),    # Transition to mako blue
-        (0.45, 8, -35),    # Mako blue (before purple)
-        (0.49, 25, -30),   # → BOLD shift toward purple (outline start)
-        (0.52, 30, -25),   # Purple peak (PROMINENT magenta, creates visible outline)
-        (0.55, 12, -20),   # → Back toward teal
-        (0.60, -18, -12),  # Teal (after outline)
-        (0.80, -12, -12),  # Pale teal (keep blue)
-        (1.00, -8, -10),   # Pale ice (stays bluer, avoids yellow/brown)
+        (0.30, 5, -35),    # Transition to first blue zone
+        (0.40, 8, -35),    # First blue zone (before purple)
+        (0.43, 20, -32),   # → Start purple shift
+        (0.48, 30, -28),   # Purple peak (PROMINENT magenta, wider zone)
+        (0.52, 30, -28),   # Purple sustain (keep magenta)
+        (0.55, 20, -32),   # → Exit purple
+        (0.60, 8, -35),    # Second blue zone (return to mako blue)
+        (0.70, -5, -25),   # Blue-teal transition
+        (0.85, -8, -15),   # Pale blue-teal
+        (1.00, -6, -8),    # Pale white (very light, slight blue tint)
     ]
 
     # Generate 256 color samples

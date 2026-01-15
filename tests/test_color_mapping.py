@@ -227,38 +227,37 @@ class TestBorealMakoColormap:
                 f"L* should increase: {lightnesses[i]} -> {lightnesses[i+1]} at {positions[i]}->{positions[i+1]}"
 
     def test_boreal_mako_edge_hue_shift(self):
-        """Edge zone (0.5-0.6) should have blue→teal hue shift."""
+        """Second blue zone (0.55-0.70) should be distinct from pale zone."""
         from src.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
-        # Sample before edge (blue zone)
-        rgb_before = boreal_mako_cmap(0.48)[:3]
-        lab_before = color.rgb2lab(np.array([[rgb_before]]))[0, 0]
+        # Sample second blue zone (after purple)
+        rgb_blue2 = boreal_mako_cmap(0.60)[:3]
+        lab_blue2 = color.rgb2lab(np.array([[rgb_blue2]]))[0, 0]
 
-        # Sample after edge (teal zone)
-        rgb_after = boreal_mako_cmap(0.62)[:3]
-        lab_after = color.rgb2lab(np.array([[rgb_after]]))[0, 0]
+        # Sample pale zone (toward white)
+        rgb_pale = boreal_mako_cmap(0.75)[:3]
+        lab_pale = color.rgb2lab(np.array([[rgb_pale]]))[0, 0]
 
-        # b* should increase (become less blue, more toward neutral/yellow)
-        # Blue has negative b*, teal has less negative b*
-        assert lab_after[2] > lab_before[2], \
-            f"b* should increase at edge: {lab_before[2]} -> {lab_after[2]}"
+        # Pale zone should be lighter (higher L*)
+        assert lab_pale[0] > lab_blue2[0], \
+            f"L* should increase toward white: {lab_blue2[0]} -> {lab_pale[0]}"
 
     def test_boreal_mako_purple_outline_prominent(self):
-        """Purple outline should be visibly distinct from surrounding colors."""
+        """Purple outline (0.40-0.55) should be visibly distinct from surrounding blue zones."""
         from src.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
-        # Sample purple zone
-        rgb_purple = boreal_mako_cmap(0.51)[:3]
+        # Sample purple zone center (wider zone: 0.40-0.55)
+        rgb_purple = boreal_mako_cmap(0.48)[:3]
         lab_purple = color.rgb2lab(np.array([[rgb_purple]]))[0, 0]
 
-        # Sample blue before purple
-        rgb_before = boreal_mako_cmap(0.46)[:3]
+        # Sample first blue zone (before purple)
+        rgb_before = boreal_mako_cmap(0.38)[:3]
         lab_before = color.rgb2lab(np.array([[rgb_before]]))[0, 0]
 
-        # Sample teal after purple
-        rgb_after = boreal_mako_cmap(0.56)[:3]
+        # Sample second blue zone (after purple) - deeper into the zone
+        rgb_after = boreal_mako_cmap(0.65)[:3]
         lab_after = color.rgb2lab(np.array([[rgb_after]]))[0, 0]
 
         # Purple should be SIGNIFICANTLY darker than surrounding colors (at least 5 units)
