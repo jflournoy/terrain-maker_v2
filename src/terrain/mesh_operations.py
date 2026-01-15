@@ -320,10 +320,10 @@ def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop
     if not closed_loop:
         smooth_curve.append(boundary_points[-1])
 
-    # For closed loop, ensure continuity
-    if closed_loop and len(smooth_curve) > 0:
-        # Make sure first and last points are the same
-        smooth_curve.append(smooth_curve[0])
+    # For closed loop: do NOT append smooth_curve[0] at the end.
+    # The face creation loop uses modulo arithmetic (next_i = (i+1) % n_boundary)
+    # which naturally wraps around, so the duplicate point would create a degenerate
+    # zero-area face with incorrect normals (appears dark/black when rendered).
 
     return smooth_curve
 
