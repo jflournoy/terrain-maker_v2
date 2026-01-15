@@ -989,12 +989,15 @@ Examples:
         args.vertex_multiplier = default_vertex_mult
 
     # Rebuild boreal_mako colormap with specified purple position
-    if args.purple_position != 0.6:  # Only rebuild if non-default
-        from src.terrain.color_mapping import _build_boreal_mako_cmap
-        import matplotlib
-        custom_boreal_mako = _build_boreal_mako_cmap(purple_position=args.purple_position)
-        matplotlib.colormaps.register(custom_boreal_mako, force=True)
-        logger.info(f"Rebuilt boreal_mako colormap with purple ribbon at position {args.purple_position}")
+    # Always rebuild to ensure consistency between visualization and rendering
+    from src.terrain.color_mapping import _build_boreal_mako_cmap
+    import matplotlib
+    custom_boreal_mako = _build_boreal_mako_cmap(purple_position=args.purple_position)
+    matplotlib.colormaps.register(custom_boreal_mako, force=True)
+    if args.purple_position != 0.6:
+        logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}")
+    else:
+        logger.info(f"Using boreal_mako colormap with default purple position (0.6)")
 
     logger.info("\n" + "=" * 70)
     logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")
