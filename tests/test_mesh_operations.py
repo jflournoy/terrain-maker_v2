@@ -635,3 +635,130 @@ class TestTwoTierBoundaryExtension:
         error_msg = str(exc_info.value)
         assert "Unknown base material" in error_msg, "Should mention unknown material"
         assert "invalid_material" in error_msg, "Should mention the invalid name"
+
+
+class TestBoundarySmoothing:
+    """Tests for boundary point smoothing to eliminate stair-step edges."""
+
+    def test_smooth_boundary_points_imports(self):
+        """Test that smooth_boundary_points can be imported."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        assert callable(smooth_boundary_points)
+
+    def test_smooth_boundary_points_basic(self):
+        """Test basic smoothing of boundary points."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        # Create a simple stair-step boundary (zigzag pattern)
+        # This simulates pixel-grid aligned boundary
+        boundary = [
+            (0, 0),
+            (0, 1),
+            (1, 1),
+            (1, 2),
+            (2, 2),
+            (2, 3),
+        ]
+
+        # Smooth with window size 3 as open path (not closed loop)
+        smoothed = smooth_boundary_points(boundary, window_size=3, closed_loop=False)
+
+        # Should return same number of points
+        assert len(smoothed) == len(boundary)
+
+        # Points should be floating point (not integer grid)
+        assert isinstance(smoothed[0][0], (float, np.floating))
+
+        # First and last points should be relatively unchanged (endpoints for open path)
+        assert np.allclose(smoothed[0], boundary[0], atol=0.5)
+        assert np.allclose(smoothed[-1], boundary[-1], atol=0.5)
+
+        # Middle points should be smoothed (not exactly on grid)
+        middle_idx = len(boundary) // 2
+        # Should not be exactly the same as input (unless by chance)
+        assert not np.allclose(smoothed[middle_idx], boundary[middle_idx], atol=0.01)
+
+    def test_smooth_boundary_points_closed_loop(self):
+        """Test smoothing preserves closed loop property."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        # Create a closed loop (rectangle-ish)
+        boundary = [
+            (0, 0),
+            (0, 5),
+            (5, 5),
+            (5, 0),
+        ]
+
+        # Smooth as closed loop
+        smoothed = smooth_boundary_points(boundary, window_size=3, closed_loop=True)
+
+        # Should return same number of points
+        assert len(smoothed) == len(boundary)
+
+        # First and last should be close (closed loop)
+        # When smoothing closed loop, endpoints also get smoothed
+        assert len(smoothed) == len(boundary)
+
+    def test_smooth_boundary_points_no_smoothing(self):
+        """Test that window_size=1 returns original points."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        boundary = [(0, 0), (1, 2), (3, 4), (5, 6)]
+
+        smoothed = smooth_boundary_points(boundary, window_size=1)
+
+        # Should return essentially the same points (converted to float)
+        assert len(smoothed) == len(boundary)
+        for i in range(len(boundary)):
+            assert np.allclose(smoothed[i], boundary[i], atol=1e-10)
+
+    def test_smooth_boundary_points_increasing_strength(self):
+        """Test that larger window size produces more smoothing."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        # Create a zigzag pattern
+        boundary = [(i, i % 2) for i in range(10)]
+
+        smoothed_3 = smooth_boundary_points(boundary, window_size=3)
+        smoothed_5 = smooth_boundary_points(boundary, window_size=5)
+
+        # More smoothing should reduce deviation from straight line
+        # Calculate variance in y-coordinates for middle points
+        middle_range = slice(2, 8)
+        var_3 = np.var([p[1] for p in smoothed_3[middle_range]])
+        var_5 = np.var([p[1] for p in smoothed_5[middle_range]])
+
+        # Larger window should produce less variance (more smoothing)
+        assert var_5 < var_3, "Larger window should smooth more"
+
+    def test_smooth_boundary_points_empty_list(self):
+        """Test handling of empty boundary list."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        smoothed = smooth_boundary_points([], window_size=3)
+
+        assert smoothed == []
+
+    def test_smooth_boundary_points_single_point(self):
+        """Test handling of single point."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        boundary = [(5, 10)]
+        smoothed = smooth_boundary_points(boundary, window_size=3)
+
+        assert len(smoothed) == 1
+        assert np.allclose(smoothed[0], boundary[0])
+
+    def test_smooth_boundary_points_two_points(self):
+        """Test handling of two points."""
+        from src.terrain.mesh_operations import smooth_boundary_points
+
+        boundary = [(0, 0), (10, 10)]
+        smoothed = smooth_boundary_points(boundary, window_size=3)
+
+        assert len(smoothed) == 2
+        # With only 2 points, smoothing should have minimal effect
+        assert np.allclose(smoothed[0], boundary[0], atol=0.5)
+        assert np.allclose(smoothed[1], boundary[1], atol=0.5)

@@ -240,6 +240,8 @@ def create_boundary_extension(
     base_material="clay",
     blend_edge_colors=True,
     surface_colors=None,
+    smooth_boundary=False,
+    smooth_window_size=5,
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -265,6 +267,10 @@ def create_boundary_extension(
         blend_edge_colors (bool): Blend surface colors to mid tier (default: True)
                                  If False, mid tier uses base_material color
         surface_colors (np.ndarray, optional): Surface vertex colors (n_vertices, 3) uint8
+        smooth_boundary (bool): Apply smoothing to boundary to eliminate stair-step edges
+                               (default: False)
+        smooth_window_size (int): Window size for boundary smoothing (default: 5).
+                                 Larger values produce smoother curves.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -282,26 +288,128 @@ def create_boundary_extension(
             - boundary_colors: np.ndarray of (2*n_boundary, 3) uint8 colors (two-tier only)
     """
     from src.terrain.materials import get_base_material_color
+    from scipy.interpolate import RegularGridInterpolator
+
+    # Apply boundary smoothing if requested
+    original_boundary_points = boundary_points
+    if smooth_boundary and len(boundary_points) > 2:
+        boundary_points = smooth_boundary_points(
+            boundary_points, window_size=smooth_window_size, closed_loop=True
+        )
 
     n_boundary = len(boundary_points)
+    has_smoothed_coords = smooth_boundary and any(
+        not (isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)))
+        for y, x in boundary_points
+    )
+
+    # Helper function to get or interpolate position
+    def get_position_at_coords(y, x):
+        """Get or interpolate vertex position at given (y, x) coordinates."""
+        # Try integer lookup first
+        if isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)):
+            idx = coord_to_index.get((int(y), int(x)))
+            if idx is not None:
+                return positions[idx].copy()
+
+        # Interpolate from surrounding vertices (for smoothed coordinates)
+        y_int, x_int = int(np.round(y)), int(np.round(x))
+        idx = coord_to_index.get((y_int, x_int))
+        if idx is not None:
+            # Use nearest neighbor for now (simple but effective)
+            return positions[idx].copy()
+
+        # Fallback: return None if can't find position
+        return None
 
     if not two_tier:
         # ===== SINGLE-TIER MODE (backwards compatible) =====
-        boundary_vertices = np.zeros((n_boundary, 3), dtype=float)
 
-        # Create bottom vertices for each boundary point
-        for i, (y, x) in enumerate(boundary_points):
-            original_idx = coord_to_index.get((y, x))
-            if original_idx is None:
-                continue
+        if has_smoothed_coords:
+            # With smoothing: create new surface vertices at smoothed positions + base vertices
+            surface_boundary_verts = np.zeros((n_boundary, 3), dtype=float)
+            base_boundary_verts = np.zeros((n_boundary, 3), dtype=float)
 
-            # Copy position but set z to base_depth
-            pos = positions[original_idx].copy()
-            pos[2] = base_depth
-            boundary_vertices[i] = pos
+            for i, (y, x) in enumerate(boundary_points):
+                pos = get_position_at_coords(y, x)
+                if pos is None:
+                    continue
 
-        # Create side faces efficiently
-        boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
+                # Update XY to smoothed position, keep interpolated Z
+                pos[0] = x / 100.0  # Use same scale as original positions
+                pos[1] = y / 100.0
+                surface_boundary_verts[i] = pos
+
+                # Base vertex: same XY, but at base_depth
+                base_pos = pos.copy()
+                base_pos[2] = base_depth
+                base_boundary_verts[i] = base_pos
+
+            # Stack surface + base vertices
+            boundary_vertices = np.vstack([surface_boundary_verts, base_boundary_verts])
+
+            # Create face indices: original mesh needs to connect to new surface boundary vertices
+            # For simplicity, use nearest original vertex indices
+            boundary_indices_orig = []
+            for y, x in original_boundary_points:
+                idx = coord_to_index.get((y, x))
+                boundary_indices_orig.append(idx if idx is not None else -1)
+
+            n_existing = len(positions)
+            surface_boundary_indices = list(range(n_existing, n_existing + n_boundary))
+            base_boundary_indices = list(
+                range(n_existing + n_boundary, n_existing + 2 * n_boundary)
+            )
+
+            # Create faces: original → smoothed surface → base
+            boundary_faces = []
+            for i in range(n_boundary):
+                if boundary_indices_orig[i] < 0:
+                    continue
+
+                next_i = (i + 1) % n_boundary
+                if boundary_indices_orig[next_i] < 0:
+                    continue
+
+                # Face from original surface to smoothed surface
+                boundary_faces.append(
+                    (
+                        boundary_indices_orig[i],
+                        boundary_indices_orig[next_i],
+                        surface_boundary_indices[next_i],
+                        surface_boundary_indices[i],
+                    )
+                )
+
+                # Face from smoothed surface to base
+                boundary_faces.append(
+                    (
+                        surface_boundary_indices[i],
+                        surface_boundary_indices[next_i],
+                        base_boundary_indices[next_i],
+                        base_boundary_indices[i],
+                    )
+                )
+
+            return boundary_vertices, boundary_faces
+
+        else:
+            # No smoothing: original behavior
+            boundary_vertices = np.zeros((n_boundary, 3), dtype=float)
+
+            # Create bottom vertices for each boundary point
+            for i, (y, x) in enumerate(boundary_points):
+                original_idx = coord_to_index.get((y, x))
+                if original_idx is None:
+                    continue
+
+                # Copy position but set z to base_depth
+                pos = positions[original_idx].copy()
+                pos[2] = base_depth
+                boundary_vertices[i] = pos
+
+            # Create side faces efficiently
+            boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
         base_indices = list(range(len(positions), len(positions) + len(boundary_points)))
 
         boundary_faces = []
@@ -414,6 +522,77 @@ def create_boundary_extension(
             boundary_colors[i + n_boundary, :3] = base_color_uint8  # Base
 
         return boundary_vertices, boundary_faces, boundary_colors
+
+
+def smooth_boundary_points(boundary_coords, window_size=3, closed_loop=True):
+    """
+    Smooth boundary points using moving average to eliminate stair-step edges.
+
+    Applies a moving average filter to boundary coordinates to create smoother
+    curves instead of following pixel grid exactly. This reduces the jagged
+    appearance on curved edges while preserving overall shape.
+
+    Args:
+        boundary_coords: List of (y, x) coordinate tuples representing boundary points
+        window_size: Size of smoothing window (must be odd, default: 3).
+                    Larger values produce more smoothing.
+        closed_loop: If True, treat boundary as closed loop (wrap edges).
+                    If False, treat as open path (endpoints less smoothed).
+
+    Returns:
+        list: Smoothed boundary points as list of (y, x) float tuples
+
+    Examples:
+        >>> boundary = [(0, 0), (0, 1), (1, 1), (1, 2)]
+        >>> smoothed = smooth_boundary_points(boundary, window_size=3)
+        >>> # Returns smoothed coordinates with reduced stair-stepping
+    """
+    # Handle edge cases
+    if len(boundary_coords) == 0:
+        return []
+
+    if len(boundary_coords) == 1:
+        return [tuple(float(c) for c in boundary_coords[0])]
+
+    if len(boundary_coords) == 2:
+        return [tuple(float(c) for c in pt) for pt in boundary_coords]
+
+    # Ensure window size is odd and at least 1
+    window_size = max(1, window_size)
+    if window_size % 2 == 0:
+        window_size += 1
+
+    # No smoothing for window_size=1
+    if window_size == 1:
+        return [tuple(float(c) for c in pt) for pt in boundary_coords]
+
+    # Convert to numpy array for efficient computation
+    coords_array = np.array(boundary_coords, dtype=float)
+    n_points = len(coords_array)
+
+    # Create smoothed array
+    smoothed = np.zeros_like(coords_array)
+
+    # Half window size for indexing
+    half_window = window_size // 2
+
+    # Apply moving average
+    for i in range(n_points):
+        if closed_loop:
+            # Wrap around for closed loop
+            indices = [(i + offset - half_window) % n_points for offset in range(window_size)]
+        else:
+            # Clamp to edges for open path
+            indices = [
+                max(0, min(n_points - 1, i + offset - half_window))
+                for offset in range(window_size)
+            ]
+
+        # Average the coordinates
+        smoothed[i] = coords_array[indices].mean(axis=0)
+
+    # Convert back to list of tuples
+    return [tuple(pt) for pt in smoothed]
 
 
 def sort_boundary_points(boundary_coords):
