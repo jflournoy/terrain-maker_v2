@@ -89,6 +89,7 @@ from src.terrain.core import (
     setup_hdri_lighting,
     setup_world_atmosphere,
 )
+from src.terrain.color_mapping import boreal_mako_cmap
 from src.terrain.transforms import (
     smooth_score_data,
     despeckle_scores,
@@ -725,6 +726,15 @@ Examples:
              "Lower values (0.15-0.25) = transition at low scores (very little dark boreal green). "
              "Higher values (0.35-0.70) = transition at high scores (a lot of dark boreal green). "
              "Useful for adjusting visual snow score threshold.",
+    )
+
+    parser.add_argument(
+        "--colormap-viz-only",
+        action="store_true",
+        default=False,
+        help="Create matplotlib visualizations of score data with different colormap transitions "
+             "(0.15, 0.27, 0.40, 0.50, 0.70) and exit before mesh creation. Fast way to preview "
+             "how the colormap looks on your data without rendering. Saves to output_dir/colormap_viz/",
     )
 
     # Wavelet denoising (frequency-aware, structure-preserving)
@@ -1715,6 +1725,156 @@ Examples:
         logger.info("✓ Score data smoothed")
 
     # Note: despeckle_scores is now applied earlier (before upscaling) for better results
+
+    # === Colormap Visualization Mode ===
+    # If --colormap-viz-only is set, create matplotlib visualizations and exit
+    if args.colormap_viz_only:
+        logger.info("Colormap visualization mode - creating matplotlib plots...")
+
+        # Create output directory for visualizations
+        viz_dir = args.output_dir / "colormap_viz"
+        viz_dir.mkdir(parents=True, exist_ok=True)
+
+        # Get the sledding scores (downsampled, already processed)
+        sledding_scores = terrain_combined.data_layers["sledding"]["data"]
+
+        logger.info(f"Sledding scores shape: {sledding_scores.shape}")
+        logger.info(f"Score range: [{np.nanmin(sledding_scores):.3f}, {np.nanmax(sledding_scores):.3f}]")
+        logger.info(f"Score mean: {np.nanmean(sledding_scores):.3f}")
+
+        # Score distribution
+        bins = [0, 0.2, 0.4, 0.45, 0.52, 0.6, 0.8, 1.0]
+        hist, _ = np.histogram(sledding_scores[~np.isnan(sledding_scores)], bins=bins)
+        logger.info("Score distribution:")
+        for i in range(len(bins)-1):
+            pct = 100 * hist[i] / np.sum(~np.isnan(sledding_scores))
+            marker = " ← PURPLE ZONE" if bins[i] == 0.45 else ""
+            logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
+
+        # Test different transition values
+        transitions = [0.15, 0.27, 0.40, 0.50, 0.70]
+
+        # Create side-by-side comparison plot
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig.suptitle('Detroit Sledding Scores with Boreal-Mako Colormap\nComparing --colormap-transition Values',
+                     fontsize=14, fontweight='bold')
+
+        for idx, transition in enumerate(transitions):
+            ax = axes[idx // 3, idx % 3]
+
+            # Apply compression formula
+            compressed_scores = compress_colormap_score(sledding_scores, transition)
+
+            # Apply colormap
+            im = ax.imshow(compressed_scores, cmap=boreal_mako_cmap, vmin=0, vmax=1,
+                          origin='lower', aspect='auto')
+
+            ax.set_title(f'--colormap-transition={transition:.2f}', fontsize=12, fontweight='bold')
+            ax.axis('off')
+
+            # Calculate purple zone info
+            purple_min, purple_max = 0.45, 0.52
+            in_purple = (compressed_scores >= purple_min) & (compressed_scores <= purple_max) & ~np.isnan(compressed_scores)
+            purple_count = np.sum(in_purple)
+            purple_pct = 100 * purple_count / np.sum(~np.isnan(compressed_scores))
+
+            # Calculate original score range that maps to purple
+            if transition <= 0.27:
+                score_min = transition + (purple_min - 0.27) * (1 - transition) / 0.73
+                score_max = transition + (purple_max - 0.27) * (1 - transition) / 0.73
+            else:
+                seg1_min = purple_min * transition / 0.27
+                seg1_max = purple_max * transition / 0.27
+                if seg1_min <= transition:
+                    score_min = seg1_min
+                    score_max = min(seg1_max, transition)
+                else:
+                    score_min = transition + (purple_min - 0.27) * (1 - transition) / 0.73
+                    score_max = transition + (purple_max - 0.27) * (1 - transition) / 0.73
+
+            info_text = f'Purple zone: scores [{score_min:.3f}, {score_max:.3f}]\n'
+            info_text += f'Purple pixels: {purple_count:,} ({purple_pct:.1f}%)'
+
+            ax.text(0.02, 0.98, info_text, transform=ax.transAxes,
+                   fontsize=10, verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, pad=0.5))
+
+        # Hide the 6th subplot
+        axes[1, 2].axis('off')
+
+        # Add colorbar with purple zone marked
+        cbar_ax = fig.add_axes([0.68, 0.15, 0.25, 0.02])
+        cbar = fig.colorbar(im, cax=cbar_ax, orientation='horizontal')
+        cbar.set_label('Colormap Position (after compression)', fontsize=11, fontweight='bold')
+        cbar.ax.axvline(0.45, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.axvline(0.52, color='yellow', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.text(0.485, 0.5, 'Purple', ha='center', va='center', color='yellow',
+                    fontweight='bold', fontsize=10,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+
+        plt.tight_layout()
+
+        output_path = viz_dir / "scores_transition_comparison.png"
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        logger.info(f"✓ Saved: {output_path}")
+        plt.close()
+
+        # Create histogram plot
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+        fig.suptitle('Detroit Score Distribution with Purple Zone',
+                     fontsize=14, fontweight='bold')
+
+        for idx, transition in enumerate(transitions):
+            ax = axes[idx // 3, idx % 3]
+
+            compressed_scores = compress_colormap_score(sledding_scores, transition)
+            valid_compressed = compressed_scores[~np.isnan(compressed_scores)]
+
+            # Histogram
+            counts, bins, patches = ax.hist(valid_compressed.flatten(), bins=100,
+                                           color='steelblue', alpha=0.7,
+                                           edgecolor='black', linewidth=0.3)
+
+            # Color the bars that fall in purple zone
+            for i, patch in enumerate(patches):
+                if bins[i] >= 0.45 and bins[i+1] <= 0.52:
+                    patch.set_facecolor('magenta')
+                    patch.set_alpha(0.9)
+
+            # Mark purple zone
+            ax.axvspan(0.45, 0.52, alpha=0.15, color='magenta', zorder=0)
+            ax.axvline(0.45, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+            ax.axvline(0.52, color='magenta', linestyle='--', linewidth=2.5, zorder=5)
+
+            # Add label
+            y_pos = ax.get_ylim()[1]*0.9
+            ax.text(0.485, y_pos, 'Purple\nZone', ha='center', va='top',
+                   fontsize=10, fontweight='bold', color='magenta',
+                   bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+            ax.set_title(f'transition={transition:.2f}', fontsize=11, fontweight='bold')
+            ax.set_xlabel('Compressed Score (colormap position)', fontsize=10)
+            ax.set_ylabel('Pixel Count', fontsize=10)
+            ax.grid(True, alpha=0.3, axis='y')
+            ax.set_xlim(0, 1)
+
+        axes[1, 2].axis('off')
+
+        plt.tight_layout()
+
+        output_path = viz_dir / "scores_histograms.png"
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        logger.info(f"✓ Saved: {output_path}")
+        plt.close()
+
+        logger.info("")
+        logger.info("="*70)
+        logger.info("Colormap visualizations created successfully!")
+        logger.info("="*70)
+        logger.info(f"Output directory: {viz_dir}")
+        logger.info("")
+        logger.info("Exiting before mesh creation (--colormap-viz-only mode)")
+        return 0
 
     # Create mesh for proximity calculations
     logger.debug("Creating temporary mesh for proximity calculations...")
