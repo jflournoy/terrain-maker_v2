@@ -67,6 +67,15 @@ Usage:
 
     # Two-tier edge with sharp transition (no color blending)
     python examples/detroit_combined_render.py --two-tier-edge --edge-base-material ivory --no-edge-blend-colors
+
+    # Enable Catmull-Rom curve smoothing for true smooth boundaries (eliminates pixel-grid staircase)
+    python examples/detroit_combined_render.py --two-tier-edge --use-catmull-rom
+
+    # Catmull-Rom with custom smoothness (higher subdivisions = smoother but more vertices)
+    python examples/detroit_combined_render.py --two-tier-edge --use-catmull-rom --catmull-rom-subdivisions 20
+
+    # Combine all smoothing techniques for maximum visual quality
+    python examples/detroit_combined_render.py --two-tier-edge --use-catmull-rom --smooth-boundary
 """
 
 import sys
@@ -1024,6 +1033,25 @@ Examples:
              "Only used when --smooth-boundary is enabled.",
     )
 
+    # Catmull-Rom curve smoothing for boundary geometry
+    parser.add_argument(
+        "--use-catmull-rom",
+        action="store_true",
+        default=False,
+        help="Use Catmull-Rom curve fitting for smooth boundary geometry (eliminates pixel-grid "
+             "staircase pattern entirely). Creates smooth parametric curves through boundary points. "
+             "Useful with --two-tier-edge for professional edge appearance.",
+    )
+
+    parser.add_argument(
+        "--catmull-rom-subdivisions",
+        type=int,
+        default=10,
+        help="Number of interpolated points per boundary segment for Catmull-Rom curves "
+             "(default: 10). Higher values = smoother curves but more vertices. "
+             "Only used when --use-catmull-rom is enabled.",
+    )
+
     parser.add_argument(
         "--clear-cache",
         action="store_true",
@@ -1948,6 +1976,8 @@ Examples:
         edge_blend_colors=args.edge_blend_colors,
         smooth_boundary=args.smooth_boundary,
         smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
+        use_catmull_rom=args.use_catmull_rom,
+        catmull_rom_subdivisions=args.catmull_rom_subdivisions,
     )
 
     if mesh_temp is None:
@@ -2084,6 +2114,7 @@ Examples:
     logger.info(f"Two-tier edge settings: enabled={args.two_tier_edge}, mid_depth={args.edge_mid_depth}, "
                 f"base_material={args.edge_base_material}, blend_colors={args.edge_blend_colors}")
     logger.info(f"Boundary smoothing: enabled={args.smooth_boundary}, window_size={args.smooth_boundary_window}")
+    logger.info(f"Catmull-Rom curve smoothing: enabled={args.use_catmull_rom}, subdivisions={args.catmull_rom_subdivisions}")
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -2096,6 +2127,8 @@ Examples:
         edge_blend_colors=args.edge_blend_colors,
         smooth_boundary=args.smooth_boundary,
         smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
+        use_catmull_rom=args.use_catmull_rom,
+        catmull_rom_subdivisions=args.catmull_rom_subdivisions,
     )
 
     if mesh_combined is None:
