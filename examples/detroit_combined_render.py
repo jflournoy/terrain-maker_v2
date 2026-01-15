@@ -55,6 +55,18 @@ Usage:
 
     # Specify output directory
     python examples/detroit_combined_render.py --output-dir ./renders
+
+    # Two-tier edge extrusion with default clay base
+    python examples/detroit_combined_render.py --two-tier-edge
+
+    # Two-tier edge with gold base material
+    python examples/detroit_combined_render.py --two-tier-edge --edge-base-material gold
+
+    # Two-tier edge with custom RGB base color
+    python examples/detroit_combined_render.py --two-tier-edge --edge-base-material "0.6,0.55,0.5"
+
+    # Two-tier edge with sharp transition (no color blending)
+    python examples/detroit_combined_render.py --two-tier-edge --edge-base-material ivory --no-edge-blend-colors
 """
 
 import sys
@@ -962,6 +974,46 @@ Examples:
         help="Disable pipeline caching (default)",
     )
 
+    # Two-tier edge extrusion arguments
+    parser.add_argument(
+        "--two-tier-edge",
+        action="store_true",
+        default=False,
+        help="Enable two-tier edge extrusion with clean base material (default: False)",
+    )
+
+    parser.add_argument(
+        "--edge-mid-depth",
+        type=float,
+        default=None,
+        help="Depth of middle tier for two-tier edge (default: auto = base_depth * 0.25). "
+             "Only used when --two-tier-edge is enabled.",
+    )
+
+    parser.add_argument(
+        "--edge-base-material",
+        type=str,
+        default="clay",
+        help="Material for base layer (default: clay). Options: clay, obsidian, chrome, "
+             "plastic, gold, ivory, or RGB tuple like '0.6,0.55,0.5'. "
+             "Only used when --two-tier-edge is enabled.",
+    )
+
+    parser.add_argument(
+        "--edge-blend-colors",
+        action="store_true",
+        default=True,
+        help="Blend surface colors to mid tier in two-tier mode (default: True). "
+             "Use --no-edge-blend-colors for sharp transition.",
+    )
+
+    parser.add_argument(
+        "--no-edge-blend-colors",
+        action="store_false",
+        dest="edge_blend_colors",
+        help="Disable color blending to mid tier (sharp transition at mid tier)",
+    )
+
     parser.add_argument(
         "--clear-cache",
         action="store_true",
@@ -978,6 +1030,23 @@ Examples:
 
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Parse edge_base_material (could be a material name or RGB tuple string)
+    if args.two_tier_edge:
+        if "," in args.edge_base_material:
+            # Parse as RGB tuple
+            try:
+                rgb_values = [float(x.strip()) for x in args.edge_base_material.split(",")]
+                if len(rgb_values) != 3:
+                    raise ValueError("RGB tuple must have exactly 3 values")
+                if not all(0 <= v <= 1 for v in rgb_values):
+                    raise ValueError("RGB values must be in range 0-1")
+                args.edge_base_material = tuple(rgb_values)
+            except (ValueError, IndexError) as e:
+                print(f"Error parsing --edge-base-material RGB tuple: {e}")
+                print("Format should be: '0.6,0.55,0.5' (three values 0-1)")
+                sys.exit(1)
+        # else: leave as string material name
 
     # Set resolution and quality based on mode
     if args.print_quality:
@@ -1996,6 +2065,10 @@ Examples:
         center_model=True,
         boundary_extension=True,
         water_mask=None,  # Already applied
+        two_tier_edge=args.two_tier_edge,
+        edge_mid_depth=args.edge_mid_depth,
+        edge_base_material=args.edge_base_material,
+        edge_blend_colors=args.edge_blend_colors,
     )
 
     if mesh_combined is None:
