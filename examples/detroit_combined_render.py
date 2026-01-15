@@ -1000,18 +1000,12 @@ Examples:
     )
 
     parser.add_argument(
-        "--edge-blend-colors",
-        action="store_true",
-        default=True,
-        help="Blend surface colors to mid tier in two-tier mode (default: True). "
-             "Use --no-edge-blend-colors for sharp transition.",
-    )
-
-    parser.add_argument(
         "--no-edge-blend-colors",
         action="store_false",
         dest="edge_blend_colors",
-        help="Disable color blending to mid tier (sharp transition at mid tier)",
+        default=True,
+        help="Disable color blending to mid tier (sharp transition at mid tier). "
+             "By default, surface colors blend to the mid tier.",
     )
 
     parser.add_argument(
@@ -2059,6 +2053,8 @@ Examples:
 
     # Create final mesh
     logger.debug("Creating final combined mesh...")
+    logger.info(f"Two-tier edge settings: enabled={args.two_tier_edge}, mid_depth={args.edge_mid_depth}, "
+                f"base_material={args.edge_base_material}, blend_colors={args.edge_blend_colors}")
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
