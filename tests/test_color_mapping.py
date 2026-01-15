@@ -135,11 +135,11 @@ class TestSlopeColormap:
 class TestBorealMakoColormap:
     """Tests for the boreal_mako colormap.
 
-    Winter forest palette with monotonically increasing luminance:
+    Winter forest palette with darkened purple ribbon:
     - Dark boreal green (cool, blue-tinted forest)
     - Transition to blue
-    - Cyan
-    - White
+    - Purple ribbon around 0.6 (brief L* dip)
+    - Back to blue, then cyan, then white
 
     Built like viridis/mako using LinearSegmentedColormap.from_list()
     """
@@ -204,7 +204,7 @@ class TestBorealMakoColormap:
         assert rgb[2] > 0.7, "Blue should be high at pale end"
 
     def test_boreal_mako_perceptually_uniform(self):
-        """boreal_mako should have monotonically increasing L* (perceived luminance)."""
+        """boreal_mako should have generally increasing L* with purple ribbon dip."""
         from src.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
@@ -217,10 +217,37 @@ class TestBorealMakoColormap:
             lab = color.rgb2lab(rgb_arr)
             lightnesses.append(lab[0, 0, 0])
 
-        # L* should monotonically increase (like mako/viridis)
+        # L* should generally increase, but purple ribbon (~0.6) creates a brief dip
         for i in range(len(lightnesses) - 1):
-            assert lightnesses[i + 1] >= lightnesses[i] - 1, \
-                f"L* should increase: {lightnesses[i]} -> {lightnesses[i+1]} at {positions[i]}->{positions[i+1]}"
+            # Allow larger tolerance around purple ribbon (positions 0.5->0.6 and 0.6->0.7)
+            if positions[i] in [0.5, 0.6]:
+                tolerance = 15  # Purple ribbon can dip L* by up to 15
+            else:
+                tolerance = 1  # Normal monotonic increase tolerance
+
+            assert lightnesses[i + 1] >= lightnesses[i] - tolerance, \
+                f"L* change at {positions[i]}->{positions[i+1]}: {lightnesses[i]:.1f} -> {lightnesses[i+1]:.1f}"
+
+    def test_boreal_mako_purple_ribbon(self):
+        """Purple ribbon should be present at position 0.6."""
+        from src.terrain.color_mapping import boreal_mako_cmap
+
+        # Sample at position 0.6 (purple ribbon)
+        rgb_purple = boreal_mako_cmap(0.6)[:3]
+
+        # Purple should have more red than surrounding blues
+        # R > B and R > G for purple
+        assert rgb_purple[0] > rgb_purple[2], "Purple should have R > B"
+        assert rgb_purple[0] > rgb_purple[1], "Purple should have R > G"
+
+        # Compare to adjacent blue positions
+        rgb_before = boreal_mako_cmap(0.55)[:3]
+        rgb_after = boreal_mako_cmap(0.65)[:3]
+
+        # Purple should be distinctly different from surrounding blues
+        # Purple should have significantly more red than adjacent blues
+        assert rgb_purple[0] > rgb_before[0] + 0.05, "Purple should be redder than before"
+        assert rgb_purple[0] > rgb_after[0] + 0.05, "Purple should be redder than after"
 
     def test_boreal_mako_cyan_to_white_transition(self):
         """Cyan to white transition should show increasing L*."""

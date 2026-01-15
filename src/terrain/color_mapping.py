@@ -61,24 +61,27 @@ except (AttributeError, TypeError):
 def _build_boreal_mako_cmap():
     """Build the boreal_mako colormap.
 
-    Winter forest palette with monotonically increasing perceived luminance:
+    Winter forest palette with darkened purple ribbon:
     - Dark boreal green (cool, blue-tinted forest)
     - Transition to blue
-    - Cyan
-    - White
+    - Purple ribbon around 0.6
+    - Back to blue, then cyan, then white
 
     Uses the same method as mako: sample key colors and interpolate.
     """
-    # Key color samples (RGB) at specific positions
-    # Designed for monotonically increasing L* (perceived luminance)
+    # Key color samples (position, RGB) with explicit positions for purple ribbon
+    # Purple ribbon creates a narrow band around 0.6
     colors = [
-        (0.05, 0.15, 0.10),  # 0.00: Dark boreal green (cool, muted)
-        (0.08, 0.25, 0.18),  # 0.20: Boreal green
-        (0.10, 0.30, 0.35),  # 0.35: Green-blue transition
-        (0.12, 0.35, 0.50),  # 0.50: Blue
-        (0.20, 0.50, 0.70),  # 0.65: Bright blue
-        (0.40, 0.70, 0.85),  # 0.80: Cyan
-        (0.85, 0.95, 0.98),  # 1.00: Pale white
+        (0.00, (0.05, 0.15, 0.10)),  # Dark boreal green (cool, muted)
+        (0.20, (0.08, 0.25, 0.18)),  # Boreal green
+        (0.35, (0.10, 0.30, 0.35)),  # Green-blue transition
+        (0.50, (0.12, 0.35, 0.50)),  # Blue
+        (0.58, (0.15, 0.40, 0.60)),  # Pre-purple blue (brighter)
+        (0.60, (0.40, 0.20, 0.38)),  # Darkened purple ribbon (R > B for true purple)
+        (0.62, (0.18, 0.45, 0.65)),  # Post-purple blue transition
+        (0.70, (0.20, 0.50, 0.70)),  # Bright blue
+        (0.80, (0.40, 0.70, 0.85)),  # Cyan
+        (1.00, (0.85, 0.95, 0.98)),  # Pale white
     ]
 
     # Create colormap using from_list (same method as mako/viridis)
