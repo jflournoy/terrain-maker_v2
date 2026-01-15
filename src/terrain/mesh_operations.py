@@ -325,6 +325,22 @@ def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop
     # which naturally wraps around, so the duplicate point would create a degenerate
     # zero-area face with incorrect normals (appears dark/black when rendered).
 
+    # Clamp curve points to stay within original boundary bounds
+    # Catmull-Rom splines can overshoot between control points, creating coordinates
+    # outside the valid DEM area. Clamp to min/max of original boundary points.
+    if len(boundary_points) > 0:
+        min_y = boundary_points[:, 0].min()
+        max_y = boundary_points[:, 0].max()
+        min_x = boundary_points[:, 1].min()
+        max_x = boundary_points[:, 1].max()
+
+        smooth_curve = [
+            np.array([
+                np.clip(pt[0], min_y, max_y),
+                np.clip(pt[1], min_x, max_x)
+            ]) for pt in smooth_curve
+        ]
+
     return smooth_curve
 
 
