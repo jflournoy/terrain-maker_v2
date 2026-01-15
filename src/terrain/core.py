@@ -2619,8 +2619,8 @@ class Terrain:
             water_depths = normalized_distances[water_y, water_x]
 
             # Water depth gradient: light blue at shore → dark blue at center
-            # t^1.5 creates the desired effect: quick initial darkening, then gentle descent
-            t = np.power(water_depths, 1.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # t^0.3 keeps water light for most of distance, then rapid darkening at depth
+            t = np.power(water_depths, 0.3)[:, np.newaxis]  # Shape (N, 1) for broadcasting
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2825,8 +2825,8 @@ class Terrain:
             water_depths = normalized_distances[water_y, water_x]
 
             # Water depth gradient: light blue at shore → dark blue at center
-            # t^1.5 creates the desired effect: quick initial darkening, then gentle descent
-            t = np.power(water_depths, 1.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # t^0.3 keeps water light for most of distance, then rapid darkening at depth
+            t = np.power(water_depths, 0.3)[:, np.newaxis]  # Shape (N, 1) for broadcasting
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2985,7 +2985,7 @@ class Terrain:
             edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
             # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
             center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
-            water_transition_power = 1.5  # Quick transition then gentle descent
+            water_transition_power = 0.3  # Quick transition then gentle descent
 
             # If colors exist, overwrite water pixels with gradient
             if hasattr(self, "colors") and self.colors is not None:
