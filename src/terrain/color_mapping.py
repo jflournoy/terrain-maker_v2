@@ -54,108 +54,34 @@ except (AttributeError, TypeError):
 # =============================================================================
 # Boreal-Mako Colormap (Perceptually Uniform)
 # =============================================================================
-# Custom colormap for sledding/snow scores with boreal forest aesthetic:
-# 1. Cool forest green (0.00-0.20)
-# 2. End of boreal zone (0.20-0.30)
-# 3. Transition to first blue (0.30-0.40)
-# 4-6. Purple outline (0.40-0.55): Start shift → Peak → Exit
-# 7. Blue Zone (0.55-0.70)
-# 8. Blue-teal transition (0.70-0.85)
-# 9. Pale blue-teal (0.85-0.95)
-# 10. Pale white (0.95-1.00)
-# Built using CIELAB L* for perceptual uniformity.
+# Winter forest palette: boreal green → blue → cyan → white
+# Built like viridis/mako with monotonically increasing luminance
+# Uses the same LinearSegmentedColormap.from_list() method as the viridis family
 
 def _build_boreal_mako_cmap():
-    """Build the boreal_mako colormap using CIELAB for perceptual uniformity."""
-    from skimage import color as skcolor
+    """Build the boreal_mako colormap.
 
-    def lab_to_rgb_clipped(L, a, b):
-        """Convert Lab to RGB, clipping to valid range."""
-        lab = np.array([[[L, a, b]]])
-        rgb = skcolor.lab2rgb(lab)[0, 0]
-        return np.clip(rgb, 0, 1)
+    Winter forest palette with monotonically increasing perceived luminance:
+    - Dark boreal green (cool, blue-tinted forest)
+    - Transition to blue
+    - Cyan
+    - White
 
-    def target_lightness(pos):
-        """Target L* value for simplified zone structure.
-
-        Zones:
-        - Cool forest green → End of boreal zone (0.00-0.30)
-        - Transition to first blue (0.30-0.40)
-        - Purple outline: Start shift → Peak → Exit (0.40-0.55)
-        - Blue Zone (0.55-0.70)
-        - Blue-teal transition (0.70-0.85)
-        - Pale blue-teal → Pale white (0.85-1.00)
-        """
-        if pos <= 0.40:
-            # Cool forest green → Transition to first blue
-            return 10 + (50 - 10) * (pos / 0.40)
-        elif pos <= 0.55:
-            # Purple outline (darker dip creates outline effect)
-            return 50 - (50 - 35) * ((pos - 0.40) / 0.15)
-        elif pos <= 0.70:
-            # Blue Zone
-            return 35 + (60 - 35) * ((pos - 0.55) / 0.15)
-        elif pos <= 0.85:
-            # Blue-teal transition
-            return 60 + (80 - 60) * ((pos - 0.70) / 0.15)
-        else:
-            # Pale blue-teal → Pale white
-            return 80 + (95 - 80) * ((pos - 0.85) / 0.15)
-
-    # Define color zones in Lab space
-    # Simplified structure matching user's requested zones:
-    # 1. Cool forest green
-    # 2. End of boreal zone
-    # 3. Transition to first blue
-    # 4. Start purple shift
-    # 5. Purple peak
-    # 6. Exit purple
-    # 7. Blue Zone
-    # 8. Blue-teal transition
-    # 9. Pale blue-teal
-    # 10. Pale white
-    control_points = [
-        # (position, a*, b*)
-        (0.00, -30, -5),   # 1. Cool forest green
-        (0.20, -30, -5),   # 2. End of boreal zone
-        (0.30, 5, -35),    # 3. Transition to first blue
-        (0.40, 8, -35),    # 4. Start purple shift
-        (0.48, 30, -28),   # 5. Purple peak (magenta)
-        (0.55, 20, -32),   # 6. Exit purple
-        (0.60, 8, -35),    # 7. Blue Zone (mako blue)
-        (0.70, -5, -25),   # 8. Blue-teal transition (start)
-        (0.85, -8, -15),   # 9. Pale blue-teal
-        (0.95, -6, -10),   # Transition to white
-        (1.00, -4, -6),    # 10. Pale white
+    Uses the same method as mako: sample key colors and interpolate.
+    """
+    # Key color samples (RGB) at specific positions
+    # Designed for monotonically increasing L* (perceived luminance)
+    colors = [
+        (0.05, 0.15, 0.10),  # 0.00: Dark boreal green (cool, muted)
+        (0.08, 0.25, 0.18),  # 0.20: Boreal green
+        (0.10, 0.30, 0.35),  # 0.35: Green-blue transition
+        (0.12, 0.35, 0.50),  # 0.50: Blue
+        (0.20, 0.50, 0.70),  # 0.65: Bright blue
+        (0.40, 0.70, 0.85),  # 0.80: Cyan
+        (0.85, 0.95, 0.98),  # 1.00: Pale white
     ]
 
-    # Generate 256 color samples
-    positions = np.linspace(0, 1, 256)
-    colors = []
-
-    for pos in positions:
-        L = target_lightness(pos)
-
-        # Interpolate a* and b* between control points
-        # Find surrounding control points
-        for i in range(len(control_points) - 1):
-            p0, a0, b0 = control_points[i]
-            p1, a1, b1 = control_points[i + 1]
-            if p0 <= pos <= p1:
-                t = (pos - p0) / (p1 - p0) if p1 > p0 else 0
-                a = a0 + t * (a1 - a0)
-                b = b0 + t * (b1 - b0)
-                break
-        else:
-            # At endpoint
-            _, a, b = control_points[-1]
-
-        rgb = lab_to_rgb_clipped(L, a, b)
-        colors.append(rgb)
-
-    colors = np.array(colors)
-
-    # Create LinearSegmentedColormap from the sampled colors
+    # Create colormap using from_list (same method as mako/viridis)
     cmap = LinearSegmentedColormap.from_list('boreal_mako', colors, N=256)
     return cmap
 

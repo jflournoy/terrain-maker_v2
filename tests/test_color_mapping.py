@@ -135,17 +135,13 @@ class TestSlopeColormap:
 class TestBorealMakoColormap:
     """Tests for the boreal_mako colormap.
 
-    Simplified zone structure:
-    1. Cool forest green (0.00-0.20)
-    2. End of boreal zone (0.20-0.30)
-    3. Transition to first blue (0.30-0.40)
-    4-6. Purple outline (0.40-0.55): Start shift → Peak → Exit
-    7. Blue Zone (0.55-0.70)
-    8. Blue-teal transition (0.70-0.85)
-    9. Pale blue-teal (0.85-0.95)
-    10. Pale white (0.95-1.00)
+    Winter forest palette with monotonically increasing luminance:
+    - Dark boreal green (cool, blue-tinted forest)
+    - Transition to blue
+    - Cyan
+    - White
 
-    Built using CIELAB L* for perceptual uniformity.
+    Built like viridis/mako using LinearSegmentedColormap.from_list()
     """
 
     def test_boreal_mako_cmap_imports(self):
@@ -208,12 +204,12 @@ class TestBorealMakoColormap:
         assert rgb[2] > 0.7, "Blue should be high at pale end"
 
     def test_boreal_mako_perceptually_uniform(self):
-        """boreal_mako should be perceptually uniform (linear L*)."""
+        """boreal_mako should have monotonically increasing L* (perceived luminance)."""
         from src.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
         # Sample L* at various positions
-        positions = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9]
+        positions = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         lightnesses = []
         for pos in positions:
             rgb = boreal_mako_cmap(pos)[:3]
@@ -221,62 +217,27 @@ class TestBorealMakoColormap:
             lab = color.rgb2lab(rgb_arr)
             lightnesses.append(lab[0, 0, 0])
 
-        # L* should generally increase (allow for purple outline dip zone: 0.45-0.52)
+        # L* should monotonically increase (like mako/viridis)
         for i in range(len(lightnesses) - 1):
-            # Skip purple outline zone (0.45-0.52) - it has intentional L* dip
-            if 0.45 <= positions[i] <= 0.52 or 0.45 <= positions[i+1] <= 0.52:
-                continue
-            assert lightnesses[i + 1] >= lightnesses[i] - 2, \
+            assert lightnesses[i + 1] >= lightnesses[i] - 1, \
                 f"L* should increase: {lightnesses[i]} -> {lightnesses[i+1]} at {positions[i]}->{positions[i+1]}"
 
-    def test_boreal_mako_edge_hue_shift(self):
-        """Second blue zone (0.55-0.70) should be distinct from pale zone."""
+    def test_boreal_mako_cyan_to_white_transition(self):
+        """Cyan to white transition should show increasing L*."""
         from src.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
-        # Sample second blue zone (after purple)
-        rgb_blue2 = boreal_mako_cmap(0.60)[:3]
-        lab_blue2 = color.rgb2lab(np.array([[rgb_blue2]]))[0, 0]
+        # Sample cyan zone
+        rgb_cyan = boreal_mako_cmap(0.80)[:3]
+        lab_cyan = color.rgb2lab(np.array([[rgb_cyan]]))[0, 0]
 
-        # Sample pale zone (toward white)
-        rgb_pale = boreal_mako_cmap(0.75)[:3]
-        lab_pale = color.rgb2lab(np.array([[rgb_pale]]))[0, 0]
+        # Sample pale/white zone
+        rgb_white = boreal_mako_cmap(0.95)[:3]
+        lab_white = color.rgb2lab(np.array([[rgb_white]]))[0, 0]
 
-        # Pale zone should be lighter (higher L*)
-        assert lab_pale[0] > lab_blue2[0], \
-            f"L* should increase toward white: {lab_blue2[0]} -> {lab_pale[0]}"
-
-    def test_boreal_mako_purple_outline_prominent(self):
-        """Purple outline (0.40-0.55) should be visibly distinct from surrounding blue zones."""
-        from src.terrain.color_mapping import boreal_mako_cmap
-        from skimage import color
-
-        # Sample purple zone center (wider zone: 0.40-0.55)
-        rgb_purple = boreal_mako_cmap(0.48)[:3]
-        lab_purple = color.rgb2lab(np.array([[rgb_purple]]))[0, 0]
-
-        # Sample first blue zone (before purple)
-        rgb_before = boreal_mako_cmap(0.38)[:3]
-        lab_before = color.rgb2lab(np.array([[rgb_before]]))[0, 0]
-
-        # Sample second blue zone (after purple) - deeper into the zone
-        rgb_after = boreal_mako_cmap(0.65)[:3]
-        lab_after = color.rgb2lab(np.array([[rgb_after]]))[0, 0]
-
-        # Purple should be SIGNIFICANTLY darker than surrounding colors (at least 5 units)
-        # L* should dip at purple, making it darker
-        darkness_dip_before = lab_before[0] - lab_purple[0]
-        darkness_dip_after = lab_after[0] - lab_purple[0]
-
-        assert darkness_dip_before >= 5, \
-            f"Purple dip not prominent enough before: {darkness_dip_before} L* units (need >= 5)"
-        assert darkness_dip_after >= 5, \
-            f"Purple dip not prominent enough after: {darkness_dip_after} L* units (need >= 5)"
-
-        # Purple should have significantly higher a* (magenta shift) - at least 10 units
-        magenta_shift = lab_purple[1] - lab_before[1]
-        assert magenta_shift >= 10, \
-            f"Purple magenta shift not prominent: {magenta_shift} units (need >= 10)"
+        # White should be significantly lighter than cyan
+        assert lab_white[0] > lab_cyan[0] + 10, \
+            f"L* should increase significantly from cyan to white: {lab_cyan[0]} -> {lab_white[0]}"
 
 
 class TestColormapCompressionFormula:
