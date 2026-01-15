@@ -1781,8 +1781,10 @@ Examples:
         # Apply gamma correction to normalized scores
         gamma_corrected_scores = np.power(normalized_scores, 0.5)
 
-        # Apply colormap
-        im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_cmap,
+        # Apply colormap (get from registry to respect --purple-position)
+        import matplotlib
+        boreal_mako_from_registry = matplotlib.colormaps.get_cmap("boreal_mako")
+        im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_from_registry,
                       vmin=0, vmax=1.0,
                       origin='lower', aspect='auto')
 

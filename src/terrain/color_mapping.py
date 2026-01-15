@@ -84,7 +84,7 @@ def _build_boreal_mako_cmap(purple_position=0.6):
     ]
 
     # Purple ribbon (narrow band around specified position)
-    purple_width = 0.02  # Width of purple band (±0.02 = 4% total width)
+    purple_width = 0.04  # Width of purple band (±0.04 = 8% total width)
     pre_purple = purple_position - purple_width
     post_purple = purple_position + purple_width
 
@@ -96,7 +96,7 @@ def _build_boreal_mako_cmap(purple_position=0.6):
 
     purple_colors = [
         (pre_purple, blue_at_purple),  # Pre-purple blue
-        (purple_position, (0.40, 0.20, 0.38)),  # Darkened purple ribbon
+        (purple_position, (0.45, 0.20, 0.35)),  # Darkened purple ribbon (more red, less blue)
         (post_purple, blue_at_purple),  # Post-purple blue
     ]
 
@@ -107,8 +107,18 @@ def _build_boreal_mako_cmap(purple_position=0.6):
         (1.00, (0.85, 0.95, 0.98)),  # Pale white
     ]
 
-    # Combine all colors, filtering out any that are out of order
-    all_colors = base_colors + purple_colors + high_colors
+    # Combine all colors, filtering out base/high colors that overlap with purple band
+    # to avoid interpolation artifacts
+    # Exclude colors within the purple band range (with small buffer)
+    purple_band_min = pre_purple - 0.05
+    purple_band_max = post_purple + 0.05
+
+    # Keep base colors only if they're well before the purple band
+    filtered_base = [c for c in base_colors if c[0] < purple_band_min]
+    # Keep high colors only if they're well after the purple band
+    filtered_high = [c for c in high_colors if c[0] > purple_band_max]
+
+    all_colors = filtered_base + purple_colors + filtered_high
     all_colors = sorted(all_colors, key=lambda x: x[0])
 
     # Create colormap using from_list (same method as mako/viridis)
