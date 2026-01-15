@@ -2855,6 +2855,8 @@ class Terrain:
         edge_mid_depth=None,
         edge_base_material="clay",
         edge_blend_colors=True,
+        smooth_boundary=False,
+        smooth_boundary_window=5,
     ):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
@@ -2892,6 +2894,10 @@ class Terrain:
                 or an RGB tuple (0-1 range).
             edge_blend_colors (bool): Blend surface colors to mid tier in two-tier mode (default: True).
                 If False, mid tier uses the base_material color for sharper transition.
+            smooth_boundary (bool): Apply smoothing to boundary points to eliminate stair-step edges
+                (default: False). Useful for smoother mesh transitions when using two-tier edge.
+            smooth_boundary_window (int): Window size for boundary smoothing (default: 5).
+                Larger values produce more smoothing. Only used when smooth_boundary=True.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -3110,7 +3116,7 @@ class Terrain:
                 else:
                     surface_colors = self.colors
 
-            # Call create_boundary_extension with two-tier parameters
+            # Call create_boundary_extension with two-tier and smoothing parameters
             result = create_boundary_extension(
                 positions,
                 boundary_points,
@@ -3121,6 +3127,8 @@ class Terrain:
                 base_material=edge_base_material,
                 blend_edge_colors=edge_blend_colors,
                 surface_colors=surface_colors,
+                smooth_boundary=smooth_boundary,
+                smooth_window_size=smooth_boundary_window,
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)

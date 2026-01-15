@@ -1009,6 +1009,22 @@ Examples:
     )
 
     parser.add_argument(
+        "--smooth-boundary",
+        action="store_true",
+        default=False,
+        help="Smooth boundary points to eliminate stair-step edges (optional refinement). "
+             "Useful when two-tier-edge is enabled to create smoother transitions.",
+    )
+
+    parser.add_argument(
+        "--smooth-boundary-window",
+        type=int,
+        default=5,
+        help="Window size for boundary smoothing (default: 5). Larger values = more smoothing. "
+             "Only used when --smooth-boundary is enabled.",
+    )
+
+    parser.add_argument(
         "--clear-cache",
         action="store_true",
         default=False,
@@ -1151,6 +1167,12 @@ Examples:
         "scale_factor": 100,
         "center_model": True,
         "boundary_extension": True,
+        "two_tier_edge": args.two_tier_edge,
+        "edge_mid_depth": args.edge_mid_depth,
+        "edge_base_material": args.edge_base_material,
+        "edge_blend_colors": args.edge_blend_colors,
+        "smooth_boundary": args.smooth_boundary,
+        "smooth_boundary_window": args.smooth_boundary_window if args.smooth_boundary else 5,
     }
 
     # Register targets with cache (defines dependency graph)
@@ -1920,6 +1942,12 @@ Examples:
         center_model=True,
         boundary_extension=True,
         water_mask=None,
+        two_tier_edge=args.two_tier_edge,
+        edge_mid_depth=args.edge_mid_depth,
+        edge_base_material=args.edge_base_material,
+        edge_blend_colors=args.edge_blend_colors,
+        smooth_boundary=args.smooth_boundary,
+        smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
     )
 
     if mesh_temp is None:
@@ -2055,6 +2083,7 @@ Examples:
     logger.debug("Creating final combined mesh...")
     logger.info(f"Two-tier edge settings: enabled={args.two_tier_edge}, mid_depth={args.edge_mid_depth}, "
                 f"base_material={args.edge_base_material}, blend_colors={args.edge_blend_colors}")
+    logger.info(f"Boundary smoothing: enabled={args.smooth_boundary}, window_size={args.smooth_boundary_window}")
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -2065,6 +2094,8 @@ Examples:
         edge_mid_depth=args.edge_mid_depth,
         edge_base_material=args.edge_base_material,
         edge_blend_colors=args.edge_blend_colors,
+        smooth_boundary=args.smooth_boundary,
+        smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
     )
 
     if mesh_combined is None:
