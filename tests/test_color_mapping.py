@@ -135,12 +135,15 @@ class TestSlopeColormap:
 class TestBorealMakoColormap:
     """Tests for the boreal_mako colormap.
 
-    Custom colormap designed for sledding scores:
-    - Boreal green at low end (0-0.2)
-    - Green → Mako blue transition (0.2-0.35)
-    - Mako blue zone (0.35-0.5)
-    - Edge: Blue → Teal hue shift (0.5-0.6)
-    - Teal → Pale mint (0.6-1.0)
+    Simplified zone structure:
+    1. Cool forest green (0.00-0.20)
+    2. End of boreal zone (0.20-0.30)
+    3. Transition to first blue (0.30-0.40)
+    4-6. Purple outline (0.40-0.55): Start shift → Peak → Exit
+    7. Blue Zone (0.55-0.70)
+    8. Blue-teal transition (0.70-0.85)
+    9. Pale blue-teal (0.85-0.95)
+    10. Pale white (0.95-1.00)
 
     Built using CIELAB L* for perceptual uniformity.
     """

@@ -55,10 +55,14 @@ except (AttributeError, TypeError):
 # Boreal-Mako Colormap (Perceptually Uniform)
 # =============================================================================
 # Custom colormap for sledding/snow scores with boreal forest aesthetic:
-# - Boreal green at low end (forest)
-# - Transition through mako blue
-# - Edge effect (hue shift blue→teal) at 0.5-0.6
-# - Pale mint at high end
+# 1. Cool forest green (0.00-0.20)
+# 2. End of boreal zone (0.20-0.30)
+# 3. Transition to first blue (0.30-0.40)
+# 4-6. Purple outline (0.40-0.55): Start shift → Peak → Exit
+# 7. Blue Zone (0.55-0.70)
+# 8. Blue-teal transition (0.70-0.85)
+# 9. Pale blue-teal (0.85-0.95)
+# 10. Pale white (0.95-1.00)
 # Built using CIELAB L* for perceptual uniformity.
 
 def _build_boreal_mako_cmap():
@@ -72,40 +76,57 @@ def _build_boreal_mako_cmap():
         return np.clip(rgb, 0, 1)
 
     def target_lightness(pos):
-        """Target L* value with WIDER purple outline sandwiched between blue zones."""
+        """Target L* value for simplified zone structure.
+
+        Zones:
+        - Cool forest green → End of boreal zone (0.00-0.30)
+        - Transition to first blue (0.30-0.40)
+        - Purple outline: Start shift → Peak → Exit (0.40-0.55)
+        - Blue Zone (0.55-0.70)
+        - Blue-teal transition (0.70-0.85)
+        - Pale blue-teal → Pale white (0.85-1.00)
+        """
         if pos <= 0.40:
-            # Linear rise to first blue zone
+            # Cool forest green → Transition to first blue
             return 10 + (50 - 10) * (pos / 0.40)
         elif pos <= 0.55:
-            # PROMINENT DIP for wider purple outline (darker = outline effect)
+            # Purple outline (darker dip creates outline effect)
             return 50 - (50 - 35) * ((pos - 0.40) / 0.15)
         elif pos <= 0.70:
-            # Rise from purple back to second blue zone
+            # Blue Zone
             return 35 + (60 - 35) * ((pos - 0.55) / 0.15)
+        elif pos <= 0.85:
+            # Blue-teal transition
+            return 60 + (80 - 60) * ((pos - 0.70) / 0.15)
         else:
-            # Rise to pale white
-            return 60 + (95 - 60) * ((pos - 0.70) / 0.30)
+            # Pale blue-teal → Pale white
+            return 80 + (95 - 80) * ((pos - 0.85) / 0.15)
 
     # Define color zones in Lab space
-    # Boreal green: cool forest green (no yellow cast - b* near zero or negative)
-    # First blue zone: mako blue leading into purple
-    # Purple outline: WIDER purple band creates prominent outline effect
-    # Second blue zone: return to blue after purple
-    # Pale white: high scores end in pale white
+    # Simplified structure matching user's requested zones:
+    # 1. Cool forest green
+    # 2. End of boreal zone
+    # 3. Transition to first blue
+    # 4. Start purple shift
+    # 5. Purple peak
+    # 6. Exit purple
+    # 7. Blue Zone
+    # 8. Blue-teal transition
+    # 9. Pale blue-teal
+    # 10. Pale white
     control_points = [
         # (position, a*, b*)
-        (0.00, -30, -5),   # Cool forest green (blue-tinted, no yellow)
-        (0.20, -30, -5),   # End of boreal zone
-        (0.30, 5, -35),    # Transition to first blue zone
-        (0.40, 8, -35),    # First blue zone (before purple)
-        (0.43, 20, -32),   # → Start purple shift
-        (0.48, 30, -28),   # Purple peak (PROMINENT magenta, wider zone)
-        (0.52, 30, -28),   # Purple sustain (keep magenta)
-        (0.55, 20, -32),   # → Exit purple
-        (0.60, 8, -35),    # Second blue zone (return to mako blue)
-        (0.70, -5, -25),   # Blue-teal transition
-        (0.85, -8, -15),   # Pale blue-teal
-        (1.00, -6, -8),    # Pale white (very light, slight blue tint)
+        (0.00, -30, -5),   # 1. Cool forest green
+        (0.20, -30, -5),   # 2. End of boreal zone
+        (0.30, 5, -35),    # 3. Transition to first blue
+        (0.40, 8, -35),    # 4. Start purple shift
+        (0.48, 30, -28),   # 5. Purple peak (magenta)
+        (0.55, 20, -32),   # 6. Exit purple
+        (0.60, 8, -35),    # 7. Blue Zone (mako blue)
+        (0.70, -5, -25),   # 8. Blue-teal transition (start)
+        (0.85, -8, -15),   # 9. Pale blue-teal
+        (0.95, -6, -10),   # Transition to white
+        (1.00, -4, -6),    # 10. Pale white
     ]
 
     # Generate 256 color samples
