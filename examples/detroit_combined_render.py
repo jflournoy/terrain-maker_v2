@@ -2116,7 +2116,9 @@ Examples:
     else:
         logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
 
-    apply_vertex_colors(mesh_combined, terrain_combined.colors, terrain_combined.y_valid, terrain_combined.x_valid)
+    # Apply vertex colors while preserving two-tier edge boundary colors
+    n_surface_vertices = len(terrain_combined.y_valid) if hasattr(terrain_combined, 'y_valid') else None
+    apply_vertex_colors(mesh_combined, terrain_combined.colors, terrain_combined.y_valid, terrain_combined.x_valid, n_surface_vertices=n_surface_vertices)
 
     # Apply road mask and material if roads are enabled
     # Roads are ALWAYS obsidian, terrain uses vertex colors or test material

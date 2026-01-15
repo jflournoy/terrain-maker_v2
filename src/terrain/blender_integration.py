@@ -10,7 +10,7 @@ import numpy as np
 import bpy
 
 
-def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, logger=None):
+def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, n_surface_vertices=None, logger=None):
     """
     Apply colors to an existing Blender mesh.
 
@@ -27,6 +27,9 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
             - Grid-space: shape (height, width, 3) or (height, width, 4)
         y_valid (np.ndarray, optional): Y indices for grid-space colors
         x_valid (np.ndarray, optional): X indices for grid-space colors
+        n_surface_vertices (int, optional): Number of surface vertices. If provided,
+            boundary vertices (index >= n_surface_vertices) will be skipped to preserve
+            their existing colors (e.g., two-tier edge colors). Default: None (apply to all)
         logger (logging.Logger, optional): Logger for progress messages
     """
     mesh = mesh_obj.data
@@ -70,18 +73,36 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, log
     loop_vertex_indices = np.zeros(n_loops, dtype=np.int32)
     mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
 
-    # Clamp indices to valid range
-    max_color_idx = len(colors_normalized) - 1
-    loop_vertex_indices = np.clip(loop_vertex_indices, 0, max_color_idx)
+    # If n_surface_vertices is specified, preserve boundary vertex colors
+    if n_surface_vertices is not None:
+        # Create color data array and get existing colors
+        color_data = np.zeros((n_loops, 4), dtype=np.float32)
+        mesh.vertex_colors[0].data.foreach_get("color", color_data.flatten())
+        color_data = color_data.reshape((n_loops, 4))
 
-    # Build flat color array for all loops (RGBA per loop)
-    loop_colors = colors_normalized[loop_vertex_indices].flatten()
+        # Only apply colors to surface vertices
+        surface_mask = loop_vertex_indices < n_surface_vertices
+        clamped_indices = np.clip(loop_vertex_indices[surface_mask], 0, len(colors_normalized) - 1)
+        color_data[surface_mask] = colors_normalized[clamped_indices]
 
-    # Apply all colors at once
-    color_layer.data.foreach_set("color", loop_colors)
+        # Apply colors
+        color_layer.data.foreach_set("color", color_data.flatten())
+        if logger:
+            logger.debug(f"✓ Applied colors to {np.sum(surface_mask)} surface loops, preserved {np.sum(~surface_mask)} boundary loops")
+    else:
+        # Apply to all vertices (original behavior)
+        # Clamp indices to valid range
+        max_color_idx = len(colors_normalized) - 1
+        loop_vertex_indices = np.clip(loop_vertex_indices, 0, max_color_idx)
 
-    if logger:
-        logger.debug(f"✓ Applied colors to {n_loops} loops (vectorized)")
+        # Build flat color array for all loops (RGBA per loop)
+        loop_colors = colors_normalized[loop_vertex_indices].flatten()
+
+        # Apply all colors at once
+        color_layer.data.foreach_set("color", loop_colors)
+
+        if logger:
+            logger.debug(f"✓ Applied colors to {n_loops} loops (vectorized)")
 
 
 def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
