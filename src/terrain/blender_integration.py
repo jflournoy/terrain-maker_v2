@@ -75,10 +75,10 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, n_s
 
     # If n_surface_vertices is specified, preserve boundary vertex colors
     if n_surface_vertices is not None:
-        # Create color data array and get existing colors
-        color_data = np.zeros((n_loops, 4), dtype=np.float32)
-        mesh.vertex_colors[0].data.foreach_get("color", color_data.flatten())
-        color_data = color_data.reshape((n_loops, 4))
+        # Get existing colors from the mesh (must use flat array first)
+        color_data_flat = np.zeros(n_loops * 4, dtype=np.float32)
+        mesh.vertex_colors[0].data.foreach_get("color", color_data_flat)
+        color_data = color_data_flat.reshape((n_loops, 4))
 
         # Only apply colors to surface vertices
         surface_mask = loop_vertex_indices < n_surface_vertices
