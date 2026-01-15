@@ -230,7 +230,17 @@ def generate_faces(height, width, coord_to_index, batch_size=10000):
     return faces
 
 
-def create_boundary_extension(positions, boundary_points, coord_to_index, base_depth=-0.2):
+def create_boundary_extension(
+    positions,
+    boundary_points,
+    coord_to_index,
+    base_depth=-0.2,
+    two_tier=False,
+    mid_depth=None,
+    base_material="clay",
+    blend_edge_colors=True,
+    surface_colors=None,
+):
     """
     Create boundary extension vertices and faces to close the mesh.
 
@@ -238,58 +248,172 @@ def create_boundary_extension(positions, boundary_points, coord_to_index, base_d
     and connecting them to the top boundary with quad faces. This closes the mesh
     into a solid object suitable for 3D printing or solid rendering.
 
+    Supports two modes:
+    - Single-tier (default): Surface → Base (one jump)
+    - Two-tier: Surface → Mid → Base (two-tier with color separation)
+
     Args:
         positions (np.ndarray): Array of (n, 3) vertex positions
         boundary_points (list): List of (y, x) tuples representing ordered boundary points
         coord_to_index (dict): Mapping from (y, x) coordinates to vertex indices
         base_depth (float): Z-coordinate for the bottom of the extension (default: -0.2)
+        two_tier (bool): Enable two-tier mode (default: False)
+        mid_depth (float, optional): Z-coordinate for mid tier (default: base_depth * 0.25)
+        base_material (str | tuple): Material for base layer - either preset name
+                                    ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
+                                    or RGB tuple (0-1 range). Default: "clay"
+        blend_edge_colors (bool): Blend surface colors to mid tier (default: True)
+                                 If False, mid tier uses base_material color
+        surface_colors (np.ndarray, optional): Surface vertex colors (n_vertices, 3) uint8
 
     Returns:
-        tuple: (boundary_vertices, boundary_faces) where:
-            - boundary_vertices: np.ndarray of (n_boundary, 3) bottom vertex positions
+        tuple: When two_tier=False (backwards compatible):
+            (boundary_vertices, boundary_faces)
+        tuple: When two_tier=True:
+            (boundary_vertices, boundary_faces, boundary_colors)
+
+        Where:
+            - boundary_vertices: np.ndarray of vertex positions
+                Single-tier: (n_boundary, 3)
+                Two-tier: (2*n_boundary, 3) - mid + base vertices
             - boundary_faces: list of tuples defining side face quad connectivity
+                Single-tier: N quads (surface→base)
+                Two-tier: 2*N quads (surface→mid + mid→base)
+            - boundary_colors: np.ndarray of (2*n_boundary, 3) uint8 colors (two-tier only)
     """
+    from src.terrain.materials import get_base_material_color
+
     n_boundary = len(boundary_points)
-    boundary_vertices = np.zeros((n_boundary, 3), dtype=float)
 
-    # Create bottom vertices for each boundary point
-    for i, (y, x) in enumerate(boundary_points):
-        # Get the original position
-        original_idx = coord_to_index.get((y, x))
-        if original_idx is None:
-            continue
+    if not two_tier:
+        # ===== SINGLE-TIER MODE (backwards compatible) =====
+        boundary_vertices = np.zeros((n_boundary, 3), dtype=float)
 
-        # Copy position but set z to base_depth
-        pos = positions[original_idx].copy()
-        pos[2] = base_depth
-        boundary_vertices[i] = pos
+        # Create bottom vertices for each boundary point
+        for i, (y, x) in enumerate(boundary_points):
+            original_idx = coord_to_index.get((y, x))
+            if original_idx is None:
+                continue
 
-    # Create side faces efficiently
-    boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
-    base_indices = list(range(len(positions), len(positions) + len(boundary_points)))
+            # Copy position but set z to base_depth
+            pos = positions[original_idx].copy()
+            pos[2] = base_depth
+            boundary_vertices[i] = pos
 
-    boundary_faces = []
-    for i in range(n_boundary):
-        # Skip invalid indices
-        if boundary_indices[i] is None:
-            continue
+        # Create side faces efficiently
+        boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
+        base_indices = list(range(len(positions), len(positions) + len(boundary_points)))
 
-        next_i = (i + 1) % n_boundary
-        # Skip if next boundary point is invalid
-        if boundary_indices[next_i] is None:
-            continue
+        boundary_faces = []
+        for i in range(n_boundary):
+            if boundary_indices[i] is None:
+                continue
 
-        # Create quad connecting top boundary to bottom
-        boundary_faces.append(
-            (
-                boundary_indices[i],
-                boundary_indices[next_i],
-                base_indices[next_i],
-                base_indices[i],
+            next_i = (i + 1) % n_boundary
+            if boundary_indices[next_i] is None:
+                continue
+
+            # Create quad connecting top boundary to bottom
+            boundary_faces.append(
+                (
+                    boundary_indices[i],
+                    boundary_indices[next_i],
+                    base_indices[next_i],
+                    base_indices[i],
+                )
             )
-        )
 
-    return boundary_vertices, boundary_faces
+        return boundary_vertices, boundary_faces
+
+    else:
+        # ===== TWO-TIER MODE =====
+
+        # Auto-calculate mid_depth if not provided
+        if mid_depth is None:
+            mid_depth = base_depth * 0.25
+
+        # Resolve material to RGB
+        base_color_rgb = get_base_material_color(base_material)
+
+        # Create mid and base vertices
+        mid_vertices = np.zeros((n_boundary, 3), dtype=float)
+        base_vertices = np.zeros((n_boundary, 3), dtype=float)
+
+        for i, (y, x) in enumerate(boundary_points):
+            original_idx = coord_to_index.get((y, x))
+            if original_idx is None:
+                continue
+
+            # Mid vertex: copy XY, set Z to mid_depth
+            pos_mid = positions[original_idx].copy()
+            pos_mid[2] = mid_depth
+            mid_vertices[i] = pos_mid
+
+            # Base vertex: copy XY, set Z to base_depth
+            pos_base = positions[original_idx].copy()
+            pos_base[2] = base_depth
+            base_vertices[i] = pos_base
+
+        # Stack mid and base vertices
+        boundary_vertices = np.vstack([mid_vertices, base_vertices])
+
+        # Create faces (surface→mid, mid→base)
+        boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
+        n_existing = len(positions)
+        mid_indices = list(range(n_existing, n_existing + n_boundary))
+        base_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
+
+        boundary_faces = []
+        for i in range(n_boundary):
+            if boundary_indices[i] is None:
+                continue
+
+            next_i = (i + 1) % n_boundary
+            if boundary_indices[next_i] is None:
+                continue
+
+            # Upper tier: surface → mid
+            boundary_faces.append(
+                (
+                    boundary_indices[i],
+                    boundary_indices[next_i],
+                    mid_indices[next_i],
+                    mid_indices[i],
+                )
+            )
+
+            # Lower tier: mid → base
+            boundary_faces.append(
+                (
+                    mid_indices[i],
+                    mid_indices[next_i],
+                    base_indices[next_i],
+                    base_indices[i],
+                )
+            )
+
+        # Create colors
+        boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
+        base_color_uint8 = (np.array(base_color_rgb) * 255).astype(np.uint8)
+
+        for i, (y, x) in enumerate(boundary_points):
+            original_idx = coord_to_index.get((y, x))
+            if original_idx is None:
+                continue
+
+            # Mid vertex color
+            if blend_edge_colors and surface_colors is not None:
+                # Copy surface color
+                mid_color = surface_colors[original_idx, :3]
+            else:
+                # Use base material color
+                mid_color = base_color_uint8
+
+            # Assign colors
+            boundary_colors[i, :3] = mid_color  # Mid
+            boundary_colors[i + n_boundary, :3] = base_color_uint8  # Base
+
+        return boundary_vertices, boundary_faces, boundary_colors
 
 
 def sort_boundary_points(boundary_coords):
