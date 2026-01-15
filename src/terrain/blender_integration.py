@@ -262,8 +262,11 @@ def create_blender_mesh(
         mesh.from_pydata(vertices.tolist(), [], faces)
         mesh.update(calc_edges=True)
 
-        # Apply colors if provided
-        if colors is not None and y_valid is not None and x_valid is not None:
+        # Apply colors if provided (surface colors OR boundary colors)
+        has_surface_colors = colors is not None and y_valid is not None and x_valid is not None
+        has_boundary_colors = boundary_colors is not None
+
+        if has_surface_colors or has_boundary_colors:
             if logger:
                 logger.info("Applying vertex colors with optimized method...")
 
@@ -272,26 +275,31 @@ def create_blender_mesh(
             if len(color_layer.data) > 0:
                 # Create color data array (Blender expects normalized 0-1 floats)
                 color_data = np.zeros((len(color_layer.data), 4), dtype=np.float32)
+                # Default to white (in case some vertices don't get colored)
+                color_data[:, :] = [1.0, 1.0, 1.0, 1.0]
 
-                # Normalize colors to 0-1 range if they're uint8
-                colors_normalized = colors.astype(np.float32)
-                if colors_normalized.max() > 1.0:
-                    colors_normalized = colors_normalized / 255.0
+                # Normalize surface colors if provided
+                colors_normalized = None
+                n_positions = 0
+                if has_surface_colors:
+                    colors_normalized = colors.astype(np.float32)
+                    if colors_normalized.max() > 1.0:
+                        colors_normalized = colors_normalized / 255.0
 
-                # Ensure colors are RGBA (add alpha channel if needed)
-                if colors_normalized.shape[-1] == 3:
-                    alpha = np.ones(
-                        (colors_normalized.shape[0], colors_normalized.shape[1], 1),
-                        dtype=np.float32,
-                    )
-                    colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
+                    # Ensure colors are RGBA (add alpha channel if needed)
+                    if colors_normalized.shape[-1] == 3:
+                        alpha = np.ones(
+                            (colors_normalized.shape[0], colors_normalized.shape[1], 1),
+                            dtype=np.float32,
+                        )
+                        colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
 
-                # Get number of original positions (before boundary extension)
-                n_positions = len(y_valid)
+                    # Get number of original positions (before boundary extension)
+                    n_positions = len(y_valid)
 
                 # Normalize boundary_colors if provided
                 boundary_colors_normalized = None
-                if boundary_colors is not None:
+                if has_boundary_colors:
                     boundary_colors_normalized = boundary_colors.astype(np.float32)
                     if boundary_colors_normalized.max() > 1.0:
                         boundary_colors_normalized = boundary_colors_normalized / 255.0
@@ -305,8 +313,8 @@ def create_blender_mesh(
                     for loop_idx in poly.loop_indices:
                         vertex_idx = mesh.loops[loop_idx].vertex_index
 
-                        # Apply colors to surface vertices
-                        if vertex_idx < n_positions:
+                        # Apply colors to surface vertices (if available)
+                        if has_surface_colors and vertex_idx < n_positions:
                             y, x = y_valid[vertex_idx], x_valid[vertex_idx]
 
                             # Check bounds
