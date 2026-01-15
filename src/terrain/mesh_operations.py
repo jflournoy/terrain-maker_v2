@@ -312,14 +312,45 @@ def create_boundary_extension(
             if idx is not None:
                 return positions[idx].copy()
 
-        # Interpolate from surrounding vertices (for smoothed coordinates)
+        # Bilinear interpolation from surrounding vertices (for smoothed float coordinates)
+        y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
+        y_ceil, x_ceil = y_floor + 1, x_floor + 1
+
+        # Get the four corner positions
+        corners = {}
+        for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
+            yy, xx = y_floor + dy, x_floor + dx
+            idx = coord_to_index.get((yy, xx))
+            if idx is not None:
+                corners[(dy, dx)] = positions[idx]
+
+        # If we have all 4 corners, do bilinear interpolation
+        if len(corners) == 4:
+            # Fractional parts
+            fy = y - y_floor
+            fx = x - x_floor
+
+            # Bilinear interpolation
+            pos_00 = corners[(0, 0)]
+            pos_01 = corners[(0, 1)]
+            pos_10 = corners[(1, 0)]
+            pos_11 = corners[(1, 1)]
+
+            # Interpolate in x direction first
+            pos_0 = pos_00 * (1 - fx) + pos_01 * fx
+            pos_1 = pos_10 * (1 - fx) + pos_11 * fx
+
+            # Then interpolate in y direction
+            result = pos_0 * (1 - fy) + pos_1 * fy
+            return result
+
+        # Fallback: use nearest neighbor if we don't have all 4 corners
         y_int, x_int = int(np.round(y)), int(np.round(x))
         idx = coord_to_index.get((y_int, x_int))
         if idx is not None:
-            # Use nearest neighbor for now (simple but effective)
             return positions[idx].copy()
 
-        # Fallback: return None if can't find position
+        # Final fallback: return None if can't find any position
         return None
 
     if not two_tier:
