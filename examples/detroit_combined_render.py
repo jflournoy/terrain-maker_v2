@@ -1993,6 +1993,18 @@ Examples:
 
     # Apply vertex colors
     logger.debug("Applying vertex colors...")
+
+    # Diagnostic: Check for purple colors in the vertex colors
+    colors_rgb = terrain_combined.colors[:, :3]  # Get RGB channels only
+    is_purple = (colors_rgb[:, 0] > colors_rgb[:, 1]) & (colors_rgb[:, 0] > colors_rgb[:, 2])  # R > G and R > B
+    num_purple = np.sum(is_purple)
+    if num_purple > 0:
+        logger.info(f"  ✓ Found {num_purple:,} purple vertices ({100*num_purple/len(colors_rgb):.2f}% of mesh)")
+        purple_avg = colors_rgb[is_purple].mean(axis=0)
+        logger.info(f"    Average purple color: R={purple_avg[0]:.3f} G={purple_avg[1]:.3f} B={purple_avg[2]:.3f}")
+    else:
+        logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
+
     apply_vertex_colors(mesh_combined, terrain_combined.colors, terrain_combined.y_valid, terrain_combined.x_valid)
 
     # Apply road mask and material if roads are enabled
