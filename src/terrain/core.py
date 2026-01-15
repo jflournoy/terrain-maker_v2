@@ -2857,6 +2857,8 @@ class Terrain:
         edge_blend_colors=True,
         smooth_boundary=False,
         smooth_boundary_window=5,
+        use_catmull_rom=False,
+        catmull_rom_subdivisions=10,
     ):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
@@ -2898,6 +2900,12 @@ class Terrain:
                 (default: False). Useful for smoother mesh transitions when using two-tier edge.
             smooth_boundary_window (int): Window size for boundary smoothing (default: 5).
                 Larger values produce more smoothing. Only used when smooth_boundary=True.
+            use_catmull_rom (bool): Use Catmull-Rom curve fitting for smooth boundary geometry
+                (default: False). When enabled, eliminates pixel-grid staircase pattern entirely
+                by fitting smooth parametric curve through boundary points.
+            catmull_rom_subdivisions (int): Number of interpolated points per boundary segment
+                when using Catmull-Rom curves (default: 10). Higher values = smoother curve
+                but more vertices. Only used when use_catmull_rom=True.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -3129,6 +3137,8 @@ class Terrain:
                 surface_colors=surface_colors,
                 smooth_boundary=smooth_boundary,
                 smooth_window_size=smooth_boundary_window,
+                use_catmull_rom=use_catmull_rom,
+                catmull_rom_subdivisions=catmull_rom_subdivisions,
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)

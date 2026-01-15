@@ -230,6 +230,104 @@ def generate_faces(height, width, coord_to_index, batch_size=10000):
     return faces
 
 
+def catmull_rom_curve(p0, p1, p2, p3, t):
+    """
+    Catmull-Rom spline interpolation between two points.
+
+    Evaluates a Catmull-Rom spline at parameter t, using four control points.
+    The curve passes through p1 and p2, and is influenced by p0 and p3.
+
+    Args:
+        p0, p1, p2, p3: Control points (numpy arrays or tuples)
+        t: Parameter in [0, 1] where 0=p1 and 1=p2
+
+    Returns:
+        Point on the curve at parameter t
+    """
+    t = np.clip(t, 0.0, 1.0)
+    t2 = t * t
+    t3 = t2 * t
+
+    # Catmull-Rom basis functions
+    q = 0.5 * np.array([
+        -t3 + 2*t2 - t,
+        3*t3 - 5*t2 + 2,
+        -3*t3 + 4*t2 + t,
+        t3 - t2
+    ])
+
+    # Weighted sum of control points
+    return q[0] * p0 + q[1] * p1 + q[2] * p2 + q[3] * p3
+
+
+def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop=True):
+    """
+    Fit a Catmull-Rom spline curve through boundary points.
+
+    Creates a smooth curve that passes through all boundary points by fitting
+    Catmull-Rom spline segments between consecutive points.
+
+    Args:
+        boundary_points: List of (y, x) or (x, y) tuples representing the boundary
+        subdivisions: Number of interpolated points per segment (higher = smoother)
+        closed_loop: If True, treat the boundary as a closed loop
+
+    Returns:
+        List of interpolated points along the smooth curve
+    """
+    if len(boundary_points) < 2:
+        return list(boundary_points)
+
+    boundary_points = np.array(boundary_points, dtype=float)
+    n = len(boundary_points)
+
+    # Handle different boundary types
+    if closed_loop and n >= 3:
+        # For closed loop, extend boundary to wrap around
+        extended = np.vstack([
+            boundary_points[-1:],  # Previous point
+            boundary_points,
+            boundary_points[:2]    # Next points
+        ])
+    else:
+        # For open path, duplicate endpoints for boundary handling
+        extended = np.vstack([
+            boundary_points[0:1],  # Duplicate first point
+            boundary_points,
+            boundary_points[-1:]   # Duplicate last point
+        ])
+
+    # Interpolate along the curve
+    smooth_curve = []
+
+    # Number of segments to process
+    n_segments = n - 1 if not closed_loop else n
+
+    for i in range(n_segments):
+        # Get four consecutive points for this segment
+        p0 = extended[i]
+        p1 = extended[i + 1]
+        p2 = extended[i + 2]
+        p3 = extended[i + 3]
+
+        # Generate subdivisions for this segment
+        for j in range(subdivisions):
+            t = j / float(subdivisions)
+            point = catmull_rom_curve(p0, p1, p2, p3, t)
+            smooth_curve.append(point)
+
+    # Add final point for open path
+    if not closed_loop:
+        smooth_curve.append(boundary_points[-1])
+
+    # For closed loop, ensure continuity
+    if closed_loop and len(smooth_curve) > 0:
+        # Make sure first and last points are the same
+        smooth_curve.append(smooth_curve[0])
+
+    return smooth_curve
+
+
 def create_boundary_extension(
     positions,
     boundary_points,
@@ -242,6 +340,8 @@ def create_boundary_extension(
     surface_colors=None,
     smooth_boundary=False,
     smooth_window_size=5,
+    use_catmull_rom=False,
+    catmull_rom_subdivisions=10,
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -271,6 +371,12 @@ def create_boundary_extension(
                                (default: False)
         smooth_window_size (int): Window size for boundary smoothing (default: 5).
                                  Larger values produce smoother curves.
+        use_catmull_rom (bool): Use Catmull-Rom curve fitting for smooth boundary
+                               instead of pixel-grid topology (default: False).
+                               When enabled, eliminates staircase pattern entirely.
+        catmull_rom_subdivisions (int): Number of interpolated points per boundary
+                                       segment when using Catmull-Rom curves (default: 10).
+                                       Higher values = smoother curve but more vertices.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -297,8 +403,17 @@ def create_boundary_extension(
             boundary_points, window_size=smooth_window_size, closed_loop=True
         )
 
+    # Apply Catmull-Rom curve fitting if requested (replaces pixel-grid topology)
+    if use_catmull_rom and len(boundary_points) > 2:
+        smooth_curve_points = fit_catmull_rom_boundary_curve(
+            boundary_points,
+            subdivisions=catmull_rom_subdivisions,
+            closed_loop=True,
+        )
+        boundary_points = smooth_curve_points
+
     n_boundary = len(boundary_points)
-    has_smoothed_coords = smooth_boundary and any(
+    has_smoothed_coords = (smooth_boundary or use_catmull_rom) and any(
         not (isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)))
         for y, x in boundary_points
     )
@@ -379,48 +494,64 @@ def create_boundary_extension(
             # Stack surface + base vertices
             boundary_vertices = np.vstack([surface_boundary_verts, base_boundary_verts])
 
-            # Create face indices: original mesh needs to connect to new surface boundary vertices
-            # For simplicity, use nearest original vertex indices
-            boundary_indices_orig = []
-            for y, x in original_boundary_points:
-                idx = coord_to_index.get((y, x))
-                boundary_indices_orig.append(idx if idx is not None else -1)
-
             n_existing = len(positions)
             surface_boundary_indices = list(range(n_existing, n_existing + n_boundary))
             base_boundary_indices = list(
                 range(n_existing + n_boundary, n_existing + 2 * n_boundary)
             )
 
-            # Create faces: original → smoothed surface → base
+            # Create faces
             boundary_faces = []
-            for i in range(n_boundary):
-                if boundary_indices_orig[i] < 0:
-                    continue
 
-                next_i = (i + 1) % n_boundary
-                if boundary_indices_orig[next_i] < 0:
-                    continue
-
-                # Face from original surface to smoothed surface
-                boundary_faces.append(
-                    (
-                        boundary_indices_orig[i],
-                        boundary_indices_orig[next_i],
-                        surface_boundary_indices[next_i],
-                        surface_boundary_indices[i],
+            if use_catmull_rom:
+                # When using Catmull-Rom curves, we have many interpolated points
+                # Create faces only between smoothed surface and base (no connection to original mesh)
+                for i in range(n_boundary):
+                    next_i = (i + 1) % n_boundary
+                    # Face from smoothed surface to base
+                    boundary_faces.append(
+                        (
+                            surface_boundary_indices[i],
+                            surface_boundary_indices[next_i],
+                            base_boundary_indices[next_i],
+                            base_boundary_indices[i],
+                        )
                     )
-                )
+            else:
+                # Without Catmull-Rom: connect original mesh to smoothed surface to base
+                boundary_indices_orig = []
+                for y, x in original_boundary_points:
+                    idx = coord_to_index.get((y, x))
+                    boundary_indices_orig.append(idx if idx is not None else -1)
 
-                # Face from smoothed surface to base
-                boundary_faces.append(
-                    (
-                        surface_boundary_indices[i],
-                        surface_boundary_indices[next_i],
-                        base_boundary_indices[next_i],
-                        base_boundary_indices[i],
+                # Create faces: original → smoothed surface → base
+                for i in range(n_boundary):
+                    if boundary_indices_orig[i] < 0:
+                        continue
+
+                    next_i = (i + 1) % n_boundary
+                    if boundary_indices_orig[next_i] < 0:
+                        continue
+
+                    # Face from original surface to smoothed surface
+                    boundary_faces.append(
+                        (
+                            boundary_indices_orig[i],
+                            boundary_indices_orig[next_i],
+                            surface_boundary_indices[next_i],
+                            surface_boundary_indices[i],
+                        )
                     )
-                )
+
+                    # Face from smoothed surface to base
+                    boundary_faces.append(
+                        (
+                            surface_boundary_indices[i],
+                            surface_boundary_indices[next_i],
+                            base_boundary_indices[next_i],
+                            base_boundary_indices[i],
+                        )
+                    )
 
             return boundary_vertices, boundary_faces
 

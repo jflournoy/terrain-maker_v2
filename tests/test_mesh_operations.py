@@ -762,3 +762,324 @@ class TestBoundarySmoothing:
         # With only 2 points, smoothing should have minimal effect
         assert np.allclose(smoothed[0], boundary[0], atol=0.5)
         assert np.allclose(smoothed[1], boundary[1], atol=0.5)
+
+
+class TestCatmullRomCurve:
+    """Tests for Catmull-Rom curve fitting and interpolation."""
+
+    def test_catmull_rom_curve_imports(self):
+        """Test that catmull_rom_curve can be imported."""
+        from src.terrain.mesh_operations import catmull_rom_curve
+
+        assert callable(catmull_rom_curve)
+
+    def test_catmull_rom_curve_basic_interpolation(self):
+        """Test basic Catmull-Rom curve interpolation."""
+        from src.terrain.mesh_operations import catmull_rom_curve
+
+        # Four control points
+        p0 = np.array([0.0, 0.0])
+        p1 = np.array([1.0, 0.0])
+        p2 = np.array([2.0, 1.0])
+        p3 = np.array([3.0, 1.0])
+
+        # Sample at t=0.5 (midpoint between p1 and p2)
+        result = catmull_rom_curve(p0, p1, p2, p3, 0.5)
+
+        # Should return a point between p1 and p2
+        assert isinstance(result, np.ndarray)
+        assert len(result) == 2
+        # Midpoint should be within bounds
+        assert p1[0] <= result[0] <= p2[0]
+
+    def test_catmull_rom_curve_t_boundaries(self):
+        """Test Catmull-Rom curve at t=0 and t=1."""
+        from src.terrain.mesh_operations import catmull_rom_curve
+
+        p0 = np.array([0.0, 0.0])
+        p1 = np.array([1.0, 1.0])
+        p2 = np.array([2.0, 2.0])
+        p3 = np.array([3.0, 3.0])
+
+        # At t=0, should be close to p1
+        result_0 = catmull_rom_curve(p0, p1, p2, p3, 0.0)
+        assert np.allclose(result_0, p1, atol=0.01)
+
+        # At t=1, should be close to p2
+        result_1 = catmull_rom_curve(p0, p1, p2, p3, 1.0)
+        assert np.allclose(result_1, p2, atol=0.01)
+
+    def test_fit_catmull_rom_boundary_curve_imports(self):
+        """Test that fit_catmull_rom_boundary_curve can be imported."""
+        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+
+        assert callable(fit_catmull_rom_boundary_curve)
+
+    def test_fit_catmull_rom_boundary_curve_basic(self):
+        """Test fitting Catmull-Rom curve through boundary points."""
+        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+
+        # Simple staircase boundary
+        boundary = [(0, 0), (1, 0), (1, 1), (0, 1)]
+
+        # Fit curve with subdivision
+        smooth_curve = fit_catmull_rom_boundary_curve(boundary, subdivisions=5, closed_loop=True)
+
+        # Should return more points than input due to subdivision
+        assert len(smooth_curve) > len(boundary)
+
+        # All points should be close to the original boundary area
+        smooth_array = np.array(smooth_curve)
+        assert np.all(smooth_array >= -1.0)  # Should not go far outside bounds
+        assert np.all(smooth_array <= 2.0)
+
+    def test_fit_catmull_rom_boundary_curve_smooth_output(self):
+        """Test that fitted curve produces smooth output."""
+        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+
+        # Staircase pattern (jagged)
+        boundary = [
+            (0, 0), (0, 1), (1, 1), (1, 2), (2, 2), (2, 3)
+        ]
+
+        # Fit smooth curve
+        smooth_curve = fit_catmull_rom_boundary_curve(boundary, subdivisions=10, closed_loop=False)
+
+        # Check that curve doesn't have harsh directional changes like the original staircase
+        smooth_array = np.array(smooth_curve)
+
+        # Calculate directional vectors between consecutive points
+        if len(smooth_curve) > 2:
+            diffs = np.diff(smooth_array, axis=0)
+            # Should have smooth transitions (not just axis-aligned moves)
+            # At least some segments should have both x and y components
+            diagonal_moves = np.sum((np.abs(diffs[:, 0]) > 0) & (np.abs(diffs[:, 1]) > 0))
+            assert diagonal_moves > 0, "Smooth curve should have diagonal transitions"
+
+    def test_fit_catmull_rom_boundary_curve_closed_loop(self):
+        """Test Catmull-Rom curve with closed loop."""
+        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+
+        # Rectangle
+        boundary = [(0, 0), (2, 0), (2, 2), (0, 2)]
+
+        smooth_curve = fit_catmull_rom_boundary_curve(boundary, subdivisions=5, closed_loop=True)
+
+        # First and last points should be close (closed loop)
+        if len(smooth_curve) > 1:
+            assert np.allclose(smooth_curve[0], smooth_curve[-1], atol=0.5)
+
+    def test_fit_catmull_rom_boundary_curve_open_path(self):
+        """Test Catmull-Rom curve with open path."""
+        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+
+        # Line of points
+        boundary = [(0, 0), (1, 1), (2, 0), (3, 1)]
+
+        smooth_curve = fit_catmull_rom_boundary_curve(boundary, subdivisions=5, closed_loop=False)
+
+        # First and last should match endpoints
+        assert np.allclose(smooth_curve[0], boundary[0], atol=0.5)
+        assert np.allclose(smooth_curve[-1], boundary[-1], atol=0.5)
+
+
+class TestCreateBoundaryExtensionCatmullRom:
+    """Tests for create_boundary_extension with Catmull-Rom curve integration."""
+
+    def test_create_boundary_extension_catmull_rom_parameter(self):
+        """Test that use_catmull_rom parameter is accepted."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        # Simple 2x2 DEM
+        dem = np.array([[1.0, 2.0], [3.0, 4.0]])
+        positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 1): 3, (1, 0): 2}
+
+        # Call with use_catmull_rom=True (should not raise error)
+        result = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=5,
+        )
+
+        # Should return tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2  # Single-tier mode returns (vertices, faces)
+
+    def test_create_boundary_extension_catmull_rom_increases_vertices(self):
+        """Test that Catmull-Rom increases boundary vertex count via interpolation."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array(
+            [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
+        )
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 3, (1, 1): 2, (1, 0): 1}
+
+        # Without Catmull-Rom
+        result_without = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=False,
+        )
+        vertices_without, _ = result_without
+
+        # With Catmull-Rom (subdivisions=10)
+        result_with = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=10,
+        )
+        vertices_with, _ = result_with
+
+        # Catmull-Rom should produce more vertices due to interpolation
+        # Original: 4 boundary points
+        # With subdivisions=10: ~4*10 = 40 interpolated points + original
+        assert len(vertices_with) > len(vertices_without)
+
+    def test_create_boundary_extension_catmull_rom_subdivisions_effect(self):
+        """Test that higher subdivisions produce more vertices."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array(
+            [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
+        )
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 3, (1, 1): 2, (1, 0): 1}
+
+        # With lower subdivisions
+        result_low = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=5,
+        )
+        vertices_low, _ = result_low
+
+        # With higher subdivisions
+        result_high = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=20,
+        )
+        vertices_high, _ = result_high
+
+        # Higher subdivisions should produce more vertices
+        assert len(vertices_high) > len(vertices_low)
+
+    def test_create_boundary_extension_catmull_rom_backwards_compatible(self):
+        """Test that default (use_catmull_rom=False) preserves original behavior."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array(
+            [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
+        )
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 3, (1, 1): 2, (1, 0): 1}
+
+        # Default call (use_catmull_rom=False)
+        result1 = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+        )
+
+        # Explicit False
+        result2 = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=False,
+        )
+
+        vertices1, faces1 = result1
+        vertices2, faces2 = result2
+
+        # Should be identical
+        assert np.allclose(vertices1, vertices2)
+        assert faces1 == faces2
+
+    def test_create_boundary_extension_catmull_rom_two_tier(self):
+        """Test Catmull-Rom with two-tier edge mode."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array(
+            [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
+        )
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 3, (1, 1): 2, (1, 0): 1}
+
+        # Two-tier with Catmull-Rom
+        result = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            two_tier=True,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=5,
+        )
+
+        # Should return 3-tuple for two-tier mode
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+        vertices, faces, colors = result
+
+        # Vertices should be positive (has content)
+        assert vertices.shape[0] > 0
+        assert vertices.shape[1] == 3  # x, y, z
+
+        # Colors should match vertex count
+        assert colors.shape[0] == vertices.shape[0]
+        assert colors.shape[1] == 3  # RGB
+
+    def test_create_boundary_extension_catmull_rom_smooth_vertices(self):
+        """Test that Catmull-Rom produces smooth vertex transitions."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        # Create staircase boundary pattern
+        positions = np.array(
+            [
+                [0, 0, 1],
+                [1, 0, 1],
+                [1, 1, 1],
+                [2, 1, 1],
+                [2, 2, 1],
+            ],
+            dtype=float,
+        )
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 2), (2, 2)]
+        coord_to_index = {
+            (0, 0): 0,
+            (0, 1): 1,
+            (1, 1): 2,
+            (1, 2): 3,
+            (2, 2): 4,
+        }
+
+        # With Catmull-Rom
+        result = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            use_catmull_rom=True,
+            catmull_rom_subdivisions=10,
+        )
+        vertices_cr, _ = result
+
+        # Check that we have smooth transitions (not just axis-aligned)
+        if len(vertices_cr) > 2:
+            diffs = np.diff(vertices_cr[:, :2], axis=0)  # Just x,y
+            # Should have some diagonal moves (both x and y components)
+            diagonal_moves = np.sum(
+                (np.abs(diffs[:, 0]) > 0.01) & (np.abs(diffs[:, 1]) > 0.01)
+            )
+            assert diagonal_moves > 0, "Catmull-Rom should produce diagonal transitions"
