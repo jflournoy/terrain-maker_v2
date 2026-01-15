@@ -83,9 +83,13 @@ def _build_boreal_mako_cmap(purple_position=0.6):
         (0.50, (0.12, 0.35, 0.50)),  # Blue
     ]
 
-    # Purple ribbon (narrow band around specified position)
-    purple_width = 0.013  # Width of purple band (±0.013 = 2.6% total width)
+    # Purple ribbon (widened band with internal gradient)
+    purple_width = 0.026  # Width of purple band (±0.026 = 5.2% total width, 2x wider)
+    half_width = purple_width / 2  # 0.013 - midpoint for internal gradient
+
     pre_purple = purple_position - purple_width
+    mid_pre_purple = purple_position - half_width
+    mid_post_purple = purple_position + half_width
     post_purple = purple_position + purple_width
 
     # Interpolate blue colors around purple position
@@ -94,7 +98,7 @@ def _build_boreal_mako_cmap(purple_position=0.6):
                       0.40 + (purple_position - 0.5) * 0.4,
                       0.60 + (purple_position - 0.5) * 0.2)
 
-    # Calculate purple color with perceived luminance matching position in gradient
+    # Calculate purple colors with perceived luminance matching position in gradient
     # Base purple ratios (maintaining purple hue: R > G, R > B)
     # Reference purple at position 0.6: (0.35, 0.15, 0.28)
     base_purple_ratios = (0.35, 0.15, 0.28)
@@ -107,14 +111,18 @@ def _build_boreal_mako_cmap(purple_position=0.6):
     brightness_scale = target_brightness / base_brightness
     purple_scaled = tuple(c * brightness_scale for c in base_purple_ratios)
 
-    # Make purple slightly darker than surrounding blue for contrast
-    darkness_factor = 0.85  # 15% darker than the blue at this position
-    purple_color = tuple(c * darkness_factor for c in purple_scaled)
+    # Create gradient within purple band: lighter edges → darker center
+    # Edge purple: 15% darker than blue (0.85)
+    purple_edge = tuple(c * 0.85 for c in purple_scaled)
+    # Center purple: 30% darker than blue (0.70) - extra dark for emphasis
+    purple_center = tuple(c * 0.70 for c in purple_scaled)
 
     purple_colors = [
-        (pre_purple, blue_at_purple),  # Pre-purple blue
-        (purple_position, purple_color),  # Purple ribbon with position-adjusted luminance
-        (post_purple, blue_at_purple),  # Post-purple blue
+        (pre_purple, blue_at_purple),          # Outer edge: blue
+        (mid_pre_purple, purple_edge),         # Inner edge: lighter purple
+        (purple_position, purple_center),      # Center: darker purple
+        (mid_post_purple, purple_edge),        # Inner edge: lighter purple
+        (post_purple, blue_at_purple),         # Outer edge: blue
     ]
 
     # High-end colors (cyan to white)
