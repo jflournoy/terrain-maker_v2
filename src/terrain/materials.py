@@ -26,6 +26,62 @@ ROAD_COLORS = {
     "hematite": (0.08, 0.06, 0.06),      # Dark iron red-gray
 }
 
+# =============================================================================
+# BASE MATERIAL PRESETS
+# =============================================================================
+
+# Named material presets for mesh bases (edge extrusion, backgrounds, etc.)
+BASE_MATERIALS = {
+    "clay": (0.5, 0.48, 0.45),         # Matte gray clay (default)
+    "obsidian": (0.02, 0.02, 0.02),    # Glossy black glass
+    "chrome": (0.9, 0.9, 0.92),        # Metallic chrome
+    "plastic": (0.95, 0.95, 0.95),     # Glossy white plastic
+    "gold": (1.0, 0.766, 0.336),       # Metallic gold
+    "ivory": (0.95, 0.93, 0.88),       # Off-white with warm tone
+}
+
+
+def get_base_material_color(material: str | Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """
+    Resolve a base material name to RGB color tuple.
+
+    Accepts either a preset material name (case-insensitive) or an RGB tuple.
+    Material names map to predefined RGB values for common materials used in
+    terrain visualization (clay, obsidian, chrome, plastic, gold, ivory).
+
+    Args:
+        material: Either a preset name from BASE_MATERIALS
+                 ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
+                 or an RGB tuple (0-1 range).
+
+    Returns:
+        RGB tuple (0-1 range) representing the material color.
+
+    Raises:
+        ValueError: If material is a string but not in BASE_MATERIALS.
+
+    Examples:
+        >>> get_base_material_color("clay")
+        (0.5, 0.48, 0.45)
+
+        >>> get_base_material_color("GOLD")  # Case-insensitive
+        (1.0, 0.766, 0.336)
+
+        >>> get_base_material_color((0.6, 0.55, 0.5))  # Custom RGB
+        (0.6, 0.55, 0.5)
+    """
+    if isinstance(material, str):
+        material_lower = material.lower()
+        if material_lower not in BASE_MATERIALS:
+            raise ValueError(
+                f"Unknown base material: {material}. "
+                f"Valid options: {', '.join(BASE_MATERIALS.keys())}"
+            )
+        return BASE_MATERIALS[material_lower]
+    else:
+        # Assume it's already an RGB tuple - pass through
+        return material
+
 
 def apply_colormap_material(material: bpy.types.Material) -> None:
     """

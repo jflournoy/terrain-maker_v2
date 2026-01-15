@@ -6,6 +6,123 @@ Tests Blender material setup, shader nodes, and background plane creation.
 
 import pytest
 
+
+# =============================================================================
+# Tests for BASE_MATERIALS and get_base_material_color (no Blender required)
+# =============================================================================
+
+
+class TestBaseMaterials:
+    """Tests for BASE_MATERIALS dictionary and get_base_material_color function."""
+
+    def test_base_materials_exists(self):
+        """Test that BASE_MATERIALS dictionary exists."""
+        from src.terrain.materials import BASE_MATERIALS
+
+        assert isinstance(BASE_MATERIALS, dict)
+        assert len(BASE_MATERIALS) > 0
+
+    def test_base_materials_all_presets(self):
+        """Test that all expected material presets are present."""
+        from src.terrain.materials import BASE_MATERIALS
+
+        expected_materials = ["clay", "obsidian", "chrome", "plastic", "gold", "ivory"]
+        for material in expected_materials:
+            assert material in BASE_MATERIALS, f"Missing material: {material}"
+
+    def test_base_materials_values_are_rgb_tuples(self):
+        """Test that all material values are RGB tuples."""
+        from src.terrain.materials import BASE_MATERIALS
+
+        for name, rgb in BASE_MATERIALS.items():
+            assert isinstance(rgb, tuple), f"{name} value is not a tuple"
+            assert len(rgb) == 3, f"{name} RGB tuple should have 3 values"
+            for component in rgb:
+                assert isinstance(component, (int, float)), f"{name} has non-numeric component"
+                assert 0.0 <= component <= 1.0, f"{name} has out-of-range component"
+
+    def test_base_materials_expected_colors(self):
+        """Test that material presets have expected RGB values."""
+        from src.terrain.materials import BASE_MATERIALS
+
+        # Test a few known values
+        assert BASE_MATERIALS["clay"] == (0.5, 0.48, 0.45)
+        assert BASE_MATERIALS["obsidian"] == (0.02, 0.02, 0.02)
+        assert BASE_MATERIALS["chrome"] == (0.9, 0.9, 0.92)
+        assert BASE_MATERIALS["plastic"] == (0.95, 0.95, 0.95)
+        assert BASE_MATERIALS["gold"] == (1.0, 0.766, 0.336)
+        assert BASE_MATERIALS["ivory"] == (0.95, 0.93, 0.88)
+
+
+class TestGetBaseMaterialColor:
+    """Tests for get_base_material_color function."""
+
+    def test_get_base_material_color_exists(self):
+        """Test that get_base_material_color function exists."""
+        from src.terrain.materials import get_base_material_color
+
+        assert callable(get_base_material_color)
+
+    def test_get_base_material_color_preset_lowercase(self):
+        """Test resolving preset material by lowercase name."""
+        from src.terrain.materials import get_base_material_color
+
+        result = get_base_material_color("clay")
+        assert result == (0.5, 0.48, 0.45)
+
+        result = get_base_material_color("gold")
+        assert result == (1.0, 0.766, 0.336)
+
+    def test_get_base_material_color_case_insensitive(self):
+        """Test that material lookup is case-insensitive."""
+        from src.terrain.materials import get_base_material_color
+
+        # Test various cases
+        assert get_base_material_color("Clay") == (0.5, 0.48, 0.45)
+        assert get_base_material_color("CLAY") == (0.5, 0.48, 0.45)
+        assert get_base_material_color("cLaY") == (0.5, 0.48, 0.45)
+
+        assert get_base_material_color("Gold") == (1.0, 0.766, 0.336)
+        assert get_base_material_color("GOLD") == (1.0, 0.766, 0.336)
+
+    def test_get_base_material_color_rgb_tuple_passthrough(self):
+        """Test that RGB tuples are passed through unchanged."""
+        from src.terrain.materials import get_base_material_color
+
+        custom_rgb = (0.6, 0.55, 0.5)
+        result = get_base_material_color(custom_rgb)
+        assert result == custom_rgb
+
+        another_rgb = (0.1, 0.2, 0.3)
+        result = get_base_material_color(another_rgb)
+        assert result == another_rgb
+
+    def test_get_base_material_color_invalid_name_raises(self):
+        """Test that invalid material name raises ValueError."""
+        from src.terrain.materials import get_base_material_color
+
+        with pytest.raises(ValueError) as exc_info:
+            get_base_material_color("invalid_material")
+
+        # Check error message is helpful
+        error_msg = str(exc_info.value)
+        assert "Unknown base material" in error_msg
+        assert "invalid_material" in error_msg
+        assert "Valid options" in error_msg
+
+    def test_get_base_material_color_all_presets(self):
+        """Test that all preset materials resolve correctly."""
+        from src.terrain.materials import get_base_material_color, BASE_MATERIALS
+
+        for material_name, expected_rgb in BASE_MATERIALS.items():
+            result = get_base_material_color(material_name)
+            assert result == expected_rgb, f"Material {material_name} did not resolve correctly"
+
+
+# =============================================================================
+# Blender-dependent tests below (require bpy)
+# =============================================================================
+
 # These tests require Blender environment
 pytest.importorskip("bpy")
 
