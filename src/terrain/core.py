@@ -2998,7 +2998,7 @@ class Terrain:
 
                 # Exponential falloff: darkens rapidly from edges to center
                 # Use t^2.5 for strong exponential darkening
-                t = np.power(water_depths, 2.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+                t = np.power(water_depths, 10)[:, np.newaxis]  # Shape (N, 1) for broadcasting
                 water_colors = edge_color * (1 - t) + center_color * t
 
                 # Apply gradient colors to water pixels
@@ -3031,20 +3031,30 @@ class Terrain:
                     gray = np.clip(normalized * 255, 0, 255).astype(np.uint8)
                     rgb = np.stack([gray, gray, gray], axis=-1)
 
-                    # Override water pixels with blue
-                    rgb[water_mask] = water_color
+                    # Apply water depth gradient coloring (not flat color)
+                    water_indices = np.where(water_mask)
+                    water_depths = normalized_distances[water_indices]
+                    t = np.power(water_depths, 10)[:, np.newaxis]
+                    water_colors = edge_color * (1 - t) + center_color * t
+                    rgb[water_indices] = water_colors.astype(np.uint8)
+
                     self.colors = rgb
                 else:
                     # If DEM is already scaled, use it directly
                     gray = np.clip(dem_data, 0, 255).astype(np.uint8)
                     rgb = np.stack([gray, gray, gray], axis=-1)
 
-                    # Override water pixels with blue
-                    rgb[water_mask] = water_color
+                    # Apply water depth gradient coloring (not flat color)
+                    water_indices = np.where(water_mask)
+                    water_depths = normalized_distances[water_indices]
+                    t = np.power(water_depths, 10)[:, np.newaxis]
+                    water_colors = edge_color * (1 - t) + center_color * t
+                    rgb[water_indices] = water_colors.astype(np.uint8)
+
                     self.colors = rgb
 
                 self.logger.info(
-                    f"Colors created with water coloring ({np.sum(water_mask)} water pixels as blue)"
+                    f"Colors created with water depth gradient coloring ({np.sum(water_mask)} water pixels)"
                 )
 
         dem_data = self.data_layers["dem"]["transformed_data"]
