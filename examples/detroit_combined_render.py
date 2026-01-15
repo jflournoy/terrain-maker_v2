@@ -729,6 +729,15 @@ Examples:
     )
 
     parser.add_argument(
+        "--purple-position",
+        type=float,
+        default=0.6,
+        help="Position of purple ribbon in boreal_mako colormap (0.0-1.0, default: 0.6). "
+             "The purple band marks a score threshold (e.g., 0.5 for mid-range, 0.7 for high scores). "
+             "Use with --colormap-viz-only to preview different positions.",
+    )
+
+    parser.add_argument(
         "--colormap-viz-only",
         action="store_true",
         default=False,
@@ -978,6 +987,14 @@ Examples:
     # Apply vertex multiplier default if not explicitly set
     if args.vertex_multiplier is None:
         args.vertex_multiplier = default_vertex_mult
+
+    # Rebuild boreal_mako colormap with specified purple position
+    if args.purple_position != 0.6:  # Only rebuild if non-default
+        from src.terrain.color_mapping import _build_boreal_mako_cmap
+        import matplotlib
+        custom_boreal_mako = _build_boreal_mako_cmap(purple_position=args.purple_position)
+        matplotlib.colormaps.register(custom_boreal_mako, force=True)
+        logger.info(f"Rebuilt boreal_mako colormap with purple ribbon at position {args.purple_position}")
 
     logger.info("\n" + "=" * 70)
     logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")

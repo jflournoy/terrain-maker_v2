@@ -58,34 +58,61 @@ except (AttributeError, TypeError):
 # Built like viridis/mako with monotonically increasing luminance
 # Uses the same LinearSegmentedColormap.from_list() method as the viridis family
 
-def _build_boreal_mako_cmap():
+def _build_boreal_mako_cmap(purple_position=0.6):
     """Build the boreal_mako colormap.
 
     Winter forest palette with darkened purple ribbon:
     - Dark boreal green (cool, blue-tinted forest)
     - Transition to blue
-    - Purple ribbon around 0.6
+    - Purple ribbon at configurable position
     - Back to blue, then cyan, then white
+
+    Args:
+        purple_position: Position of purple ribbon (0.0-1.0), default 0.6
 
     Uses the same method as mako: sample key colors and interpolate.
     """
     # Key color samples (position, RGB) with explicit positions for purple ribbon
-    # Purple ribbon creates a narrow band around 0.6
-    colors = [
+    # Purple ribbon creates a narrow band around the specified position
+
+    # Fixed color stops (independent of purple position)
+    base_colors = [
         (0.00, (0.05, 0.15, 0.10)),  # Dark boreal green (cool, muted)
         (0.20, (0.08, 0.25, 0.18)),  # Boreal green
         (0.35, (0.10, 0.30, 0.35)),  # Green-blue transition
         (0.50, (0.12, 0.35, 0.50)),  # Blue
-        (0.58, (0.15, 0.40, 0.60)),  # Pre-purple blue (brighter)
-        (0.60, (0.40, 0.20, 0.38)),  # Darkened purple ribbon (R > B for true purple)
-        (0.62, (0.18, 0.45, 0.65)),  # Post-purple blue transition
+    ]
+
+    # Purple ribbon (narrow band around specified position)
+    purple_width = 0.02  # Width of purple band (±0.02 = 4% total width)
+    pre_purple = purple_position - purple_width
+    post_purple = purple_position + purple_width
+
+    # Interpolate blue colors around purple position
+    # Get blue color at purple position
+    blue_at_purple = (0.15 + (purple_position - 0.5) * 0.2,
+                      0.40 + (purple_position - 0.5) * 0.4,
+                      0.60 + (purple_position - 0.5) * 0.2)
+
+    purple_colors = [
+        (pre_purple, blue_at_purple),  # Pre-purple blue
+        (purple_position, (0.40, 0.20, 0.38)),  # Darkened purple ribbon
+        (post_purple, blue_at_purple),  # Post-purple blue
+    ]
+
+    # High-end colors (cyan to white)
+    high_colors = [
         (0.70, (0.20, 0.50, 0.70)),  # Bright blue
         (0.80, (0.40, 0.70, 0.85)),  # Cyan
         (1.00, (0.85, 0.95, 0.98)),  # Pale white
     ]
 
+    # Combine all colors, filtering out any that are out of order
+    all_colors = base_colors + purple_colors + high_colors
+    all_colors = sorted(all_colors, key=lambda x: x[0])
+
     # Create colormap using from_list (same method as mako/viridis)
-    cmap = LinearSegmentedColormap.from_list('boreal_mako', colors, N=256)
+    cmap = LinearSegmentedColormap.from_list('boreal_mako', all_colors, N=256)
     return cmap
 
 
