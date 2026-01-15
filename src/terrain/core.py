@@ -2602,11 +2602,11 @@ class Terrain:
                 # Single-pixel water or uniform - use uniform color
                 normalized_distances = water_distances
 
-            # Define gradient colors from boreal_mako gradient (more blue, less green)
-            # Edge (shallow water near shore): Position ~0.42 on gradient
-            edge_color = np.array([30, 88, 115], dtype=np.float32)  # Cyan-blue
-            # Center (deep water): Position ~0.18 on gradient
-            center_color = np.array([18, 58, 60], dtype=np.float32)  # Very dark blue-teal
+            # Define gradient colors: blue to very dark blue (Great Lakes depth)
+            # Edge (shallow water near shore): Bright recognizable blue
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
+            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
+            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
 
             # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
@@ -2618,9 +2618,9 @@ class Terrain:
             water_x = self.x_valid[water_vertex_indices]
             water_depths = normalized_distances[water_y, water_x]
 
-            # Non-linear gradient: approach dark more rapidly from edges
-            # Use t^1.8 for rapid transition to deep color
-            t = np.power(water_depths, 1.8)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # Exponential falloff: darkens rapidly from edges to center
+            # Use t^2.5 for strong exponential darkening
+            t = np.power(water_depths, 2.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2809,11 +2809,11 @@ class Terrain:
                 # Single-pixel water or uniform - use uniform color
                 normalized_distances = water_distances
 
-            # Define gradient colors from boreal_mako gradient (more blue, less green)
-            # Edge (shallow water near shore): Position ~0.42 on gradient
-            edge_color = np.array([30, 88, 115], dtype=np.float32)  # Cyan-blue
-            # Center (deep water): Position ~0.18 on gradient
-            center_color = np.array([18, 58, 60], dtype=np.float32)  # Very dark blue-teal
+            # Define gradient colors: blue to very dark blue (Great Lakes depth)
+            # Edge (shallow water near shore): Bright recognizable blue
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
+            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
+            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
 
             # Map water mask from grid space to vertex space (vectorized)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
@@ -2824,9 +2824,9 @@ class Terrain:
             water_x = self.x_valid[water_vertex_indices]
             water_depths = normalized_distances[water_y, water_x]
 
-            # Non-linear gradient: approach dark more rapidly from edges
-            # Use t^1.8 for rapid transition to deep color
-            t = np.power(water_depths, 1.8)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # Exponential falloff: darkens rapidly from edges to center
+            # Use t^2.5 for strong exponential darkening
+            t = np.power(water_depths, 2.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2966,11 +2966,11 @@ class Terrain:
                 # Single-pixel water or uniform - use uniform color
                 normalized_distances = water_distances
 
-            # Define gradient colors from boreal_mako gradient (more blue, less green)
-            # Edge (shallow water near shore): Position ~0.42 on gradient
-            edge_color = np.array([30, 88, 115], dtype=np.float32)  # Cyan-blue
-            # Center (deep water): Position ~0.18 on gradient
-            center_color = np.array([18, 58, 60], dtype=np.float32)  # Very dark blue-teal
+            # Define gradient colors: blue to very dark blue (Great Lakes depth)
+            # Edge (shallow water near shore): Bright recognizable blue
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
+            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
+            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
 
             # If colors exist, overwrite water pixels with gradient
             if hasattr(self, "colors") and self.colors is not None:
@@ -2982,9 +2982,9 @@ class Terrain:
                 water_indices = np.where(water_mask)
                 water_depths = normalized_distances[water_indices]
 
-                # Non-linear gradient: approach dark more rapidly from edges
-                # Use t^1.8 for rapid transition to deep color
-                t = np.power(water_depths, 1.8)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+                # Exponential falloff: darkens rapidly from edges to center
+                # Use t^2.5 for strong exponential darkening
+                t = np.power(water_depths, 2.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
                 water_colors = edge_color * (1 - t) + center_color * t
 
                 # Apply gradient colors to water pixels
