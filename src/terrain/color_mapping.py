@@ -84,7 +84,7 @@ def _build_boreal_mako_cmap(purple_position=0.6):
     ]
 
     # Purple ribbon (narrow band around specified position)
-    purple_width = 0.04  # Width of purple band (±0.04 = 8% total width)
+    purple_width = 0.013  # Width of purple band (±0.013 = 2.6% total width)
     pre_purple = purple_position - purple_width
     post_purple = purple_position + purple_width
 
