@@ -94,9 +94,26 @@ def _build_boreal_mako_cmap(purple_position=0.6):
                       0.40 + (purple_position - 0.5) * 0.4,
                       0.60 + (purple_position - 0.5) * 0.2)
 
+    # Calculate purple color with perceived luminance matching position in gradient
+    # Base purple ratios (maintaining purple hue: R > G, R > B)
+    # Reference purple at position 0.6: (0.35, 0.15, 0.28)
+    base_purple_ratios = (0.35, 0.15, 0.28)
+    base_brightness = sum(base_purple_ratios) / 3  # 0.26
+
+    # Target brightness based on blue_at_purple (what luminance should be at this position)
+    target_brightness = sum(blue_at_purple) / 3
+
+    # Scale purple to match target brightness while maintaining hue
+    brightness_scale = target_brightness / base_brightness
+    purple_scaled = tuple(c * brightness_scale for c in base_purple_ratios)
+
+    # Make purple slightly darker than surrounding blue for contrast
+    darkness_factor = 0.85  # 15% darker than the blue at this position
+    purple_color = tuple(c * darkness_factor for c in purple_scaled)
+
     purple_colors = [
         (pre_purple, blue_at_purple),  # Pre-purple blue
-        (purple_position, (0.35, 0.15, 0.28)),  # Darkened purple ribbon (darker center)
+        (purple_position, purple_color),  # Purple ribbon with position-adjusted luminance
         (post_purple, blue_at_purple),  # Post-purple blue
     ]
 
