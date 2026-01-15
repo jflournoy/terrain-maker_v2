@@ -96,7 +96,7 @@ def _build_boreal_mako_cmap(purple_position=0.6):
 
     purple_colors = [
         (pre_purple, blue_at_purple),  # Pre-purple blue
-        (purple_position, (0.45, 0.20, 0.35)),  # Darkened purple ribbon (more red, less blue)
+        (purple_position, (0.35, 0.15, 0.28)),  # Darkened purple ribbon (darker center)
         (post_purple, blue_at_purple),  # Post-purple blue
     ]
 
