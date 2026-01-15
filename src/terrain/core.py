@@ -2996,9 +2996,9 @@ class Terrain:
                 water_indices = np.where(water_mask)
                 water_depths = normalized_distances[water_indices]
 
-                # Exponential falloff: darkens rapidly from edges to center
-                # Use t^2.5 for strong exponential darkening
-                t = np.power(water_depths, 10)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+                # Water depth gradient: light blue at shore → dark blue at center
+                # t^1.5 creates the desired effect: quick initial darkening, then gentle descent
+                t = np.power(water_depths, 1.5)[:, np.newaxis]  # Shape (N, 1) for broadcasting
                 water_colors = edge_color * (1 - t) + center_color * t
 
                 # Apply gradient colors to water pixels
