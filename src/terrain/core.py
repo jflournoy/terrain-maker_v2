@@ -2588,15 +2588,44 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            water_color = np.array([24, 72, 75], dtype=np.uint8)  # Deep boreal water (from boreal_mako at 0.30) (#18484B)
+            # Create depth gradient for water bodies (lighter at edges, darker at center)
+            # Compute distance transform to measure distance from water edges (shores)
+            from scipy.ndimage import distance_transform_edt
+
+            water_distances = distance_transform_edt(water_mask)
+
+            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
+            max_dist = water_distances.max()
+            if max_dist > 0:
+                normalized_distances = water_distances / max_dist
+            else:
+                # Single-pixel water or uniform - use uniform color
+                normalized_distances = water_distances
+
+            # Define gradient colors from boreal_mako gradient
+            # Edge (shallow water near shore): Position ~0.38 on gradient
+            edge_color = np.array([27, 80, 94], dtype=np.float32)  # Lighter blue-green
+            # Center (deep water): Position ~0.25 on gradient
+            center_color = np.array([22, 68, 70], dtype=np.float32)  # Darker blue
 
             # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            # Apply to surface vertices only (colors may include boundary vertices)
+            water_vertex_indices = np.where(water_at_vertices)[0]
+
+            # Get normalized distances for all water vertices
+            water_y = self.y_valid[water_vertex_indices]
+            water_x = self.x_valid[water_vertex_indices]
+            water_depths = normalized_distances[water_y, water_x]
+
+            # Vectorized gradient interpolation: edge → center (shallow → deep)
+            t = water_depths[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            water_colors = edge_color * (1 - t) + center_color * t
+
+            # Apply gradient colors to water vertices
             surface_colors = colors[:num_surface_vertices]
-            surface_colors[water_at_vertices, :3] = water_color
-            water_vertex_count = np.sum(water_at_vertices)
+            surface_colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
+            water_vertex_count = len(water_vertex_indices)
 
             self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
 
@@ -2765,12 +2794,42 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            water_color = np.array([24, 72, 75], dtype=np.uint8)  # Deep boreal water (from boreal_mako at 0.30) (#18484B)
+            # Create depth gradient for water bodies (lighter at edges, darker at center)
+            # Compute distance transform to measure distance from water edges (shores)
+            from scipy.ndimage import distance_transform_edt
+
+            water_distances = distance_transform_edt(water_mask)
+
+            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
+            max_dist = water_distances.max()
+            if max_dist > 0:
+                normalized_distances = water_distances / max_dist
+            else:
+                # Single-pixel water or uniform - use uniform color
+                normalized_distances = water_distances
+
+            # Define gradient colors from boreal_mako gradient
+            # Edge (shallow water near shore): Position ~0.38 on gradient
+            edge_color = np.array([27, 80, 94], dtype=np.float32)  # Lighter blue-green
+            # Center (deep water): Position ~0.25 on gradient
+            center_color = np.array([22, 68, 70], dtype=np.float32)  # Darker blue
 
             # Map water mask from grid space to vertex space (vectorized)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            vertex_colors[water_at_vertices, :3] = water_color
-            water_vertex_count = np.sum(water_at_vertices)
+            water_vertex_indices = np.where(water_at_vertices)[0]
+
+            # Get normalized distances for all water vertices
+            water_y = self.y_valid[water_vertex_indices]
+            water_x = self.x_valid[water_vertex_indices]
+            water_depths = normalized_distances[water_y, water_x]
+
+            # Vectorized gradient interpolation: edge → center (shallow → deep)
+            t = water_depths[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            water_colors = edge_color * (1 - t) + center_color * t
+
+            # Apply gradient colors to water vertices
+            vertex_colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
+            water_vertex_count = len(water_vertex_indices)
 
             self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
 
@@ -2891,18 +2950,42 @@ class Terrain:
                     f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
                 )
 
-            # Apply water mask to colors: color water with deep boreal water, keep elevation colors for land
-            # Water color: Deep boreal water (from boreal_mako at 0.30) #18484B = RGB (24, 72, 75)
-            water_color = np.array([24, 72, 75], dtype=np.uint8)  # Deep boreal water (from boreal_mako at 0.30) (#18484B)
+            # Apply water mask to colors: create depth gradient (lighter at edges, darker at center)
+            # Compute distance transform to measure distance from water edges (shores)
+            from scipy.ndimage import distance_transform_edt
 
-            # If colors exist, overwrite water pixels with water color
+            water_distances = distance_transform_edt(water_mask)
+
+            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
+            max_dist = water_distances.max()
+            if max_dist > 0:
+                normalized_distances = water_distances / max_dist
+            else:
+                # Single-pixel water or uniform - use uniform color
+                normalized_distances = water_distances
+
+            # Define gradient colors from boreal_mako gradient
+            # Edge (shallow water near shore): Position ~0.38 on gradient
+            edge_color = np.array([27, 80, 94], dtype=np.float32)  # Lighter blue-green
+            # Center (deep water): Position ~0.25 on gradient
+            center_color = np.array([22, 68, 70], dtype=np.float32)  # Darker blue
+
+            # If colors exist, overwrite water pixels with gradient
             if hasattr(self, "colors") and self.colors is not None:
                 # Extract RGB channels (keep alpha if present)
                 has_alpha = self.colors.shape[-1] >= 4
                 rgb_data = self.colors[..., :3]
 
-                # Color water pixels blue
-                rgb_data[water_mask] = water_color
+                # Apply depth gradient to water pixels
+                water_indices = np.where(water_mask)
+                water_depths = normalized_distances[water_indices]
+
+                # Vectorized gradient interpolation: edge → center (shallow → deep)
+                t = water_depths[:, np.newaxis]  # Shape (N, 1) for broadcasting
+                water_colors = edge_color * (1 - t) + center_color * t
+
+                # Apply gradient colors to water pixels
+                rgb_data[water_indices] = water_colors.astype(np.uint8)
 
                 # Reconstruct with alpha channel if needed
                 if has_alpha:
@@ -2910,7 +2993,7 @@ class Terrain:
                 else:
                     self.colors = rgb_data
 
-                self.logger.info(f"Water colored blue ({np.sum(water_mask)} water pixels)")
+                self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
             else:
                 # No colors yet, create them with water coloring
                 height, width = dem_data.shape
