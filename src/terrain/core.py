@@ -2588,7 +2588,7 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
+            water_color = np.array([28, 83, 108], dtype=np.uint8)  # Boreal water (from boreal_mako at 0.45) (#1C536C)
 
             # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
@@ -2765,7 +2765,7 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
+            water_color = np.array([28, 83, 108], dtype=np.uint8)  # Boreal water (from boreal_mako at 0.45) (#1C536C)
 
             # Map water mask from grid space to vertex space (vectorized)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
@@ -2891,11 +2891,11 @@ class Terrain:
                     f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
                 )
 
-            # Apply water mask to colors: color water with Michigan blue, keep elevation colors for land
-            # Water color: University of Michigan blue #00274C = RGB (0, 39, 76)
-            water_color = np.array([0, 39, 76], dtype=np.uint8)  # University of Michigan blue (#00274C)
+            # Apply water mask to colors: color water with boreal water, keep elevation colors for land
+            # Water color: Boreal water (from boreal_mako at 0.45) #1C536C = RGB (28, 83, 108)
+            water_color = np.array([28, 83, 108], dtype=np.uint8)  # Boreal water (from boreal_mako at 0.45) (#1C536C)
 
-            # If colors exist, overwrite water pixels with blue
+            # If colors exist, overwrite water pixels with water color
             if hasattr(self, "colors") and self.colors is not None:
                 # Extract RGB channels (keep alpha if present)
                 has_alpha = self.colors.shape[-1] >= 4
