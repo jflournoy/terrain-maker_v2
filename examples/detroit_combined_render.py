@@ -1071,6 +1071,7 @@ Examples:
 
     color_params = {
         "colormap": "boreal_mako",
+        "purple_position": args.purple_position,
         "gamma": args.gamma,
         "smooth_scores": args.smooth_scores,
         "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
