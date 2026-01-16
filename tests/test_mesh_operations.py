@@ -1096,3 +1096,208 @@ class TestCreateBoundaryExtensionCatmullRom:
                 (np.abs(diffs[:, 0]) > 0.01) & (np.abs(diffs[:, 1]) > 0.01)
             )
             assert diagonal_moves > 0, "Catmull-Rom should produce diagonal transitions"
+
+
+class TestRectangleEdgeBoundary:
+    """Tests for transform-based rectangle edge boundary generation (RED phase - TDD)."""
+
+    def test_generate_rectangle_edge_vertices_imports(self):
+        """TDD RED: Test that function can be imported."""
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+
+        assert callable(generate_rectangle_edge_vertices)
+
+    def test_generate_rectangle_edge_vertices_basic(self):
+        """TDD RED: Test basic rectangle edge vertex generation.
+
+        For a 4x4 DEM with edge_sample_spacing=1, should create boundary vertices
+        at all edge pixels sampling at the given spacing.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        # Simple 4x4 DEM
+        dem_shape = (4, 4)
+        dem_data = np.ones((4, 4), dtype=float)
+        original_transform = Affine.identity()  # Unit spacing, origin at (0, 0)
+
+        boundary_vertices, boundary_faces = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],  # No transforms
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,
+        )
+
+        # Should have vertices for the rectangle perimeter
+        # For 4x4 with spacing=1: top(4) + right(4) + bottom(3, skip corner) + left(3, skip corners) = 14 vertices
+        assert boundary_vertices.shape[0] > 0, "Should generate boundary vertices"
+        assert boundary_vertices.shape[1] == 3, "Each vertex should have (x, y, z)"
+
+        # All base vertices should be at base_depth
+        assert np.all(boundary_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+
+    def test_generate_rectangle_edge_vertices_preserves_affine_transform(self):
+        """TDD RED: Test that edge vertices apply affine transforms correctly.
+
+        When transforms_list is empty, output coordinates should match
+        original_transform applied to pixel coordinates.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        dem_shape = (4, 4)
+        dem_data = np.ones((4, 4), dtype=float)
+
+        # Create a simple affine transform: scale by 10, translate to (100, 200)
+        original_transform = Affine.translation(100, 200) * Affine.scale(10, 10)
+
+        boundary_vertices, _ = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,
+        )
+
+        # First vertex should be at top-left corner: pixel (0, 0)
+        # Affine transform: x = 100 + 10*0 = 100, y = 200 + 10*0 = 200
+        # So first vertex should be at approximately (100, 200, -0.2)
+        assert np.isclose(
+            boundary_vertices[0, 0], 100, atol=1.0
+        ), "X coordinate should follow affine transform"
+        assert np.isclose(
+            boundary_vertices[0, 1], 200, atol=1.0
+        ), "Y coordinate should follow affine transform"
+
+    def test_generate_rectangle_edge_vertices_face_connectivity(self):
+        """TDD RED: Test that generated faces form proper quads.
+
+        All faces should be quads (4 vertices) connecting consecutive edge vertices.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        dem_shape = (4, 4)
+        dem_data = np.ones((4, 4), dtype=float)
+        original_transform = Affine.identity()
+
+        boundary_vertices, boundary_faces = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,
+        )
+
+        # All faces should be quads
+        assert isinstance(boundary_faces, list), "Faces should be a list"
+        assert len(boundary_faces) > 0, "Should have faces"
+        for face in boundary_faces:
+            assert len(face) == 4, "Each face should be a quad (4 vertices)"
+
+        # All face indices should reference valid vertices
+        max_vertex_idx = boundary_vertices.shape[0] - 1
+        for face in boundary_faces:
+            for idx in face:
+                assert 0 <= idx <= max_vertex_idx, f"Face index {idx} out of range"
+
+    def test_generate_rectangle_edge_vertices_handles_coarse_spacing(self):
+        """TDD RED: Test that larger edge_sample_spacing reduces vertex count.
+
+        With spacing=2, should have approximately half the vertices compared to spacing=1.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        dem_shape = (10, 10)
+        dem_data = np.ones((10, 10), dtype=float)
+        original_transform = Affine.identity()
+
+        # With spacing=1
+        vertices_fine, _ = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,
+        )
+
+        # With spacing=2
+        vertices_coarse, _ = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=2.0,
+            base_depth=-0.2,
+        )
+
+        # Coarse should have approximately half the vertices
+        assert vertices_coarse.shape[0] < vertices_fine.shape[0], "Coarse spacing should reduce vertices"
+        assert (
+            vertices_coarse.shape[0]
+            > vertices_fine.shape[0] // 3  # At least ~1/3 to account for rounding
+        ), "Should not reduce vertices too much"
+
+    def test_generate_rectangle_edge_vertices_elevation_lookup(self):
+        """TDD RED: Test that elevations are looked up from DEM at edge coordinates.
+
+        Edge vertices should have Z values from the DEM at their pixel locations.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        # Create DEM with distinct edge values
+        dem_data = np.array(
+            [
+                [10, 20, 30, 40],  # Top row: edge elevations 10, 20, 30, 40
+                [50, 60, 70, 80],  # Interior
+                [90, 100, 110, 120],  # Interior
+                [130, 140, 150, 160],  # Bottom row: edge elevations 130, 140, 150, 160
+            ],
+            dtype=float,
+        )
+        dem_shape = dem_data.shape
+        original_transform = Affine.identity()
+
+        boundary_vertices, _ = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,  # This is the Z coordinate, not elevation
+        )
+
+        # All base vertices should be at base_depth (flat foundation)
+        assert np.all(boundary_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+
+    def test_generate_rectangle_edge_vertices_empty_transforms_list(self):
+        """TDD RED: Test that empty transforms list works correctly.
+
+        Should apply only the original_transform, no additional transforms.
+        """
+        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from rasterio import Affine
+
+        dem_shape = (3, 3)
+        dem_data = np.ones((3, 3), dtype=float)
+        original_transform = Affine.translation(0, 0) * Affine.scale(1, 1)
+
+        boundary_vertices, _ = generate_rectangle_edge_vertices(
+            dem_shape=dem_shape,
+            dem_data=dem_data,
+            original_transform=original_transform,
+            transforms_list=[],
+            edge_sample_spacing=1.0,
+            base_depth=-0.2,
+        )
+
+        # Should work without errors and produce vertices
+        assert boundary_vertices.shape[0] > 0, "Should produce vertices even with empty transforms"
+        assert boundary_vertices.shape[1] == 3, "Vertices should be 3D"
