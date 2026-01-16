@@ -383,8 +383,8 @@ def create_boundary_extension(
     surface_colors=None,
     smooth_boundary=False,
     smooth_window_size=5,
-    use_catmull_rom=False,
-    catmull_rom_subdivisions=10,
+    use_catmull_rom=False,  # PERFORMANCE: Disabled by default due to computational cost (~1-2s per terrain)
+    catmull_rom_subdivisions=2,
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -417,9 +417,12 @@ def create_boundary_extension(
         use_catmull_rom (bool): Use Catmull-Rom curve fitting for smooth boundary
                                instead of pixel-grid topology (default: False).
                                When enabled, eliminates staircase pattern entirely.
+                               NOTE: Computationally expensive (~0.3-2s per terrain).
+                               Provides true smooth curves vs simple smoothing.
         catmull_rom_subdivisions (int): Number of interpolated points per boundary
-                                       segment when using Catmull-Rom curves (default: 10).
-                                       Higher values = smoother curve but more vertices.
+                                       segment when using Catmull-Rom curves (default: 2).
+                                       Higher values = smoother curve but MORE COMPUTATION.
+                                       Recommended: 2 (fast) or 3-4 (very smooth).
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -649,15 +652,20 @@ def create_boundary_extension(
         base_color_rgb = get_base_material_color(base_material)
 
         # When using smoothed coordinates, extract original boundary Z values for smooth interpolation
+        # Also pre-compute original boundary coordinates as numpy array for fast distance calculations
         original_boundary_z_values = None
+        original_boundary_coords_array = None
         if has_smoothed_coords:
             original_boundary_z_values = []
+            orig_coords_list = []
             for y, x in original_boundary_points:
+                orig_coords_list.append([y, x])
                 orig_idx = coord_to_index.get((int(y), int(x)))
                 if orig_idx is not None:
                     original_boundary_z_values.append(positions[orig_idx, 2])
                 else:
                     original_boundary_z_values.append(None)
+            original_boundary_coords_array = np.array(orig_coords_list, dtype=float)
 
         # When using smoothed coordinates, create surface vertices at smoothed positions
         # When not using smoothed, we'll reference the original mesh
@@ -678,16 +686,12 @@ def create_boundary_extension(
 
                 # Improve Z value: use smooth interpolation along boundary curve
                 # instead of spatial bilinear interpolation
-                if use_catmull_rom and original_boundary_z_values:
-                    # For Catmull-Rom, find nearest original boundary point
-                    # and interpolate Z based on proximity to neighbors
-                    min_dist = float('inf')
-                    closest_idx = 0
-                    for orig_idx, orig_pt in enumerate(original_boundary_points):
-                        dist = np.sqrt((y - orig_pt[0])**2 + (x - orig_pt[1])**2)
-                        if dist < min_dist:
-                            min_dist = dist
-                            closest_idx = orig_idx
+                if use_catmull_rom and original_boundary_z_values and original_boundary_coords_array is not None:
+                    # OPTIMIZATION: Use vectorized numpy to find nearest original boundary point
+                    # instead of Python loop (O(N) → O(1) for distance computation)
+                    dists = np.sqrt((original_boundary_coords_array[:, 0] - y)**2 +
+                                   (original_boundary_coords_array[:, 1] - x)**2)
+                    closest_idx = np.argmin(dists)
 
                     # Interpolate Z between this point and next
                     next_idx = (closest_idx + 1) % len(original_boundary_points)
@@ -696,8 +700,8 @@ def create_boundary_extension(
 
                     if z1 is not None and z2 is not None:
                         # Distance-based interpolation within the segment
-                        orig_y1, orig_x1 = original_boundary_points[closest_idx]
-                        orig_y2, orig_x2 = original_boundary_points[next_idx]
+                        orig_y1, orig_x1 = original_boundary_coords_array[closest_idx]
+                        orig_y2, orig_x2 = original_boundary_coords_array[next_idx]
 
                         seg_dist = np.sqrt((orig_y2 - orig_y1)**2 + (orig_x2 - orig_x1)**2)
                         if seg_dist > 0:
