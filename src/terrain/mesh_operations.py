@@ -626,17 +626,25 @@ def create_boundary_extension(
         base_vertices = np.zeros((n_boundary, 3), dtype=float)
 
         for i, (y, x) in enumerate(boundary_points):
-            original_idx = coord_to_index.get((y, x))
-            if original_idx is None:
-                continue
+            # For smoothed coordinates (Catmull-Rom or smooth_boundary), use interpolation
+            if has_smoothed_coords:
+                pos = get_position_at_coords(y, x)
+                if pos is None:
+                    continue
+            else:
+                # For integer coordinates, direct lookup
+                original_idx = coord_to_index.get((y, x))
+                if original_idx is None:
+                    continue
+                pos = positions[original_idx].copy()
 
-            # Mid vertex: copy XY, set Z to mid_depth
-            pos_mid = positions[original_idx].copy()
+            # Mid vertex: copy interpolated position, set Z to mid_depth
+            pos_mid = pos.copy()
             pos_mid[2] = mid_depth
             mid_vertices[i] = pos_mid
 
-            # Base vertex: copy XY, set Z to base_depth
-            pos_base = positions[original_idx].copy()
+            # Base vertex: copy interpolated position, set Z to base_depth
+            pos_base = pos.copy()
             pos_base[2] = base_depth
             base_vertices[i] = pos_base
 
@@ -644,55 +652,96 @@ def create_boundary_extension(
         boundary_vertices = np.vstack([mid_vertices, base_vertices])
 
         # Create faces (surface→mid, mid→base)
-        boundary_indices = [coord_to_index.get((y, x)) for y, x in boundary_points]
         n_existing = len(positions)
         mid_indices = list(range(n_existing, n_existing + n_boundary))
         base_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
 
         boundary_faces = []
-        for i in range(n_boundary):
-            if boundary_indices[i] is None:
-                continue
 
-            next_i = (i + 1) % n_boundary
-            if boundary_indices[next_i] is None:
-                continue
-
-            # Upper tier: surface → mid
-            boundary_faces.append(
-                (
-                    boundary_indices[i],
-                    boundary_indices[next_i],
-                    mid_indices[next_i],
-                    mid_indices[i],
+        # When using smoothed coordinates, we don't have direct surface vertex indices,
+        # so we just connect mid→base tiers (no upper tier to original surface)
+        if has_smoothed_coords:
+            # Just create faces between mid and base vertices (connect the two tiers)
+            for i in range(n_boundary):
+                next_i = (i + 1) % n_boundary
+                # Face from mid to base
+                boundary_faces.append(
+                    (
+                        mid_indices[i],
+                        mid_indices[next_i],
+                        base_indices[next_i],
+                        base_indices[i],
+                    )
                 )
-            )
+        else:
+            # Original behavior: connect surface → mid → base
+            boundary_indices = [coord_to_index.get((int(y), int(x))) for y, x in boundary_points]
 
-            # Lower tier: mid → base
-            boundary_faces.append(
-                (
-                    mid_indices[i],
-                    mid_indices[next_i],
-                    base_indices[next_i],
-                    base_indices[i],
+            for i in range(n_boundary):
+                if boundary_indices[i] is None:
+                    continue
+
+                next_i = (i + 1) % n_boundary
+                if boundary_indices[next_i] is None:
+                    continue
+
+                # Upper tier: surface → mid
+                boundary_faces.append(
+                    (
+                        boundary_indices[i],
+                        boundary_indices[next_i],
+                        mid_indices[next_i],
+                        mid_indices[i],
+                    )
                 )
-            )
+
+                # Lower tier: mid → base
+                boundary_faces.append(
+                    (
+                        mid_indices[i],
+                        mid_indices[next_i],
+                        base_indices[next_i],
+                        base_indices[i],
+                    )
+                )
 
         # Create colors
         boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
         base_color_uint8 = (np.array(base_color_rgb) * 255).astype(np.uint8)
 
         for i, (y, x) in enumerate(boundary_points):
-            original_idx = coord_to_index.get((y, x))
-            if original_idx is None:
-                continue
-
-            # Mid vertex color
+            # Get surface color by interpolating from nearby vertices
+            mid_color = None
             if blend_edge_colors and surface_colors is not None:
-                # Copy surface color
-                mid_color = surface_colors[original_idx, :3]
-            else:
-                # Use base material color
+                if has_smoothed_coords:
+                    # For smoothed coordinates, interpolate color from corners
+                    y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
+                    color_corners = {}
+                    for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
+                        yy, xx = y_floor + dy, x_floor + dx
+                        idx = coord_to_index.get((yy, xx))
+                        if idx is not None:
+                            color_corners[(dy, dx)] = surface_colors[idx, :3]
+
+                    if len(color_corners) == 4:
+                        # Bilinear interpolation of color
+                        fy = y - y_floor
+                        fx = x - x_floor
+                        c00 = color_corners[(0, 0)].astype(float)
+                        c01 = color_corners[(0, 1)].astype(float)
+                        c10 = color_corners[(1, 0)].astype(float)
+                        c11 = color_corners[(1, 1)].astype(float)
+                        c0 = c00 * (1 - fx) + c01 * fx
+                        c1 = c10 * (1 - fx) + c11 * fx
+                        mid_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
+                else:
+                    # For integer coordinates, direct lookup
+                    original_idx = coord_to_index.get((int(y), int(x)))
+                    if original_idx is not None:
+                        mid_color = surface_colors[original_idx, :3]
+
+            if mid_color is None:
+                # Use base material color as fallback
                 mid_color = base_color_uint8
 
             # Assign colors
