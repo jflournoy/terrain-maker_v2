@@ -341,7 +341,34 @@ def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop
             ]) for pt in smooth_curve
         ]
 
-    return smooth_curve
+    # Remove duplicate/very-close points (can occur from curve wrapping or coincidental interpolation)
+    # These create degenerate zero-area faces that cause rendering artifacts
+    # Keep track of unique points by checking distance to all previous points
+    filtered_curve = []
+    for pt in smooth_curve:
+        # Check if this point is too close to any previous point
+        is_duplicate = False
+        for prev_pt in filtered_curve:
+            if np.allclose(pt, prev_pt, atol=1e-6):
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            filtered_curve.append(pt)
+
+    # If we removed points and this is a closed loop, make sure we don't have the first point appearing in the middle
+    # Re-filter to ensure no point appears more than once
+    if len(filtered_curve) > 2:
+        final_curve = [filtered_curve[0]]
+        for i in range(1, len(filtered_curve)):
+            # Check against all previous points, not just the last one
+            is_dup = any(np.allclose(filtered_curve[i], prev_pt, atol=1e-6) for prev_pt in final_curve)
+            if not is_dup:
+                final_curve.append(filtered_curve[i])
+
+        return final_curve
+
+    return filtered_curve
 
 
 def create_boundary_extension(
