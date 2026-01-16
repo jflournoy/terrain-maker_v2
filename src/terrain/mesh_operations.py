@@ -638,12 +638,15 @@ def create_boundary_extension(
                     continue
                 pos = positions[original_idx].copy()
 
-            # Mid vertex: copy interpolated position, set Z to mid_depth
+            # Mid vertex: extend downward from surface by mid_depth offset
+            # (mid_depth is shallower, typically -0.2 or so)
             pos_mid = pos.copy()
-            pos_mid[2] = mid_depth
+            pos_mid[2] = pos[2] + mid_depth
             mid_vertices[i] = pos_mid
 
-            # Base vertex: copy interpolated position, set Z to base_depth
+            # Base vertex: flat at absolute base_depth Z coordinate
+            # (base_depth is absolute Z value, typically -0.2 to -0.8)
+            # All base vertices stay at same Z regardless of surface elevation
             pos_base = pos.copy()
             pos_base[2] = base_depth
             base_vertices[i] = pos_base

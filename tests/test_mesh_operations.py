@@ -444,12 +444,12 @@ class TestTwoTierBoundaryExtension:
         for i, v in enumerate(boundary_vertices[:4]):
             assert np.isclose(v[2], expected_mid_z[i]), f"Mid vertex {i} Z mismatch"
 
-        # Base tier vertices (last 4): each at its position's Z + base_depth
-        # positions Z values are [1, 2, 4, 3], base_depth = -0.4
-        # Expected: [0.6, 1.6, 3.6, 2.6]
-        expected_base_z = [0.6, 1.6, 3.6, 2.6]
+        # Base tier vertices (last 4): all at FLAT base_depth (absolute Z)
+        # base_depth = -0.4, so all base vertices should be at -0.4
+        # (This creates a flat foundation regardless of surface elevation)
+        expected_base_z = -0.4
         for i, v in enumerate(boundary_vertices[4:]):
-            assert np.isclose(v[2], expected_base_z[i]), f"Base vertex {i} Z mismatch"
+            assert np.isclose(v[2], expected_base_z), f"Base vertex {i} Z mismatch: got {v[2]}, expected {expected_base_z}"
 
     def test_two_tier_mid_depth_auto_calculation(self):
         """Test that mid_depth auto-calculates as 25% of base_depth."""
@@ -470,10 +470,10 @@ class TestTwoTierBoundaryExtension:
         )
 
         # Mid depth auto-calculated as base_depth * 0.25 = -0.8 * 0.25 = -0.2
-        # Mid vertex: surface + mid_depth = 5 + (-0.2) = 4.8
-        # Base vertex: surface + base_depth = 5 + (-0.8) = 4.2
+        # Mid vertex: surface + mid_depth = 5 + (-0.2) = 4.8 (follows elevation)
+        # Base vertex: base_depth = -0.8 (flat absolute Z)
         assert np.isclose(boundary_vertices[0, 2], 4.8), "Mid vertex should be at surface + mid_depth"
-        assert np.isclose(boundary_vertices[1, 2], 4.2), "Base vertex should be at surface + base_depth"
+        assert np.isclose(boundary_vertices[1, 2], -0.8), "Base vertex should be at flat base_depth"
 
     def test_two_tier_face_generation(self):
         """Test that two-tier mode creates upper and lower tier faces."""
