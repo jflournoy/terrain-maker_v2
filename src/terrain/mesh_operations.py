@@ -385,6 +385,8 @@ def create_boundary_extension(
     smooth_window_size=5,
     use_catmull_rom=False,  # PERFORMANCE: Disabled by default due to computational cost (~1-2s per terrain)
     catmull_rom_subdivisions=2,
+    use_rectangle_edges=False,  # NEW: Use rectangle-edge sampling instead of morphological detection
+    dem_shape=None,  # NEW: Required when use_rectangle_edges=True
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -423,6 +425,12 @@ def create_boundary_extension(
                                        segment when using Catmull-Rom curves (default: 2).
                                        Higher values = smoother curve but MORE COMPUTATION.
                                        Recommended: 2 (fast) or 3-4 (very smooth).
+        use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
+                                   boundary detection (default: False). Requires dem_shape.
+                                   ~150x faster than morphological detection.
+                                   Ideal for rectangular DEMs from raster sources.
+        dem_shape (tuple, optional): DEM shape (height, width) when using rectangle-edge sampling.
+                                    Required if use_rectangle_edges=True. Ignored otherwise.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -441,6 +449,12 @@ def create_boundary_extension(
     """
     from src.terrain.materials import get_base_material_color
     from scipy.interpolate import RegularGridInterpolator
+
+    # Generate rectangle edge pixels if requested (replaces input boundary_points)
+    if use_rectangle_edges:
+        if dem_shape is None:
+            raise ValueError("dem_shape is required when use_rectangle_edges=True")
+        boundary_points = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points

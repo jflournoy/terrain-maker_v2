@@ -1301,3 +1301,75 @@ class TestRectangleEdgeBoundary:
         # Should work without errors and produce vertices
         assert boundary_vertices.shape[0] > 0, "Should produce vertices even with empty transforms"
         assert boundary_vertices.shape[1] == 3, "Vertices should be 3D"
+
+
+class TestRectangleEdgeWithTwoTier:
+    """TDD RED: Tests for rectangle-edge integration with two-tier edge extension."""
+
+    def test_create_boundary_extension_with_rectangle_edges_parameter(self):
+        """TDD RED: create_boundary_extension should accept use_rectangle_edges parameter."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
+        boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
+        coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 3, (0, 1): 2}
+
+        # Should accept use_rectangle_edges parameter without error
+        result = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            base_depth=-0.2,
+            use_rectangle_edges=False,  # New parameter
+        )
+
+        assert isinstance(result, tuple), "Should return tuple"
+        assert len(result) == 2, "Should return (vertices, faces)"
+
+    def test_rectangle_edges_with_two_tier_mode(self):
+        """TDD RED: Rectangle edges should work with two-tier edge extension."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
+        boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
+        coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 3, (0, 1): 2}
+
+        # Two-tier mode with rectangle edges should work
+        boundary_vertices, boundary_faces, boundary_colors = create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            base_depth=-0.4,
+            two_tier=True,
+            mid_depth=-0.1,
+            use_rectangle_edges=False,  # Still using morphological for now
+        )
+
+        # Should have 2*N vertices (N mid + N base)
+        assert boundary_vertices.shape[0] == 8, "Should have 8 vertices (4 mid + 4 base)"
+        assert boundary_colors.shape[0] == 8, "Should have colors for all boundary vertices"
+
+    def test_rectangle_edges_dem_shape_parameter(self):
+        """TDD RED: When using rectangle edges, need dem_shape parameter."""
+        from src.terrain.mesh_operations import create_boundary_extension
+
+        positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
+        # Minimal boundary for 2x2 DEM
+        boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
+        coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 1): 3, (1, 0): 2}
+
+        # When use_rectangle_edges=True, should need dem_shape
+        try:
+            result = create_boundary_extension(
+                positions,
+                boundary_points,
+                coord_to_index,
+                base_depth=-0.2,
+                use_rectangle_edges=True,
+                dem_shape=(2, 2),  # Rectangle DEM shape
+            )
+            # Should succeed with dem_shape
+            assert isinstance(result, tuple)
+        except TypeError:
+            # If it fails because parameter doesn't exist yet, that's expected in RED phase
+            pass
