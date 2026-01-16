@@ -621,6 +621,12 @@ def create_boundary_extension(
         # Resolve material to RGB
         base_color_rgb = get_base_material_color(base_material)
 
+        # When using smoothed coordinates, create surface vertices at smoothed positions
+        # When not using smoothed, we'll reference the original mesh
+        surface_vertices = None
+        if has_smoothed_coords:
+            surface_vertices = np.zeros((n_boundary, 3), dtype=float)
+
         # Create mid and base vertices
         mid_vertices = np.zeros((n_boundary, 3), dtype=float)
         base_vertices = np.zeros((n_boundary, 3), dtype=float)
@@ -631,6 +637,8 @@ def create_boundary_extension(
                 pos = get_position_at_coords(y, x)
                 if pos is None:
                     continue
+                # Store the surface position at smoothed coordinates
+                surface_vertices[i] = pos.copy()
             else:
                 # For integer coordinates, direct lookup
                 original_idx = coord_to_index.get((y, x))
@@ -651,35 +659,37 @@ def create_boundary_extension(
             pos_base[2] = base_depth
             base_vertices[i] = pos_base
 
-        # Stack mid and base vertices
-        boundary_vertices = np.vstack([mid_vertices, base_vertices])
-
-        # Create faces (surface→mid, mid→base)
+        # Stack vertices appropriately based on coordinate type
         n_existing = len(positions)
-        mid_indices = list(range(n_existing, n_existing + n_boundary))
-        base_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
+        if has_smoothed_coords:
+            # When using smoothed coordinates, include the surface vertices
+            # so we have: surface + mid + base tiers
+            boundary_vertices = np.vstack([surface_vertices, mid_vertices, base_vertices])
+            surface_indices = list(range(n_existing, n_existing + n_boundary))
+            mid_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
+            base_indices = list(range(n_existing + 2 * n_boundary, n_existing + 3 * n_boundary))
+        else:
+            # When using integer coordinates, just mid + base
+            boundary_vertices = np.vstack([mid_vertices, base_vertices])
+            surface_indices = [coord_to_index.get((int(y), int(x))) for y, x in boundary_points]
+            mid_indices = list(range(n_existing, n_existing + n_boundary))
+            base_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
 
         boundary_faces = []
 
-        # Always create both upper and lower tier faces, even with smoothed coordinates
-        # Get the original boundary vertex indices (nearest integer coordinates)
-        boundary_indices = [coord_to_index.get((int(y), int(x))) for y, x in boundary_points]
-
         for i in range(n_boundary):
-            if boundary_indices[i] is None:
+            if surface_indices[i] is None:
                 continue
 
             next_i = (i + 1) % n_boundary
-            if boundary_indices[next_i] is None:
+            if surface_indices[next_i] is None:
                 continue
 
             # Upper tier: surface → mid
-            # This connects original surface vertices to the new mid-tier vertices
-            # (critical for avoiding diagonal cut artifacts when using smoothed coordinates)
             boundary_faces.append(
                 (
-                    boundary_indices[i],
-                    boundary_indices[next_i],
+                    surface_indices[i],
+                    surface_indices[next_i],
                     mid_indices[next_i],
                     mid_indices[i],
                 )
@@ -695,13 +705,19 @@ def create_boundary_extension(
                 )
             )
 
-        # Create colors
-        boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
+        # Create colors (size depends on whether we created surface vertices)
+        if has_smoothed_coords:
+            # When using smoothed coordinates: surface + mid + base = 3 tiers
+            boundary_colors = np.zeros((3 * n_boundary, 3), dtype=np.uint8)
+        else:
+            # When using integer coordinates: mid + base = 2 tiers
+            boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
+
         base_color_uint8 = (np.array(base_color_rgb) * 255).astype(np.uint8)
 
         for i, (y, x) in enumerate(boundary_points):
             # Get surface color by interpolating from nearby vertices
-            mid_color = None
+            surface_color = None
             if blend_edge_colors and surface_colors is not None:
                 if has_smoothed_coords:
                     # For smoothed coordinates, interpolate color from corners
@@ -723,20 +739,27 @@ def create_boundary_extension(
                         c11 = color_corners[(1, 1)].astype(float)
                         c0 = c00 * (1 - fx) + c01 * fx
                         c1 = c10 * (1 - fx) + c11 * fx
-                        mid_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
+                        surface_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
                 else:
                     # For integer coordinates, direct lookup
                     original_idx = coord_to_index.get((int(y), int(x)))
                     if original_idx is not None:
-                        mid_color = surface_colors[original_idx, :3]
+                        surface_color = surface_colors[original_idx, :3]
 
-            if mid_color is None:
+            if surface_color is None:
                 # Use base material color as fallback
-                mid_color = base_color_uint8
+                surface_color = base_color_uint8
 
-            # Assign colors
-            boundary_colors[i, :3] = mid_color  # Mid
-            boundary_colors[i + n_boundary, :3] = base_color_uint8  # Base
+            # Assign colors based on tier structure
+            if has_smoothed_coords:
+                # Three-tier structure: surface + mid + base
+                boundary_colors[i, :3] = surface_color                           # Surface tier
+                boundary_colors[i + n_boundary, :3] = surface_color             # Mid tier (same as surface)
+                boundary_colors[i + 2 * n_boundary, :3] = base_color_uint8     # Base tier (uniform color)
+            else:
+                # Two-tier structure: mid + base
+                boundary_colors[i, :3] = surface_color             # Mid tier
+                boundary_colors[i + n_boundary, :3] = base_color_uint8  # Base tier
 
         return boundary_vertices, boundary_faces, boundary_colors
 
