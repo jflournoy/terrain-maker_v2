@@ -621,6 +621,17 @@ def create_boundary_extension(
         # Resolve material to RGB
         base_color_rgb = get_base_material_color(base_material)
 
+        # When using smoothed coordinates, extract original boundary Z values for smooth interpolation
+        original_boundary_z_values = None
+        if has_smoothed_coords:
+            original_boundary_z_values = []
+            for y, x in original_boundary_points:
+                orig_idx = coord_to_index.get((int(y), int(x)))
+                if orig_idx is not None:
+                    original_boundary_z_values.append(positions[orig_idx, 2])
+                else:
+                    original_boundary_z_values.append(None)
+
         # When using smoothed coordinates, create surface vertices at smoothed positions
         # When not using smoothed, we'll reference the original mesh
         surface_vertices = None
@@ -637,6 +648,36 @@ def create_boundary_extension(
                 pos = get_position_at_coords(y, x)
                 if pos is None:
                     continue
+
+                # Improve Z value: use smooth interpolation along boundary curve
+                # instead of spatial bilinear interpolation
+                if use_catmull_rom and original_boundary_z_values:
+                    # For Catmull-Rom, find nearest original boundary point
+                    # and interpolate Z based on proximity to neighbors
+                    min_dist = float('inf')
+                    closest_idx = 0
+                    for orig_idx, orig_pt in enumerate(original_boundary_points):
+                        dist = np.sqrt((y - orig_pt[0])**2 + (x - orig_pt[1])**2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_idx = orig_idx
+
+                    # Interpolate Z between this point and next
+                    next_idx = (closest_idx + 1) % len(original_boundary_points)
+                    z1 = original_boundary_z_values[closest_idx]
+                    z2 = original_boundary_z_values[next_idx]
+
+                    if z1 is not None and z2 is not None:
+                        # Distance-based interpolation within the segment
+                        orig_y1, orig_x1 = original_boundary_points[closest_idx]
+                        orig_y2, orig_x2 = original_boundary_points[next_idx]
+
+                        seg_dist = np.sqrt((orig_y2 - orig_y1)**2 + (orig_x2 - orig_x1)**2)
+                        if seg_dist > 0:
+                            point_dist = np.sqrt((y - orig_y1)**2 + (x - orig_x1)**2)
+                            t = np.clip(point_dist / seg_dist, 0, 1)
+                            pos[2] = z1 * (1 - t) + z2 * t
+
                 # Store the surface position at smoothed coordinates
                 surface_vertices[i] = pos.copy()
             else:
