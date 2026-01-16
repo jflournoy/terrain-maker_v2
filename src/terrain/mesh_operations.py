@@ -661,52 +661,39 @@ def create_boundary_extension(
 
         boundary_faces = []
 
-        # When using smoothed coordinates, we don't have direct surface vertex indices,
-        # so we just connect mid→base tiers (no upper tier to original surface)
-        if has_smoothed_coords:
-            # Just create faces between mid and base vertices (connect the two tiers)
-            for i in range(n_boundary):
-                next_i = (i + 1) % n_boundary
-                # Face from mid to base
-                boundary_faces.append(
-                    (
-                        mid_indices[i],
-                        mid_indices[next_i],
-                        base_indices[next_i],
-                        base_indices[i],
-                    )
+        # Always create both upper and lower tier faces, even with smoothed coordinates
+        # Get the original boundary vertex indices (nearest integer coordinates)
+        boundary_indices = [coord_to_index.get((int(y), int(x))) for y, x in boundary_points]
+
+        for i in range(n_boundary):
+            if boundary_indices[i] is None:
+                continue
+
+            next_i = (i + 1) % n_boundary
+            if boundary_indices[next_i] is None:
+                continue
+
+            # Upper tier: surface → mid
+            # This connects original surface vertices to the new mid-tier vertices
+            # (critical for avoiding diagonal cut artifacts when using smoothed coordinates)
+            boundary_faces.append(
+                (
+                    boundary_indices[i],
+                    boundary_indices[next_i],
+                    mid_indices[next_i],
+                    mid_indices[i],
                 )
-        else:
-            # Original behavior: connect surface → mid → base
-            boundary_indices = [coord_to_index.get((int(y), int(x))) for y, x in boundary_points]
+            )
 
-            for i in range(n_boundary):
-                if boundary_indices[i] is None:
-                    continue
-
-                next_i = (i + 1) % n_boundary
-                if boundary_indices[next_i] is None:
-                    continue
-
-                # Upper tier: surface → mid
-                boundary_faces.append(
-                    (
-                        boundary_indices[i],
-                        boundary_indices[next_i],
-                        mid_indices[next_i],
-                        mid_indices[i],
-                    )
+            # Lower tier: mid → base
+            boundary_faces.append(
+                (
+                    mid_indices[i],
+                    mid_indices[next_i],
+                    base_indices[next_i],
+                    base_indices[i],
                 )
-
-                # Lower tier: mid → base
-                boundary_faces.append(
-                    (
-                        mid_indices[i],
-                        mid_indices[next_i],
-                        base_indices[next_i],
-                        base_indices[i],
-                    )
-                )
+            )
 
         # Create colors
         boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
