@@ -420,7 +420,9 @@ class TestTwoTierBoundaryExtension:
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
-        coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
+        # Maps (y, x) coordinates to position indices:
+        # (0,0)->0 (z=1), (1,0)->1 (z=2), (1,1)->3 (z=4), (0,1)->2 (z=3)
+        coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 3, (0, 1): 2}
 
         boundary_vertices, boundary_faces, boundary_colors = create_boundary_extension(
             positions,
@@ -435,11 +437,19 @@ class TestTwoTierBoundaryExtension:
         # Should create 2*N vertices (N mid + N base)
         assert boundary_vertices.shape == (8, 3), "Should have 8 vertices (4 mid + 4 base)"
 
-        # First 4 vertices (mid tier) should be at mid_depth
-        assert all(v[2] == -0.1 for v in boundary_vertices[:4]), "Mid vertices at wrong depth"
+        # Mid tier vertices (first 4): each at its position's Z + mid_depth
+        # positions Z values are [1, 2, 4, 3], mid_depth = -0.1
+        # Expected: [0.9, 1.9, 3.9, 2.9]
+        expected_mid_z = [0.9, 1.9, 3.9, 2.9]
+        for i, v in enumerate(boundary_vertices[:4]):
+            assert np.isclose(v[2], expected_mid_z[i]), f"Mid vertex {i} Z mismatch"
 
-        # Last 4 vertices (base tier) should be at base_depth
-        assert all(v[2] == -0.4 for v in boundary_vertices[4:]), "Base vertices at wrong depth"
+        # Base tier vertices (last 4): each at its position's Z + base_depth
+        # positions Z values are [1, 2, 4, 3], base_depth = -0.4
+        # Expected: [0.6, 1.6, 3.6, 2.6]
+        expected_base_z = [0.6, 1.6, 3.6, 2.6]
+        for i, v in enumerate(boundary_vertices[4:]):
+            assert np.isclose(v[2], expected_base_z[i]), f"Base vertex {i} Z mismatch"
 
     def test_two_tier_mid_depth_auto_calculation(self):
         """Test that mid_depth auto-calculates as 25% of base_depth."""
@@ -459,8 +469,11 @@ class TestTwoTierBoundaryExtension:
             base_material="clay",
         )
 
-        # mid_depth should be base_depth * 0.25 = -0.8 * 0.25 = -0.2
-        assert np.isclose(boundary_vertices[0, 2], -0.2), "Mid depth not auto-calculated correctly"
+        # Mid depth auto-calculated as base_depth * 0.25 = -0.8 * 0.25 = -0.2
+        # Mid vertex: surface + mid_depth = 5 + (-0.2) = 4.8
+        # Base vertex: surface + base_depth = 5 + (-0.8) = 4.2
+        assert np.isclose(boundary_vertices[0, 2], 4.8), "Mid vertex should be at surface + mid_depth"
+        assert np.isclose(boundary_vertices[1, 2], 4.2), "Base vertex should be at surface + base_depth"
 
     def test_two_tier_face_generation(self):
         """Test that two-tier mode creates upper and lower tier faces."""
