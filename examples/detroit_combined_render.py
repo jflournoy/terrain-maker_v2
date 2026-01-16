@@ -76,6 +76,12 @@ Usage:
 
     # Combine all smoothing techniques for maximum visual quality
     python examples/detroit_combined_render.py --two-tier-edge --use-catmull-rom --smooth-boundary
+
+    # Rectangle-edge boundary sampling (150x faster than morphological detection)
+    python examples/detroit_combined_render.py --two-tier-edge --use-rectangle-edges
+
+    # Rectangle-edges with two-tier and clay base
+    python examples/detroit_combined_render.py --two-tier-edge --use-rectangle-edges --edge-base-material clay
 """
 
 import sys
@@ -1053,6 +1059,16 @@ Examples:
     )
 
     parser.add_argument(
+        "--use-rectangle-edges",
+        action="store_true",
+        default=False,
+        help="Use rectangle-edge boundary sampling instead of morphological detection "
+             "(default: False, uses morphological). ~150x faster for rectangular DEMs. "
+             "Ideal for raster-based DEM sources (HGT, GeoTIFF). Generates clean, "
+             "regularly-sampled edge vertices using the rectangle boundary.",
+    )
+
+    parser.add_argument(
         "--clear-cache",
         action="store_true",
         default=False,
@@ -1978,6 +1994,7 @@ Examples:
         smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
         use_catmull_rom=args.use_catmull_rom,
         catmull_rom_subdivisions=args.catmull_rom_subdivisions,
+        use_rectangle_edges=args.use_rectangle_edges,
     )
 
     if mesh_temp is None:
@@ -2115,6 +2132,7 @@ Examples:
                 f"base_material={args.edge_base_material}, blend_colors={args.edge_blend_colors}")
     logger.info(f"Boundary smoothing: enabled={args.smooth_boundary}, window_size={args.smooth_boundary_window}")
     logger.info(f"Catmull-Rom curve smoothing: enabled={args.use_catmull_rom}, subdivisions={args.catmull_rom_subdivisions}")
+    logger.info(f"Rectangle-edge boundary: enabled={args.use_rectangle_edges}")
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -2129,6 +2147,7 @@ Examples:
         smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
         use_catmull_rom=args.use_catmull_rom,
         catmull_rom_subdivisions=args.catmull_rom_subdivisions,
+        use_rectangle_edges=args.use_rectangle_edges,
     )
 
     if mesh_combined is None:

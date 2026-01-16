@@ -2859,6 +2859,7 @@ class Terrain:
         smooth_boundary_window=5,
         use_catmull_rom=False,
         catmull_rom_subdivisions=10,
+        use_rectangle_edges=False,
     ):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
@@ -2906,6 +2907,10 @@ class Terrain:
             catmull_rom_subdivisions (int): Number of interpolated points per boundary segment
                 when using Catmull-Rom curves (default: 10). Higher values = smoother curve
                 but more vertices. Only used when use_catmull_rom=True.
+            use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
+                boundary detection (default: False). ~150x faster than morphological detection.
+                Ideal for rectangular DEMs from raster sources. Uses original DEM shape to
+                generate clean, regularly-sampled edge vertices.
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -3135,6 +3140,12 @@ class Terrain:
                 else:
                     surface_colors = self.colors
 
+            # Get original DEM shape for rectangle-edge sampling if needed
+            original_dem_shape = None
+            if use_rectangle_edges:
+                original_dem_data = self.data_layers["dem"]["data"]
+                original_dem_shape = original_dem_data.shape
+
             # Call create_boundary_extension with two-tier and smoothing parameters
             result = create_boundary_extension(
                 positions,
@@ -3150,6 +3161,8 @@ class Terrain:
                 smooth_window_size=smooth_boundary_window,
                 use_catmull_rom=use_catmull_rom,
                 catmull_rom_subdivisions=catmull_rom_subdivisions,
+                use_rectangle_edges=use_rectangle_edges,
+                dem_shape=original_dem_shape,
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
