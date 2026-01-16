@@ -685,6 +685,30 @@ def create_boundary_extension(
             if surface_indices[next_i] is None:
                 continue
 
+            # When using smoothed coordinates, bridge original to new smooth boundary
+            # This eliminates orphaned vertices
+            # Note: We use the rounded coordinates to find the nearest original vertex
+            if has_smoothed_coords:
+                # Find nearest original boundary vertices to this smoothed segment
+                # by rounding the smoothed coordinates
+                orig_i_y, orig_i_x = int(np.round(boundary_points[i][0])), int(np.round(boundary_points[i][1]))
+                orig_next_y, orig_next_x = int(np.round(boundary_points[next_i][0])), int(np.round(boundary_points[next_i][1]))
+
+                orig_i = coord_to_index.get((orig_i_y, orig_i_x))
+                orig_next = coord_to_index.get((orig_next_y, orig_next_x))
+
+                if orig_i is not None and orig_next is not None:
+                    # Bridge face: original boundary → new smooth surface tier
+                    # This connects the stair-step to the smooth curve
+                    boundary_faces.append(
+                        (
+                            orig_i,
+                            orig_next,
+                            surface_indices[next_i],
+                            surface_indices[i],
+                        )
+                    )
+
             # Upper tier: surface → mid
             boundary_faces.append(
                 (
