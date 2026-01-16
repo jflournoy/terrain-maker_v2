@@ -3140,11 +3140,12 @@ class Terrain:
                 else:
                     surface_colors = self.colors
 
-            # Get original DEM shape for rectangle-edge sampling if needed
-            original_dem_shape = None
+            # Get downsampled/transformed DEM shape for rectangle-edge sampling if needed
+            # Must use TRANSFORMED shape (not original), since boundary_points are in mesh coordinate space
+            mesh_dem_shape = None
             if use_rectangle_edges:
-                original_dem_data = self.data_layers["dem"]["data"]
-                original_dem_shape = original_dem_data.shape
+                # dem_data at line 3066 is the transformed_data, which matches mesh grid
+                mesh_dem_shape = (height, width)
 
             # Call create_boundary_extension with two-tier and smoothing parameters
             result = create_boundary_extension(
@@ -3162,7 +3163,7 @@ class Terrain:
                 use_catmull_rom=use_catmull_rom,
                 catmull_rom_subdivisions=catmull_rom_subdivisions,
                 use_rectangle_edges=use_rectangle_edges,
-                dem_shape=original_dem_shape,
+                dem_shape=mesh_dem_shape,
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
