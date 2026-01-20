@@ -522,12 +522,15 @@ def create_boundary_extension(
         if rect_count >= min_required:
             # Rectangle edges produced good boundary - use it
             boundary_points = rect_boundary_valid
-            print(f"Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
+            print(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
         else:
             # Rectangle edges too sparse - keep morphological boundary
             boundary_points = original_morphological_boundary
-            print(f"Rectangle-edge sampling: Too few valid vertices ({rect_count}/{rect_count + len([p for p in rect_edge_pixels if (int(p[0]), int(p[1])) not in coord_to_index])}), keeping morphological boundary ({original_count} vertices)")
-            print(f"  Tip: Data may have NaN values at grid edges. Rectangle-edge works best with clean rectangular DEMs.")
+            print(f"✗ Rectangle-edge sampling: Too few valid vertices ({rect_count}), keeping morphological boundary ({original_count} vertices)")
+            if terrain is None:
+                print(f"  Tip: Pass terrain= parameter for transform-aware sampling to avoid NaN margins")
+            else:
+                print(f"  Tip: Check coordinate transformation - may be mapping outside valid mesh bounds")
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points
@@ -1349,6 +1352,10 @@ def generate_transform_aware_rectangle_edges(
 
     # 3. Map each edge pixel: original → geographic → final
     edge_pixels_final = []
+    transform_errors = 0
+    out_of_bounds = 0
+    not_in_coord_index = 0
+
     for (y_orig, x_orig) in edge_pixels_orig:
         try:
             # Original pixel → geographic coords
@@ -1363,12 +1370,30 @@ def generate_transform_aware_rectangle_edges(
             # Round to integer pixel coordinates
             y_int, x_int = int(round(y_final)), int(round(x_final))
 
+            # Check bounds
+            transformed_shape = dem_layer["transformed_data"].shape
+            if y_int < 0 or y_int >= transformed_shape[0] or x_int < 0 or x_int >= transformed_shape[1]:
+                out_of_bounds += 1
+                continue
+
             # Check if this maps to a valid mesh vertex
             if (y_int, x_int) in coord_to_index:
                 edge_pixels_final.append((y_int, x_int))
+            else:
+                not_in_coord_index += 1
 
-        except Exception:
-            # Skip pixels that fail to transform (e.g., outside bounds)
+        except Exception as e:
+            # Track transformation errors for debugging
+            transform_errors += 1
             continue
+
+    # Debug output if very few pixels mapped
+    if len(edge_pixels_final) < 100:
+        print(f"  DEBUG: Transform results:")
+        print(f"    Original edge pixels: {len(edge_pixels_orig)}")
+        print(f"    Successfully mapped: {len(edge_pixels_final)}")
+        print(f"    Transform errors: {transform_errors}")
+        print(f"    Out of bounds: {out_of_bounds}")
+        print(f"    Not in coord_to_index: {not_in_coord_index}")
 
     return edge_pixels_final
