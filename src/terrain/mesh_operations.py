@@ -454,7 +454,21 @@ def create_boundary_extension(
     if use_rectangle_edges:
         if dem_shape is None:
             raise ValueError("dem_shape is required when use_rectangle_edges=True")
-        boundary_points = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
+        rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
+
+        # Filter to only include pixels that are actually valid mesh vertices
+        # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
+        boundary_points = [
+            (y, x) for y, x in rect_edge_pixels
+            if (int(y), int(x)) in coord_to_index
+        ]
+
+        # Fallback to morphological detection if rectangle edges don't have valid vertices
+        if not boundary_points:
+            # Rectangle edges found no valid vertices - likely NaN at boundaries
+            # Fall back to extracting boundary from coord_to_index (morphological approach)
+            boundary_coords = list(coord_to_index.keys())
+            boundary_points = sort_boundary_points(boundary_coords)
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points
