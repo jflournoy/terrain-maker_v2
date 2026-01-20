@@ -450,7 +450,10 @@ def create_boundary_extension(
     from src.terrain.materials import get_base_material_color
     from scipy.interpolate import RegularGridInterpolator
 
-    # Generate rectangle edge pixels if requested (replaces input boundary_points)
+    # Generate rectangle edge pixels if requested
+    # Keep original morphological boundary_points as fallback
+    original_morphological_boundary = boundary_points
+
     if use_rectangle_edges:
         if dem_shape is None:
             raise ValueError("dem_shape is required when use_rectangle_edges=True")
@@ -458,17 +461,28 @@ def create_boundary_extension(
 
         # Filter to only include pixels that are actually valid mesh vertices
         # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
-        boundary_points = [
+        rect_boundary_valid = [
             (y, x) for y, x in rect_edge_pixels
             if (int(y), int(x)) in coord_to_index
         ]
 
-        # Fallback to morphological detection if rectangle edges don't have valid vertices
-        if not boundary_points:
-            # Rectangle edges found no valid vertices - likely NaN at boundaries
-            # Fall back to extracting boundary from coord_to_index (morphological approach)
-            boundary_coords = list(coord_to_index.keys())
-            boundary_points = sort_boundary_points(boundary_coords)
+        # Use rectangle edges only if they produce a reasonable boundary
+        # If too few valid points, stick with the original morphological boundary
+        original_count = len(original_morphological_boundary)
+        rect_count = len(rect_boundary_valid)
+
+        # Heuristic: Need at least 80% of morphological boundary vertices, or at least 100 vertices
+        min_required = max(100, int(0.8 * original_count))
+
+        if rect_count >= min_required:
+            # Rectangle edges produced good boundary - use it
+            boundary_points = rect_boundary_valid
+            print(f"Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
+        else:
+            # Rectangle edges too sparse - keep morphological boundary
+            boundary_points = original_morphological_boundary
+            print(f"Rectangle-edge sampling: Too few valid vertices ({rect_count}/{rect_count + len([p for p in rect_edge_pixels if (int(p[0]), int(p[1])) not in coord_to_index])}), keeping morphological boundary ({original_count} vertices)")
+            print(f"  Tip: Data may have NaN values at grid edges. Rectangle-edge works best with clean rectangular DEMs.")
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points
