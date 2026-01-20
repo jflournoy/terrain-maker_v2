@@ -457,6 +457,22 @@ def create_boundary_extension(
     if use_rectangle_edges:
         if dem_shape is None:
             raise ValueError("dem_shape is required when use_rectangle_edges=True")
+
+        # Run diagnostic to understand edge coverage
+        diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
+        print(f"\n{'='*60}")
+        print(f"Rectangle Edge Diagnostic")
+        print(f"{'='*60}")
+        print(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
+        print(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
+        print(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
+        print(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
+        print(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
+        print(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
+        print(f"\nRecommendation: {diagnostic['recommendation']}")
+        print(f"Reason: {diagnostic['reason']}")
+        print(f"{'='*60}\n")
+
         rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
 
         # Filter to only include pixels that are actually valid mesh vertices
@@ -1031,6 +1047,91 @@ def sort_boundary_points(boundary_coords):
         current = next_point
 
     return ordered
+
+
+def diagnose_rectangle_edge_coverage(dem_shape, coord_to_index):
+    """
+    Diagnose how well rectangle edge sampling will work for this DEM.
+
+    Checks what percentage of the rectangle perimeter has valid mesh vertices.
+    Helps determine if rectangle-edge sampling is appropriate for this dataset.
+
+    Args:
+        dem_shape (tuple): DEM shape (height, width)
+        coord_to_index (dict): Mapping from (y, x) to vertex indices
+
+    Returns:
+        dict: Diagnostic information including:
+            - total_edge_pixels: Total pixels on rectangle perimeter
+            - valid_edge_pixels: How many have valid mesh vertices
+            - coverage_percent: Percentage of edge that's valid
+            - edge_validity: Per-edge breakdown (top, right, bottom, left)
+            - recommendation: Whether to use rectangle edges or morphological
+    """
+    height, width = dem_shape
+
+    edge_validity = {
+        'top': {'total': 0, 'valid': 0},
+        'right': {'total': 0, 'valid': 0},
+        'bottom': {'total': 0, 'valid': 0},
+        'left': {'total': 0, 'valid': 0},
+    }
+
+    # Check top edge (y=0, x from 0 to width-1)
+    for x in range(width):
+        edge_validity['top']['total'] += 1
+        if (0, x) in coord_to_index:
+            edge_validity['top']['valid'] += 1
+
+    # Check right edge (x=width-1, y from 0 to height-1)
+    for y in range(height):
+        edge_validity['right']['total'] += 1
+        if (y, width - 1) in coord_to_index:
+            edge_validity['right']['valid'] += 1
+
+    # Check bottom edge (y=height-1, x from 0 to width-1)
+    for x in range(width):
+        edge_validity['bottom']['total'] += 1
+        if (height - 1, x) in coord_to_index:
+            edge_validity['bottom']['valid'] += 1
+
+    # Check left edge (x=0, y from 0 to height-1)
+    for y in range(height):
+        edge_validity['left']['total'] += 1
+        if (y, 0) in coord_to_index:
+            edge_validity['left']['valid'] += 1
+
+    # Calculate totals
+    total_edge_pixels = 2 * (height + width) - 4  # Perimeter, not counting corners twice
+    valid_edge_pixels = (
+        edge_validity['top']['valid'] +
+        edge_validity['right']['valid'] +
+        edge_validity['bottom']['valid'] +
+        edge_validity['left']['valid'] - 4  # Remove duplicate corner counts
+    )
+
+    coverage_percent = (valid_edge_pixels / total_edge_pixels * 100) if total_edge_pixels > 0 else 0
+
+    # Generate recommendation
+    if coverage_percent >= 90:
+        recommendation = "use_rectangle_edges"
+        reason = "Excellent coverage - valid data extends to grid edges"
+    elif coverage_percent >= 70:
+        recommendation = "use_rectangle_edges"
+        reason = "Good coverage - rectangle edges should work well"
+    else:
+        recommendation = "use_morphological"
+        reason = f"Low coverage ({coverage_percent:.1f}%) - data doesn't extend to grid edges"
+
+    return {
+        'dem_shape': dem_shape,
+        'total_edge_pixels': total_edge_pixels,
+        'valid_edge_pixels': valid_edge_pixels,
+        'coverage_percent': coverage_percent,
+        'edge_validity': edge_validity,
+        'recommendation': recommendation,
+        'reason': reason,
+    }
 
 
 def generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0):
