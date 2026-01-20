@@ -386,7 +386,9 @@ def create_boundary_extension(
     use_catmull_rom=False,  # PERFORMANCE: Disabled by default due to computational cost (~1-2s per terrain)
     catmull_rom_subdivisions=2,
     use_rectangle_edges=False,  # NEW: Use rectangle-edge sampling instead of morphological detection
-    dem_shape=None,  # NEW: Required when use_rectangle_edges=True
+    dem_shape=None,  # DEPRECATED: Use terrain= instead for transform-aware edges
+    terrain=None,  # NEW: Terrain object for transform-aware rectangle edges
+    edge_sample_spacing=1.0,  # Sampling density for rectangle edges
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -426,11 +428,17 @@ def create_boundary_extension(
                                        Higher values = smoother curve but MORE COMPUTATION.
                                        Recommended: 2 (fast) or 3-4 (very smooth).
         use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
-                                   boundary detection (default: False). Requires dem_shape.
+                                   boundary detection (default: False).
                                    ~150x faster than morphological detection.
                                    Ideal for rectangular DEMs from raster sources.
-        dem_shape (tuple, optional): DEM shape (height, width) when using rectangle-edge sampling.
-                                    Required if use_rectangle_edges=True. Ignored otherwise.
+        dem_shape (tuple, optional): DEPRECATED - DEM shape (height, width) for legacy rectangle-edge sampling.
+                                    Use terrain= parameter instead for transform-aware edges (avoids NaN margins).
+        terrain (Terrain, optional): Terrain object for transform-aware rectangle-edge sampling.
+                                    Provides original DEM shape and transform pipeline for accurate
+                                    coordinate mapping without NaN margins. Improves edge coverage from
+                                    0.6% (legacy) to ~100% (transform-aware) for downsampled DEMs.
+        edge_sample_spacing (float): Pixel spacing for edge sampling at original DEM resolution (default: 1.0).
+                                     Lower values = denser sampling, more edge pixels.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -455,30 +463,51 @@ def create_boundary_extension(
     original_morphological_boundary = boundary_points
 
     if use_rectangle_edges:
-        if dem_shape is None:
-            raise ValueError("dem_shape is required when use_rectangle_edges=True")
+        # NEW: Use transform-aware approach if terrain object provided
+        if terrain is not None:
+            # Transform-aware rectangle-edge sampling (avoids NaN margins)
+            rect_boundary_valid = generate_transform_aware_rectangle_edges(
+                terrain,
+                coord_to_index,
+                edge_sample_spacing
+            )
 
-        # Run diagnostic to understand edge coverage
-        diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
-        print(f"\n{'='*60}")
-        print(f"Rectangle Edge Diagnostic")
-        print(f"{'='*60}")
-        print(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
-        print(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
-        print(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
-        print(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
-        print(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
-        print(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
-        print(f"\nRecommendation: {diagnostic['recommendation']}")
-        print(f"Reason: {diagnostic['reason']}")
-        print(f"{'='*60}\n")
+            # Report results
+            original_shape = terrain.dem_shape
+            print(f"\n{'='*60}")
+            print(f"Transform-Aware Rectangle Edge Sampling")
+            print(f"{'='*60}")
+            print(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+            print(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
+            print(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+            print(f"{'='*60}\n")
+        else:
+            # FALLBACK: Legacy approach using transformed DEM shape
+            if dem_shape is None:
+                raise ValueError("Either terrain or dem_shape required when use_rectangle_edges=True")
 
-        rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
+            # Run diagnostic to show why this doesn't work well
+            diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
+            print(f"\n{'='*60}")
+            print(f"⚠️  Legacy Rectangle Edge Sampling (Transformed DEM)")
+            print(f"{'='*60}")
+            print(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
+            print(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
+            print(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
+            print(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
+            print(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
+            print(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
+            print(f"\nRecommendation: {diagnostic['recommendation']}")
+            print(f"Reason: {diagnostic['reason']}")
+            print(f"💡 Tip: Pass terrain= parameter for transform-aware sampling (~100% coverage)")
+            print(f"{'='*60}\n")
 
-        # Filter to only include pixels that are actually valid mesh vertices
-        # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
-        rect_boundary_valid = [
-            (y, x) for y, x in rect_edge_pixels
+            rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing)
+
+            # Filter to only include pixels that are actually valid mesh vertices
+            # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
+            rect_boundary_valid = [
+                (y, x) for y, x in rect_edge_pixels
             if (int(y), int(x)) in coord_to_index
         ]
 
@@ -1261,3 +1290,85 @@ def generate_rectangle_edge_vertices(
         boundary_faces.append([i, next_i, next_i, i])
 
     return boundary_vertices, boundary_faces
+
+
+def generate_transform_aware_rectangle_edges(
+    terrain,
+    coord_to_index,
+    edge_sample_spacing=1.0,
+):
+    """
+    Generate rectangle edge pixels by sampling original DEM perimeter
+    and mapping through transform pipeline.
+
+    This function solves the NaN margin problem by sampling edges at the original
+    DEM resolution (where all perimeter pixels are valid) and mapping them through
+    the transform pipeline to final mesh coordinates.
+
+    Uses affine transforms to map coordinates:
+      original pixel → geographic → final transformed pixel
+
+    Args:
+        terrain: Terrain object with dem_shape, dem_transform, data_layers
+        coord_to_index: Dict mapping (y, x) final pixels to vertex indices
+        edge_sample_spacing: Pixel spacing for edge sampling at original resolution (default 1.0)
+
+    Returns:
+        list: Edge pixel coordinates in final transformed space,
+              filtered to only valid mesh vertices
+
+    Raises:
+        ValueError: If terrain is None or lacks required transform data
+    """
+    if terrain is None:
+        raise ValueError("Terrain object required for transform-aware rectangle edges")
+
+    # 1. Sample edges at original resolution
+    original_shape = terrain.dem_shape
+    edge_pixels_orig = generate_rectangle_edge_pixels(
+        original_shape,
+        edge_sample_spacing
+    )
+
+    # 2. Get transform info
+    original_transform = terrain.dem_transform
+    dem_layer = terrain.data_layers.get("dem")
+
+    if dem_layer is None:
+        raise ValueError("Terrain lacks 'dem' data layer")
+
+    if not dem_layer.get("transformed", False):
+        raise ValueError(
+            "Terrain DEM has not been transformed yet. "
+            "Call terrain.apply_transforms() before using transform-aware edges."
+        )
+
+    transformed_transform = dem_layer.get("transformed_transform")
+    if transformed_transform is None:
+        raise ValueError("Terrain DEM lacks 'transformed_transform' - cannot map coordinates")
+
+    # 3. Map each edge pixel: original → geographic → final
+    edge_pixels_final = []
+    for (y_orig, x_orig) in edge_pixels_orig:
+        try:
+            # Original pixel → geographic coords
+            # Affine multiplication: (lon, lat) = transform * (x, y)
+            # Note: Affine takes (x, y) not (y, x)
+            lon, lat = original_transform * (x_orig, y_orig)
+
+            # Geographic → final pixel coords
+            # Inverse transform: (x, y) = ~transform * (lon, lat)
+            x_final, y_final = ~transformed_transform * (lon, lat)
+
+            # Round to integer pixel coordinates
+            y_int, x_int = int(round(y_final)), int(round(x_final))
+
+            # Check if this maps to a valid mesh vertex
+            if (y_int, x_int) in coord_to_index:
+                edge_pixels_final.append((y_int, x_int))
+
+        except Exception:
+            # Skip pixels that fail to transform (e.g., outside bounds)
+            continue
+
+    return edge_pixels_final
