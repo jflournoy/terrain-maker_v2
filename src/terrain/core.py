@@ -2249,19 +2249,15 @@ class Terrain:
         if missing_layers:
             raise ValueError(f"Source layers not found: {missing_layers}")
 
-        # Validate overlay_mask
-        if not hasattr(self, "vertices") or self.vertices is None:
-            raise RuntimeError(
-                "create_mesh() must be called before set_blended_color_mapping(). "
-                "Vertex count is needed to validate overlay_mask shape."
-            )
-
+        # Validate overlay_mask (can be grid-space or vertex-space)
+        # Actual shape validation happens in _compute_blended_colors()
         overlay_mask = np.asarray(overlay_mask)
-        expected_shape = (len(self.vertices),)
-        if overlay_mask.shape != expected_shape:
+
+        # Check if it's a valid 1D or 2D array
+        if overlay_mask.ndim not in (1, 2):
             raise ValueError(
-                f"overlay_mask must have shape {expected_shape} to match vertex count. "
-                f"Got {overlay_mask.shape}. Use compute_proximity_mask() to create mask."
+                f"overlay_mask must be 1D (vertex-space) or 2D (grid-space). "
+                f"Got shape {overlay_mask.shape}."
             )
 
         # Default kwargs
@@ -2283,9 +2279,14 @@ class Terrain:
         self.logger.info("Blended color mapping configured:")
         self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
         self.logger.info(f"  Overlay colormap: {overlay_colormap.__name__} on {overlay_source_layers}")
+
+        # Log mask info (grid-space or vertex-space)
+        mask_sum = np.sum(overlay_mask)
+        mask_size = overlay_mask.size
+        mask_type = "grid-space" if overlay_mask.ndim == 2 else "vertex-space"
         self.logger.info(
-            f"  Overlay mask: {np.sum(overlay_mask)}/{len(overlay_mask)} vertices "
-            f"({100.0 * np.sum(overlay_mask) / len(overlay_mask):.1f}%)"
+            f"  Overlay mask ({mask_type}): {mask_sum}/{mask_size} elements "
+            f"({100.0 * mask_sum / mask_size:.1f}%)"
         )
 
     def set_multi_color_mapping(
@@ -2566,15 +2567,29 @@ class Terrain:
                 ]
             )
 
+        # Convert overlay_mask to vertex-space if it's grid-space
+        if self.overlay_mask.ndim == 2:
+            # Grid-space mask: convert to vertex-space using y_valid, x_valid
+            self.logger.info(f"  Converting grid-space mask to vertex-space...")
+            overlay_mask_vertex = self.overlay_mask[self.y_valid, self.x_valid]
+
+            # Pad with False for boundary vertices if they exist
+            if num_total_vertices > num_surface_vertices:
+                padding = np.zeros(num_total_vertices - num_surface_vertices, dtype=bool)
+                overlay_mask_vertex = np.concatenate([overlay_mask_vertex, padding])
+        else:
+            # Already vertex-space
+            overlay_mask_vertex = self.overlay_mask
+
         # Blend colors using overlay_mask: True = overlay, False = base
         colors = np.where(
-            self.overlay_mask[:, None],  # Broadcast to (N, 1) for RGBA channels
+            overlay_mask_vertex[:, None],  # Broadcast to (N, 1) for RGBA channels
             overlay_vertex_colors,
             base_vertex_colors,
         )
 
-        num_overlay = np.sum(self.overlay_mask)
-        num_base = len(self.overlay_mask) - num_overlay
+        num_overlay = np.sum(overlay_mask_vertex)
+        num_base = len(overlay_mask_vertex) - num_overlay
         self.logger.info(
             f"Blended colors computed: {num_overlay} overlay vertices, {num_base} base vertices"
         )
@@ -2651,8 +2666,12 @@ class Terrain:
         """
         self.logger.info("Computing multi-overlay colors...")
 
-        # Get transformed DEM data to determine grid shape
-        dem_data = self.data_layers["dem"]["transformed_data"]
+        # Get transformed DEM data to determine grid shape (fall back to original if not transformed)
+        dem_layer = self.data_layers["dem"]
+        if "transformed_data" in dem_layer:
+            dem_data = dem_layer["transformed_data"]
+        else:
+            dem_data = dem_layer["data"]
         height, width = dem_data.shape
 
         # Compute base colors for all pixels
@@ -2944,9 +2963,8 @@ class Terrain:
         if "dem" not in self.data_layers or not self.data_layers["dem"].get("transformed", False):
             raise ValueError("Transformed DEM layer required for mesh creation")
 
-        # Compute colors if color mapping is set and colors haven't been computed yet
-        if hasattr(self, "color_mapping") and not hasattr(self, "colors"):
-            self.compute_colors()
+        # Note: Color computation moved to after vertex position generation
+        # (multi-overlay mode needs y_valid and x_valid to exist)
 
         # Apply water detection if requested
         if detect_water or water_mask is not None:
@@ -3077,6 +3095,20 @@ class Terrain:
             dem_data, valid_mask, scale_factor, height_scale
         )
 
+        # Store y_valid and x_valid as instance attributes for color computation
+        self.y_valid = y_valid
+        self.x_valid = x_valid
+
+        # Compute colors if color mapping is set and colors haven't been computed yet
+        # Check for any color mapping mode (standard, blended, or multi-overlay)
+        has_color_mapping = (
+            hasattr(self, "color_mapping") or
+            hasattr(self, "base_colormap") or
+            hasattr(self, "color_mapping_mode")
+        )
+        if has_color_mapping and not hasattr(self, "colors"):
+            self.compute_colors()
+
         # Center the model if requested
         if center_model:
             self.logger.info("Centering model at origin...")
@@ -3115,8 +3147,22 @@ class Terrain:
         boundary_coords = find_boundary_points(valid_mask)
 
         # Only sort boundary points if needed (they're used for side faces)
+        boundary_winding = "counter-clockwise"  # Default winding direction
         if boundary_extension:
             boundary_points = self._sort_boundary_points_optimized(boundary_coords)
+
+            # DEBUG: Check boundary winding direction
+            # A consistent winding direction (counter-clockwise) ensures correct face normals
+            if len(boundary_points) >= 3:
+                # Compute signed area to determine winding
+                # Positive = counter-clockwise, Negative = clockwise
+                signed_area = 0
+                for i in range(len(boundary_points)):
+                    y1, x1 = boundary_points[i]
+                    y2, x2 = boundary_points[(i + 1) % len(boundary_points)]
+                    signed_area += (x2 - x1) * (y2 + y1)
+                boundary_winding = "counter-clockwise" if signed_area < 0 else "clockwise"
+                self.logger.info(f"Boundary winding direction: {boundary_winding} (signed area: {signed_area:.2f})")
         else:
             boundary_points = boundary_coords
 
@@ -3157,7 +3203,8 @@ class Terrain:
                 catmull_rom_subdivisions=catmull_rom_subdivisions,
                 use_rectangle_edges=use_rectangle_edges,
                 terrain=self if use_rectangle_edges else None,  # NEW: Pass terrain for transform-aware edges
-                edge_sample_spacing=1.0,  # Sample every pixel at original DEM resolution
+                edge_sample_spacing=0.33,  # Sample at 3x density (0.33 pixels) for smooth edges
+                boundary_winding=boundary_winding,  # Pass winding direction for correct face normals
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
@@ -3520,6 +3567,188 @@ class Terrain:
         pct_in_zone = 100.0 * num_in_zone / len(mask)
         self.logger.info(
             f"  Proximity mask: {num_in_zone}/{len(mask)} vertices ({pct_in_zone:.1f}%) in zones"
+        )
+
+        return mask
+
+    def compute_proximity_mask_grid(
+        self,
+        lons: np.ndarray,
+        lats: np.ndarray,
+        radius_meters: float,
+        input_crs: str = "EPSG:4326",
+        cluster_threshold_meters: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Create boolean mask for DEM grid cells within radius of geographic points.
+
+        Similar to compute_proximity_mask() but works directly on the transformed DEM
+        grid WITHOUT requiring mesh creation. Returns a 2D boolean array matching
+        the transformed DEM shape.
+
+        This is useful when you need to compute proximity zones before creating the
+        mesh, avoiding the need for duplicate mesh creation.
+
+        Args:
+            lons: Array of longitudes for points of interest.
+            lats: Array of latitudes for points of interest (must match lons shape).
+            radius_meters: Radius in meters around each point/cluster to include.
+            input_crs: CRS of input coordinates (default: "EPSG:4326" for WGS84 lon/lat).
+            cluster_threshold_meters: Optional distance threshold for clustering nearby
+                points using DBSCAN. If None, each point gets its own zone.
+
+        Returns:
+            Boolean array of shape (height, width) matching transformed DEM,
+            where True indicates grid cell is within radius of at least one point/cluster.
+
+        Raises:
+            ValueError: If DEM has not been transformed yet or if lons/lats mismatch.
+
+        Example:
+            >>> terrain = Terrain(dem, transform)
+            >>> terrain.add_transform(reproject_to_utm(...))
+            >>> terrain.apply_transforms()
+            >>> # Compute proximity BEFORE mesh creation
+            >>> park_mask = terrain.compute_proximity_mask_grid(
+            ...     park_lons, park_lats, radius_meters=1000
+            ... )
+            >>> # Use mask in color computations, then create mesh once
+        """
+        from scipy.spatial import KDTree
+        from pyproj import Transformer
+
+        # Check prerequisites
+        dem_info = self.data_layers.get("dem", {})
+        if not dem_info.get("transformed", False):
+            raise ValueError(
+                "DEM layer must be transformed before compute_proximity_mask_grid(). "
+                "Call apply_transforms() first."
+            )
+
+        # Validate inputs
+        lons = np.asarray(lons)
+        lats = np.asarray(lats)
+        if lons.shape != lats.shape:
+            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
+
+        # Filter out NaN coordinates
+        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
+        if not np.all(valid_mask):
+            num_invalid = np.sum(~valid_mask)
+            self.logger.warning(
+                f"Filtering out {num_invalid} points with NaN coordinates "
+                f"({len(lons) - num_invalid} valid points remaining)"
+            )
+            lons = lons[valid_mask]
+            lats = lats[valid_mask]
+
+        # Handle edge case: no valid points
+        dem_data = dem_info["transformed_data"]
+        if len(lons) == 0:
+            self.logger.warning("No valid points remaining after filtering NaN coordinates")
+            return np.zeros(dem_data.shape, dtype=bool)
+
+        # Get transformed DEM properties
+        transform = dem_info.get("transformed_transform")
+        dem_crs = dem_info.get("transformed_crs", "EPSG:4326")
+
+        if transform is None:
+            raise ValueError("No transform found for transformed DEM layer.")
+
+        # Reproject coordinates if input CRS differs from DEM CRS
+        if input_crs != dem_crs:
+            self.logger.debug(f"  Reprojecting {len(lons)} points from {input_crs} to {dem_crs}")
+            transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
+            lons, lats = transformer.transform(lons, lats)
+
+        # Convert geographic coords to pixel coordinates
+        from rasterio.transform import rowcol
+
+        rows = []
+        cols = []
+        for lon, lat in zip(lons, lats):
+            row, col = rowcol(transform, lon, lat)
+            rows.append(row)
+            cols.append(col)
+
+        rows = np.array(rows)
+        cols = np.array(cols)
+
+        # Filter out points outside DEM bounds
+        height, width = dem_data.shape
+        valid_bounds = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
+        if not np.all(valid_bounds):
+            num_invalid = np.sum(~valid_bounds)
+            self.logger.warning(
+                f"Filtering out {num_invalid} points outside DEM bounds "
+                f"({np.sum(valid_bounds)} valid points remaining)"
+            )
+            rows = rows[valid_bounds]
+            cols = cols[valid_bounds]
+
+        # Handle edge case: no valid points after filtering
+        if len(rows) == 0:
+            self.logger.warning("No points within DEM bounds for proximity mask")
+            return np.zeros(dem_data.shape, dtype=bool)
+
+        self.logger.info(f"Computing grid-based proximity mask for {len(rows)} points...")
+
+        # Get pixel size in meters (assumes metric CRS like UTM after transformation)
+        pixel_size_meters = abs(transform.a)
+
+        # Convert radius from meters to pixels
+        radius_pixels = radius_meters / pixel_size_meters
+
+        # Stack point coordinates
+        point_coords = np.column_stack([rows, cols])
+
+        # Cluster nearby points using DBSCAN
+        if cluster_threshold_meters is not None:
+            from sklearn.cluster import DBSCAN
+
+            # Convert cluster threshold from meters to pixels
+            cluster_threshold_pixels = cluster_threshold_meters / pixel_size_meters
+
+            self.logger.info(
+                f"  Clustering points with threshold {cluster_threshold_meters}m "
+                f"({cluster_threshold_pixels:.3f} pixels)..."
+            )
+
+            clustering = DBSCAN(eps=cluster_threshold_pixels, min_samples=1)
+            labels = clustering.fit_predict(point_coords)
+            num_clusters = labels.max() + 1
+
+            # Use cluster centroids instead of individual points
+            point_coords = np.array(
+                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+            )
+
+            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
+
+        # Build KDTree for efficient spatial queries
+        tree = KDTree(point_coords)
+
+        # Create grid of all pixel coordinates
+        row_indices, col_indices = np.indices(dem_data.shape)
+        grid_coords = np.column_stack([row_indices.ravel(), col_indices.ravel()])
+
+        # Query: which pixels are within radius of ANY point?
+        self.logger.info(
+            f"  Querying {len(grid_coords)} pixels within {radius_meters}m "
+            f"({radius_pixels:.3f} pixels) of {len(point_coords)} point(s)..."
+        )
+
+        distances, _ = tree.query(grid_coords, k=1)
+        mask_flat = distances <= radius_pixels
+
+        # Reshape to grid
+        mask = mask_flat.reshape(dem_data.shape)
+
+        num_in_zone = np.sum(mask)
+        total_pixels = mask.size
+        pct_in_zone = 100.0 * num_in_zone / total_pixels
+        self.logger.info(
+            f"  Proximity mask: {num_in_zone}/{total_pixels} pixels ({pct_in_zone:.1f}%) in zones"
         )
 
         return mask
