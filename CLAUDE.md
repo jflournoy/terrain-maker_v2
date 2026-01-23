@@ -1,5 +1,23 @@
 # CLAUDE.md - Project AI Guidelines
 
+## State Tracking
+
+**Use two complementary systems for tracking work:**
+
+1. **TodoWrite tool** (primary) - Use for task management visible to the user
+   - Break work into discrete, actionable items
+   - Mark tasks in_progress/completed as you work
+   - Good for: task lists, progress tracking, user visibility
+
+2. **`.claude-current-status` file** (supplementary) - Higher-resolution notes
+   - Timestamps, context, decisions, file references
+   - Details that don't fit in todo items
+   - Session continuity across conversations
+   - Good for: debugging context, decision rationale, file locations
+
+**Workflow:** Start tasks with TodoWrite, and always add detailed notes to `.claude-current-status`.
+
+
 ## Development Method: TDD
 
 **RECOMMENDED: Use Test-Driven Development for new features**
@@ -48,6 +66,27 @@ Examples of honest responses:
 - "I'd recommend against that pattern because..."
 - "While that's possible, a better approach would be..."
 - "That's technically feasible but violates \[principle] because..."
+
+## Render Approval
+
+**REQUIRED: Always check with the user before running any renders**
+
+Rendering scripts (e.g., `detroit_combined_render.py`, `detroit_elevation_real.py`) can take significant time and computational resources.
+
+- **Before running**: Summarize what the render will do and ask for approval
+- **During development**: Use `--mock-data` flag to test with fast synthetic data
+- **For final renders**: Wait for explicit user approval with parameters
+
+Example:
+```
+I'm about to run a render with:
+- Resolution: 1008×720 @ 72 DPI (print quality)
+- Samples: 4,096 (high quality)
+- Expected time: ~3-5 minutes on GPU
+- Output: docs/images/combined_render/sledding_with_xc_parks_3d_print.png
+
+Should I proceed? [yes/no]
+```
 
 ## Development Workflow
 
