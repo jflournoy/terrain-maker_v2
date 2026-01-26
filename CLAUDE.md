@@ -15,7 +15,7 @@
    - Session continuity across conversations
    - Good for: debugging context, decision rationale, file locations
 
-**Workflow:** Start tasks with TodoWrite, and always add detailed notes to `.claude-current-status`.
+**Workflow:** Start tasks with TodoWrite, always add detailed notes to `.claude-current-status`. When you add notes, re-assess and clean up old notes.
 
 
 ## Development Method: TDD
