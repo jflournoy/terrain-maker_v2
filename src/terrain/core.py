@@ -2546,7 +2546,8 @@ class Terrain:
         # Boundary vertices (from boundary_extension) don't map to grid pixels
         # Use nearest valid pixel color (or default color)
         num_surface_vertices = len(self.y_valid)
-        num_total_vertices = len(self.vertices)
+        # vertices may not be set yet if compute_colors() is called early
+        num_total_vertices = len(self.vertices) if self.vertices is not None else num_surface_vertices
 
         if num_total_vertices > num_surface_vertices:
             # Has boundary vertices - pad with default color
@@ -2603,39 +2604,40 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            # Create depth gradient for water bodies (lighter at edges, darker at center)
+            # Create shoreline vignette for water bodies (cartographic style)
             # Compute distance transform to measure distance from water edges (shores)
             from scipy.ndimage import distance_transform_edt
 
             water_distances = distance_transform_edt(water_mask)
 
-            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
-            max_dist = water_distances.max()
-            if max_dist > 0:
-                normalized_distances = water_distances / max_dist
-            else:
-                # Single-pixel water or uniform - use uniform color
-                normalized_distances = water_distances
-
-            # Define gradient colors: blue to very dark blue (Great Lakes depth)
-            # Edge (shallow water near shore): Bright recognizable blue
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
-            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
-            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
+            # Define gradient colors for shoreline vignette
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Light blue (shore)
+            center_color = np.array([15, 50, 85], dtype=np.float32)  # Dark blue (interior)
 
             # Map water mask from grid space to vertex space (vectorized)
             # Only for surface vertices (not boundary vertices)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
             water_vertex_indices = np.where(water_at_vertices)[0]
 
-            # Get normalized distances for all water vertices
+            # Get raw pixel distances for all water vertices
             water_y = self.y_valid[water_vertex_indices]
             water_x = self.x_valid[water_vertex_indices]
-            water_depths = normalized_distances[water_y, water_x]
+            water_pixel_distances = water_distances[water_y, water_x]
 
-            # Water depth gradient: light blue at shore → dark blue at center
-            # t^0.3 keeps water light for most of distance, then rapid darkening at depth
-            t = np.power(water_depths, 0.3)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # Cartographic shoreline vignette style (vintage map aesthetic)
+            # Gradient only in shoreline band; interior water is uniform dark
+            shoreline_width_pixels = 12
+
+            # t=1 means dark (interior), t=0 means light (at shore edge)
+            # Start with all water as interior (dark)
+            t = np.ones_like(water_pixel_distances)
+
+            # Apply gradient only within shoreline band
+            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
+            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
+
+            # Power curve for smoother transition
+            t = np.power(t, 0.5)[:, np.newaxis]
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2814,38 +2816,39 @@ class Terrain:
             self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
             self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
 
-            # Create depth gradient for water bodies (lighter at edges, darker at center)
+            # Create shoreline vignette for water bodies (cartographic style)
             # Compute distance transform to measure distance from water edges (shores)
             from scipy.ndimage import distance_transform_edt
 
             water_distances = distance_transform_edt(water_mask)
 
-            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
-            max_dist = water_distances.max()
-            if max_dist > 0:
-                normalized_distances = water_distances / max_dist
-            else:
-                # Single-pixel water or uniform - use uniform color
-                normalized_distances = water_distances
-
-            # Define gradient colors: blue to very dark blue (Great Lakes depth)
-            # Edge (shallow water near shore): Bright recognizable blue
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
-            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
-            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
+            # Define gradient colors for shoreline vignette
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Light blue (shore)
+            center_color = np.array([15, 50, 85], dtype=np.float32)  # Dark blue (interior)
 
             # Map water mask from grid space to vertex space (vectorized)
             water_at_vertices = water_mask[self.y_valid, self.x_valid]
             water_vertex_indices = np.where(water_at_vertices)[0]
 
-            # Get normalized distances for all water vertices
+            # Get raw pixel distances for all water vertices
             water_y = self.y_valid[water_vertex_indices]
             water_x = self.x_valid[water_vertex_indices]
-            water_depths = normalized_distances[water_y, water_x]
+            water_pixel_distances = water_distances[water_y, water_x]
 
-            # Water depth gradient: light blue at shore → dark blue at center
-            # t^0.3 keeps water light for most of distance, then rapid darkening at depth
-            t = np.power(water_depths, 0.3)[:, np.newaxis]  # Shape (N, 1) for broadcasting
+            # Cartographic shoreline vignette style (vintage map aesthetic)
+            # Gradient only in shoreline band; interior water is uniform dark
+            shoreline_width_pixels = 12
+
+            # t=1 means dark (interior), t=0 means light (at shore edge)
+            # Start with all water as interior (dark)
+            t = np.ones_like(water_pixel_distances)
+
+            # Apply gradient only within shoreline band
+            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
+            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
+
+            # Power curve for smoother transition
+            t = np.power(t, 0.5)[:, np.newaxis]
             water_colors = edge_color * (1 - t) + center_color * t
 
             # Apply gradient colors to water vertices
@@ -2879,6 +2882,8 @@ class Terrain:
         use_catmull_rom=False,
         catmull_rom_subdivisions=10,
         use_rectangle_edges=False,
+        use_fractional_edges=False,
+        edge_sample_spacing=0.33,
     ):
         """
         Create a Blender mesh from transformed DEM data with both performance and control.
@@ -2930,6 +2935,15 @@ class Terrain:
                 boundary detection (default: False). ~150x faster than morphological detection.
                 Ideal for rectangular DEMs from raster sources. Uses original DEM shape to
                 generate clean, regularly-sampled edge vertices.
+            use_fractional_edges (bool): Use fractional edge coordinates that preserve projection
+                curvature (default: False). When enabled with use_rectangle_edges, edge vertices
+                follow the true curved boundary from WGS84→UTM Transverse Mercator projection
+                instead of snapping to integer grid positions. Creates smoother, more
+                geographically accurate edge geometry.
+            edge_sample_spacing (float): Pixel spacing for edge/skirt vertices (default: 0.33).
+                Lower values = denser skirt (smoother but more memory). 0.33 = 3x denser than
+                mesh edge. 1.0 = same density as mesh edge. 2.0 = half density (good for large
+                meshes to avoid OOM).
 
         Returns:
             bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
@@ -2966,13 +2980,12 @@ class Terrain:
         # Note: Color computation moved to after vertex position generation
         # (multi-overlay mode needs y_valid and x_valid to exist)
 
-        # Apply water detection if requested
+        # Water detection - store mask for later (coloring happens after compute_colors)
+        _water_mask_for_coloring = None
         if detect_water or water_mask is not None:
             if water_mask is None:
-                # Get transformed DEM data (needed for both water detection and coloring)
+                # Compute water mask from transformed DEM
                 dem_data = self.data_layers["dem"]["transformed_data"]
-
-                # Compute water mask from transformed DEM (if no pre-computed mask provided)
                 self.logger.info(
                     f"Detecting water bodies (slope threshold: {water_slope_threshold})..."
                 )
@@ -2982,104 +2995,10 @@ class Terrain:
                     dem_data, slope_threshold=water_slope_threshold, fill_holes=True
                 )
             else:
-                # Get transformed DEM data for coloring
-                dem_data = self.data_layers["dem"]["transformed_data"]
-
                 self.logger.info(
                     f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
                 )
-
-            # Apply water mask to colors: create depth gradient (lighter at edges, darker at center)
-            # Compute distance transform to measure distance from water edges (shores)
-            from scipy.ndimage import distance_transform_edt
-
-            water_distances = distance_transform_edt(water_mask)
-
-            # Normalize distances (0 at edge/shore, 1 at center/deepest point)
-            max_dist = water_distances.max()
-            if max_dist > 0:
-                normalized_distances = water_distances / max_dist
-            else:
-                # Single-pixel water or uniform - use uniform color
-                normalized_distances = water_distances
-
-            # Define gradient colors: blue to very dark blue (Great Lakes depth)
-            # Edge (shallow water near shore): Bright recognizable blue
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue
-            # Center (deep water): Very dark blue (suggests depth of Lake Superior: 1,332 ft)
-            center_color = np.array([5, 20, 35], dtype=np.float32)  # Deep dark blue
-            water_transition_power = 0.3  # Quick transition then gentle descent
-
-            # If colors exist, overwrite water pixels with gradient
-            if hasattr(self, "colors") and self.colors is not None:
-                # Extract RGB channels (keep alpha if present)
-                has_alpha = self.colors.shape[-1] >= 4
-                rgb_data = self.colors[..., :3]
-
-                # Apply depth gradient to water pixels
-                water_indices = np.where(water_mask)
-                water_depths = normalized_distances[water_indices]
-
-                # Water depth gradient: light blue at shore → dark blue at center
-                # t^1.5 creates the desired effect: quick initial darkening, then gentle descent
-                t = np.power(water_depths, water_transition_power)[:, np.newaxis]  # Shape (N, 1) for broadcasting
-                water_colors = edge_color * (1 - t) + center_color * t
-
-                # Apply gradient colors to water pixels
-                rgb_data[water_indices] = water_colors.astype(np.uint8)
-
-                # Reconstruct with alpha channel if needed
-                if has_alpha:
-                    self.colors[..., :3] = rgb_data
-                else:
-                    self.colors = rgb_data
-
-                self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
-            else:
-                # No colors yet, create them with water coloring
-                height, width = dem_data.shape
-                if dem_data.dtype == np.float32 or dem_data.dtype == np.float64:
-                    # Normalize elevation for color
-                    valid = ~np.isnan(dem_data)
-                    if np.any(valid):
-                        min_elev = np.nanmin(dem_data)
-                        max_elev = np.nanmax(dem_data)
-                        normalized = np.zeros_like(dem_data)
-                        normalized[valid] = (dem_data[valid] - min_elev) / (
-                            max_elev - min_elev + 1e-8
-                        )
-                    else:
-                        normalized = np.zeros_like(dem_data)
-
-                    # Create grayscale RGB from elevation
-                    gray = np.clip(normalized * 255, 0, 255).astype(np.uint8)
-                    rgb = np.stack([gray, gray, gray], axis=-1)
-
-                    # Apply water depth gradient coloring (not flat color)
-                    water_indices = np.where(water_mask)
-                    water_depths = normalized_distances[water_indices]
-                    t = np.power(water_depths, water_transition_power)[:, np.newaxis]
-                    water_colors = edge_color * (1 - t) + center_color * t
-                    rgb[water_indices] = water_colors.astype(np.uint8)
-
-                    self.colors = rgb
-                else:
-                    # If DEM is already scaled, use it directly
-                    gray = np.clip(dem_data, 0, 255).astype(np.uint8)
-                    rgb = np.stack([gray, gray, gray], axis=-1)
-
-                    # Apply water depth gradient coloring (not flat color)
-                    water_indices = np.where(water_mask)
-                    water_depths = normalized_distances[water_indices]
-                    t = np.power(water_depths, water_transition_power)[:, np.newaxis]
-                    water_colors = edge_color * (1 - t) + center_color * t
-                    rgb[water_indices] = water_colors.astype(np.uint8)
-
-                    self.colors = rgb
-
-                self.logger.info(
-                    f"Colors created with water depth gradient coloring ({np.sum(water_mask)} water pixels)"
-                )
+            _water_mask_for_coloring = water_mask
 
         dem_data = self.data_layers["dem"]["transformed_data"]
         height, width = dem_data.shape
@@ -3108,6 +3027,53 @@ class Terrain:
         )
         if has_color_mapping and not hasattr(self, "colors"):
             self.compute_colors()
+
+        # Apply water coloring AFTER color computation (so we modify the colormap colors)
+        if _water_mask_for_coloring is not None and hasattr(self, "colors") and self.colors is not None:
+            from scipy.ndimage import distance_transform_edt
+
+            water_mask = _water_mask_for_coloring
+            water_distances = distance_transform_edt(water_mask)
+
+            # Define gradient colors: blue to dark blue (Great Lakes depth)
+            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue (shore)
+            center_color = np.array([15, 50, 85], dtype=np.float32)  # Deep blue (center)
+
+            # Map water mask (2D grid) to vertex indices
+            # self.colors is a 1D vertex array, not a 2D grid
+            water_at_vertices = water_mask[self.y_valid, self.x_valid]
+            water_vertex_indices = np.where(water_at_vertices)[0]
+
+            # Get raw pixel distances for water vertices using grid coordinates
+            water_y = self.y_valid[water_vertex_indices]
+            water_x = self.x_valid[water_vertex_indices]
+            water_pixel_distances = water_distances[water_y, water_x]
+
+            # Cartographic shoreline vignette style (vintage map aesthetic)
+            # Gradient only in shoreline band; interior water is uniform dark
+            shoreline_width_pixels = 12
+
+            # t=1 means dark (interior), t=0 means light (at shore edge)
+            # Start with all water as interior (dark)
+            t = np.ones_like(water_pixel_distances)
+
+            # Apply gradient only within shoreline band
+            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
+            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
+
+            # Power curve for smoother transition
+            t = np.power(t, 0.5)[:, np.newaxis]
+            water_colors = edge_color * (1 - t) + center_color * t
+
+            # Apply water colors - handle both grid-space (H, W, 4) and vertex-space (N, 4) colors
+            if self.colors.ndim == 3:
+                # Grid-space colors - index using y, x coordinates directly
+                self.colors[water_y, water_x, :3] = water_colors.astype(np.uint8)
+            else:
+                # Vertex-space colors - index using vertex indices
+                self.colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
+
+            self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
 
         # Center the model if requested
         if center_model:
@@ -3151,10 +3117,14 @@ class Terrain:
         if boundary_extension:
             boundary_points = self._sort_boundary_points_optimized(boundary_coords)
 
-            # DEBUG: Check boundary winding direction
-            # A consistent winding direction (counter-clockwise) ensures correct face normals
-            if len(boundary_points) >= 3:
-                # Compute signed area to determine winding
+            # Determine winding direction based on boundary type
+            if use_rectangle_edges:
+                # Rectangle edge sampling always traces clockwise in image coordinates
+                # (top→right→bottom→left with y increasing downward)
+                boundary_winding = "clockwise"
+                self.logger.info(f"Boundary winding direction: {boundary_winding} (rectangle edges always clockwise)")
+            elif len(boundary_points) >= 3:
+                # Compute signed area to determine winding for morphological boundary
                 # Positive = counter-clockwise, Negative = clockwise
                 signed_area = 0
                 for i in range(len(boundary_points)):
@@ -3203,8 +3173,11 @@ class Terrain:
                 catmull_rom_subdivisions=catmull_rom_subdivisions,
                 use_rectangle_edges=use_rectangle_edges,
                 terrain=self if use_rectangle_edges else None,  # NEW: Pass terrain for transform-aware edges
-                edge_sample_spacing=0.33,  # Sample at 3x density (0.33 pixels) for smooth edges
+                edge_sample_spacing=edge_sample_spacing,  # User-configurable density
                 boundary_winding=boundary_winding,  # Pass winding direction for correct face normals
+                use_fractional_edges=use_fractional_edges,  # NEW: Use fractional coords for projection curvature
+                scale_factor=scale_factor,  # For fractional edge X,Y computation
+                model_offset=self.model_offset,  # For fractional edge X,Y computation
             )
 
             # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
@@ -3752,3 +3725,230 @@ class Terrain:
         )
 
         return mask
+
+    def compute_ring_mask_grid(
+        self,
+        lons: np.ndarray,
+        lats: np.ndarray,
+        inner_radius_meters: float,
+        outer_radius_meters: float,
+        input_crs: str = "EPSG:4326",
+        cluster_threshold_meters: Optional[float] = None,
+    ) -> np.ndarray:
+        """
+        Create boolean mask for ring (annulus) around geographic points.
+
+        Creates a ring-shaped mask where pixels are True if they are:
+        - Within outer_radius_meters of a point, AND
+        - Outside inner_radius_meters of all points
+
+        This is useful for creating visual outlines around areas of interest.
+
+        Args:
+            lons: Array of longitudes for points of interest.
+            lats: Array of latitudes for points of interest (must match lons shape).
+            inner_radius_meters: Inner radius of the ring in meters. Pixels closer
+                than this to any point are excluded. Use 0 for filled circle.
+            outer_radius_meters: Outer radius of the ring in meters. Pixels farther
+                than this from all points are excluded.
+            input_crs: CRS of input coordinates (default: "EPSG:4326" for WGS84 lon/lat).
+            cluster_threshold_meters: Optional distance threshold for clustering nearby
+                points using DBSCAN. If None, each point gets its own ring.
+
+        Returns:
+            Boolean array of shape (height, width) matching transformed DEM,
+            where True indicates grid cell is within the ring zone.
+
+        Raises:
+            ValueError: If inner_radius > outer_radius or if radii are negative.
+
+        Example:
+            >>> # Create a 100m-wide ring at 2km from each park
+            >>> ring_mask = terrain.compute_ring_mask_grid(
+            ...     park_lons, park_lats,
+            ...     inner_radius_meters=1900,
+            ...     outer_radius_meters=2000,
+            ... )
+        """
+        from scipy.spatial import KDTree
+        from pyproj import Transformer
+
+        # Validate radii
+        if inner_radius_meters < 0:
+            raise ValueError(f"inner_radius_meters must be >= 0, got {inner_radius_meters}")
+        if outer_radius_meters < 0:
+            raise ValueError(f"outer_radius_meters must be >= 0, got {outer_radius_meters}")
+        if inner_radius_meters > outer_radius_meters:
+            raise ValueError(
+                f"inner_radius_meters ({inner_radius_meters}) must be <= "
+                f"outer_radius_meters ({outer_radius_meters})"
+            )
+
+        # Check prerequisites
+        dem_info = self.data_layers.get("dem", {})
+        if not dem_info.get("transformed", False):
+            # For tests with mock terrain, check for _transformed_dem attribute
+            if hasattr(self, "_transformed_dem") and self._transformed_dem is not None:
+                dem_data = self._transformed_dem
+                transform = getattr(self, "_transformed_transform", None)
+                dem_crs = getattr(self, "_transformed_crs", "EPSG:4326")
+            else:
+                raise ValueError(
+                    "DEM layer must be transformed before compute_ring_mask_grid(). "
+                    "Call apply_transforms() first."
+                )
+        else:
+            dem_data = dem_info["transformed_data"]
+            transform = dem_info.get("transformed_transform")
+            dem_crs = dem_info.get("transformed_crs", "EPSG:4326")
+
+        # Validate inputs
+        lons = np.asarray(lons)
+        lats = np.asarray(lats)
+        if lons.shape != lats.shape:
+            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
+
+        # Handle edge case: no points
+        if len(lons) == 0:
+            self.logger.debug("No points provided for ring mask - returning empty mask")
+            return np.zeros(dem_data.shape, dtype=bool)
+
+        # Filter out NaN coordinates
+        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
+        if not np.all(valid_mask):
+            num_invalid = np.sum(~valid_mask)
+            self.logger.warning(
+                f"Filtering out {num_invalid} points with NaN coordinates"
+            )
+            lons = lons[valid_mask]
+            lats = lats[valid_mask]
+
+        if len(lons) == 0:
+            return np.zeros(dem_data.shape, dtype=bool)
+
+        # If no transform, use simple grid coordinates (for testing)
+        if transform is None:
+            # Assume coordinates are already in grid space (0-1 normalized)
+            height, width = dem_data.shape
+            rows = (lats * height).astype(int)
+            cols = (lons * width).astype(int)
+            pixel_size_meters = 30.0  # Assume 30m pixels for testing
+        else:
+            # Reproject coordinates if input CRS differs from DEM CRS
+            if input_crs != dem_crs:
+                self.logger.debug(f"  Reprojecting points from {input_crs} to {dem_crs}")
+                transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
+                lons, lats = transformer.transform(lons, lats)
+
+            # Convert geographic coords to pixel coordinates
+            from rasterio.transform import rowcol
+
+            rows = []
+            cols = []
+            for lon, lat in zip(lons, lats):
+                row, col = rowcol(transform, lon, lat)
+                rows.append(row)
+                cols.append(col)
+
+            rows = np.array(rows)
+            cols = np.array(cols)
+
+            # Get pixel size in meters
+            pixel_size_meters = abs(transform.a)
+
+        # Filter out points outside DEM bounds
+        height, width = dem_data.shape
+        valid_bounds = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
+        if not np.all(valid_bounds):
+            rows = rows[valid_bounds]
+            cols = cols[valid_bounds]
+
+        if len(rows) == 0:
+            return np.zeros(dem_data.shape, dtype=bool)
+
+        self.logger.info(f"Computing ring mask for {len(rows)} points...")
+
+        # Convert radii from meters to pixels
+        inner_radius_pixels = inner_radius_meters / pixel_size_meters
+        outer_radius_pixels = outer_radius_meters / pixel_size_meters
+
+        # Stack point coordinates
+        point_coords = np.column_stack([rows, cols])
+
+        # Cluster nearby points using DBSCAN if requested
+        if cluster_threshold_meters is not None:
+            from sklearn.cluster import DBSCAN
+
+            cluster_threshold_pixels = cluster_threshold_meters / pixel_size_meters
+            clustering = DBSCAN(eps=cluster_threshold_pixels, min_samples=1)
+            labels = clustering.fit_predict(point_coords)
+            num_clusters = labels.max() + 1
+
+            # Use cluster centroids
+            point_coords = np.array(
+                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+            )
+            self.logger.info(f"  Clustered into {num_clusters} zones")
+
+        # Build KDTree for efficient spatial queries
+        tree = KDTree(point_coords)
+
+        # Create grid of all pixel coordinates
+        row_indices, col_indices = np.indices(dem_data.shape)
+        grid_coords = np.column_stack([row_indices.ravel(), col_indices.ravel()])
+
+        # Query distances to nearest point
+        distances, _ = tree.query(grid_coords, k=1)
+
+        # Create ring mask: within outer but outside inner
+        # Use strict inequality for inner so inner_radius=0 gives filled circle
+        outer_mask = distances <= outer_radius_pixels
+        inner_mask = distances < inner_radius_pixels  # Strictly less than
+        ring_mask_flat = outer_mask & ~inner_mask
+
+        # Reshape to grid
+        ring_mask = ring_mask_flat.reshape(dem_data.shape)
+
+        num_in_ring = np.sum(ring_mask)
+        self.logger.info(
+            f"  Ring mask: {num_in_ring} pixels "
+            f"(ring width: {outer_radius_meters - inner_radius_meters}m)"
+        )
+
+        return ring_mask
+
+    def apply_ring_color(
+        self,
+        ring_mask: np.ndarray,
+        ring_color: tuple = (0.1, 0.1, 0.1),
+    ) -> None:
+        """
+        Apply a solid color to vertices within the ring mask.
+
+        This modifies self.colors in-place, setting the RGB values for vertices
+        that fall within the ring mask to the specified color.
+
+        Args:
+            ring_mask: 2D boolean array matching DEM shape. True = apply ring color.
+            ring_color: RGB tuple (0-1 range) for ring color. Default: dark gray.
+
+        Raises:
+            ValueError: If ring_mask shape doesn't match DEM or colors not initialized.
+        """
+        if not hasattr(self, "colors") or self.colors is None:
+            raise ValueError("Colors must be computed before applying ring color")
+
+        if not hasattr(self, "y_valid") or not hasattr(self, "x_valid"):
+            raise ValueError("Vertex coordinates (y_valid, x_valid) must be set")
+
+        # Apply ring color to vertices within the mask
+        for i, (y, x) in enumerate(zip(self.y_valid, self.x_valid)):
+            # Clamp to valid indices
+            y_idx = int(np.clip(y, 0, ring_mask.shape[0] - 1))
+            x_idx = int(np.clip(x, 0, ring_mask.shape[1] - 1))
+
+            if ring_mask[y_idx, x_idx]:
+                self.colors[i, 0] = ring_color[0]
+                self.colors[i, 1] = ring_color[1]
+                self.colors[i, 2] = ring_color[2]
+                # Keep alpha unchanged
