@@ -192,8 +192,12 @@ def smooth_road_vertices(
     """
     Smooth Z coordinates of mesh vertices that are on roads.
 
-    This function operates on mesh vertices directly after mesh creation,
-    avoiding the coordinate alignment issues of DEM-based smoothing.
+    Reconstructs a 2D Z grid from vertex positions, applies 2D Gaussian
+    smoothing in grid space, then writes smoothed values back to road
+    vertices only. Non-road vertices are unchanged.
+
+    This ensures smoothing follows the spatial layout of the road rather
+    than the arbitrary vertex index order.
 
     Args:
         vertices: Mesh vertex positions (N, 3) array with [x, y, z] coords
@@ -206,25 +210,22 @@ def smooth_road_vertices(
         Modified vertices array with smoothed Z values on roads.
         X and Y coordinates are never modified.
     """
-    from scipy.ndimage import gaussian_filter1d
+    from scipy.ndimage import gaussian_filter
 
     # Return unchanged if no smoothing
     if smoothing_radius <= 0:
         return vertices.copy()
 
     result = vertices.copy()
-    n_vertices = len(vertices)
-    n_surface_vertices = len(y_valid)  # Only surface vertices have grid mappings
+    n_surface_vertices = len(y_valid)
+    h, w = road_mask.shape
 
-    # Vectorized: Find which surface vertices are on roads
-    # Check bounds first (only for surface vertices that have y_valid/x_valid mappings)
+    # Find which surface vertices are on roads
     in_bounds = (
-        (y_valid >= 0) & (y_valid < road_mask.shape[0]) &
-        (x_valid >= 0) & (x_valid < road_mask.shape[1])
+        (y_valid >= 0) & (y_valid < h) &
+        (x_valid >= 0) & (x_valid < w)
     )
 
-    # For in-bounds surface vertices, check road mask
-    # Note: Only first n_surface_vertices have grid mappings; boundary vertices are skipped
     road_vertex_mask = np.zeros(n_surface_vertices, dtype=bool)
     road_vertex_mask[in_bounds] = road_mask[y_valid[in_bounds], x_valid[in_bounds]] > 0.5
 
@@ -232,24 +233,37 @@ def smooth_road_vertices(
     if len(road_indices) == 0:
         return result
 
-    # Get Z values of road vertices
-    road_z = result[road_indices, 2].copy()
+    # Reconstruct 2D Z grid from vertex positions
+    z_grid = np.full((h, w), np.nan, dtype=np.float64)
+    z_grid[y_valid[in_bounds], x_valid[in_bounds]] = result[
+        np.where(in_bounds)[0], 2
+    ]
 
-    # Handle NaN values by interpolation
-    nan_mask = np.isnan(road_z)
-    if np.any(nan_mask):
-        valid_mask = ~nan_mask
-        if np.any(valid_mask):
-            # Linear interpolation to fill NaNs
-            valid_indices = np.where(valid_mask)[0]
-            nan_indices = np.where(nan_mask)[0]
-            road_z[nan_mask] = np.interp(nan_indices, valid_indices, road_z[valid_mask])
+    # Create a road-only Z grid: set non-road pixels to NaN so the Gaussian
+    # only averages road Z values with neighboring road Z values.
+    # To handle NaN in gaussian_filter, use the normalized convolution trick:
+    # smoothed = convolve(data_with_zeros) / convolve(mask)
+    is_road = road_mask > 0.5
+    valid_road = is_road & ~np.isnan(z_grid)
 
-    # Apply 1D Gaussian smoothing to the road Z values
-    if len(road_z) > 1:
-        smoothed_z = gaussian_filter1d(road_z, sigma=smoothing_radius, mode='nearest')
-        result[road_indices, 2] = smoothed_z
-    # else: single vertex, nothing to smooth
+    z_for_smooth = np.where(valid_road, z_grid, 0.0)
+    weight = valid_road.astype(np.float64)
+
+    sigma = float(smoothing_radius)
+    z_smoothed = gaussian_filter(z_for_smooth, sigma=sigma, mode='nearest')
+    w_smoothed = gaussian_filter(weight, sigma=sigma, mode='nearest')
+
+    # Avoid division by zero where no valid road neighbors exist
+    safe_mask = w_smoothed > 1e-10
+    z_result = np.where(safe_mask, z_smoothed / w_smoothed, z_grid)
+
+    # Write smoothed Z back to road vertices only
+    result[road_indices, 2] = z_result[
+        y_valid[road_indices], x_valid[road_indices]
+    ]
+
+    logger.info(f"✓ Smoothed {len(road_indices)} road vertices in 2D grid space "
+                f"(sigma={smoothing_radius})")
 
     return result
 
