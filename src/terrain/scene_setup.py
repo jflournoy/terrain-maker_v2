@@ -751,6 +751,7 @@ def position_camera_relative(
         "east": (1, 0, 0),  # +X
         "west": (-1, 0, 0),  # -X
         "above": (0, 0, 1),  # +Z (straight up)
+        "above-tilted": (0.7071, 0.7071, 0),  # Tilt direction: look toward NE (shows SW skirt)
         "northeast": (0.7071, 0.7071, 0),
         "northwest": (-0.7071, 0.7071, 0),
         "southeast": (0.7071, -0.7071, 0),
@@ -802,8 +803,9 @@ def position_camera_relative(
     # Get direction vector and calculate camera position
     dir_vector = np.array(DIRECTIONS[direction])
 
-    # For 'above', position directly overhead; for others, position offset from center
-    if direction == "above":
+    # For 'above' and 'above-tilted', position directly overhead
+    # For others, position offset from center based on direction
+    if direction in ("above", "above-tilted"):
         camera_pos = center.copy()
     else:
         camera_pos = center + dir_vector * distance * mesh_diagonal
@@ -813,9 +815,16 @@ def position_camera_relative(
 
     # Determine look-at target
     if look_at == "center":
-        target_pos = center
+        target_pos = center.copy()
     else:
         target_pos = np.array(look_at)
+
+    # For 'above-tilted', offset the look-at target toward NE to tilt camera toward SW
+    # This shows the southwest skirt edge while keeping camera overhead
+    if direction == "above-tilted":
+        tilt_offset = 0.1 * mesh_diagonal  # ~5° tilt
+        target_pos[0] += tilt_offset * 0.7071  # +X (east)
+        target_pos[1] += tilt_offset * 0.7071  # +Y (north)
 
     # Calculate rotation to point at target
     # Special case: for overhead (above) view, use zero rotation
@@ -829,6 +838,17 @@ def position_camera_relative(
         # Use to_track_quat to calculate rotation
         # Arguments: (forward_axis, up_axis) where -Z is camera forward, Y is world up
         track_quat = cam_to_target.to_track_quat("-Z", "Y")
+
+        # For 'above-tilted', add roll compensation to keep terrain edges parallel to frame
+        # Tilting toward NE causes the image to rotate; counterclockwise roll fixes this
+        # Apply roll as rotation around the forward axis (camera's local -Z)
+        if direction == "above-tilted":
+            import math
+            from mathutils import Quaternion
+            # 45° counterclockwise roll around the viewing axis
+            roll_quat = Quaternion(cam_to_target, math.radians(-45))
+            track_quat = roll_quat @ track_quat
+
         camera_angle = track_quat.to_euler()
 
     logger.debug(f"Camera position: {camera_pos}, angle: {camera_angle}")
