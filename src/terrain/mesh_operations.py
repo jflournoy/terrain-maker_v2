@@ -388,7 +388,11 @@ def create_boundary_extension(
     use_rectangle_edges=False,  # NEW: Use rectangle-edge sampling instead of morphological detection
     dem_shape=None,  # DEPRECATED: Use terrain= instead for transform-aware edges
     terrain=None,  # NEW: Terrain object for transform-aware rectangle edges
-    edge_sample_spacing=1.0,  # Sampling density for rectangle edges
+    edge_sample_spacing=0.33,  # Sampling density for rectangle edges (0.33 = 3x denser, ~80K boundary vertices for smooth curves)
+    boundary_winding="counter-clockwise",  # NEW: Boundary winding direction for correct face normals
+    use_fractional_edges=False,  # NEW: Use fractional coords preserving projection curvature
+    scale_factor=100.0,  # Scale factor used for mesh positions (for fractional edge X,Y computation)
+    model_offset=None,  # Model centering offset [x, y, z] (for fractional edge X,Y computation)
 ):
     """
     Create boundary extension vertices and faces to close the mesh.
@@ -439,6 +443,11 @@ def create_boundary_extension(
                                     0.6% (legacy) to ~100% (transform-aware) for downsampled DEMs.
         edge_sample_spacing (float): Pixel spacing for edge sampling at original DEM resolution (default: 1.0).
                                      Lower values = denser sampling, more edge pixels.
+        use_fractional_edges (bool): Use fractional coordinates that preserve projection curvature
+                                    (default: False). When True, edge vertices follow the true curved
+                                    boundary from WGS84→UTM Transverse Mercator projection instead of
+                                    snapping to integer grid positions. Requires terrain= parameter.
+                                    Automatically enables bilinear interpolation for surface positions.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -463,8 +472,31 @@ def create_boundary_extension(
     original_morphological_boundary = boundary_points
 
     if use_rectangle_edges:
-        # NEW: Use transform-aware approach if terrain object provided
-        if terrain is not None:
+        # NEW: Use fractional coordinates to preserve projection curvature
+        if use_fractional_edges and terrain is not None:
+            # Fractional edge sampling - preserves curved boundary from projection
+            rect_boundary_fractional = generate_transform_aware_rectangle_edges_fractional(
+                terrain,
+                edge_sample_spacing
+            )
+
+            # Report results
+            original_shape = terrain.dem_shape
+            print(f"\n{'='*60}")
+            print(f"Transform-Aware Fractional Edge Sampling (Curved Boundary)")
+            print(f"{'='*60}")
+            print(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+            print(f"Fractional edge vertices: {len(rect_boundary_fractional)}")
+            print(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+            print(f"NOTE: Fractional coordinates preserve projection curvature")
+            print(f"{'='*60}\n")
+
+            # Use fractional edges directly - they'll be processed by bilinear interpolation
+            # No need to filter through coord_to_index since these are fractional coords
+            rect_boundary_valid = rect_boundary_fractional
+
+        # Use transform-aware INTEGER approach if terrain provided but not fractional
+        elif terrain is not None:
             # Transform-aware rectangle-edge sampling (avoids NaN margins)
             rect_boundary_valid = generate_transform_aware_rectangle_edges(
                 terrain,
@@ -475,7 +507,7 @@ def create_boundary_extension(
             # Report results
             original_shape = terrain.dem_shape
             print(f"\n{'='*60}")
-            print(f"Transform-Aware Rectangle Edge Sampling")
+            print(f"Transform-Aware Rectangle Edge Sampling (Integer)")
             print(f"{'='*60}")
             print(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
             print(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
@@ -521,8 +553,54 @@ def create_boundary_extension(
 
         if rect_count >= min_required:
             # Rectangle edges produced good boundary - use it
-            boundary_points = rect_boundary_valid
+            # IMPORTANT: For rectangle edges, the points are ALREADY in order from generate_rectangle_edge_pixels()
+            # which traces: top→right→bottom→left in a continuous loop
+            # DON'T sort them - sorting with KD-tree nearest-neighbor breaks down on dense point clouds (82K+ points)
+            # and can reduce the boundary from 82K points to just 10 points!
             print(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
+
+            # CRITICAL: After coordinate transformation, the natural rectangle order is destroyed!
+            # First deduplicate, then re-sort spatially to form a closed loop
+            print(f"  Deduplicating boundary points...")
+            rect_boundary_unique = deduplicate_boundary_points(rect_boundary_valid)
+
+            # For dense boundaries, use angular sorting (faster and more robust)
+            # For sparse boundaries, use nearest-neighbor
+            if len(rect_boundary_unique) >= 100:
+                print(f"  Sorting {len(rect_boundary_unique)} points using angular method...")
+                boundary_points = sort_boundary_points_angular(rect_boundary_unique)
+            else:
+                print(f"  Sorting {len(rect_boundary_unique)} points using nearest-neighbor...")
+                boundary_points = sort_boundary_points(rect_boundary_unique)
+            print(f"  ✓ Boundary sorted into continuous path")
+
+            # DEBUG: Check spatial distribution of boundary points
+            boundary_array = np.array(boundary_points)
+            y_min, y_max = boundary_array[:, 0].min(), boundary_array[:, 0].max()
+            x_min, x_max = boundary_array[:, 1].min(), boundary_array[:, 1].max()
+
+            # Count points on each edge (with 5% margin)
+            y_range = y_max - y_min
+            x_range = x_max - x_min
+            margin = 0.05
+
+            top_count = np.sum(boundary_array[:, 0] <= y_min + margin * y_range)
+            bottom_count = np.sum(boundary_array[:, 0] >= y_max - margin * y_range)
+            left_count = np.sum(boundary_array[:, 1] <= x_min + margin * x_range)
+            right_count = np.sum(boundary_array[:, 1] >= x_max - margin * x_range)
+
+            print(f"  Boundary point distribution:")
+            print(f"    Top edge (north):    {top_count:6d} points")
+            print(f"    Bottom edge (south): {bottom_count:6d} points")
+            print(f"    Left edge (west):    {left_count:6d} points")
+            print(f"    Right edge (east):   {right_count:6d} points")
+
+            # Check if distribution is severely uneven (any edge has < 5% of points)
+            total_points = len(boundary_points)
+            min_percent = min(top_count, bottom_count, left_count, right_count) / total_points * 100
+            if min_percent < 5.0:
+                print(f"  ⚠️  Warning: Uneven distribution detected (min={min_percent:.1f}%)")
+                print(f"  Sparse edges may have lower visual quality")
         else:
             # Rectangle edges too sparse - keep morphological boundary
             boundary_points = original_morphological_boundary
@@ -549,14 +627,38 @@ def create_boundary_extension(
         boundary_points = smooth_curve_points
 
     n_boundary = len(boundary_points)
-    has_smoothed_coords = (smooth_boundary or use_catmull_rom) and any(
+    # Check if we have fractional coordinates that need bilinear interpolation
+    # This can happen from: smooth_boundary, use_catmull_rom, OR use_fractional_edges
+    has_smoothed_coords = (smooth_boundary or use_catmull_rom or use_fractional_edges) and any(
         not (isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)))
         for y, x in boundary_points
     )
 
     # Helper function to get or interpolate position
+    # Precompute mesh bounds for edge clamping (once, not per-call)
+    mesh_bounds = None
+    if coord_to_index:
+        all_yx = list(coord_to_index.keys())
+        mesh_y = [yx[0] for yx in all_yx]
+        mesh_x = [yx[1] for yx in all_yx]
+        mesh_bounds = (min(mesh_y), max(mesh_y), min(mesh_x), max(mesh_x))
+
     def get_position_at_coords(y, x):
-        """Get or interpolate vertex position at given (y, x) coordinates."""
+        """Get or interpolate vertex position at given (y, x) coordinates.
+
+        Handles edge coordinates that extend slightly beyond mesh bounds
+        by clamping to valid range. This is essential for transform-aware
+        rectangle edges where projection curvature causes boundary pixels
+        to land outside the integer mesh grid.
+        """
+        # Clamp coordinates to mesh bounds to handle projection curvature
+        # that causes edge pixels to extend slightly outside the mesh
+        if mesh_bounds is not None:
+            y_min, y_max, x_min, x_max = mesh_bounds
+            # Clamp to valid interpolation range (one less than max for bilinear)
+            y = np.clip(y, y_min, y_max - 0.001)
+            x = np.clip(x, x_min, x_max - 0.001)
+
         # Try integer lookup first
         if isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)):
             idx = coord_to_index.get((int(y), int(x)))
@@ -569,18 +671,21 @@ def create_boundary_extension(
 
         # Get the four corner positions
         corners = {}
+        missing_corners = []
         for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
             yy, xx = y_floor + dy, x_floor + dx
             idx = coord_to_index.get((yy, xx))
             if idx is not None:
                 corners[(dy, dx)] = positions[idx]
+            else:
+                missing_corners.append((yy, xx))
+
+        # Fractional parts (used for all interpolation modes)
+        fy = y - y_floor
+        fx = x - x_floor
 
         # If we have all 4 corners, do bilinear interpolation
         if len(corners) == 4:
-            # Fractional parts
-            fy = y - y_floor
-            fx = x - x_floor
-
             # Bilinear interpolation
             pos_00 = corners[(0, 0)]
             pos_01 = corners[(0, 1)]
@@ -595,14 +700,89 @@ def create_boundary_extension(
             result = pos_0 * (1 - fy) + pos_1 * fy
             return result
 
+        # Partial corner interpolation - handle trapezoidal mesh edges
+        # UTM projection can create meshes where edge pixels don't form complete rectangles
+        if len(corners) >= 2:
+            # Try to interpolate with available corners
+            available = list(corners.values())
+
+            # If we have top or bottom row complete, do linear interpolation
+            if (0, 0) in corners and (0, 1) in corners:
+                # Have top row - interpolate and extrapolate
+                pos_0 = corners[(0, 0)] * (1 - fx) + corners[(0, 1)] * fx
+                if (1, 0) in corners and (1, 1) in corners:
+                    pos_1 = corners[(1, 0)] * (1 - fx) + corners[(1, 1)] * fx
+                    return pos_0 * (1 - fy) + pos_1 * fy
+                return pos_0  # Use top row only
+
+            if (1, 0) in corners and (1, 1) in corners:
+                # Have bottom row only - use it
+                pos_1 = corners[(1, 0)] * (1 - fx) + corners[(1, 1)] * fx
+                return pos_1
+
+            # If we have left or right column complete, do linear interpolation
+            if (0, 0) in corners and (1, 0) in corners:
+                # Have left column - interpolate
+                pos_left = corners[(0, 0)] * (1 - fy) + corners[(1, 0)] * fy
+                if (0, 1) in corners and (1, 1) in corners:
+                    pos_right = corners[(0, 1)] * (1 - fy) + corners[(1, 1)] * fy
+                    return pos_left * (1 - fx) + pos_right * fx
+                return pos_left  # Use left column only
+
+            if (0, 1) in corners and (1, 1) in corners:
+                # Have right column only - use it
+                pos_right = corners[(0, 1)] * (1 - fy) + corners[(1, 1)] * fy
+                return pos_right
+
+            # Diagonal corners - average them
+            return np.mean(available, axis=0)
+
+        # If we have exactly 1 corner, use it
+        if len(corners) == 1:
+            return list(corners.values())[0].copy()
+
         # Fallback: use nearest neighbor if we don't have all 4 corners
         y_int, x_int = int(np.round(y)), int(np.round(x))
+        # Clamp to mesh bounds
+        if mesh_bounds is not None:
+            y_min, y_max, x_min, x_max = mesh_bounds
+            y_int = max(y_min, min(y_int, y_max))
+            x_int = max(x_min, min(x_int, x_max))
         idx = coord_to_index.get((y_int, x_int))
         if idx is not None:
             return positions[idx].copy()
 
+        # Expanding search for nearest valid vertex (handles trapezoidal meshes)
+        # The mesh may have gaps at corners due to UTM projection
+        if mesh_bounds is not None:
+            y_min, y_max, x_min, x_max = mesh_bounds
+            for radius in range(1, 50):  # Search up to 50 pixels away
+                # Search in a square ring at this radius
+                for dy in range(-radius, radius + 1):
+                    for dx in range(-radius, radius + 1):
+                        if abs(dy) != radius and abs(dx) != radius:
+                            continue  # Only check ring, not filled square
+                        yy = y_int + dy
+                        xx = x_int + dx
+                        if y_min <= yy <= y_max and x_min <= xx <= x_max:
+                            idx = coord_to_index.get((yy, xx))
+                            if idx is not None:
+                                return positions[idx].copy()
+
+        # DEBUG: Log when we truly can't find a position
+        if missing_corners:
+            get_position_at_coords.missing_corner_samples.append({
+                'y': y, 'x': x,
+                'y_floor': y_floor, 'x_floor': x_floor,
+                'missing': missing_corners,
+                'n_corners': len(corners)
+            })
+
         # Final fallback: return None if can't find any position
         return None
+
+    # Initialize debug tracking
+    get_position_at_coords.missing_corner_samples = []
 
     if not two_tier:
         # ===== SINGLE-TIER MODE (backwards compatible) =====
@@ -617,10 +797,15 @@ def create_boundary_extension(
                 if pos is None:
                     continue
 
-                # Update XY to smoothed position, keep interpolated Z
-                pos[0] = x / 100.0  # Use same scale as original positions
-                pos[1] = y / 100.0
-                surface_boundary_verts[i] = pos
+                # For fractional edges: compute X,Y directly from fractional coordinates
+                # The bilinear interpolation correctly gets Z, but X,Y get clamped to mesh bounds
+                # which causes stair-stepping. Use the true fractional coords for smooth edges.
+                if use_fractional_edges and model_offset is not None:
+                    pos[0] = x / scale_factor - model_offset[0]
+                    pos[1] = y / scale_factor - model_offset[1]
+                    # Z remains from bilinear interpolation (elevation data)
+
+                surface_boundary_verts[i] = pos.copy()
 
                 # Base vertex: same XY, but at base_depth
                 base_pos = pos.copy()
@@ -639,8 +824,9 @@ def create_boundary_extension(
             # Create faces
             boundary_faces = []
 
-            if use_catmull_rom:
-                # When using Catmull-Rom curves, we have many interpolated points
+            if use_catmull_rom or use_fractional_edges:
+                # When using Catmull-Rom curves or fractional edges, we have many interpolated points
+                # that don't map to existing mesh vertices.
                 # Create faces only between smoothed surface and base (no connection to original mesh)
                 for i in range(n_boundary):
                     next_i = (i + 1) % n_boundary
@@ -711,23 +897,98 @@ def create_boundary_extension(
         base_indices = list(range(len(positions), len(positions) + len(boundary_points)))
 
         boundary_faces = []
+
+        # DEBUG: Track face generation statistics
+        faces_created = 0
+        faces_skipped_none = 0
+        faces_skipped_distance = 0
+
         for i in range(n_boundary):
             if boundary_indices[i] is None:
+                faces_skipped_none += 1
                 continue
 
             next_i = (i + 1) % n_boundary
             if boundary_indices[next_i] is None:
+                faces_skipped_none += 1
                 continue
 
+            # Check if this is the wrap-around edge (last → first vertex)
+            # For rectangle edges with angular sorting, check if gap is reasonable
+            if i == n_boundary - 1 and use_rectangle_edges:
+                # Get positions of last and first boundary points
+                y_last, x_last = boundary_points[i]
+                y_first, x_first = boundary_points[0]
+
+                # Calculate wrap-around distance
+                distance = np.sqrt((y_last - y_first)**2 + (x_last - x_first)**2)
+
+                # Calculate median edge distance for comparison
+                # Sample distances between consecutive boundary points to establish "normal" edge spacing
+                sample_size = min(100, n_boundary - 1)
+                sample_distances = []
+                for j in range(sample_size):
+                    y_curr, x_curr = boundary_points[j]
+                    y_next, x_next = boundary_points[j + 1]
+                    d = np.sqrt((y_next - y_curr)**2 + (x_next - x_curr)**2)
+                    sample_distances.append(d)
+
+                median_edge_distance = np.median(sample_distances)
+
+                # Allow wrap-around only if it's within 10x the median edge distance
+                # This prevents diagonal artifacts across the mesh
+                threshold = max(median_edge_distance * 10.0, 50.0)
+
+                if distance > threshold:
+                    # Skip this wrap-around edge - gap is too large relative to normal edge spacing
+                    faces_skipped_distance += 1
+                    print(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
+                    continue
+                elif distance > median_edge_distance * 2.0:
+                    # Warn but still create the face (gap is large but acceptable)
+                    print(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
+
             # Create quad connecting top boundary to bottom
-            boundary_faces.append(
-                (
-                    boundary_indices[i],
-                    boundary_indices[next_i],
-                    base_indices[next_i],
-                    base_indices[i],
+            # Face winding must match boundary direction for correct normals
+            if boundary_winding == "clockwise":
+                # Clockwise boundary: reverse face winding for outward normals
+                boundary_faces.append(
+                    (
+                        boundary_indices[i],
+                        base_indices[i],
+                        base_indices[next_i],
+                        boundary_indices[next_i],
+                    )
                 )
-            )
+            else:
+                # Counter-clockwise boundary: standard winding
+                boundary_faces.append(
+                    (
+                        boundary_indices[i],
+                        boundary_indices[next_i],
+                        base_indices[next_i],
+                        base_indices[i],
+                    )
+                )
+            faces_created += 1
+
+        # DEBUG: Print face generation statistics
+        print(f"\n{'='*60}")
+        print(f"Boundary Face Generation (Single-Tier)")
+        print(f"{'='*60}")
+        print(f"Boundary winding: {boundary_winding}")
+        print(f"Boundary vertices: {n_boundary}")
+        print(f"Boundary indices (valid): {n_boundary - sum(1 for idx in boundary_indices if idx is None)}")
+        print(f"Boundary indices (None): {sum(1 for idx in boundary_indices if idx is None)}")
+        print(f"Faces created: {faces_created}")
+        print(f"Faces skipped (None index): {faces_skipped_none}")
+        print(f"Faces skipped (distance check): {faces_skipped_distance}")
+        print(f"Total boundary faces: {len(boundary_faces)}")
+        expected_faces = n_boundary  # 1 face per boundary segment
+        coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
+        print(f"Expected faces (ideal): {expected_faces}")
+        print(f"Coverage: {coverage:.1f}%")
+        print(f"{'='*60}\n")
 
         return boundary_vertices, boundary_faces
 
@@ -767,12 +1028,49 @@ def create_boundary_extension(
         mid_vertices = np.zeros((n_boundary, 3), dtype=float)
         base_vertices = np.zeros((n_boundary, 3), dtype=float)
 
+        # Track which boundary vertices were successfully initialized
+        # (needed for smoothed coords where interpolation may fail)
+        valid_boundary_vertex = [False] * n_boundary
+
+        # DEBUG: Track interpolation failures by edge region
+        interp_success = 0
+        interp_fail_no_corners = 0
+        interp_fail_fallback = 0
+        failed_coords = []
+
+        # Analyze boundary coordinate ranges
+        if has_smoothed_coords and boundary_points:
+            y_coords = [bp[0] for bp in boundary_points]
+            x_coords = [bp[1] for bp in boundary_points]
+            print(f"\n[DIAG] Boundary coordinate ranges:")
+            print(f"  Y: min={min(y_coords):.2f}, max={max(y_coords):.2f}")
+            print(f"  X: min={min(x_coords):.2f}, max={max(x_coords):.2f}")
+            # Get mesh bounds from coord_to_index
+            if coord_to_index:
+                all_yx = list(coord_to_index.keys())
+                mesh_y = [yx[0] for yx in all_yx]
+                mesh_x = [yx[1] for yx in all_yx]
+                print(f"  Mesh Y: min={min(mesh_y)}, max={max(mesh_y)}")
+                print(f"  Mesh X: min={min(mesh_x)}, max={max(mesh_x)}")
+
+        # Track position samples for diagnostics
+        position_samples = []
+
         for i, (y, x) in enumerate(boundary_points):
             # For smoothed coordinates (Catmull-Rom or smooth_boundary), use interpolation
             if has_smoothed_coords:
                 pos = get_position_at_coords(y, x)
                 if pos is None:
+                    interp_fail_no_corners += 1
+                    if len(failed_coords) < 20:  # Limit debug output
+                        failed_coords.append((y, x))
                     continue
+                interp_success += 1
+                valid_boundary_vertex[i] = True
+
+                # Store bilinear-interpolated values for diagnostics (before fractional edge correction)
+                bilinear_x = pos[0]
+                bilinear_y = pos[1]
 
                 # Improve Z value: use smooth interpolation along boundary curve
                 # instead of spatial bilinear interpolation
@@ -799,7 +1097,31 @@ def create_boundary_extension(
                             t = np.clip(point_dist / seg_dist, 0, 1)
                             pos[2] = z1 * (1 - t) + z2 * t
 
-                # Store the surface position at smoothed coordinates
+                # For fractional edges: compute X,Y directly from fractional coordinates
+                # The bilinear interpolation correctly gets Z, but X,Y get clamped to mesh bounds
+                # which causes stair-stepping. Use the true fractional coords for smooth edges.
+                if use_fractional_edges and model_offset is not None:
+                    # Compute X,Y using same formula as mesh vertices:
+                    # pos_x = x_pixel / scale_factor - centroid_x
+                    # pos_y = y_pixel / scale_factor - centroid_y
+                    pos[0] = x / scale_factor - model_offset[0]
+                    pos[1] = y / scale_factor - model_offset[1]
+                    # Z remains from bilinear interpolation (elevation data)
+
+                # Sample positions for diagnostic output (AFTER fractional edge correction)
+                if len(position_samples) < 80:
+                    position_samples.append({
+                        'i': i,
+                        'y_in': y,
+                        'x_in': x,
+                        'bilinear_x': bilinear_x,
+                        'bilinear_y': bilinear_y,
+                        'x_out': pos[0],
+                        'y_out': pos[1],
+                        'z_out': pos[2],
+                    })
+
+                # Store the surface position
                 surface_vertices[i] = pos.copy()
             else:
                 # For integer coordinates, direct lookup
@@ -807,6 +1129,7 @@ def create_boundary_extension(
                 if original_idx is None:
                     continue
                 pos = positions[original_idx].copy()
+                valid_boundary_vertex[i] = True
 
             # Mid vertex: extend downward from surface by mid_depth offset
             # (mid_depth is shallower, typically -0.2 or so)
@@ -820,6 +1143,60 @@ def create_boundary_extension(
             pos_base = pos.copy()
             pos_base[2] = base_depth
             base_vertices[i] = pos_base
+
+        # DEBUG: Print interpolation summary
+        if has_smoothed_coords:
+            total_boundary = interp_success + interp_fail_no_corners
+            success_rate = interp_success / total_boundary * 100 if total_boundary > 0 else 0
+            print(f"\n[DIAG] Vertex interpolation summary:")
+            print(f"  Success: {interp_success}/{total_boundary} ({success_rate:.1f}%)")
+            print(f"  Failed (no corners): {interp_fail_no_corners}")
+            if failed_coords:
+                print(f"  First failed coords (up to 20):")
+                for y, x in failed_coords[:10]:
+                    print(f"    (y={y:.2f}, x={x:.2f})")
+                if len(failed_coords) > 10:
+                    print(f"    ... and {len(failed_coords) - 10} more")
+
+            # Print detailed missing corner info
+            if hasattr(get_position_at_coords, 'missing_corner_samples') and get_position_at_coords.missing_corner_samples:
+                samples = get_position_at_coords.missing_corner_samples[:10]
+                print(f"\n[DIAG] Missing corner details (first {len(samples)}):")
+                for s in samples:
+                    print(f"    coord=({s['y']:.2f}, {s['x']:.2f}) floor=({s['y_floor']}, {s['x_floor']}) "
+                          f"missing={s['missing']} had={s['n_corners']}/4 corners")
+
+            # Print position interpolation samples to verify smoothness
+            if position_samples:
+                frac_mode = use_fractional_edges and model_offset is not None
+                print(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
+                print(f"  Fractional edge correction: {'ENABLED' if frac_mode else 'DISABLED'}")
+                if frac_mode:
+                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'bilinear':>21} | {'final (corrected)':>21} | {'z':>8}")
+                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*21}-+-{'-'*21}-+-{'-'*8}")
+                    for s in position_samples[:20]:
+                        print(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                              f"({s['bilinear_x']:9.4f}, {s['bilinear_y']:9.4f}) | "
+                              f"({s['x_out']:9.4f}, {s['y_out']:9.4f}) | {s['z_out']:8.4f}")
+                else:
+                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}")
+                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*10}-{'-'*10}-{'-'*8}")
+                    for s in position_samples[:20]:
+                        print(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                              f"{s['x_out']:10.5f} {s['y_out']:10.5f} {s['z_out']:8.4f}")
+                if len(position_samples) > 20:
+                    print(f"  ... ({len(position_samples) - 20} more samples)")
+
+                # Check for stair-stepping: are X,Y outputs changing smoothly?
+                x_outs = [s['x_out'] for s in position_samples]
+                y_outs = [s['y_out'] for s in position_samples]
+                x_diffs = [abs(x_outs[i+1] - x_outs[i]) for i in range(len(x_outs)-1)]
+                y_diffs = [abs(y_outs[i+1] - y_outs[i]) for i in range(len(y_outs)-1)]
+                print(f"\n  Output position deltas (smoothness check):")
+                print(f"    X: min={min(x_diffs) if x_diffs else 0:.6f}, max={max(x_diffs) if x_diffs else 0:.6f}, "
+                      f"mean={sum(x_diffs)/len(x_diffs) if x_diffs else 0:.6f}")
+                print(f"    Y: min={min(y_diffs) if y_diffs else 0:.6f}, max={max(y_diffs) if y_diffs else 0:.6f}, "
+                      f"mean={sum(y_diffs)/len(y_diffs) if y_diffs else 0:.6f}")
 
         # Stack vertices appropriately based on coordinate type
         n_existing = len(positions)
@@ -839,18 +1216,63 @@ def create_boundary_extension(
 
         boundary_faces = []
 
+        # DEBUG: Track face generation statistics
+        faces_created = 0
+        faces_skipped_none = 0
+        faces_skipped_distance = 0
+        bridge_faces_created = 0
+
         for i in range(n_boundary):
-            if surface_indices[i] is None:
+            # Skip if surface index is None (integer coords) or vertex wasn't initialized (smoothed coords)
+            if surface_indices[i] is None or not valid_boundary_vertex[i]:
+                faces_skipped_none += 1
                 continue
 
             next_i = (i + 1) % n_boundary
-            if surface_indices[next_i] is None:
+            if surface_indices[next_i] is None or not valid_boundary_vertex[next_i]:
+                faces_skipped_none += 1
                 continue
 
-            # When using smoothed coordinates, bridge original to new smooth boundary
-            # This eliminates orphaned vertices
-            # Note: We use the rounded coordinates to find the nearest original vertex
-            if has_smoothed_coords:
+            # Check if this is the wrap-around edge (last → first vertex)
+            # For rectangle edges with angular sorting, check if gap is reasonable
+            if i == n_boundary - 1 and use_rectangle_edges:
+                # Get positions of last and first boundary points
+                y_last, x_last = boundary_points[i]
+                y_first, x_first = boundary_points[0]
+
+                # Calculate wrap-around distance
+                distance = np.sqrt((y_last - y_first)**2 + (x_last - x_first)**2)
+
+                # Calculate median edge distance for comparison
+                # Sample distances between consecutive boundary points to establish "normal" edge spacing
+                sample_size = min(100, n_boundary - 1)
+                sample_distances = []
+                for j in range(sample_size):
+                    y_curr, x_curr = boundary_points[j]
+                    y_next, x_next = boundary_points[j + 1]
+                    d = np.sqrt((y_next - y_curr)**2 + (x_next - x_curr)**2)
+                    sample_distances.append(d)
+
+                median_edge_distance = np.median(sample_distances)
+
+                # Allow wrap-around only if it's within 10x the median edge distance
+                # This prevents diagonal artifacts across the mesh
+                threshold = max(median_edge_distance * 10.0, 50.0)
+
+                if distance > threshold:
+                    # Skip this wrap-around edge - gap is too large relative to normal edge spacing
+                    faces_skipped_distance += 1
+                    print(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
+                    continue
+                elif distance > median_edge_distance * 2.0:
+                    # Warn but still create the face (gap is large but acceptable)
+                    print(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
+
+            # When using smoothed coordinates (but NOT fractional/Catmull-Rom), bridge original
+            # to new smooth boundary. This eliminates orphaned vertices.
+            # Skip for fractional edges or Catmull-Rom: these create many interpolated points
+            # that don't map to existing mesh vertices, so bridge faces would create diagonals.
+            if has_smoothed_coords and not (use_fractional_edges or use_catmull_rom):
                 # Find nearest original boundary vertices to this smoothed segment
                 # by rounding the smoothed coordinates
                 orig_i_y, orig_i_x = int(np.round(boundary_points[i][0])), int(np.round(boundary_points[i][1]))
@@ -862,34 +1284,103 @@ def create_boundary_extension(
                 if orig_i is not None and orig_next is not None:
                     # Bridge face: original boundary → new smooth surface tier
                     # This connects the stair-step to the smooth curve
-                    boundary_faces.append(
-                        (
-                            orig_i,
-                            orig_next,
-                            surface_indices[next_i],
-                            surface_indices[i],
+                    # Face winding must match boundary direction
+                    if boundary_winding == "clockwise":
+                        # Clockwise boundary: reverse face winding
+                        boundary_faces.append(
+                            (
+                                orig_i,
+                                surface_indices[i],
+                                surface_indices[next_i],
+                                orig_next,
+                            )
                         )
-                    )
+                    else:
+                        # Counter-clockwise boundary: standard winding
+                        boundary_faces.append(
+                            (
+                                orig_i,
+                                orig_next,
+                                surface_indices[next_i],
+                                surface_indices[i],
+                            )
+                        )
+                    bridge_faces_created += 1
 
             # Upper tier: surface → mid
-            boundary_faces.append(
-                (
-                    surface_indices[i],
-                    surface_indices[next_i],
-                    mid_indices[next_i],
-                    mid_indices[i],
+            # Face winding must match boundary direction for correct normals
+            if boundary_winding == "clockwise":
+                # Clockwise boundary: reverse face winding for outward normals
+                boundary_faces.append(
+                    (
+                        surface_indices[i],
+                        mid_indices[i],
+                        mid_indices[next_i],
+                        surface_indices[next_i],
+                    )
                 )
-            )
+            else:
+                # Counter-clockwise boundary: standard winding
+                boundary_faces.append(
+                    (
+                        surface_indices[i],
+                        surface_indices[next_i],
+                        mid_indices[next_i],
+                        mid_indices[i],
+                    )
+                )
+            faces_created += 1
 
             # Lower tier: mid → base
-            boundary_faces.append(
-                (
-                    mid_indices[i],
-                    mid_indices[next_i],
-                    base_indices[next_i],
-                    base_indices[i],
+            if boundary_winding == "clockwise":
+                # Clockwise boundary: reverse face winding for outward normals
+                boundary_faces.append(
+                    (
+                        mid_indices[i],
+                        base_indices[i],
+                        base_indices[next_i],
+                        mid_indices[next_i],
+                    )
                 )
-            )
+            else:
+                # Counter-clockwise boundary: standard winding
+                boundary_faces.append(
+                    (
+                        mid_indices[i],
+                        mid_indices[next_i],
+                        base_indices[next_i],
+                        base_indices[i],
+                    )
+                )
+            faces_created += 1
+
+        # DEBUG: Print face generation statistics
+        print(f"\n{'='*60}")
+        print(f"Boundary Face Generation (Two-Tier)")
+        print(f"{'='*60}")
+        print(f"Boundary winding: {boundary_winding}")
+        print(f"Boundary vertices: {n_boundary}")
+        print(f"Surface indices (valid): {n_boundary - sum(1 for idx in surface_indices if idx is None)}")
+        print(f"Surface indices (None): {sum(1 for idx in surface_indices if idx is None)}")
+        if has_smoothed_coords:
+            print(f"Bridge faces created: {bridge_faces_created}")
+        print(f"Tier faces created: {faces_created}")
+        print(f"Faces skipped (None index): {faces_skipped_none}")
+        print(f"Faces skipped (distance check): {faces_skipped_distance}")
+        print(f"Total boundary faces: {len(boundary_faces)}")
+        expected_faces = n_boundary * 2  # 2 faces per boundary segment (upper + lower)
+        coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
+        print(f"Expected faces (ideal): {expected_faces}")
+        print(f"Coverage: {coverage:.1f}%")
+
+        # DEBUG: Sample a few face windings to verify correctness
+        if len(boundary_faces) > 0:
+            print(f"\nSample face indices (first 3 faces):")
+            for i in range(min(3, len(boundary_faces))):
+                face = boundary_faces[i]
+                print(f"  Face {i}: {face}")
+
+        print(f"{'='*60}\n")
 
         # Create colors (size depends on whether we created surface vertices)
         if has_smoothed_coords:
@@ -927,10 +1418,38 @@ def create_boundary_extension(
                         c1 = c10 * (1 - fx) + c11 * fx
                         surface_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
                 else:
-                    # For integer coordinates, direct lookup
-                    original_idx = coord_to_index.get((int(y), int(x)))
+                    # For integer coordinates, try direct lookup first
+                    y_int, x_int = int(y), int(x)
+                    original_idx = coord_to_index.get((y_int, x_int))
                     if original_idx is not None:
                         surface_color = surface_colors[original_idx, :3]
+                    else:
+                        # Direct lookup failed - interpolate from nearby valid pixels
+                        # This happens with rectangle-edge sampling after downsampling
+                        y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
+                        color_corners = {}
+                        for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
+                            yy, xx = y_floor + dy, x_floor + dx
+                            idx = coord_to_index.get((yy, xx))
+                            if idx is not None:
+                                color_corners[(dy, dx)] = surface_colors[idx, :3]
+
+                        if len(color_corners) >= 1:
+                            # Bilinear interpolation if we have all 4 corners
+                            if len(color_corners) == 4:
+                                fy = y - y_floor
+                                fx = x - x_floor
+                                c00 = color_corners[(0, 0)].astype(float)
+                                c01 = color_corners[(0, 1)].astype(float)
+                                c10 = color_corners[(1, 0)].astype(float)
+                                c11 = color_corners[(1, 1)].astype(float)
+                                c0 = c00 * (1 - fx) + c01 * fx
+                                c1 = c10 * (1 - fx) + c11 * fx
+                                surface_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
+                            else:
+                                # Fallback: average available corners
+                                colors_array = np.array(list(color_corners.values()), dtype=float)
+                                surface_color = np.mean(colors_array, axis=0).astype(np.uint8)
 
             if surface_color is None:
                 # Use base material color as fallback
@@ -1021,6 +1540,226 @@ def smooth_boundary_points(boundary_coords, window_size=3, closed_loop=True):
     return [tuple(pt) for pt in smoothed]
 
 
+def deduplicate_boundary_points(boundary_coords):
+    """
+    Remove duplicate points while preserving the original order.
+
+    After coordinate transformations, many boundary points map to the same
+    pixel coordinates, creating duplicates. This function removes duplicates
+    while preserving the original perimeter traversal order.
+
+    Args:
+        boundary_coords: List of (y, x) coordinate tuples
+
+    Returns:
+        list: Deduplicated boundary points in original order
+    """
+    if len(boundary_coords) <= 1:
+        return boundary_coords
+
+    seen = set()
+    unique_points = []
+
+    for point in boundary_coords:
+        point_tuple = tuple(point)
+        if point_tuple not in seen:
+            seen.add(point_tuple)
+            unique_points.append(point)
+
+    duplicates_removed = len(boundary_coords) - len(unique_points)
+    if duplicates_removed > 0:
+        print(f"    Removed {duplicates_removed} duplicate points")
+
+    return unique_points
+
+
+def sort_boundary_points_perimeter(boundary_coords):
+    """
+    Sort boundary points by perimeter distance to form a closed loop.
+
+    Ideal for rectangular boundaries. Classifies points by which edge they're on
+    (top, right, bottom, left), sorts within each edge, then concatenates.
+    This creates an even distribution around the perimeter, unlike angular sorting
+    which clusters points on elongated shapes.
+
+    Args:
+        boundary_coords: List of (y, x) coordinate tuples representing boundary points
+
+    Returns:
+        list: Sorted boundary points forming a continuous closed loop
+    """
+    # Quick return for small boundaries
+    if len(boundary_coords) <= 2:
+        return boundary_coords
+
+    # Convert to numpy for vectorized operations
+    points_array = np.array(boundary_coords, dtype=float)
+
+    # Remove duplicate points while preserving order
+    # np.unique sorts the array which destroys perimeter structure!
+    # Use a different approach that preserves order
+    seen = set()
+    unique_indices = []
+    for i, point in enumerate(points_array):
+        point_tuple = tuple(point)
+        if point_tuple not in seen:
+            seen.add(point_tuple)
+            unique_indices.append(i)
+
+    if len(unique_indices) < len(points_array):
+        duplicates_removed = len(points_array) - len(unique_indices)
+        print(f"  Removed {duplicates_removed} duplicate boundary points (order-preserving)")
+        points_array = points_array[unique_indices]
+
+    # Find bounding box
+    y_min, y_max = points_array[:, 0].min(), points_array[:, 0].max()
+    x_min, x_max = points_array[:, 1].min(), points_array[:, 1].max()
+
+    y_range = y_max - y_min
+    x_range = x_max - x_min
+
+    # Classify each point to exactly ONE edge using 45-degree diagonals
+    # This prevents corner points from being assigned to multiple edges
+
+    # Normalize coordinates to [0, 1] range
+    y_norm = (points_array[:, 0] - y_min) / y_range if y_range > 0 else np.zeros(len(points_array))
+    x_norm = (points_array[:, 1] - x_min) / x_range if x_range > 0 else np.zeros(len(points_array))
+
+    # Use 45-degree diagonal lines to partition the rectangle
+    # Top: y_norm < x_norm and y_norm < (1 - x_norm)
+    # Right: x_norm >= (1 - y_norm) and x_norm >= y_norm
+    # Bottom: y_norm >= x_norm and y_norm >= (1 - x_norm)
+    # Left: x_norm < (1 - y_norm) and x_norm < y_norm
+
+    top_mask = (y_norm < x_norm) & (y_norm < (1 - x_norm))
+    right_mask = (x_norm >= (1 - y_norm)) & (x_norm >= y_norm)
+    bottom_mask = (y_norm >= x_norm) & (y_norm >= (1 - x_norm))
+    left_mask = (x_norm < (1 - y_norm)) & (x_norm < y_norm)
+
+    # Extract points for each edge
+    top_points = points_array[top_mask]
+    right_points = points_array[right_mask]
+    bottom_points = points_array[bottom_mask]
+    left_points = points_array[left_mask]
+
+    # Sort each edge
+    # Top: left to right (increasing x)
+    if len(top_points) > 0:
+        top_sorted_idx = np.argsort(top_points[:, 1])
+        top_sorted = top_points[top_sorted_idx]
+    else:
+        top_sorted = top_points
+
+    # Right: top to bottom (increasing y)
+    if len(right_points) > 0:
+        right_sorted_idx = np.argsort(right_points[:, 0])
+        right_sorted = right_points[right_sorted_idx]
+    else:
+        right_sorted = right_points
+
+    # Bottom: right to left (decreasing x)
+    if len(bottom_points) > 0:
+        bottom_sorted_idx = np.argsort(bottom_points[:, 1])[::-1]
+        bottom_sorted = bottom_points[bottom_sorted_idx]
+    else:
+        bottom_sorted = bottom_points
+
+    # Left: bottom to top (decreasing y)
+    if len(left_points) > 0:
+        left_sorted_idx = np.argsort(left_points[:, 0])[::-1]
+        left_sorted = left_points[left_sorted_idx]
+    else:
+        left_sorted = left_points
+
+    # Concatenate in order: top → right → bottom → left
+    sorted_array = np.vstack([
+        arr for arr in [top_sorted, right_sorted, bottom_sorted, left_sorted]
+        if len(arr) > 0
+    ])
+
+    # Convert back to list of tuples
+    sorted_points = [tuple(pt) for pt in sorted_array]
+
+    print(f"  Perimeter sorting: {len(top_sorted)} top, {len(right_sorted)} right, {len(bottom_sorted)} bottom, {len(left_sorted)} left")
+
+    # DEBUG: Check for duplicate consecutive points
+    duplicates = 0
+    for i in range(len(sorted_points)):
+        next_i = (i + 1) % len(sorted_points)
+        if sorted_points[i] == sorted_points[next_i]:
+            duplicates += 1
+            if duplicates <= 5:  # Show first 5
+                print(f"    WARNING: Duplicate at positions {i}, {next_i}: {sorted_points[i]}")
+
+    if duplicates > 0:
+        print(f"    Total duplicate consecutive points: {duplicates}")
+
+    return sorted_points
+
+
+def sort_boundary_points_angular(boundary_coords):
+    """
+    Sort boundary points by angle from centroid to form a closed loop.
+
+    This is much faster than nearest-neighbor sorting and works well for dense
+    boundaries (>10K points). Computes the centroid of all boundary points,
+    then sorts by angle, creating a natural closed loop around the perimeter.
+
+    After angular sorting, rotates the list so the largest gap between consecutive
+    points becomes the start/end, preventing diagonal faces across the mesh.
+
+    Args:
+        boundary_coords: List of (y, x) coordinate tuples representing boundary points
+
+    Returns:
+        list: Sorted boundary points forming a continuous closed loop
+    """
+    # Quick return for small boundaries
+    if len(boundary_coords) <= 2:
+        return boundary_coords
+
+    # Convert to numpy for vectorized operations
+    points_array = np.array(boundary_coords, dtype=float)
+
+    # Compute centroid
+    centroid = points_array.mean(axis=0)
+
+    # Compute angle from centroid for each point
+    # Using atan2(y - cy, x - cx) gives angle in range [-pi, pi]
+    dy = points_array[:, 0] - centroid[0]
+    dx = points_array[:, 1] - centroid[1]
+    angles = np.arctan2(dy, dx)
+
+    # Sort by angle (counter-clockwise from -pi to pi)
+    sorted_indices = np.argsort(angles)
+    sorted_array = points_array[sorted_indices]
+
+    # Find the largest gap between consecutive points
+    # This is where we should split the loop to avoid a diagonal face
+    distances = np.zeros(len(sorted_array))
+    for i in range(len(sorted_array)):
+        next_i = (i + 1) % len(sorted_array)
+        dy = sorted_array[next_i, 0] - sorted_array[i, 0]
+        dx = sorted_array[next_i, 1] - sorted_array[i, 1]
+        distances[i] = np.sqrt(dy**2 + dx**2)
+
+    # Find the index with the largest gap
+    max_gap_idx = np.argmax(distances)
+    max_gap_distance = distances[max_gap_idx]
+
+    # Rotate the list so the largest gap is at the end (becomes wrap-around)
+    # This puts the start/end at adjacent points on the perimeter
+    rotated_array = np.roll(sorted_array, -max_gap_idx - 1, axis=0)
+
+    # Report the wrap-around gap (will be the max gap we just found)
+    print(f"  Angular sorting: max gap = {max_gap_distance:.2f} pixels (placed at wrap-around)")
+
+    # Convert back to list of tuples
+    sorted_points = [tuple(pt) for pt in rotated_array]
+
+    return sorted_points
+
+
 def sort_boundary_points(boundary_coords):
     """
     Sort boundary points efficiently using spatial relationships.
@@ -1058,9 +1797,15 @@ def sort_boundary_points(boundary_coords):
     current = start_point
 
     # Find next closest point until all points are used
-    while len(ordered) < len(boundary_coords):
-        # Query KD-tree for 10 nearest neighbors (more than enough)
-        distances, indices = kdtree.query(current, k=10)
+    # Dynamically adjust k based on boundary density
+    # For dense boundaries (>10K points), query more neighbors to avoid getting stuck
+    n_points = len(boundary_coords)
+    k_neighbors = min(100, n_points)  # Query up to 100 neighbors for dense boundaries
+
+    while len(ordered) < n_points:
+        # Query KD-tree for k nearest neighbors
+        # For dense boundaries, we need to search farther to find the next sequential point
+        distances, indices = kdtree.query(current, k=k_neighbors)
 
         # Find the closest unused point
         next_point = None
@@ -1072,7 +1817,12 @@ def sort_boundary_points(boundary_coords):
                 break
 
         # If no more valid neighbors, break
+        # This can happen if the boundary has disconnected components
         if next_point is None:
+            # DEBUG: Report incomplete sorting
+            missing = n_points - len(ordered)
+            if missing > n_points * 0.01:  # More than 1% points missing
+                print(f"  ⚠️  Warning: Boundary sorting incomplete - {missing}/{n_points} points not connected")
             break
 
         ordered.append(next_point)
@@ -1188,24 +1938,27 @@ def generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0):
     height, width = dem_shape
     edge_pixels = []
 
+    # IMPORTANT: Keep fractional coordinates! They're meaningful for sub-pixel sampling.
+    # Only round after coordinate transformation to preserve edge density.
+
     # Top edge (y=0, x from 0 to width-1)
     for x in np.arange(0, width, edge_sample_spacing):
-        edge_pixels.append((0, int(x)))
+        edge_pixels.append((0.0, float(x)))
 
     # Right edge (x=width-1, y from spacing to height-1)
     for y in np.arange(edge_sample_spacing, height, edge_sample_spacing):
-        edge_pixels.append((int(y), width - 1))
+        edge_pixels.append((float(y), float(width - 1)))
 
     # Bottom edge (y=height-1, x from width-1 down to 0)
     for x in np.arange(width - 1, -1, -edge_sample_spacing):
-        edge_pixels.append((height - 1, int(x)))
+        edge_pixels.append((float(height - 1), float(x)))
 
     # Left edge (x=0, y from height-1 down to spacing)
     for y in np.arange(height - 1 - edge_sample_spacing, -1, -edge_sample_spacing):
-        if int(y) >= 0:
-            edge_pixels.append((int(y), 0))
+        if y >= 0:
+            edge_pixels.append((float(y), 0.0))
 
-    # Remove duplicates (corners get added twice)
+    # Remove duplicates (corners get added twice - should be rare with fractional coords)
     edge_pixels = list(dict.fromkeys(edge_pixels))
 
     return edge_pixels
@@ -1228,7 +1981,12 @@ def generate_rectangle_edge_vertices(
     Algorithm:
     1. Sample the rectangle boundary in original DEM pixel space
     2. For each edge vertex, apply the sequence of geographic transforms
-    3. Creates vertices with flat base_depth (foundation)
+    3. Creates BOTH surface vertices (at DEM elevation) AND base vertices (at base_depth)
+    4. Generates quad faces forming vertical walls ("skirt") around the terrain edge
+
+    Vertex layout:
+    - Indices 0 to n-1: Surface vertices (at DEM elevation)
+    - Indices n to 2n-1: Base vertices (at base_depth, same x,y as surface)
 
     Args:
         dem_shape (tuple): Original DEM shape (height, width)
@@ -1240,57 +1998,53 @@ def generate_rectangle_edge_vertices(
 
     Returns:
         tuple: (boundary_vertices, boundary_faces) where:
-            - boundary_vertices: Nx3 array of vertex positions
-            - boundary_faces: List of quad faces connecting vertices
+            - boundary_vertices: (2*n)x3 array of vertex positions (surface + base)
+            - boundary_faces: List of quad faces forming vertical walls
     """
     # Step 1: Get rectangle edge pixels
     edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing)
 
-    # Step 2: Apply affine transform to get world coordinates
-    # For each pixel (y_px, x_px), compute:
-    #   x_world = original_transform.c + original_transform.a * x_px + original_transform.b * y_px
-    #   y_world = original_transform.f + original_transform.d * x_px + original_transform.e * y_px
-
-    boundary_vertices = []
+    # Step 2: Create BOTH surface and base vertices
+    surface_vertices = []
+    base_vertices = []
 
     for y_px, x_px in edge_pixels:
         # Apply original affine transform to pixel coordinates
-        # Affine.Affine(a, b, c, d, e, f) where:
-        #   a, e = pixel sizes
-        #   b, d = rotation/shear
-        #   c, f = origin
-
         x_world = original_transform.c + original_transform.a * x_px + original_transform.b * y_px
         y_world = original_transform.f + original_transform.d * x_px + original_transform.e * y_px
 
-        # Apply each transform in sequence (same as for DEM)
-        pixel_coord = np.array([y_px, x_px], dtype=float)
-        current_transform = original_transform
-        dem_shape_current = dem_shape
+        # Sample DEM elevation at this edge pixel (with boundary clamping)
+        y_idx = int(round(y_px))
+        x_idx = int(round(x_px))
+        y_idx = max(0, min(y_idx, dem_shape[0] - 1))
+        x_idx = max(0, min(x_idx, dem_shape[1] - 1))
+        elevation = dem_data[y_idx, x_idx]
 
-        # Note: For now, we're only applying the original_transform
-        # Full transform pipeline support would be added in next iteration
-        # This gives us the baseline functionality
+        # Surface vertex at DEM elevation
+        surface_vertices.append([x_world, y_world, elevation])
+        # Base vertex at base_depth (same x, y)
+        base_vertices.append([x_world, y_world, base_depth])
 
-        # All base vertices have the same Z coordinate (flat foundation)
-        boundary_vertices.append([x_world, y_world, base_depth])
+    # Stack: surface vertices first (0 to n-1), then base vertices (n to 2n-1)
+    boundary_vertices = np.array(surface_vertices + base_vertices, dtype=float)
 
-    boundary_vertices = np.array(boundary_vertices, dtype=float)
-
-    # Step 3: Create faces connecting consecutive edge vertices
-    # Each consecutive pair of edge vertices forms a quad with the base
-    n_vertices = len(boundary_vertices)
+    # Step 3: Create quad faces forming vertical walls
+    # Each quad connects surface and base vertices to form a vertical wall
+    n_edge = len(edge_pixels)
     boundary_faces = []
 
-    for i in range(n_vertices):
-        # Create quad connecting:
-        # - Current and next edge vertex (at surface, but we have them at base_depth)
-        # - For now, simple edge quads
-        next_i = (i + 1) % n_vertices
+    for i in range(n_edge):
+        next_i = (i + 1) % n_edge
 
-        # Quad: current, next, next (duplicate for now, to be refined)
-        # This is a placeholder - full implementation will create proper bridge faces
-        boundary_faces.append([i, next_i, next_i, i])
+        # Indices: surface = 0..n-1, base = n..2n-1
+        surface_i = i
+        surface_next = next_i
+        base_i = i + n_edge
+        base_next = next_i + n_edge
+
+        # Face winding for outward normals (boundary traces clockwise in image coords)
+        # Order: surface[i] → base[i] → base[i+1] → surface[i+1]
+        boundary_faces.append([surface_i, base_i, base_next, surface_next])
 
     return boundary_vertices, boundary_faces
 
@@ -1323,6 +2077,8 @@ def generate_transform_aware_rectangle_edges(
     Raises:
         ValueError: If terrain is None or lacks required transform data
     """
+    from pyproj import Transformer
+
     if terrain is None:
         raise ValueError("Terrain object required for transform-aware rectangle edges")
 
@@ -1350,7 +2106,16 @@ def generate_transform_aware_rectangle_edges(
     if transformed_transform is None:
         raise ValueError("Terrain DEM lacks 'transformed_transform' - cannot map coordinates")
 
-    # 3. Map each edge pixel: original → geographic → final
+    # Get CRS information for reprojection
+    original_crs = dem_layer.get("crs", "EPSG:4326")
+    transformed_crs = dem_layer.get("transformed_crs", original_crs)
+
+    # Create coordinate transformer if CRS changed
+    transformer = None
+    if original_crs != transformed_crs:
+        transformer = Transformer.from_crs(original_crs, transformed_crs, always_xy=True)
+
+    # 3. Map each edge pixel: original → geographic → reprojected → final
     edge_pixels_final = []
     transform_errors = 0
     out_of_bounds = 0
@@ -1358,14 +2123,18 @@ def generate_transform_aware_rectangle_edges(
 
     for (y_orig, x_orig) in edge_pixels_orig:
         try:
-            # Original pixel → geographic coords
-            # Affine multiplication: (lon, lat) = transform * (x, y)
+            # Original pixel → geographic coords in original CRS
+            # Affine multiplication: (x_geo, y_geo) = transform * (x_px, y_px)
             # Note: Affine takes (x, y) not (y, x)
-            lon, lat = original_transform * (x_orig, y_orig)
+            x_geo, y_geo = original_transform * (x_orig, y_orig)
 
-            # Geographic → final pixel coords
-            # Inverse transform: (x, y) = ~transform * (lon, lat)
-            x_final, y_final = ~transformed_transform * (lon, lat)
+            # Reproject if CRS changed
+            if transformer is not None:
+                x_geo, y_geo = transformer.transform(x_geo, y_geo)
+
+            # Geographic coords (in transformed CRS) → final pixel coords
+            # Inverse transform: (x_px, y_px) = ~transform * (x_geo, y_geo)
+            x_final, y_final = ~transformed_transform * (x_geo, y_geo)
 
             # Round to integer pixel coordinates
             y_int, x_int = int(round(y_final)), int(round(x_final))
@@ -1387,13 +2156,96 @@ def generate_transform_aware_rectangle_edges(
             transform_errors += 1
             continue
 
-    # Debug output if very few pixels mapped
-    if len(edge_pixels_final) < 100:
-        print(f"  DEBUG: Transform results:")
-        print(f"    Original edge pixels: {len(edge_pixels_orig)}")
-        print(f"    Successfully mapped: {len(edge_pixels_final)}")
-        print(f"    Transform errors: {transform_errors}")
-        print(f"    Out of bounds: {out_of_bounds}")
-        print(f"    Not in coord_to_index: {not_in_coord_index}")
-
     return edge_pixels_final
+
+
+def generate_transform_aware_rectangle_edges_fractional(
+    terrain,
+    edge_sample_spacing=1.0,
+):
+    """
+    Generate rectangle edge vertices with FRACTIONAL coordinates preserving projection curvature.
+
+    Unlike generate_transform_aware_rectangle_edges() which rounds to integers and filters
+    to existing mesh vertices, this function returns the true fractional coordinates
+    from the non-linear projection transformation.
+
+    This preserves the curved boundary that results from:
+    - WGS84 → UTM Transverse Mercator projection (non-linear, causes curvature)
+    - Horizontal flip transform
+    - Downsampling
+
+    Args:
+        terrain: Terrain object with dem_shape, dem_transform, data_layers
+        edge_sample_spacing: Pixel spacing for edge sampling at original resolution (default 1.0)
+
+    Returns:
+        list of (y, x) tuples: Fractional edge coordinates in final mesh space.
+            These coordinates preserve the true curved boundary and may extend
+            slightly beyond the integer grid bounds.
+
+    Raises:
+        ValueError: If terrain is None or lacks required transform data
+    """
+    from pyproj import Transformer
+
+    if terrain is None:
+        raise ValueError("Terrain object required for transform-aware rectangle edges")
+
+    # 1. Sample edges at original resolution
+    original_shape = terrain.dem_shape
+    edge_pixels_orig = generate_rectangle_edge_pixels(
+        original_shape,
+        edge_sample_spacing
+    )
+
+    # 2. Get transform info
+    original_transform = terrain.dem_transform
+    dem_layer = terrain.data_layers.get("dem")
+
+    if dem_layer is None:
+        raise ValueError("Terrain lacks 'dem' data layer")
+
+    if not dem_layer.get("transformed", False):
+        raise ValueError(
+            "Terrain DEM has not been transformed yet. "
+            "Call terrain.apply_transforms() before using transform-aware edges."
+        )
+
+    transformed_transform = dem_layer.get("transformed_transform")
+    if transformed_transform is None:
+        raise ValueError("Terrain DEM lacks 'transformed_transform' - cannot map coordinates")
+
+    # Get CRS information for reprojection
+    original_crs = dem_layer.get("crs", "EPSG:4326")
+    transformed_crs = dem_layer.get("transformed_crs", original_crs)
+
+    # Create coordinate transformer if CRS changed
+    transformer = None
+    if original_crs != transformed_crs:
+        transformer = Transformer.from_crs(original_crs, transformed_crs, always_xy=True)
+
+    # 3. Map each edge pixel: original → geographic → reprojected → final (FRACTIONAL)
+    edge_pixels_fractional = []
+    transform_errors = 0
+
+    for (y_orig, x_orig) in edge_pixels_orig:
+        try:
+            # Original pixel → geographic coords in original CRS
+            x_geo, y_geo = original_transform * (x_orig, y_orig)
+
+            # Reproject if CRS changed (this is the NON-LINEAR step!)
+            if transformer is not None:
+                x_geo, y_geo = transformer.transform(x_geo, y_geo)
+
+            # Geographic coords (in transformed CRS) → final pixel coords
+            # KEEP FRACTIONAL - do NOT round to integer!
+            x_final, y_final = ~transformed_transform * (x_geo, y_geo)
+
+            edge_pixels_fractional.append((y_final, x_final))
+
+        except Exception:
+            transform_errors += 1
+            continue
+
+    return edge_pixels_fractional
