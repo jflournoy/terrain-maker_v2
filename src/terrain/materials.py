@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 # ROAD COLOR PRESETS
 # =============================================================================
 
-# Named color presets for roads (same glossy metallic properties, different colors)
+# Named color presets for roads (polished stone/mineral appearance, dielectric)
 ROAD_COLORS = {
-    "obsidian": (0.02, 0.02, 0.02),      # Near-black glass
+    "obsidian": (0.02, 0.02, 0.02),      # Near-black volcanic glass
     "azurite": (0.04, 0.09, 0.16),       # Deep blue mineral (#0A1628)
     "azurite-light": (0.06, 0.15, 0.25), # Richer azurite (#0F2540)
     "malachite": (0.02, 0.08, 0.05),     # Deep green copper mineral
@@ -33,57 +33,281 @@ ROAD_COLORS = {
 # Named material presets for mesh bases (edge extrusion, backgrounds, etc.)
 BASE_MATERIALS = {
     "clay": (0.5, 0.48, 0.45),         # Matte gray clay (default)
-    "obsidian": (0.02, 0.02, 0.02),    # Glossy black glass
+    "obsidian": (0.02, 0.02, 0.02),    # Dark volcanic glass (dielectric)
     "chrome": (0.9, 0.9, 0.92),        # Metallic chrome
     "plastic": (0.95, 0.95, 0.95),     # Glossy white plastic
     "gold": (1.0, 0.766, 0.336),       # Metallic gold
     "ivory": (0.95, 0.93, 0.88),       # Off-white with warm tone
 }
 
+# =============================================================================
+# UNIFIED COLOR PRESETS (all colors available everywhere)
+# =============================================================================
 
-def get_base_material_color(material: str | Tuple[float, float, float]) -> Tuple[float, float, float]:
+# Combined color presets from both ROAD_COLORS and BASE_MATERIALS.
+# All color-accepting options (--road-color, --edge-base-material, --test-material)
+# can use any of these colors.
+ALL_COLORS = {**ROAD_COLORS, **BASE_MATERIALS}
+
+# =============================================================================
+# TERRAIN MATERIAL PRESETS
+# =============================================================================
+
+# Named material presets for terrain surface rendering.
+# These control how vertex colors (elevation/score colormaps) are displayed.
+# All presets are dielectric (non-metallic) to preserve color accuracy.
+TERRAIN_MATERIALS = {
+    # === DIELECTRIC PRESETS (preserve color accuracy) ===
+    "matte": {
+        # Pure diffuse - colors appear exactly as computed, no specular
+        # Best for: 3D print preview, technical visualization
+        "roughness": 1.0,
+        "metallic": 0.0,
+        "specular_ior_level": 0.0,
+    },
+    "eggshell": {
+        # Very subtle sheen - almost matte but with slight depth
+        # Best for: print-quality renders, subtle topography
+        "roughness": 0.85,
+        "metallic": 0.0,
+        "specular_ior_level": 0.2,
+    },
+    "satin": {
+        # Soft highlights reveal terrain form while preserving color accuracy
+        # Best for: general-purpose visualization, presentations
+        "roughness": 0.7,
+        "metallic": 0.0,
+        "specular_ior_level": 0.3,
+    },
+    "ceramic": {
+        # Glossy surface like a ceramic sculpture or museum model
+        # Best for: presentation renders, architectural model aesthetic
+        "roughness": 0.35,
+        "metallic": 0.0,
+        "specular_ior_level": 0.5,
+        "ior": 1.5,
+    },
+    "lacquered": {
+        # Very glossy like varnished wood relief map
+        # Best for: artistic renders, vintage map aesthetic
+        "roughness": 0.25,
+        "metallic": 0.0,
+        "specular_ior_level": 0.5,
+        "ior": 1.45,
+    },
+    "clearcoat": {
+        # Matte color underneath glossy clear layer - automotive paint look
+        # Best for: premium presentation renders
+        "roughness": 0.6,
+        "metallic": 0.0,
+        "specular_ior_level": 0.3,
+        "coat_weight": 1.0,
+        "coat_roughness": 0.1,
+    },
+    "velvet": {
+        # Soft fabric-like appearance with gentle edge highlights
+        # Best for: organic/natural terrain visualization
+        "roughness": 0.8,
+        "metallic": 0.0,
+        "specular_ior_level": 0.15,
+        "sheen_weight": 0.3,
+        "sheen_roughness": 0.5,
+    },
+    # === MATERIAL-STYLE PRESETS (from color materials) ===
+    # These apply the shader properties of named materials while preserving vertex colors.
+    # Note: metallic materials will shift colors toward metallic reflection behavior.
+    "clay": {
+        # Matte gray clay look - same as matte but named for consistency
+        "roughness": 1.0,
+        "metallic": 0.0,
+        "specular_ior_level": 0.0,
+    },
+    "plastic": {
+        # Glossy plastic finish
+        "roughness": 0.2,
+        "metallic": 0.0,
+        "specular_ior_level": 0.5,
+    },
+    "ivory": {
+        # Slightly glossy with warm character
+        "roughness": 0.3,
+        "metallic": 0.0,
+        "specular_ior_level": 0.4,
+    },
+    "obsidian": {
+        # Glossy volcanic glass - very smooth dielectric
+        "roughness": 0.03,
+        "metallic": 0.0,
+        "specular_ior_level": 0.5,
+        "ior": 1.5,
+    },
+    "chrome": {
+        # Mirror-like metallic finish (will shift vertex colors toward metallic)
+        "roughness": 0.05,
+        "metallic": 1.0,
+        "specular_ior_level": 0.5,
+    },
+    "gold": {
+        # Metallic gold finish (will shift vertex colors toward metallic gold tones)
+        "roughness": 0.1,
+        "metallic": 1.0,
+        "specular_ior_level": 0.5,
+    },
+    "mineral": {
+        # Polished stone/mineral appearance - good generic glossy dielectric
+        "roughness": 0.15,
+        "metallic": 0.0,
+        "specular_ior_level": 0.5,
+        "ior": 1.55,
+    },
+}
+
+# Default terrain material preset
+DEFAULT_TERRAIN_MATERIAL = "satin"
+
+
+# =============================================================================
+# HELP TEXT GENERATORS
+# =============================================================================
+
+
+def get_all_colors_help() -> str:
+    """Generate help text listing all available color presets (unified)."""
+    return ", ".join(ALL_COLORS.keys())
+
+
+def get_all_colors_choices() -> list[str]:
+    """Return list of all valid color preset names for argparse choices."""
+    return list(ALL_COLORS.keys())
+
+
+def get_terrain_materials_help() -> str:
+    """Generate help text listing all available terrain material presets."""
+    return ", ".join(TERRAIN_MATERIALS.keys())
+
+
+def get_terrain_materials_choices() -> list[str]:
+    """Return list of valid terrain material preset names for argparse choices."""
+    return list(TERRAIN_MATERIALS.keys())
+
+
+# Legacy aliases for backward compatibility
+def get_road_colors_help() -> str:
+    """Generate help text listing all available color presets."""
+    return get_all_colors_help()
+
+
+def get_base_materials_help() -> str:
+    """Generate help text listing all available color presets."""
+    return get_all_colors_help()
+
+
+def get_road_colors_choices() -> list[str]:
+    """Return list of all valid color preset names for argparse choices."""
+    return get_all_colors_choices()
+
+
+def get_base_materials_choices() -> list[str]:
+    """Return list of all valid color preset names for argparse choices."""
+    return get_all_colors_choices()
+
+
+def get_terrain_material_params(material: str) -> Dict:
     """
-    Resolve a base material name to RGB color tuple.
-
-    Accepts either a preset material name (case-insensitive) or an RGB tuple.
-    Material names map to predefined RGB values for common materials used in
-    terrain visualization (clay, obsidian, chrome, plastic, gold, ivory).
+    Get terrain material parameters by preset name.
 
     Args:
-        material: Either a preset name from BASE_MATERIALS
-                 ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
-                 or an RGB tuple (0-1 range).
+        material: Preset name (case-insensitive). One of:
+            - "matte": Pure diffuse, no specular (3D print preview)
+            - "eggshell": Very subtle sheen (print-quality renders)
+            - "satin": Soft highlights (general-purpose, default)
+            - "ceramic": Glossy museum model look
+            - "lacquered": Very glossy varnished wood look
+            - "clearcoat": Glossy clear layer over matte color
+            - "velvet": Soft fabric-like with edge highlights
 
     Returns:
-        RGB tuple (0-1 range) representing the material color.
+        Dict of Principled BSDF parameters.
 
     Raises:
-        ValueError: If material is a string but not in BASE_MATERIALS.
+        ValueError: If material name is not recognized.
 
     Examples:
-        >>> get_base_material_color("clay")
+        >>> params = get_terrain_material_params("satin")
+        >>> params["roughness"]
+        0.7
+    """
+    material_lower = material.lower()
+    if material_lower not in TERRAIN_MATERIALS:
+        valid = ", ".join(TERRAIN_MATERIALS.keys())
+        raise ValueError(f"Unknown terrain material: {material}. Valid options: {valid}")
+    return TERRAIN_MATERIALS[material_lower].copy()
+
+
+def get_color(color: str | Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """
+    Resolve a color preset name to RGB color tuple.
+
+    Accepts either a preset color name (case-insensitive) or an RGB tuple.
+    Color names map to predefined RGB values from ALL_COLORS (combined
+    road colors and base materials).
+
+    For terrain material presets (like "satin", "matte") that don't have
+    associated colors, returns clay gray (0.5, 0.48, 0.45) as a neutral default.
+
+    Args:
+        color: Either a preset name from ALL_COLORS or an RGB tuple (0-1 range).
+               Available presets: {get_all_colors_help()}
+
+    Returns:
+        RGB tuple (0-1 range) representing the color.
+
+    Raises:
+        ValueError: If color is a string but not in ALL_COLORS or TERRAIN_MATERIALS.
+
+    Examples:
+        >>> get_color("clay")
         (0.5, 0.48, 0.45)
 
-        >>> get_base_material_color("GOLD")  # Case-insensitive
+        >>> get_color("azurite")  # Road color preset
+        (0.04, 0.09, 0.16)
+
+        >>> get_color("GOLD")  # Case-insensitive
         (1.0, 0.766, 0.336)
 
-        >>> get_base_material_color((0.6, 0.55, 0.5))  # Custom RGB
+        >>> get_color("satin")  # Terrain material - returns clay gray
+        (0.5, 0.48, 0.45)
+
+        >>> get_color((0.6, 0.55, 0.5))  # Custom RGB
         (0.6, 0.55, 0.5)
     """
-    if isinstance(material, str):
-        material_lower = material.lower()
-        if material_lower not in BASE_MATERIALS:
-            raise ValueError(
-                f"Unknown base material: {material}. "
-                f"Valid options: {', '.join(BASE_MATERIALS.keys())}"
-            )
-        return BASE_MATERIALS[material_lower]
+    if isinstance(color, str):
+        color_lower = color.lower()
+        if color_lower in ALL_COLORS:
+            return ALL_COLORS[color_lower]
+        # For terrain material presets without colors (satin, matte, etc.),
+        # return clay gray as neutral default
+        if color_lower in TERRAIN_MATERIALS:
+            return ALL_COLORS["clay"]  # (0.5, 0.48, 0.45)
+        raise ValueError(
+            f"Unknown color preset: {color}. "
+            f"Valid options: {get_all_colors_help()}"
+        )
     else:
         # Assume it's already an RGB tuple - pass through
-        return material
+        return color
 
 
-def apply_colormap_material(material: bpy.types.Material) -> None:
+# Legacy alias for backward compatibility
+def get_base_material_color(material: str | Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """Resolve a color preset name to RGB. Alias for get_color()."""
+    return get_color(material)
+
+
+def apply_colormap_material(
+    material: bpy.types.Material,
+    terrain_material: Optional[str] = None,
+) -> None:
     """
     Create a physically-based material for terrain visualization using vertex colors.
 
@@ -92,8 +316,26 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
 
     Args:
         material: Blender material to configure
+        terrain_material: Optional preset name for material appearance. One of:
+            - "matte": Pure diffuse, no specular (3D print preview)
+            - "eggshell": Very subtle sheen (print-quality renders)
+            - "satin": Soft highlights (general-purpose, recommended)
+            - "ceramic": Glossy museum model look
+            - "lacquered": Very glossy varnished wood look
+            - "clearcoat": Glossy clear layer over matte color
+            - "velvet": Soft fabric-like with edge highlights
+            If None, uses DEFAULT_TERRAIN_MATERIAL ("satin").
     """
-    logger.info(f"Setting up material nodes for {material.name}")
+    # Get material parameters from preset
+    preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
+    try:
+        params = get_terrain_material_params(preset_name)
+    except ValueError:
+        logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
+        params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
+        preset_name = DEFAULT_TERRAIN_MATERIAL
+
+    logger.info(f"Setting up {preset_name} material nodes for {material.name}")
 
     # Clear existing nodes
     material.node_tree.nodes.clear()
@@ -114,11 +356,22 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
         # Set vertex color layer
         vertex_color.layer_name = "TerrainColors"
 
-        # Configure principled shader for natural terrain appearance
-        # Roughness 0.8 = mostly matte with subtle highlights
-        principled.inputs["Roughness"].default_value = 0.8
-        principled.inputs["Metallic"].default_value = 0.0
-        principled.inputs["Specular IOR Level"].default_value = 0.3  # Subtle specular
+        # Apply material parameters from preset
+        principled.inputs["Roughness"].default_value = params["roughness"]
+        principled.inputs["Metallic"].default_value = params["metallic"]
+        principled.inputs["Specular IOR Level"].default_value = params["specular_ior_level"]
+
+        # Optional parameters
+        if "ior" in params:
+            principled.inputs["IOR"].default_value = params["ior"]
+        if "coat_weight" in params:
+            principled.inputs["Coat Weight"].default_value = params["coat_weight"]
+        if "coat_roughness" in params:
+            principled.inputs["Coat Roughness"].default_value = params["coat_roughness"]
+        if "sheen_weight" in params:
+            principled.inputs["Sheen Weight"].default_value = params["sheen_weight"]
+        if "sheen_roughness" in params:
+            principled.inputs["Sheen Roughness"].default_value = params["sheen_roughness"]
 
         # Create connections
         logger.debug("Creating node connections")
@@ -128,7 +381,7 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
         # Connect to output
         links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
-        logger.info("Material setup completed successfully (pure Principled BSDF)")
+        logger.info(f"Material setup completed: {preset_name} (roughness={params['roughness']})")
 
     except Exception as e:
         logger.error(f"Error setting up material: {str(e)}")
@@ -136,7 +389,9 @@ def apply_colormap_material(material: bpy.types.Material) -> None:
 
 
 def apply_water_shader(
-    material: bpy.types.Material, water_color: Tuple[float, float, float] = (0.0, 0.153, 0.298)
+    material: bpy.types.Material,
+    water_color: Tuple[float, float, float] = (0.0, 0.153, 0.298),
+    terrain_material: Optional[str] = None,
 ) -> None:
     """
     Apply water shader to material, coloring water areas based on vertex alpha channel.
@@ -146,8 +401,20 @@ def apply_water_shader(
     Args:
         material: Blender material to configure
         water_color: RGB tuple for water (default: University of Michigan blue #00274C)
+        terrain_material: Optional preset name for land material appearance.
+            See apply_colormap_material() for available presets.
+            If None, uses DEFAULT_TERRAIN_MATERIAL.
     """
-    logger.info(f"Setting up water shader for {material.name}")
+    # Get material parameters from preset
+    preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
+    try:
+        params = get_terrain_material_params(preset_name)
+    except ValueError:
+        logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
+        params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
+        preset_name = DEFAULT_TERRAIN_MATERIAL
+
+    logger.info(f"Setting up water shader ({preset_name} terrain) for {material.name}")
 
     # Clear existing nodes
     material.node_tree.nodes.clear()
@@ -173,10 +440,22 @@ def apply_water_shader(
         # Configure water color
         water_rgba = (*water_color, 1.0)
 
-        # Set principled shader - no emission, proper lighting response
-        principled.inputs["Roughness"].default_value = 0.6  # Water is slightly smoother
-        principled.inputs["Metallic"].default_value = 0.0
-        principled.inputs["Specular IOR Level"].default_value = 0.5
+        # Apply terrain material parameters from preset
+        principled.inputs["Roughness"].default_value = params["roughness"]
+        principled.inputs["Metallic"].default_value = params["metallic"]
+        principled.inputs["Specular IOR Level"].default_value = params["specular_ior_level"]
+
+        # Optional parameters
+        if "ior" in params:
+            principled.inputs["IOR"].default_value = params["ior"]
+        if "coat_weight" in params:
+            principled.inputs["Coat Weight"].default_value = params["coat_weight"]
+        if "coat_roughness" in params:
+            principled.inputs["Coat Roughness"].default_value = params["coat_roughness"]
+        if "sheen_weight" in params:
+            principled.inputs["Sheen Weight"].default_value = params["sheen_weight"]
+        if "sheen_roughness" in params:
+            principled.inputs["Sheen Roughness"].default_value = params["sheen_roughness"]
 
         # Configure mix RGB for blending land and water colors
         # Factor from alpha: 0 = land (use vertex color), 1 = water (use water color)
@@ -204,7 +483,7 @@ def apply_water_shader(
         # Connect directly to output (no emission mixing)
         links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
-        logger.info("Water shader setup completed successfully")
+        logger.info(f"Water shader setup completed: {preset_name} terrain")
 
     except Exception as e:
         logger.error(f"Error setting up water shader: {str(e)}")
@@ -343,6 +622,7 @@ def apply_terrain_with_obsidian_roads(
     material: bpy.types.Material,
     terrain_style: Optional[str] = None,
     road_color: str | Tuple[float, float, float] = "obsidian",
+    terrain_material: Optional[str] = None,
 ) -> None:
     """
     Create a material with glossy roads and terrain colors/test material.
@@ -351,25 +631,29 @@ def apply_terrain_with_obsidian_roads(
     - "TerrainColors": The actual terrain colors (used for non-road areas)
     - "RoadMask": R channel marks road pixels (R > 0.5 = road)
 
-    Roads render with glossy metallic properties (like polished stone).
+    Roads render with glossy dielectric properties (like polished stone).
     Non-road areas use either vertex colors or a test material.
 
     Args:
         material: Blender material to configure
         terrain_style: Optional test material for terrain ("chrome", "clay", etc.)
-                      If None, uses vertex colors with pure Principled BSDF (no emission).
+                      If None, uses vertex colors with terrain_material preset.
         road_color: Road color - either a preset name from ROAD_COLORS
                    ("obsidian", "azurite", "azurite-light", "malachite", "hematite")
                    or an RGB tuple (0-1 range). Default: "obsidian" (near-black).
+        terrain_material: Optional preset name for terrain material appearance when
+                         using vertex colors (terrain_style=None). One of:
+                         "matte", "eggshell", "satin", "ceramic", "lacquered",
+                         "clearcoat", "velvet". Default: DEFAULT_TERRAIN_MATERIAL.
     """
-    # Resolve road color
+    # Resolve road color (accepts any color from ALL_COLORS or RGB tuple)
     if isinstance(road_color, str):
-        if road_color.lower() in ROAD_COLORS:
-            road_rgb = ROAD_COLORS[road_color.lower()]
+        if road_color.lower() in ALL_COLORS:
+            road_rgb = ALL_COLORS[road_color.lower()]
             road_color_name = road_color.lower()
         else:
-            logger.warning(f"Unknown road color preset '{road_color}', using obsidian")
-            road_rgb = ROAD_COLORS["obsidian"]
+            logger.warning(f"Unknown color preset '{road_color}', using obsidian")
+            road_rgb = ALL_COLORS["obsidian"]
             road_color_name = "obsidian"
     else:
         road_rgb = road_color
@@ -404,14 +688,28 @@ def apply_terrain_with_obsidian_roads(
         mix_shader = nodes.new("ShaderNodeMixShader")
         mix_shader.location = (600, 0)
 
-        # === MATTE ROAD SHADER (brushed stone appearance) ===
+        # === ROAD SHADER ===
+        # Use material properties from TERRAIN_MATERIALS if available, otherwise default to mineral
         road_shader = nodes.new("ShaderNodeBsdfPrincipled")
         road_shader.location = (200, -200)
         road_shader.inputs["Base Color"].default_value = (*road_rgb, 1.0)
-        road_shader.inputs["Roughness"].default_value = 0.5  # Semi-matte finish
-        road_shader.inputs["Metallic"].default_value = 0.8   # Slightly less metallic
-        road_shader.inputs["IOR"].default_value = 1.5
-        road_shader.inputs["Specular IOR Level"].default_value = 0.5
+
+        # Get shader properties from TERRAIN_MATERIALS if the color has a matching material preset
+        if road_color_name in TERRAIN_MATERIALS:
+            road_params = TERRAIN_MATERIALS[road_color_name]
+            road_shader.inputs["Roughness"].default_value = road_params["roughness"]
+            road_shader.inputs["Metallic"].default_value = road_params["metallic"]
+            road_shader.inputs["Specular IOR Level"].default_value = road_params["specular_ior_level"]
+            if "ior" in road_params:
+                road_shader.inputs["IOR"].default_value = road_params["ior"]
+            logger.info(f"  Road material: {road_color_name} (metallic={road_params['metallic']})")
+        else:
+            # Default: polished mineral appearance for colors without specific material presets
+            road_shader.inputs["Roughness"].default_value = 0.15  # Polished stone finish
+            road_shader.inputs["Metallic"].default_value = 0.0    # Dielectric
+            road_shader.inputs["IOR"].default_value = 1.55        # Mineral-like
+            road_shader.inputs["Specular IOR Level"].default_value = 0.6  # Good reflectivity
+            logger.info(f"  Road material: mineral (default)")
 
         # === TERRAIN SHADER ===
         if terrain_style and terrain_style.lower() != "none":
@@ -420,22 +718,44 @@ def apply_terrain_with_obsidian_roads(
             terrain_shader.location = (200, 200)
             _configure_principled_for_style(terrain_shader, terrain_style)
         else:
-            # Use vertex colors with pure Principled BSDF for terrain
+            # Use vertex colors with terrain material preset
             terrain_colors = nodes.new("ShaderNodeVertexColor")
             terrain_colors.layer_name = "TerrainColors"
             terrain_colors.location = (-400, 200)
 
-            # Pure Principled BSDF - no emission for proper lighting response
+            # Get terrain material parameters from preset
+            preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
+            try:
+                params = get_terrain_material_params(preset_name)
+            except ValueError:
+                logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
+                params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
+                preset_name = DEFAULT_TERRAIN_MATERIAL
+
+            # Principled BSDF with terrain material preset
             terrain_principled = nodes.new("ShaderNodeBsdfPrincipled")
             terrain_principled.location = (0, 300)
-            terrain_principled.inputs["Roughness"].default_value = 0.8
-            terrain_principled.inputs["Metallic"].default_value = 0.0
-            terrain_principled.inputs["Specular IOR Level"].default_value = 0.3
+            terrain_principled.inputs["Roughness"].default_value = params["roughness"]
+            terrain_principled.inputs["Metallic"].default_value = params["metallic"]
+            terrain_principled.inputs["Specular IOR Level"].default_value = params["specular_ior_level"]
+
+            # Optional parameters
+            if "ior" in params:
+                terrain_principled.inputs["IOR"].default_value = params["ior"]
+            if "coat_weight" in params:
+                terrain_principled.inputs["Coat Weight"].default_value = params["coat_weight"]
+            if "coat_roughness" in params:
+                terrain_principled.inputs["Coat Roughness"].default_value = params["coat_roughness"]
+            if "sheen_weight" in params:
+                terrain_principled.inputs["Sheen Weight"].default_value = params["sheen_weight"]
+            if "sheen_roughness" in params:
+                terrain_principled.inputs["Sheen Roughness"].default_value = params["sheen_roughness"]
 
             # Connect terrain vertex colors directly to principled shader
             links.new(terrain_colors.outputs["Color"], terrain_principled.inputs["Base Color"])
 
             terrain_shader = terrain_principled
+            logger.info(f"  Terrain material: {preset_name}")
 
         # === CONNECT EVERYTHING ===
         # Road mask R channel controls mixing (R=1 → road, R=0 → terrain)
@@ -458,15 +778,28 @@ def apply_terrain_with_obsidian_roads(
 
 
 def _configure_principled_for_style(shader_node, style: str) -> None:
-    """Configure a Principled BSDF node for a specific test material style."""
+    """
+    Configure a Principled BSDF node for a specific test material style.
+
+    Supports all colors from ALL_COLORS. Some materials have special shader
+    settings (chrome/gold are metallic, obsidian is glossy glass, etc.),
+    while others use the color with standard dielectric settings.
+
+    Args:
+        shader_node: Blender Principled BSDF shader node to configure.
+        style: Material/color name (case-insensitive) from ALL_COLORS.
+    """
     style_lower = style.lower()
 
+    # Materials with special shader settings
     if style_lower == "obsidian":
+        # Obsidian is volcanic glass (dielectric), NOT metal
+        # Reflects via Fresnel like glass, dark from iron/magnesium impurities
         shader_node.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
-        shader_node.inputs["Roughness"].default_value = 0.0
-        shader_node.inputs["Metallic"].default_value = 1.0
-        shader_node.inputs["IOR"].default_value = 1.5
-        shader_node.inputs["Specular IOR Level"].default_value = 1.0
+        shader_node.inputs["Roughness"].default_value = 0.03  # Very smooth but not perfect mirror
+        shader_node.inputs["Metallic"].default_value = 0.0    # Glass, not metal
+        shader_node.inputs["IOR"].default_value = 1.5         # Glass-like
+        shader_node.inputs["Specular IOR Level"].default_value = 0.5  # Standard dielectric
     elif style_lower == "chrome":
         shader_node.inputs["Base Color"].default_value = (0.9, 0.9, 0.92, 1.0)
         shader_node.inputs["Roughness"].default_value = 0.05
@@ -485,8 +818,23 @@ def _configure_principled_for_style(shader_node, style: str) -> None:
         shader_node.inputs["Base Color"].default_value = (1.0, 0.766, 0.336, 1.0)
         shader_node.inputs["Roughness"].default_value = 0.1
         shader_node.inputs["Metallic"].default_value = 1.0
+    elif style_lower == "ivory":
+        # Off-white with warm tone, slightly glossy
+        shader_node.inputs["Base Color"].default_value = (0.95, 0.93, 0.88, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.3
+        shader_node.inputs["Metallic"].default_value = 0.0
+        shader_node.inputs["Specular IOR Level"].default_value = 0.4
+    elif style_lower in ALL_COLORS:
+        # Use color from ALL_COLORS with polished stone/mineral appearance
+        # (dielectric, slightly glossy - good for road colors like azurite, malachite)
+        rgb = ALL_COLORS[style_lower]
+        shader_node.inputs["Base Color"].default_value = (*rgb, 1.0)
+        shader_node.inputs["Roughness"].default_value = 0.15  # Polished finish
+        shader_node.inputs["Metallic"].default_value = 0.0    # Dielectric
+        shader_node.inputs["IOR"].default_value = 1.55        # Mineral-like
+        shader_node.inputs["Specular IOR Level"].default_value = 0.5
     else:
-        # Default to gray
+        # Unknown style - default to gray
         shader_node.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1.0)
         shader_node.inputs["Roughness"].default_value = 0.5
 
@@ -511,40 +859,48 @@ def apply_test_material(material: bpy.types.Material, style: str) -> None:
 
     Args:
         material: Blender material to configure
-        style: Material style name - one of:
-            - "obsidian": Glossy black glass (metallic, mirror-smooth)
-            - "chrome": Metallic chrome with reflections
-            - "clay": Matte gray clay (diffuse, no reflections)
-            - "plastic": Glossy white plastic
-            - "gold": Metallic gold with warm tones
-            - "terrain": Normal terrain with vertex colors (default)
+        style: Material style name - any color from ALL_COLORS
+            ({get_all_colors_help()}) or "terrain" for normal vertex colors.
 
     Raises:
         ValueError: If style is not recognized
     """
     style_lower = style.lower()
 
-    if style_lower == "obsidian":
-        _apply_test_material_obsidian(material)
-    elif style_lower == "chrome":
-        _apply_test_material_chrome(material)
-    elif style_lower == "clay":
-        _apply_test_material_clay(material)
-    elif style_lower == "plastic":
-        _apply_test_material_plastic(material)
-    elif style_lower == "gold":
-        _apply_test_material_gold(material)
-    elif style_lower == "terrain":
+    if style_lower == "terrain":
         apply_colormap_material(material)
+    elif style_lower in ALL_COLORS:
+        _apply_test_material_generic(material, style_lower)
     else:
         raise ValueError(
             f"Unknown test material style: {style}. "
-            f"Valid options: obsidian, chrome, clay, plastic, gold, terrain"
+            f"Valid options: {get_all_colors_help()}, terrain"
         )
 
 
+def _apply_test_material_generic(material: bpy.types.Material, style: str) -> None:
+    """Apply a test material using the unified color/style system."""
+    logger.info(f"Applying {style} test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Configure shader based on style (handles special cases and generic colors)
+    _configure_principled_for_style(principled, style)
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info(f"✓ {style.capitalize()} test material applied")
+
+
 def _apply_test_material_obsidian(material: bpy.types.Material) -> None:
-    """Glossy black obsidian glass - metallic, mirror-smooth."""
+    """Obsidian volcanic glass - dark dielectric with glass-like reflections."""
     logger.info(f"Applying obsidian test material to {material.name}")
 
     material.node_tree.nodes.clear()
@@ -557,12 +913,13 @@ def _apply_test_material_obsidian(material: bpy.types.Material) -> None:
     principled.location = (0, 0)
     output.location = (300, 0)
 
-    # Dark obsidian glass
+    # Obsidian is volcanic glass (dielectric), NOT metal
+    # Dark color from iron/magnesium impurities, reflects via Fresnel like glass
     principled.inputs["Base Color"].default_value = (0.02, 0.02, 0.02, 1.0)
-    principled.inputs["Roughness"].default_value = 0.0
-    principled.inputs["Metallic"].default_value = 1.0
-    principled.inputs["IOR"].default_value = 1.5
-    principled.inputs["Specular IOR Level"].default_value = 1.0
+    principled.inputs["Roughness"].default_value = 0.03  # Very smooth but not perfect mirror
+    principled.inputs["Metallic"].default_value = 0.0    # Glass, not metal
+    principled.inputs["IOR"].default_value = 1.5         # Glass-like
+    principled.inputs["Specular IOR Level"].default_value = 0.5  # Standard dielectric
 
     links.new(principled.outputs["BSDF"], output.inputs["Surface"])
     logger.info("✓ Obsidian test material applied")
@@ -660,3 +1017,27 @@ def _apply_test_material_gold(material: bpy.types.Material) -> None:
 
     links.new(principled.outputs["BSDF"], output.inputs["Surface"])
     logger.info("✓ Gold test material applied")
+
+
+def _apply_test_material_ivory(material: bpy.types.Material) -> None:
+    """Ivory - off-white with warm tone, slightly glossy."""
+    logger.info(f"Applying ivory test material to {material.name}")
+
+    material.node_tree.nodes.clear()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    principled = nodes.new("ShaderNodeBsdfPrincipled")
+
+    principled.location = (0, 0)
+    output.location = (300, 0)
+
+    # Ivory - warm off-white
+    principled.inputs["Base Color"].default_value = (0.95, 0.93, 0.88, 1.0)
+    principled.inputs["Roughness"].default_value = 0.3  # Slightly glossy
+    principled.inputs["Metallic"].default_value = 0.0
+    principled.inputs["Specular IOR Level"].default_value = 0.4
+
+    links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    logger.info("✓ Ivory test material applied")
