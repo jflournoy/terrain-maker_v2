@@ -82,6 +82,9 @@ Usage:
 
     # Rectangle-edges with two-tier and clay base
     python examples/detroit_combined_render.py --two-tier-edge --use-rectangle-edges --edge-base-material clay
+
+    # Fractional edges preserving projection curvature (smooth curved boundary from UTM projection)
+    python examples/detroit_combined_render.py --two-tier-edge --use-rectangle-edges --use-fractional-edges
 """
 
 import sys
@@ -89,9 +92,12 @@ import argparse
 import logging
 import json
 import gc
+import shlex
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 import numpy as np
+from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
 
 import bpy
 
@@ -128,8 +134,15 @@ from src.terrain.transforms import (
     upscale_scores,
 )
 from src.terrain.scene_setup import create_background_plane
-from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_vertex_positions
-from src.terrain.materials import apply_terrain_with_obsidian_roads, apply_test_material
+from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_ring_colors, apply_vertex_positions
+from src.terrain.materials import (
+    apply_terrain_with_obsidian_roads,
+    apply_test_material,
+    get_all_colors_choices,
+    get_all_colors_help,
+    get_terrain_materials_choices,
+    get_terrain_materials_help,
+)
 from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files, load_score_grid
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
@@ -142,6 +155,8 @@ from src.terrain.diagnostics import (
     generate_upscale_diagnostics,
     generate_rgb_histogram,
     generate_luminance_histogram,
+    generate_road_elevation_diagnostics,
+    plot_road_vertex_z_diagnostics,
 )
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
@@ -171,6 +186,152 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s: %(message)s",
     handlers=[file_handler]
 )
+
+
+# =============================================================================
+# IMAGE METADATA EMBEDDING
+# =============================================================================
+
+def embed_command_metadata(image_path: Path, command: str, extra_metadata: dict = None):
+    """
+    Embed the generation command and metadata into an image file.
+
+    For PNG: Uses tEXt chunks (Software, Comment, Description)
+    For JPEG: Uses EXIF UserComment field
+
+    Args:
+        image_path: Path to the image file
+        command: The full command used to generate the image
+        extra_metadata: Optional dict of additional metadata to embed
+    """
+    try:
+        from PIL import Image
+        from PIL.PngImagePlugin import PngInfo
+
+        img = Image.open(image_path)
+        is_png = image_path.suffix.lower() == '.png'
+
+        if is_png:
+            # PNG: Use text chunks
+            metadata = PngInfo()
+            metadata.add_text("Software", "terrain-maker (detroit_combined_render.py)")
+            metadata.add_text("Generation-Command", command)
+            metadata.add_text("Generation-Date", datetime.now().isoformat())
+
+            if extra_metadata:
+                for key, value in extra_metadata.items():
+                    metadata.add_text(key, str(value))
+
+            # Re-save with metadata
+            img.save(image_path, pnginfo=metadata)
+            return True
+
+        else:
+            # JPEG: Try multiple approaches
+            img.close()  # Close before modifying
+
+            # Approach 1: Use piexif if available
+            try:
+                import piexif
+
+                with Image.open(image_path) as img2:
+                    exif_dict = piexif.load(img2.info.get('exif', b'')) if img2.info.get('exif') else {
+                        "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None
+                    }
+
+                # UserComment in Exif IFD
+                comment = f"Command: {command}\nDate: {datetime.now().isoformat()}"
+                if extra_metadata:
+                    comment += f"\nMetadata: {json.dumps(extra_metadata)}"
+
+                exif_dict["Exif"][piexif.ExifIFD.UserComment] = b"ASCII\x00\x00\x00" + comment.encode('utf-8')
+
+                exif_bytes = piexif.dump(exif_dict)
+                piexif.insert(exif_bytes, str(image_path))
+                return True
+
+            except ImportError:
+                pass  # Try fallback
+
+            # Approach 2: Write a sidecar JSON file (always works)
+            sidecar_path = image_path.with_suffix('.json')
+            sidecar_data = {
+                "software": "terrain-maker (detroit_combined_render.py)",
+                "generation_command": command,
+                "generation_date": datetime.now().isoformat(),
+            }
+            if extra_metadata:
+                sidecar_data.update(extra_metadata)
+
+            with open(sidecar_path, 'w') as f:
+                json.dump(sidecar_data, f, indent=2)
+
+            logging.getLogger(__name__).info(f"  (JPEG sidecar: {sidecar_path.name})")
+            return True
+
+    except ImportError:
+        logging.getLogger(__name__).warning("PIL not available, skipping metadata embedding")
+        return False
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to embed metadata: {e}")
+        return False
+
+
+def read_command_metadata(image_path: Path) -> Optional[str]:
+    """
+    Read the generation command from an image's metadata.
+
+    Checks (in order):
+    1. PNG tEXt chunks
+    2. JPEG EXIF UserComment
+    3. Sidecar JSON file (.json next to image)
+
+    Args:
+        image_path: Path to the image file
+
+    Returns:
+        The generation command string, or None if not found
+    """
+    image_path = Path(image_path)
+
+    # Check for sidecar JSON file first (works for any format)
+    sidecar_path = image_path.with_suffix('.json')
+    if sidecar_path.exists():
+        try:
+            with open(sidecar_path) as f:
+                data = json.load(f)
+                if 'generation_command' in data:
+                    return data['generation_command']
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    try:
+        from PIL import Image
+
+        img = Image.open(image_path)
+
+        # PNG: Check text chunks
+        if hasattr(img, 'text') and 'Generation-Command' in img.text:
+            return img.text['Generation-Command']
+
+        # JPEG: Check EXIF UserComment
+        if img.info.get('exif'):
+            try:
+                import piexif
+                exif_dict = piexif.load(img.info['exif'])
+                user_comment = exif_dict.get("Exif", {}).get(piexif.ExifIFD.UserComment)
+                if user_comment:
+                    # Strip ASCII prefix and decode
+                    comment = user_comment[8:].decode('utf-8', errors='ignore')
+                    if comment.startswith("Command: "):
+                        return comment.split("\n")[0].replace("Command: ", "")
+            except ImportError:
+                pass
+
+        return None
+
+    except Exception:
+        return None
 
 
 # =============================================================================
@@ -216,6 +377,101 @@ def compress_colormap_score(score, transition):
 
     # Return scalar if input was scalar
     return float(result) if is_scalar else result
+
+
+def modulate_saturation_by_elevation(
+    colors: np.ndarray,
+    elevation: np.ndarray,
+    strength: float = 0.5,
+    invert: bool = True,
+    min_saturation: float = 0.2,
+    max_saturation: float = 1.0,
+    value_strength: float = 0.0,
+    min_value: float = 0.7,
+    max_value: float = 1.0,
+) -> np.ndarray:
+    """
+    Set color saturation and value based on elevation (bivariate encoding).
+
+    Uses saturation (and optionally value/lightness) as independent perceptual
+    dimensions to encode elevation, while preserving hue from the score colormap.
+
+    Args:
+        colors: RGB colors array (H, W, 3) or (H, W, 4) with values in [0, 255] or [0, 1].
+        elevation: Elevation array (H, W) - will be normalized internally.
+        strength: Saturation blend strength [0, 1]. 0 = keep original, 1 = fully elevation-based.
+        invert: If True (default), high elevation = low saturation + high value (muted/brighter).
+                If False, high elevation = high saturation + low value (vivid/darker).
+        min_saturation: Minimum saturation value (at one elevation extreme).
+        max_saturation: Maximum saturation value (at other elevation extreme).
+        value_strength: Value/lightness blend strength [0, 1]. 0 = no change, 1 = fully elevation-based.
+        min_value: Minimum value/lightness (at one elevation extreme).
+        max_value: Maximum value/lightness (at other elevation extreme).
+
+    Returns:
+        Modified colors array with same shape and range as input.
+    """
+    # Handle both uint8 [0, 255] and float [0, 1] inputs
+    was_uint8 = colors.dtype == np.uint8
+    if was_uint8:
+        colors_float = colors.astype(np.float32) / 255.0
+    else:
+        colors_float = colors.astype(np.float32)
+
+    # Extract RGB (handle both 3 and 4 channel inputs)
+    has_alpha = colors_float.shape[-1] == 4
+    rgb = colors_float[..., :3]
+
+    # Normalize elevation to [0, 1], handling NaN values
+    elev_min = np.nanmin(elevation)
+    elev_max = np.nanmax(elevation)
+    if elev_max - elev_min > 0:
+        normalized_elev = (elevation - elev_min) / (elev_max - elev_min)
+    else:
+        normalized_elev = np.zeros_like(elevation)
+
+    # Replace NaN values with 0.5 (mid-range for invalid elevation)
+    normalized_elev = np.nan_to_num(normalized_elev, nan=0.5)
+
+    # Compute target saturation and value based on elevation
+    # Saturation: invert=True means high elevation -> low saturation (muted)
+    # Value: high elevation -> brighter (atmospheric haze effect)
+    if invert:
+        target_saturation = max_saturation - normalized_elev * (max_saturation - min_saturation)
+        # Value goes opposite direction: high elevation = brighter (washed out)
+        target_value = min_value + normalized_elev * (max_value - min_value)
+    else:
+        target_saturation = min_saturation + normalized_elev * (max_saturation - min_saturation)
+        target_value = max_value - normalized_elev * (max_value - min_value)
+
+    # Convert RGB to HSV (using matplotlib's vectorized conversion)
+    hsv = rgb_to_hsv(rgb)
+
+    # Set saturation channel based on elevation (blend with original based on strength)
+    original_saturation = hsv[..., 1]
+    hsv[..., 1] = original_saturation * (1.0 - strength) + target_saturation * strength
+
+    # Set value channel based on elevation (blend with original based on value_strength)
+    if value_strength > 0:
+        original_value = hsv[..., 2]
+        hsv[..., 2] = original_value * (1.0 - value_strength) + target_value * value_strength
+
+    # Convert back to RGB
+    rgb_modified = hsv_to_rgb(hsv)
+
+    # Reconstruct full array with alpha if present
+    if has_alpha:
+        result = np.concatenate([rgb_modified, colors_float[..., 3:4]], axis=-1)
+    else:
+        result = rgb_modified
+
+    # Convert back to uint8 if input was uint8
+    if was_uint8:
+        # Clip to valid range and handle any remaining NaN values
+        result = np.nan_to_num(result, nan=0.0)
+        result = np.clip(result * 255, 0, 255).astype(np.uint8)
+
+    return result
 
 
 # =============================================================================
@@ -450,6 +706,14 @@ Examples:
     )
 
     parser.add_argument(
+        "--background-size",
+        type=float,
+        default=2.0,
+        help="Size multiplier for background plane relative to camera frustum (default: 2.0). "
+             "Increase for larger background coverage.",
+    )
+
+    parser.add_argument(
         "--height-scale",
         type=float,
         default=30.0,
@@ -460,8 +724,8 @@ Examples:
         "--camera-direction",
         type=str,
         default="above",
-        choices=["above", "south", "north", "east", "west", "northeast", "northwest", "southeast", "southwest"],
-        help="Camera viewing direction (default: above)",
+        choices=["above", "above-tilted", "south", "north", "east", "west", "northeast", "northwest", "southeast", "southwest"],
+        help="Camera viewing direction (default: above). Use 'above-tilted' to show 3D skirt edge.",
     )
 
     parser.add_argument(
@@ -583,18 +847,20 @@ Examples:
     parser.add_argument(
         "--test-material",
         type=str,
-        choices=["none", "obsidian", "chrome", "clay", "plastic", "gold"],
+        choices=["none"] + get_all_colors_choices(),
         default="none",
-        help="Test material for entire terrain (ignores vertex colors): none=normal terrain colors, "
-             "obsidian=glossy black, chrome=reflective metal, clay=matte gray, plastic=glossy white, gold=metallic gold",
+        help=f"Override terrain with solid color (ignores vertex colors). "
+             f"Use for testing lighting/geometry. 'none' = show vertex colors. "
+             f"Colors: {get_all_colors_help()}",
     )
 
     parser.add_argument(
         "--road-color",
         type=str,
+        choices=get_all_colors_choices(),
         default="azurite",
-        help="Road color preset: obsidian (black), azurite (deep blue), azurite-light (richer blue), "
-             "malachite (deep green), hematite (dark iron gray). Default: azurite",
+        help=f"Color for road overlay. "
+             f"Colors: {get_all_colors_help()}. Default: azurite",
     )
 
     # Terrain smoothing options
@@ -949,6 +1215,18 @@ Examples:
         help="Disable HDRI sky lighting",
     )
 
+    # Terrain material preset
+    parser.add_argument(
+        "--terrain-material",
+        type=str,
+        default="satin",
+        choices=get_terrain_materials_choices(),
+        help=f"Shader properties for terrain surface (vertex colors show through). "
+             f"Dielectric: matte, eggshell, satin, ceramic, lacquered, clearcoat, velvet. "
+             f"Material-style: clay, plastic, ivory, obsidian, chrome, gold, mineral. "
+             f"Default: satin",
+    )
+
     # GPU memory-saving options for large renders
     parser.add_argument(
         "--auto-tile",
@@ -989,6 +1267,21 @@ Examples:
         help="Disable pipeline caching (default)",
     )
 
+    # Metadata embedding
+    parser.add_argument(
+        "--no-embed-command",
+        action="store_true",
+        default=False,
+        help="Disable embedding the generation command in image metadata",
+    )
+
+    parser.add_argument(
+        "--read-command",
+        type=Path,
+        metavar="IMAGE",
+        help="Read and print the generation command from an existing image's metadata, then exit",
+    )
+
     # Two-tier edge extrusion arguments
     parser.add_argument(
         "--two-tier-edge",
@@ -1006,12 +1299,20 @@ Examples:
     )
 
     parser.add_argument(
+        "--base-depth",
+        type=float,
+        default=-0.2,
+        help="Z-coordinate for bottom of skirt/edge extrusion (default: -0.2). "
+             "More negative = deeper skirt. Try -0.5 or -1.0 for more visible skirt.",
+    )
+
+    parser.add_argument(
         "--edge-base-material",
         type=str,
         default="clay",
-        help="Material for base layer (default: clay). Options: clay, obsidian, chrome, "
-             "plastic, gold, ivory, or RGB tuple like '0.6,0.55,0.5'. "
-             "Only used when --two-tier-edge is enabled.",
+        help=f"Color for edge extrusion base layer. "
+             f"Colors: {get_all_colors_help()}, or RGB tuple '0.6,0.55,0.5'. "
+             f"Only with --two-tier-edge. Default: clay",
     )
 
     parser.add_argument(
@@ -1069,6 +1370,29 @@ Examples:
     )
 
     parser.add_argument(
+        "--use-fractional-edges",
+        action="store_true",
+        default=False,
+        help="Use fractional edge coordinates that preserve projection curvature "
+             "(default: False). When enabled with --use-rectangle-edges, edge vertices "
+             "follow the true curved boundary from WGS84→UTM Transverse Mercator projection "
+             "instead of snapping to integer grid positions. Creates smoother, more "
+             "geographically accurate edge geometry.",
+    )
+
+    parser.add_argument(
+        "--edge-spacing",
+        type=float,
+        default=None,
+        help="Pixel spacing for edge/skirt vertices (default: auto based on mesh size). "
+             "Lower values = denser skirt (smoother but more memory). "
+             "0.33 = 3x denser than mesh edge (default for small meshes). "
+             "1.0 = same density as mesh edge. "
+             "2.0 = half density (good for large meshes to avoid OOM). "
+             "Auto-scales: 0.33 for <500k vertices, 1.0 for 500k-2M, 2.0 for >2M.",
+    )
+
+    parser.add_argument(
         "--clear-cache",
         action="store_true",
         default=False,
@@ -1082,7 +1406,70 @@ Examples:
         help="Directory for pipeline cache files (default: .pipeline_cache/)",
     )
 
+    parser.add_argument(
+        "--elev-saturation",
+        type=float,
+        default=0.0,
+        help="Saturation encoding of elevation. "
+             "0.0 = off (default), 1.0 = saturation fully determined by elevation. "
+             "Higher elevations appear more muted/gray, lower elevations stay vivid.",
+    )
+
+    parser.add_argument(
+        "--elev-value",
+        type=float,
+        default=0.0,
+        help="Value/lightness encoding of elevation. "
+             "0.0 = off (default), 0.3 = subtle darkening at high elevations, 1.0 = full effect. "
+             "Higher elevations appear darker, lower elevations stay bright.",
+    )
+
+    # Park ring outline arguments
+    parser.add_argument(
+        "--park-rings",
+        action="store_true",
+        help="Add dark ring outlines around XC skiing park zones to help them stand out.",
+    )
+
+    parser.add_argument(
+        "--park-ring-inner",
+        type=float,
+        default=2400.0,
+        help="Inner radius of park ring in meters (default: 2400). "
+             "Should be slightly less than --park-ring-outer for a thin outline.",
+    )
+
+    parser.add_argument(
+        "--park-ring-outer",
+        type=float,
+        default=2500.0,
+        help="Outer radius of park ring in meters (default: 2500). "
+             "Matches the proximity zone radius by default.",
+    )
+
+    parser.add_argument(
+        "--park-ring-color",
+        type=str,
+        default="0.15,0.15,0.15",
+        help="RGB color for park rings as 'R,G,B' (0-1 range). Default: dark gray (0.15,0.15,0.15).",
+    )
+
     args = parser.parse_args()
+
+    # Handle --read-command: read metadata from existing image and exit
+    if args.read_command:
+        if not args.read_command.exists():
+            print(f"Error: File not found: {args.read_command}")
+            sys.exit(1)
+        command = read_command_metadata(args.read_command)
+        if command:
+            print(f"Generation command for {args.read_command}:")
+            print(command)
+        else:
+            print(f"No generation command found in {args.read_command}")
+            print("(Image may not have been generated by this script, or metadata was stripped)")
+        sys.exit(0)
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     # Parse edge_base_material (could be a material name or RGB tuple string)
@@ -1217,6 +1604,7 @@ Examples:
         "edge_blend_colors": args.edge_blend_colors,
         "smooth_boundary": args.smooth_boundary,
         "smooth_boundary_window": args.smooth_boundary_window if args.smooth_boundary else 5,
+        "terrain_material": args.terrain_material,
     }
 
     # Register targets with cache (defines dependency graph)
@@ -1978,41 +2366,33 @@ Examples:
         logger.info("Exiting before mesh creation (--colormap-viz-only mode)")
         return 0
 
-    # Create mesh for proximity calculations
-    logger.debug("Creating temporary mesh for proximity calculations...")
-    mesh_temp = terrain_combined.create_mesh(
-        scale_factor=100,
-        height_scale=args.height_scale,
-        center_model=True,
-        boundary_extension=True,
-        water_mask=None,
-        two_tier_edge=args.two_tier_edge,
-        edge_mid_depth=args.edge_mid_depth,
-        edge_base_material=args.edge_base_material,
-        edge_blend_colors=args.edge_blend_colors,
-        smooth_boundary=args.smooth_boundary,
-        smooth_boundary_window=args.smooth_boundary_window if args.smooth_boundary else 5,
-        use_catmull_rom=args.use_catmull_rom,
-        catmull_rom_subdivisions=args.catmull_rom_subdivisions,
-        use_rectangle_edges=args.use_rectangle_edges,
-    )
-
-    if mesh_temp is None:
-        logger.error("Failed to create temporary mesh")
-        return 1
-
-    # Compute proximity mask for parks if available
+    # Compute proximity mask for parks if available (BEFORE mesh creation)
+    # This avoids the need for duplicate mesh creation
+    park_mask_grid = None
+    park_ring_mask_grid = None
     if parks:
-        logger.info(f"Computing proximity mask for {len(parks)} parks...")
+        logger.info(f"Computing grid-based proximity mask for {len(parks)} parks...")
         park_lons = np.array([p["lon"] for p in parks])
         park_lats = np.array([p["lat"] for p in parks])
-        park_mask = terrain_combined.compute_proximity_mask(
+        park_mask_grid = terrain_combined.compute_proximity_mask_grid(
             park_lons,
             park_lats,
             radius_meters=2_500,
             cluster_threshold_meters=500,
         )
-        logger.debug(f"Proximity mask: {np.sum(park_mask)} vertices in park zones")
+        logger.debug(f"Proximity mask: {np.sum(park_mask_grid)} grid pixels in park zones")
+
+        # Compute ring mask for park outlines if requested
+        if args.park_rings:
+            logger.info(f"Computing ring mask for park outlines...")
+            park_ring_mask_grid = terrain_combined.compute_ring_mask_grid(
+                park_lons,
+                park_lats,
+                inner_radius_meters=args.park_ring_inner,
+                outer_radius_meters=args.park_ring_outer,
+                cluster_threshold_meters=500,
+            )
+            logger.info(f"Ring mask: {np.sum(park_ring_mask_grid)} grid pixels in ring zones")
 
     # Add roads as data layer if requested
     # Roads are added BEFORE color mapping so they can be part of the multi-overlay system
@@ -2036,6 +2416,19 @@ Examples:
                 terrain_combined.data_layers["roads"]["data"] = smoothed_roads
                 logger.info("✓ Road anti-aliasing applied")
 
+            # Generate road elevation diagnostic
+            if "roads" in terrain_combined.data_layers:
+                dem_layer = terrain_combined.data_layers["dem"]
+                dem_for_diag = dem_layer.get("transformed_data", dem_layer["data"])
+                road_for_diag = terrain_combined.data_layers["roads"]["data"]
+                generate_road_elevation_diagnostics(
+                    dem=dem_for_diag,
+                    road_mask=road_for_diag,
+                    output_dir=Path(args.output_dir),
+                    prefix="road_elevation",
+                    kernel_radius=3,
+                )
+
         except Exception as e:
             logger.warning(f"Failed to add roads layer: {e}")
 
@@ -2045,6 +2438,52 @@ Examples:
     # Set up color mapping with overlays
     # Note: Roads are NOT included in color overlays - they keep terrain colors
     # but get glassy material applied via separate RoadMask vertex color layer
+    # Using grid-space park_mask_grid (computed before mesh creation) eliminates
+    # the need for duplicate mesh creation (option 2 - the better fix)
+
+    # Get DEM data for elevation-based color modulation (if enabled)
+    # DEM is already transformed at this point, so we can capture it in closures
+    elev_sat_dem = None
+    elev_sat_strength = args.elev_saturation
+    elev_val_strength = args.elev_value
+    if elev_sat_strength > 0 or elev_val_strength > 0:
+        dem_layer = terrain_combined.data_layers["dem"]
+        elev_sat_dem = dem_layer.get("transformed_data", dem_layer["data"])
+        effects = []
+        if elev_sat_strength > 0:
+            effects.append(f"saturation={elev_sat_strength}")
+        if elev_val_strength > 0:
+            effects.append(f"value={elev_val_strength}")
+        logger.info(f"Elevation color encoding enabled ({', '.join(effects)}, high elevation = muted/brighter)")
+
+    # Helper to wrap colormaps with elevation-based color modulation
+    def make_sat_colormap(base_cmap_func):
+        """Wrap a colormap function to apply saturation/value modulation based on elevation."""
+        def wrapped(score):
+            colors = base_cmap_func(score)
+            if elev_sat_dem is not None and (elev_sat_strength > 0 or elev_val_strength > 0):
+                colors = modulate_saturation_by_elevation(
+                    colors, elev_sat_dem,
+                    strength=elev_sat_strength,
+                    value_strength=elev_val_strength,
+                    invert=True
+                )
+            return colors
+        return wrapped
+
+    # Define base colormap functions (will be wrapped with saturation modulation if enabled)
+    def sledding_colormap(score):
+        return elevation_colormap(
+            np.power(score / np.nanmax(score), args.gamma),
+            cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
+        )
+
+    def xc_skiing_colormap(score):
+        return elevation_colormap(score, cmap_name="rocket", min_elev=0.0, max_elev=1.0)
+
+    # Wrap with saturation modulation (only affects base colormap, not overlays)
+    base_colormap = make_sat_colormap(sledding_colormap)
+
     if args.roads and road_data and road_bbox and parks:
         # With parks: base sledding + XC skiing overlay (no road color overlay)
         logger.info("Setting multi-overlay color mapping:")
@@ -2054,19 +2493,15 @@ Examples:
 
         overlays = [
             {
-                "colormap": lambda score: elevation_colormap(
-                    score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
-                ),
+                "colormap": xc_skiing_colormap,  # Overlay keeps full saturation
                 "source_layers": ["xc_skiing"],
                 "priority": 20,
-                "mask": park_mask,  # Only apply near parks
+                "mask": park_mask_grid,  # Grid-space mask (set_multi_color_mapping accepts grid masks)
             },
         ]
 
         terrain_combined.set_multi_color_mapping(
-            base_colormap=lambda score: elevation_colormap(
-                np.power(score / np.nanmax(score), args.gamma), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
-            ),
+            base_colormap=base_colormap,
             base_source_layers=["sledding"],
             overlays=overlays,
         )
@@ -2076,7 +2511,7 @@ Examples:
         logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
-            lambda score: elevation_colormap(np.power(score / np.nanmax(score), args.gamma), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0),
+            base_colormap,
             source_layers=["sledding"],
         )
     else:
@@ -2086,59 +2521,54 @@ Examples:
             logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
             logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
-                base_colormap=lambda score: elevation_colormap(
-                    np.power(score / np.nanmax(score), args.gamma), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
-                ),
+                base_colormap=base_colormap,
                 base_source_layers=["sledding"],
-                overlay_colormap=lambda score: elevation_colormap(
-                    score, cmap_name="rocket", min_elev=0.0, max_elev=1.0
-                ),
+                overlay_colormap=xc_skiing_colormap,  # Overlay keeps full saturation
                 overlay_source_layers=["xc_skiing"],
-                overlay_mask=park_mask,
+                overlay_mask=park_mask_grid,  # Grid-space mask (converted to vertex-space internally)
             )
         else:
             logger.info(f"No parks available - using sledding scores with gamma={args.gamma} (boreal_mako colormap)")
             terrain_combined.set_color_mapping(
-                lambda score: elevation_colormap(np.power(score / np.nanmax(score), args.gamma), cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0),
+                base_colormap,
                 source_layers=["sledding"],
             )
 
     # NOTE: Water mask was detected earlier (before smoothing) for accurate slope detection
     # The water_mask variable is already defined and ready to use
-
-    # Compute colors (with caching)
-    if args.cache:
-        color_key = cache.compute_target_key("colors_computed")
-        cached_colors = cache.get_cached("colors_computed")
-        if cached_colors is not None:
-            logger.info(f"  Cache HIT: colors_computed (key: {color_key[:12]}...) - restoring from cache")
-            terrain_combined.colors = cached_colors
-            logger.debug("✓ Skipped compute_colors() - loaded from cache")
-        else:
-            logger.info(f"  Cache MISS: colors_computed (key: {color_key[:12]}...) - computing")
-            terrain_combined.compute_colors(water_mask=water_mask)
-            cache.save_target("colors_computed", terrain_combined.colors)
-            logger.debug("✓ Saved colors_computed to cache")
-    else:
-        logger.debug("Computing colors with water detection...")
-        terrain_combined.compute_colors(water_mask=water_mask)
-
-    # Remove temporary mesh
-    bpy.data.objects.remove(mesh_temp, do_unlink=True)
+    # NOTE: Saturation modulation (if enabled) is already integrated into the colormap functions above
 
     # Create final mesh
     logger.debug("Creating final combined mesh...")
-    logger.info(f"Two-tier edge settings: enabled={args.two_tier_edge}, mid_depth={args.edge_mid_depth}, "
-                f"base_material={args.edge_base_material}, blend_colors={args.edge_blend_colors}")
+    logger.info(f"Two-tier edge settings: enabled={args.two_tier_edge}, base_depth={args.base_depth}, "
+                f"mid_depth={args.edge_mid_depth}, base_material={args.edge_base_material}, "
+                f"blend_colors={args.edge_blend_colors}")
     logger.info(f"Boundary smoothing: enabled={args.smooth_boundary}, window_size={args.smooth_boundary_window}")
     logger.info(f"Catmull-Rom curve smoothing: enabled={args.use_catmull_rom}, subdivisions={args.catmull_rom_subdivisions}")
     logger.info(f"Rectangle-edge boundary: enabled={args.use_rectangle_edges}")
+    logger.info(f"Fractional edges (projection curvature): enabled={args.use_fractional_edges}")
+
+    # Compute edge spacing (auto-scale based on target vertex count if not specified)
+    edge_spacing = args.edge_spacing
+    if edge_spacing is None:
+        # Auto-scale: denser for small meshes, sparser for large to avoid OOM
+        if target_vertices < 500_000:
+            edge_spacing = 0.33  # 3x denser (smooth edges)
+        elif target_vertices < 2_000_000:
+            edge_spacing = 1.0   # Same as mesh edge
+        else:
+            edge_spacing = 2.0   # Half density (memory-safe)
+        logger.info(f"Edge spacing: {edge_spacing} (auto-scaled for {target_vertices:,} vertices)")
+    else:
+        logger.info(f"Edge spacing: {edge_spacing} (user-specified)")
+
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
         center_model=True,
         boundary_extension=True,
-        water_mask=None,  # Already applied
+        base_depth=args.base_depth,
+        water_mask=water_mask,  # Apply water depth gradient coloring
         two_tier_edge=args.two_tier_edge,
         edge_mid_depth=args.edge_mid_depth,
         edge_base_material=args.edge_base_material,
@@ -2148,29 +2578,56 @@ Examples:
         use_catmull_rom=args.use_catmull_rom,
         catmull_rom_subdivisions=args.catmull_rom_subdivisions,
         use_rectangle_edges=args.use_rectangle_edges,
+        use_fractional_edges=args.use_fractional_edges,
+        edge_sample_spacing=edge_spacing,
     )
 
     if mesh_combined is None:
         logger.error("Failed to create combined terrain mesh")
         return 1
 
-    # Apply vertex colors
-    logger.debug("Applying vertex colors...")
+    # Apply vertex colors (already applied during create_mesh, but check if available)
+    logger.debug("Vertex colors applied during mesh creation")
 
-    # Diagnostic: Check for purple colors in the vertex colors
-    colors_rgb = terrain_combined.colors[:, :3]  # Get RGB channels only
-    is_purple = (colors_rgb[:, 0] > colors_rgb[:, 1]) & (colors_rgb[:, 0] > colors_rgb[:, 2])  # R > G and R > B
-    num_purple = np.sum(is_purple)
-    if num_purple > 0:
-        logger.info(f"  ✓ Found {num_purple:,} purple vertices ({100*num_purple/len(colors_rgb):.2f}% of mesh)")
-        purple_avg = colors_rgb[is_purple].mean(axis=0)
-        logger.info(f"    Average purple color: R={purple_avg[0]:.3f} G={purple_avg[1]:.3f} B={purple_avg[2]:.3f}")
+    # Diagnostic: Check for purple colors in the vertex colors (if still available)
+    # Colors might not be stored on Terrain object after mesh creation
+    if hasattr(terrain_combined, 'colors') and terrain_combined.colors is not None:
+        colors = terrain_combined.colors
+        if colors.ndim == 3:
+            # Grid-space colors: flatten to (num_pixels, 4)
+            colors = colors.reshape(-1, colors.shape[-1])
+        colors_rgb = colors[:, :3]  # Get RGB channels only
+        is_purple = (colors_rgb[:, 0] > colors_rgb[:, 1]) & (colors_rgb[:, 0] > colors_rgb[:, 2])  # R > G and R > B
+        num_purple = np.sum(is_purple)
+        if num_purple > 0:
+            logger.info(f"  ✓ Found {num_purple:,} purple vertices ({100*num_purple/len(colors_rgb):.2f}% of mesh)")
+            purple_avg = colors_rgb[is_purple].mean(axis=0)
+            logger.info(f"    Average purple color: R={purple_avg[0]:.3f} G={purple_avg[1]:.3f} B={purple_avg[2]:.3f}")
+        else:
+            logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
     else:
-        logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
+        logger.debug("Colors already applied to mesh (diagnostic check skipped)")
 
-    # Apply vertex colors while preserving two-tier edge boundary colors
-    n_surface_vertices = len(terrain_combined.y_valid) if hasattr(terrain_combined, 'y_valid') else None
-    apply_vertex_colors(mesh_combined, terrain_combined.colors, terrain_combined.y_valid, terrain_combined.x_valid, n_surface_vertices=n_surface_vertices)
+    # Apply ring colors for park outlines if enabled
+    if args.park_rings and park_ring_mask_grid is not None:
+        # Parse ring color from CLI argument
+        try:
+            ring_rgb = tuple(float(x.strip()) for x in args.park_ring_color.split(","))
+            if len(ring_rgb) != 3:
+                raise ValueError("Ring color must have exactly 3 values")
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid --park-ring-color '{args.park_ring_color}': {e}. Using default dark gray.")
+            ring_rgb = (0.15, 0.15, 0.15)
+
+        logger.info(f"Applying park ring outlines (color: RGB{ring_rgb})...")
+        apply_ring_colors(
+            mesh_combined,
+            park_ring_mask_grid,
+            terrain_combined.y_valid,
+            terrain_combined.x_valid,
+            ring_color=ring_rgb,
+            logger=logger,
+        )
 
     # Apply road mask and material if roads are enabled
     # Roads are ALWAYS obsidian, terrain uses vertex colors or test material
@@ -2214,6 +2671,20 @@ Examples:
 
             apply_vertex_positions(mesh_combined, offset_vertices, logger)
 
+        # Generate vertex-level road Z diagnostic (captures final mesh state)
+        logger.info("Generating vertex-level road Z diagnostics...")
+        final_verts = np.array([v.co[:] for v in mesh_combined.data.vertices])
+        plot_road_vertex_z_diagnostics(
+            vertices=final_verts,
+            road_mask=road_layer_data,
+            y_valid=terrain_combined.y_valid,
+            x_valid=terrain_combined.x_valid,
+            output_dir=Path(args.output_dir),
+            prefix="road_vertex_z",
+            kernel_radius=3,
+            label="post-smoothing+offset",
+        )
+
     # Apply material based on roads and test_material settings
     # Roads use configurable color (default azurite); terrain uses vertex colors or test material
     if mesh_combined.data.materials:
@@ -2221,16 +2692,22 @@ Examples:
             # Use mixed material: glossy roads + terrain (vertex colors or test material)
             terrain_style = args.test_material if args.test_material != "none" else None
             logger.info(f"Applying material: {args.road_color} roads + {terrain_style or 'vertex colors'} terrain")
+            logger.info(f"  Terrain material preset: {args.terrain_material}")
             apply_terrain_with_obsidian_roads(
                 mesh_combined.data.materials[0],
                 terrain_style=terrain_style,
                 road_color=args.road_color,
+                terrain_material=args.terrain_material,
             )
         elif args.test_material != "none":
             # No roads, but test material requested
             logger.info(f"Applying test material: {args.test_material}")
             apply_test_material(mesh_combined.data.materials[0], args.test_material)
-        # else: keep default colormap material (already applied by create_mesh)
+        else:
+            # No roads, no test material - apply terrain material preset directly
+            from src.terrain.materials import apply_colormap_material
+            logger.info(f"Applying terrain material preset: {args.terrain_material}")
+            apply_colormap_material(mesh_combined.data.materials[0], terrain_material=args.terrain_material)
 
     logger.info("✓ Combined terrain mesh created successfully")
 
@@ -2324,11 +2801,13 @@ Examples:
         logger.info(f"Creating background plane...")
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
+        logger.info(f"  Size multiplier: {args.background_size}x")
         background_plane = create_background_plane(
             camera=camera,
             mesh_or_meshes=mesh_combined,
             distance_below=args.background_distance,
             color=args.background_color,
+            size_multiplier=args.background_size,
             receive_shadows=not args.background_flat,  # Flat color ignores shadows
             flat_color=args.background_flat,
         )
@@ -2384,6 +2863,17 @@ Examples:
 
         if result:
             logger.info(f"✓ Render saved: {output_path} ({output_path.stat().st_size / 1024:.1f} KB)")
+
+            # Embed generation command in image metadata (unless disabled)
+            if not args.no_embed_command:
+                full_command = "python " + " ".join(shlex.quote(arg) for arg in sys.argv)
+                extra_meta = {
+                    "Resolution": f"{render_width}x{render_height}",
+                    "Samples": str(render_samples),
+                    "Quality": "print" if args.print_quality else "preview",
+                }
+                if embed_command_metadata(output_path, full_command, extra_meta):
+                    logger.info("✓ Embedded generation command in image metadata")
 
             # Embed sRGB color profile if requested (for print)
             if args.embed_profile:
