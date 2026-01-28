@@ -105,6 +105,82 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, n_s
             logger.debug(f"✓ Applied colors to {n_loops} loops (vectorized)")
 
 
+def apply_ring_colors(mesh_obj, ring_mask, y_valid, x_valid, ring_color=(0.15, 0.15, 0.15), logger=None):
+    """
+    Apply a solid color to vertices within a ring mask.
+
+    Modifies the existing TerrainColors vertex color layer, setting RGB values
+    for vertices that fall within the ring mask to the specified color.
+    This creates a dark outline around areas of interest (e.g., park zones).
+
+    Uses Blender's foreach_get/foreach_set for efficient bulk operations.
+
+    Args:
+        mesh_obj (bpy.types.Object): The Blender mesh object
+        ring_mask (np.ndarray): 2D boolean array (height, width) where True = apply ring color
+        y_valid (np.ndarray): Y indices mapping vertices to grid positions
+        x_valid (np.ndarray): X indices mapping vertices to grid positions
+        ring_color (tuple): RGB color (0-1 range) to apply to ring vertices. Default: dark gray.
+        logger (logging.Logger, optional): Logger for progress messages
+    """
+    mesh = mesh_obj.data
+
+    # Get existing color layer
+    if len(mesh.vertex_colors) == 0:
+        if logger:
+            logger.warning("No vertex colors to modify for ring colors")
+        return
+
+    color_layer = mesh.vertex_colors[0]  # TerrainColors
+    n_loops = len(color_layer.data)
+
+    if n_loops == 0:
+        if logger:
+            logger.warning("Mesh has no color data for ring colors")
+        return
+
+    # Get current colors
+    current_colors = np.zeros(n_loops * 4, dtype=np.float32)
+    color_layer.data.foreach_get("color", current_colors)
+    current_colors = current_colors.reshape(-1, 4)
+
+    # Build loop-to-vertex mapping (each face has 3 or 4 loops)
+    # For triangulated meshes, each face has 3 vertices = 3 loops
+    mesh.calc_loop_triangles()
+    loop_to_vertex = np.zeros(n_loops, dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_to_vertex)
+
+    # Count how many loops will be modified
+    modified_count = 0
+
+    for loop_idx in range(n_loops):
+        vert_idx = loop_to_vertex[loop_idx]
+
+        # Skip if vertex index is out of range for our mapping
+        if vert_idx >= len(y_valid):
+            continue
+
+        y = int(y_valid[vert_idx])
+        x = int(x_valid[vert_idx])
+
+        # Clamp to valid indices
+        y = max(0, min(y, ring_mask.shape[0] - 1))
+        x = max(0, min(x, ring_mask.shape[1] - 1))
+
+        if ring_mask[y, x]:
+            current_colors[loop_idx, 0] = ring_color[0]
+            current_colors[loop_idx, 1] = ring_color[1]
+            current_colors[loop_idx, 2] = ring_color[2]
+            # Keep alpha unchanged
+            modified_count += 1
+
+    # Apply modified colors back
+    color_layer.data.foreach_set("color", current_colors.flatten())
+
+    if logger:
+        logger.info(f"✓ Applied ring color to {modified_count:,} loops")
+
+
 def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
     """
     Apply a road mask as a separate vertex color layer for material detection.
@@ -302,17 +378,30 @@ def create_blender_mesh(
                 # Normalize surface colors if provided
                 colors_normalized = None
                 n_positions = 0
+                is_vertex_space = False  # Track whether colors are vertex-space or grid-space
                 if has_surface_colors:
                     colors_normalized = colors.astype(np.float32)
                     if colors_normalized.max() > 1.0:
                         colors_normalized = colors_normalized / 255.0
 
+                    # Detect color space: vertex-space (N, 3/4) vs grid-space (H, W, 3/4)
+                    is_vertex_space = colors_normalized.ndim == 2
+                    if logger:
+                        color_shape = f"{colors_normalized.shape}"
+                        color_space = "vertex-space" if is_vertex_space else "grid-space"
+                        logger.debug(f"Color array shape {color_shape} detected as {color_space}")
+
                     # Ensure colors are RGBA (add alpha channel if needed)
                     if colors_normalized.shape[-1] == 3:
-                        alpha = np.ones(
-                            (colors_normalized.shape[0], colors_normalized.shape[1], 1),
-                            dtype=np.float32,
-                        )
+                        if is_vertex_space:
+                            # Vertex-space: add alpha as (N, 1)
+                            alpha = np.ones((colors_normalized.shape[0], 1), dtype=np.float32)
+                        else:
+                            # Grid-space: add alpha as (H, W, 1)
+                            alpha = np.ones(
+                                (colors_normalized.shape[0], colors_normalized.shape[1], 1),
+                                dtype=np.float32,
+                            )
                         colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
 
                     # Get number of original positions (before boundary extension)
@@ -336,14 +425,19 @@ def create_blender_mesh(
 
                         # Apply colors to surface vertices (if available)
                         if has_surface_colors and vertex_idx < n_positions:
-                            y, x = y_valid[vertex_idx], x_valid[vertex_idx]
-
-                            # Check bounds
-                            if (
-                                0 <= y < colors_normalized.shape[0]
-                                and 0 <= x < colors_normalized.shape[1]
-                            ):
-                                color_data[loop_idx] = colors_normalized[y, x]
+                            if is_vertex_space:
+                                # Vertex-space colors: direct index lookup
+                                if vertex_idx < len(colors_normalized):
+                                    color_data[loop_idx] = colors_normalized[vertex_idx]
+                            else:
+                                # Grid-space colors: coordinate-based lookup
+                                y, x = y_valid[vertex_idx], x_valid[vertex_idx]
+                                # Check bounds
+                                if (
+                                    0 <= y < colors_normalized.shape[0]
+                                    and 0 <= x < colors_normalized.shape[1]
+                                ):
+                                    color_data[loop_idx] = colors_normalized[y, x]
                         # Apply boundary colors to boundary vertices (if available)
                         elif boundary_colors_normalized is not None:
                             boundary_idx = vertex_idx - n_positions
