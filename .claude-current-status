@@ -1,0 +1,77 @@
+# Claude Current Status
+Last updated: 2026-01-27 12:45
+
+## Current Work: Fixed Fractional Edge Positioning
+
+### Summary
+Fixed two bugs with fractional edge positioning:
+
+### Bug #1: Single-tier offset (fixed earlier)
+**Location**: `src/terrain/mesh_operations.py` lines 798-800 (single-tier mode)
+
+**Problem**: Code was overwriting correctly-interpolated centered coordinates with uncentered pixel coordinates.
+
+**Fix**: Removed the override - use interpolated position as-is.
+
+### Bug #2: Stair-stepping from clamped coordinates (just fixed)
+**Location**: `src/terrain/mesh_operations.py` and `src/terrain/core.py`
+
+**Problem**: Edge coordinates exceeding mesh bounds were clamped, causing all edge points in that region to produce identical X,Y output (stair-stepping).
+
+**Diagnostic evidence**:
+```
+y_in changes: 16.212 → 16.963
+x_out constant: 16.96908 (should vary!)
+X deltas: min=0.000000, max=0.000000, mean=0.000000
+```
+
+**Fix**: For fractional edges, compute X,Y directly from the fractional pixel coordinates instead of using bilinear interpolation:
+```python
+if use_fractional_edges and model_offset is not None:
+    pos[0] = x / scale_factor - model_offset[0]  # True fractional X
+    pos[1] = y / scale_factor - model_offset[1]  # True fractional Y
+    # Z remains from bilinear interpolation (elevation data)
+```
+
+Added `scale_factor` and `model_offset` parameters to `create_boundary_extension()` and passed them from `core.py`.
+
+### Previous Analysis: Stair-Stepping
+The stair-stepping is **inherent** to how mesh boundaries work with downsampled grids:
+
+1. After downsampling, mesh vertices exist only at integer pixel positions
+2. The valid pixel mask creates a stair-stepped boundary at pixel edges
+3. Bilinear interpolation in `get_position_at_coords()` can only produce positions WITHIN the mesh grid convex hull
+4. The skirt follows this stair-stepped boundary regardless of coordinate precision
+
+### What Fractional Edges DO
+- Preserve projection curvature (subtle curve from WGS84→UTM transformation)
+- Provide denser sampling along the boundary
+- Smoother Z-value interpolation between mesh vertices
+
+### What Fractional Edges DON'T DO
+- Eliminate the stair-step pattern from pixel boundaries
+- Create positions outside the mesh grid
+
+### Recommendations for Smoother Edges
+1. **Less aggressive downsampling**: Higher `target_vertices` = smoother stair-steps
+2. **Combine fractional + Catmull-Rom**: May help slightly with `use_catmull_rom=True`
+3. **Single-tier mode**: Stair-steps less visually prominent
+4. **Lighting/camera angles**: Steep angles minimize visual impact
+
+### Files Modified This Session
+- `src/terrain/mesh_operations.py`:
+  - Fixed single-tier fractional edge positioning (lines ~793-810)
+  - Added fractional edge X,Y computation for two-tier mode (lines ~1107-1116)
+  - Added `scale_factor` and `model_offset` parameters to `create_boundary_extension()`
+  - Enhanced diagnostic output to show bilinear vs corrected positions
+- `src/terrain/core.py`:
+  - Pass `scale_factor` and `model_offset` to `create_boundary_extension()`
+
+### Related Tests
+- All 49 boundary tests passing
+- `test_create_boundary_extension_catmull_rom_smooth_vertices` - Now passing after fix
+
+### Previous Session Context (camera positioning)
+- Added "above-tilted" camera direction with 45° roll compensation
+- Added command-line args: `--edge-spacing`, `--base-depth`, `--background-size`
+- Key files: `src/terrain/scene_setup.py`, `examples/detroit_combined_render.py`
