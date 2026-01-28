@@ -1667,6 +1667,602 @@ def generate_upscale_diagnostics(
 
 
 # =============================================================================
+# ROAD ELEVATION DIAGNOSTICS
+# =============================================================================
+
+
+def plot_road_elevation_diagnostics(
+    dem: np.ndarray,
+    road_mask: np.ndarray,
+    output_dir: Path,
+    prefix: str = "road_elevation",
+    kernel_radius: int = 3,
+    nodata_value: float = np.nan,
+    cmap: str = "terrain",
+    dpi: int = 300,
+) -> list[Path]:
+    """
+    Plot the max height difference between road pixels and surrounding terrain.
+
+    For each road pixel, computes the max elevation of nearby non-road pixels
+    and reports the difference (road - surrounding_max). Negative means the road
+    sits below the highest neighboring terrain; positive means the road is
+    higher than all surrounding non-road pixels.
+
+    Saves six separate high-resolution plots:
+    - {prefix}_dem_overlay.png: DEM with road overlay
+    - {prefix}_diff_map.png: Spatial map of road-vs-surrounding max difference
+    - {prefix}_positive_map.png: Roads above surrounding terrain (positive deviations)
+    - {prefix}_negative_map.png: Roads below surrounding terrain (negative deviations)
+    - {prefix}_histogram.png: Distribution of differences
+    - {prefix}_stats.png: Summary statistics panel
+
+    Args:
+        dem: 2D elevation array (same shape as road_mask)
+        road_mask: 2D array where >0.5 indicates road pixels
+        output_dir: Directory to save the diagnostic plots
+        prefix: Filename prefix for all output files
+        kernel_radius: Radius of the neighborhood window for computing
+            surrounding terrain max (default: 3 pixels)
+        nodata_value: Value treated as no data in the DEM
+        cmap: Colormap for elevation visualization
+        dpi: Output resolution (default: 300)
+
+    Returns:
+        List of paths to saved diagnostic plots, empty if no roads
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import TwoSlopeNorm
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved_paths: list[Path] = []
+
+    # Binary road mask
+    is_road = road_mask > 0.5
+    n_road = int(np.sum(is_road))
+
+    if n_road == 0:
+        logger.warning("No road pixels found, skipping road elevation diagnostic")
+        return saved_paths
+
+    # Valid DEM mask
+    if np.isnan(nodata_value):
+        valid_dem = ~np.isnan(dem)
+    else:
+        valid_dem = dem != nodata_value
+
+    h, w = dem.shape
+    ksize = 2 * kernel_radius + 1
+
+    # Compute max of surrounding non-road pixels using maximum_filter.
+    # Set road pixels to -inf so they lose the max competition, then run
+    # the compiled C filter (orders of magnitude faster than generic_filter
+    # with a Python callback on large grids like 3625x4809).
+    from scipy.ndimage import maximum_filter
+
+    dem_no_roads = dem.astype(np.float64).copy()
+    dem_no_roads[is_road] = -np.inf
+    dem_no_roads[~valid_dem] = -np.inf
+
+    surrounding_max = maximum_filter(dem_no_roads, size=ksize, mode='reflect')
+
+    # Where the max is still -inf, all neighbors were road/nodata
+    surrounding_max[surrounding_max == -np.inf] = np.nan
+
+    # Compute difference: road elevation - surrounding terrain max
+    diff = np.full((h, w), np.nan, dtype=np.float64)
+    road_and_valid = is_road & valid_dem & ~np.isnan(surrounding_max)
+    diff[road_and_valid] = dem[road_and_valid] - surrounding_max[road_and_valid]
+
+    valid_diffs = diff[road_and_valid]
+    n_valid = len(valid_diffs)
+
+    if n_valid == 0:
+        logger.warning("No valid road-vs-surrounding differences computed")
+        return saved_paths
+
+    # Statistics
+    median_diff = float(np.median(valid_diffs))
+    mean_diff = float(np.mean(valid_diffs))
+    std_diff = float(np.std(valid_diffs))
+    pct_higher = float(100 * np.mean(valid_diffs > 0))
+    pct_lower = float(100 * np.mean(valid_diffs < 0))
+    max_above = float(np.max(valid_diffs))
+    max_below = float(np.min(valid_diffs))
+    p05 = float(np.percentile(valid_diffs, 5))
+    p95 = float(np.percentile(valid_diffs, 95))
+
+    # Shared data for spatial plots
+    dem_masked = np.ma.masked_where(~valid_dem, dem)
+    vmin_e = float(np.nanmin(dem[valid_dem]))
+    vmax_e = float(np.nanmax(dem[valid_dem]))
+    diff_at_roads = np.ma.masked_where(~road_and_valid, diff)
+    abs_max = max(abs(p05), abs(p95), 0.01)
+    norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+
+    # --- Plot 1: DEM with road overlay ---
+    fig1, ax1 = plt.subplots(figsize=(10, 8))
+    im1 = ax1.imshow(dem_masked, cmap=cmap, vmin=vmin_e, vmax=vmax_e)
+    road_overlay = np.ma.masked_where(~is_road, np.ones((h, w)))
+    ax1.imshow(road_overlay, cmap='Reds', vmin=0, vmax=1, alpha=0.6)
+    ax1.set_title("DEM with Road Overlay", fontsize=14, fontweight="bold")
+    ax1.set_xlabel("Column")
+    ax1.set_ylabel("Row")
+    plt.colorbar(im1, ax=ax1, label="Elevation (m)")
+    plt.tight_layout()
+    p1 = output_dir / f"{prefix}_dem_overlay.png"
+    fig1.savefig(p1, dpi=dpi, bbox_inches="tight")
+    plt.close(fig1)
+    saved_paths.append(p1)
+
+    # --- Plot 2: Spatial difference map ---
+    fig2, ax2 = plt.subplots(figsize=(10, 8))
+    im2 = ax2.imshow(diff_at_roads, cmap='RdBu_r', norm=norm)
+    ax2.set_title(
+        f"Road - Surrounding Max Elevation (m)\n"
+        f"(kernel radius={kernel_radius}px, {n_valid:,} road pixels)",
+        fontsize=14, fontweight="bold",
+    )
+    ax2.set_xlabel("Column")
+    ax2.set_ylabel("Row")
+    plt.colorbar(im2, ax=ax2, label="Difference (m)")
+    plt.tight_layout()
+    p2 = output_dir / f"{prefix}_diff_map.png"
+    fig2.savefig(p2, dpi=dpi, bbox_inches="tight")
+    plt.close(fig2)
+    saved_paths.append(p2)
+
+    # --- Plot 3: Positive deviations (road above surrounding terrain) ---
+    pos_mask = road_and_valid & (diff > 0)
+    n_pos = int(np.sum(pos_mask))
+    fig_pos, ax_pos = plt.subplots(figsize=(10, 8))
+    if n_pos > 0:
+        pos_only = np.ma.masked_where(~pos_mask, diff)
+        pos_max = float(np.max(diff[pos_mask]))
+        im_pos = ax_pos.imshow(pos_only, cmap='Reds', vmin=0, vmax=max(pos_max, 0.01))
+        plt.colorbar(im_pos, ax=ax_pos, label="Road above surrounding (m)")
+    else:
+        ax_pos.imshow(np.zeros((h, w)), cmap='Reds', vmin=0, vmax=1)
+        ax_pos.text(0.5, 0.5, "No positive deviations",
+                    transform=ax_pos.transAxes, ha='center', va='center',
+                    fontsize=16, color='gray')
+    ax_pos.set_title(
+        f"Roads Above Surrounding Terrain\n"
+        f"({n_pos:,} pixels, {pct_higher:.1f}% of road)",
+        fontsize=14, fontweight="bold",
+    )
+    ax_pos.set_xlabel("Column")
+    ax_pos.set_ylabel("Row")
+    plt.tight_layout()
+    p_pos = output_dir / f"{prefix}_positive_map.png"
+    fig_pos.savefig(p_pos, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_pos)
+    saved_paths.append(p_pos)
+
+    # --- Plot 4: Negative deviations (road below surrounding terrain) ---
+    neg_mask = road_and_valid & (diff < 0)
+    n_neg = int(np.sum(neg_mask))
+    fig_neg, ax_neg = plt.subplots(figsize=(10, 8))
+    if n_neg > 0:
+        neg_only = np.ma.masked_where(~neg_mask, -diff)  # flip sign so deeper = larger
+        neg_max = float(np.max(-diff[neg_mask]))
+        im_neg = ax_neg.imshow(neg_only, cmap='Blues', vmin=0, vmax=max(neg_max, 0.01))
+        plt.colorbar(im_neg, ax=ax_neg, label="Road below surrounding (m)")
+    else:
+        ax_neg.imshow(np.zeros((h, w)), cmap='Blues', vmin=0, vmax=1)
+        ax_neg.text(0.5, 0.5, "No negative deviations",
+                    transform=ax_neg.transAxes, ha='center', va='center',
+                    fontsize=16, color='gray')
+    ax_neg.set_title(
+        f"Roads Below Surrounding Terrain\n"
+        f"({n_neg:,} pixels, {pct_lower:.1f}% of road)",
+        fontsize=14, fontweight="bold",
+    )
+    ax_neg.set_xlabel("Column")
+    ax_neg.set_ylabel("Row")
+    plt.tight_layout()
+    p_neg = output_dir / f"{prefix}_negative_map.png"
+    fig_neg.savefig(p_neg, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_neg)
+    saved_paths.append(p_neg)
+
+    # --- Plot 5: Histogram ---
+    fig3, ax3 = plt.subplots(figsize=(10, 7))
+    ax3.hist(valid_diffs, bins=80, color='steelblue', edgecolor='none', alpha=0.8)
+    ax3.axvline(0, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    ax3.axvline(median_diff, color='red', linestyle='--', linewidth=2,
+                label=f'Median: {median_diff:.3f}m')
+    ax3.axvline(mean_diff, color='orange', linestyle='--', linewidth=2,
+                label=f'Mean: {mean_diff:.3f}m')
+    ax3.set_xlabel("Road - Surrounding Max Elevation (m)", fontsize=12)
+    ax3.set_ylabel("Count", fontsize=12)
+    ax3.set_title(
+        "Distribution of Road vs Max Surrounding Elevation Differences",
+        fontsize=14, fontweight="bold",
+    )
+    ax3.legend(fontsize=11)
+    ax3.grid(True, alpha=0.3)
+    plt.tight_layout()
+    p3 = output_dir / f"{prefix}_histogram.png"
+    fig3.savefig(p3, dpi=dpi, bbox_inches="tight")
+    plt.close(fig3)
+    saved_paths.append(p3)
+
+    # --- Plot 4: Statistics panel ---
+    fig4, ax4 = plt.subplots(figsize=(8, 6))
+    ax4.axis("off")
+
+    stats_text = (
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"ROAD ELEVATION ANALYSIS\n"
+        f"  Metric:              max height difference\n"
+        f"  Total road pixels:   {n_road:,}\n"
+        f"  Valid comparisons:   {n_valid:,}\n"
+        f"  Kernel radius:       {kernel_radius} px\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"DIFFERENCE (road - surrounding max)\n"
+        f"  Median:    {median_diff:+.4f} m\n"
+        f"  Mean:      {mean_diff:+.4f} m\n"
+        f"  Std:       {std_diff:.4f} m\n"
+        f"  P5-P95:    [{p05:+.3f}, {p95:+.3f}] m\n"
+        f"  Max above: {max_above:+.3f} m\n"
+        f"  Max below: {max_below:+.3f} m\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"DIRECTION\n"
+        f"  Roads higher:  {pct_higher:.1f}%\n"
+        f"  Roads lower:   {pct_lower:.1f}%\n"
+        f"  Roads equal:   {100 - pct_higher - pct_lower:.1f}%\n"
+    )
+
+    ax4.text(
+        0.05, 0.95, stats_text,
+        transform=ax4.transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        fontfamily="monospace",
+        bbox={"boxstyle": "round,pad=0.5", "facecolor": "lightyellow",
+              "alpha": 0.9, "edgecolor": "gray"},
+    )
+    ax4.set_title("Road Elevation Summary Statistics",
+                  fontsize=14, fontweight="bold")
+    plt.tight_layout()
+    p4 = output_dir / f"{prefix}_stats.png"
+    fig4.savefig(p4, dpi=dpi, bbox_inches="tight")
+    plt.close(fig4)
+    saved_paths.append(p4)
+
+    logger.info(f"Road elevation diagnostic (max): median diff = {median_diff:+.4f}m, "
+                f"{pct_higher:.1f}% higher, {pct_lower:.1f}% lower")
+    for p in saved_paths:
+        logger.info(f"  Saved: {p}")
+    return saved_paths
+
+
+def generate_road_elevation_diagnostics(
+    dem: np.ndarray,
+    road_mask: np.ndarray,
+    output_dir: Path,
+    prefix: str = "road_elevation",
+    kernel_radius: int = 3,
+    nodata_value: float = np.nan,
+    dpi: int = 300,
+) -> list[Path]:
+    """
+    Generate road elevation diagnostic plots (6 separate high-res files).
+
+    Args:
+        dem: 2D elevation array
+        road_mask: 2D array where >0.5 indicates road pixels
+        output_dir: Directory to save diagnostic plots
+        prefix: Filename prefix
+        kernel_radius: Radius for surrounding terrain window
+        nodata_value: Value treated as no data
+        dpi: Output resolution (default: 300)
+
+    Returns:
+        List of paths to saved diagnostic plots, empty if no roads
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    return plot_road_elevation_diagnostics(
+        dem,
+        road_mask,
+        output_dir,
+        prefix=prefix,
+        kernel_radius=kernel_radius,
+        nodata_value=nodata_value,
+        dpi=dpi,
+    )
+
+
+# =============================================================================
+# VERTEX-LEVEL ROAD ELEVATION DIAGNOSTICS
+# =============================================================================
+
+
+def plot_road_vertex_z_diagnostics(
+    vertices: np.ndarray,
+    road_mask: np.ndarray,
+    y_valid: np.ndarray,
+    x_valid: np.ndarray,
+    output_dir: Path,
+    prefix: str = "road_vertex_z",
+    kernel_radius: int = 3,
+    dpi: int = 300,
+    label: str = "",
+) -> list[Path]:
+    """
+    Plot road-vs-surrounding elevation using actual mesh vertex Z positions.
+
+    Reconstructs a Z-height grid from vertex positions, then computes the max
+    height of non-road neighbors for each road pixel. This reflects what the
+    renderer actually sees, including any smoothing/offset already applied.
+
+    Saves six separate high-resolution plots:
+    - {prefix}_dem_overlay.png: Vertex Z grid with road overlay
+    - {prefix}_diff_map.png: Spatial difference map (road Z - surrounding max Z)
+    - {prefix}_positive_map.png: Roads above surrounding (positive deviations)
+    - {prefix}_negative_map.png: Roads below surrounding (negative deviations)
+    - {prefix}_histogram.png: Distribution of differences
+    - {prefix}_stats.png: Summary statistics
+
+    Args:
+        vertices: (N, 3) array of mesh vertex positions (X, Y, Z)
+        road_mask: 2D grid array where >0.5 indicates road pixels
+        y_valid: 1D array mapping surface vertex index -> grid row
+        x_valid: 1D array mapping surface vertex index -> grid column
+        output_dir: Directory to save diagnostic plots
+        prefix: Filename prefix for all output files
+        kernel_radius: Radius for surrounding terrain window (default: 3)
+        dpi: Output resolution (default: 300)
+        label: Optional label for plot titles (e.g. "pre-smoothing")
+
+    Returns:
+        List of paths to saved diagnostic plots, empty if no roads
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import TwoSlopeNorm
+    from scipy.ndimage import maximum_filter
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved_paths: list[Path] = []
+
+    h, w = road_mask.shape
+    is_road = road_mask > 0.5
+    n_road_grid = int(np.sum(is_road))
+
+    if n_road_grid == 0:
+        logger.warning("No road pixels found, skipping vertex Z diagnostic")
+        return saved_paths
+
+    # Reconstruct Z grid from vertex positions
+    # y_valid/x_valid map surface vertices (indices 0..len-1) to grid coords
+    n_surface = len(y_valid)
+    z_grid = np.full((h, w), np.nan, dtype=np.float64)
+    vertex_z = vertices[:n_surface, 2]
+    z_grid[y_valid, x_valid] = vertex_z
+
+    valid_z = ~np.isnan(z_grid)
+    ksize = 2 * kernel_radius + 1
+
+    # Compute max Z of surrounding non-road pixels
+    z_no_roads = z_grid.copy()
+    z_no_roads[is_road] = -np.inf
+    z_no_roads[~valid_z] = -np.inf
+
+    surrounding_max = maximum_filter(z_no_roads, size=ksize, mode='reflect')
+    surrounding_max[surrounding_max == -np.inf] = np.nan
+
+    # Difference: road vertex Z - surrounding max Z
+    diff = np.full((h, w), np.nan, dtype=np.float64)
+    road_and_valid = is_road & valid_z & ~np.isnan(surrounding_max)
+    diff[road_and_valid] = z_grid[road_and_valid] - surrounding_max[road_and_valid]
+
+    valid_diffs = diff[road_and_valid]
+    n_valid = len(valid_diffs)
+
+    if n_valid == 0:
+        logger.warning("No valid vertex Z road-vs-surrounding differences")
+        return saved_paths
+
+    # Statistics
+    median_diff = float(np.median(valid_diffs))
+    mean_diff = float(np.mean(valid_diffs))
+    std_diff = float(np.std(valid_diffs))
+    pct_higher = float(100 * np.mean(valid_diffs > 0))
+    pct_lower = float(100 * np.mean(valid_diffs < 0))
+    max_above = float(np.max(valid_diffs))
+    max_below = float(np.min(valid_diffs))
+    p05 = float(np.percentile(valid_diffs, 5))
+    p95 = float(np.percentile(valid_diffs, 95))
+
+    title_suffix = f" ({label})" if label else ""
+
+    # Shared data
+    z_masked = np.ma.masked_where(~valid_z, z_grid)
+    vmin_z = float(np.nanmin(z_grid[valid_z]))
+    vmax_z = float(np.nanmax(z_grid[valid_z]))
+    diff_at_roads = np.ma.masked_where(~road_and_valid, diff)
+    abs_max = max(abs(p05), abs(p95), 0.001)
+    norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+
+    # --- Plot 1: Vertex Z grid with road overlay ---
+    fig1, ax1 = plt.subplots(figsize=(10, 8))
+    im1 = ax1.imshow(z_masked, cmap='terrain', vmin=vmin_z, vmax=vmax_z)
+    road_overlay = np.ma.masked_where(~is_road, np.ones((h, w)))
+    ax1.imshow(road_overlay, cmap='Reds', vmin=0, vmax=1, alpha=0.6)
+    ax1.set_title(f"Mesh Vertex Z with Road Overlay{title_suffix}",
+                  fontsize=14, fontweight="bold")
+    ax1.set_xlabel("Column")
+    ax1.set_ylabel("Row")
+    plt.colorbar(im1, ax=ax1, label="Vertex Z (scene units)")
+    plt.tight_layout()
+    p1 = output_dir / f"{prefix}_dem_overlay.png"
+    fig1.savefig(p1, dpi=dpi, bbox_inches="tight")
+    plt.close(fig1)
+    saved_paths.append(p1)
+
+    # --- Plot 2: Spatial difference map ---
+    fig2, ax2 = plt.subplots(figsize=(10, 8))
+    im2 = ax2.imshow(diff_at_roads, cmap='RdBu_r', norm=norm)
+    ax2.set_title(
+        f"Road Vertex Z - Surrounding Max Z{title_suffix}\n"
+        f"(kernel={kernel_radius}px, {n_valid:,} road pixels)",
+        fontsize=14, fontweight="bold",
+    )
+    ax2.set_xlabel("Column")
+    ax2.set_ylabel("Row")
+    plt.colorbar(im2, ax=ax2, label="Difference (scene units)")
+    plt.tight_layout()
+    p2 = output_dir / f"{prefix}_diff_map.png"
+    fig2.savefig(p2, dpi=dpi, bbox_inches="tight")
+    plt.close(fig2)
+    saved_paths.append(p2)
+
+    # --- Plot 3: Positive deviations ---
+    pos_mask = road_and_valid & (diff > 0)
+    n_pos = int(np.sum(pos_mask))
+    fig_pos, ax_pos = plt.subplots(figsize=(10, 8))
+    if n_pos > 0:
+        pos_only = np.ma.masked_where(~pos_mask, diff)
+        pos_max = float(np.max(diff[pos_mask]))
+        im_pos = ax_pos.imshow(pos_only, cmap='Reds', vmin=0,
+                               vmax=max(pos_max, 0.001))
+        plt.colorbar(im_pos, ax=ax_pos,
+                     label="Road above surrounding (scene units)")
+    else:
+        ax_pos.imshow(np.zeros((h, w)), cmap='Reds', vmin=0, vmax=1)
+        ax_pos.text(0.5, 0.5, "No positive deviations",
+                    transform=ax_pos.transAxes, ha='center', va='center',
+                    fontsize=16, color='gray')
+    ax_pos.set_title(
+        f"Roads Above Surrounding Terrain{title_suffix}\n"
+        f"({n_pos:,} pixels, {pct_higher:.1f}% of road)",
+        fontsize=14, fontweight="bold",
+    )
+    ax_pos.set_xlabel("Column")
+    ax_pos.set_ylabel("Row")
+    plt.tight_layout()
+    p_pos = output_dir / f"{prefix}_positive_map.png"
+    fig_pos.savefig(p_pos, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_pos)
+    saved_paths.append(p_pos)
+
+    # --- Plot 4: Negative deviations ---
+    neg_mask = road_and_valid & (diff < 0)
+    n_neg = int(np.sum(neg_mask))
+    fig_neg, ax_neg = plt.subplots(figsize=(10, 8))
+    if n_neg > 0:
+        neg_only = np.ma.masked_where(~neg_mask, -diff)
+        neg_max = float(np.max(-diff[neg_mask]))
+        im_neg = ax_neg.imshow(neg_only, cmap='Blues', vmin=0,
+                               vmax=max(neg_max, 0.001))
+        plt.colorbar(im_neg, ax=ax_neg,
+                     label="Road below surrounding (scene units)")
+    else:
+        ax_neg.imshow(np.zeros((h, w)), cmap='Blues', vmin=0, vmax=1)
+        ax_neg.text(0.5, 0.5, "No negative deviations",
+                    transform=ax_neg.transAxes, ha='center', va='center',
+                    fontsize=16, color='gray')
+    ax_neg.set_title(
+        f"Roads Below Surrounding Terrain{title_suffix}\n"
+        f"({n_neg:,} pixels, {pct_lower:.1f}% of road)",
+        fontsize=14, fontweight="bold",
+    )
+    ax_neg.set_xlabel("Column")
+    ax_neg.set_ylabel("Row")
+    plt.tight_layout()
+    p_neg = output_dir / f"{prefix}_negative_map.png"
+    fig_neg.savefig(p_neg, dpi=dpi, bbox_inches="tight")
+    plt.close(fig_neg)
+    saved_paths.append(p_neg)
+
+    # --- Plot 5: Histogram ---
+    fig3, ax3 = plt.subplots(figsize=(10, 7))
+    ax3.hist(valid_diffs, bins=80, color='steelblue', edgecolor='none', alpha=0.8)
+    ax3.axvline(0, color='black', linestyle='-', linewidth=1, alpha=0.5)
+    ax3.axvline(median_diff, color='red', linestyle='--', linewidth=2,
+                label=f'Median: {median_diff:.4f}')
+    ax3.axvline(mean_diff, color='orange', linestyle='--', linewidth=2,
+                label=f'Mean: {mean_diff:.4f}')
+    ax3.set_xlabel("Road Vertex Z - Surrounding Max Z (scene units)", fontsize=12)
+    ax3.set_ylabel("Count", fontsize=12)
+    ax3.set_title(
+        f"Distribution of Road Vertex Z Differences{title_suffix}",
+        fontsize=14, fontweight="bold",
+    )
+    ax3.legend(fontsize=11)
+    ax3.grid(True, alpha=0.3)
+    plt.tight_layout()
+    p3 = output_dir / f"{prefix}_histogram.png"
+    fig3.savefig(p3, dpi=dpi, bbox_inches="tight")
+    plt.close(fig3)
+    saved_paths.append(p3)
+
+    # --- Plot 6: Statistics panel ---
+    fig4, ax4 = plt.subplots(figsize=(8, 6))
+    ax4.axis("off")
+
+    z_range = vmax_z - vmin_z
+
+    stats_text = (
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"VERTEX Z ROAD ANALYSIS{title_suffix}\n"
+        f"  Source:              mesh vertex positions\n"
+        f"  Metric:              max height difference\n"
+        f"  Road pixels:         {n_road_grid:,}\n"
+        f"  Valid comparisons:   {n_valid:,}\n"
+        f"  Kernel radius:       {kernel_radius} px\n"
+        f"  Z range:             {vmin_z:.4f} - {vmax_z:.4f}\n"
+        f"  Z relief:            {z_range:.4f}\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"DIFFERENCE (road Z - surrounding max Z)\n"
+        f"  Median:    {median_diff:+.6f}\n"
+        f"  Mean:      {mean_diff:+.6f}\n"
+        f"  Std:       {std_diff:.6f}\n"
+        f"  P5-P95:    [{p05:+.5f}, {p95:+.5f}]\n"
+        f"  Max above: {max_above:+.5f}\n"
+        f"  Max below: {max_below:+.5f}\n"
+        f"\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"DIRECTION\n"
+        f"  Roads higher:  {pct_higher:.1f}%\n"
+        f"  Roads lower:   {pct_lower:.1f}%\n"
+        f"  Roads equal:   {100 - pct_higher - pct_lower:.1f}%\n"
+    )
+
+    ax4.text(
+        0.05, 0.95, stats_text,
+        transform=ax4.transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        fontfamily="monospace",
+        bbox={"boxstyle": "round,pad=0.5", "facecolor": "lightyellow",
+              "alpha": 0.9, "edgecolor": "gray"},
+    )
+    ax4.set_title(f"Vertex Z Road Summary{title_suffix}",
+                  fontsize=14, fontweight="bold")
+    plt.tight_layout()
+    p4 = output_dir / f"{prefix}_stats.png"
+    fig4.savefig(p4, dpi=dpi, bbox_inches="tight")
+    plt.close(fig4)
+    saved_paths.append(p4)
+
+    logger.info(f"Vertex Z road diagnostic{title_suffix}: "
+                f"median diff = {median_diff:+.6f}, "
+                f"{pct_higher:.1f}% higher, {pct_lower:.1f}% lower")
+    for p in saved_paths:
+        logger.info(f"  Saved: {p}")
+    return saved_paths
+
+
+# =============================================================================
 # RENDER IMAGE DIAGNOSTICS
 # =============================================================================
 
@@ -1717,15 +2313,18 @@ def generate_rgb_histogram(
         alpha = 0.5
 
         ax.hist(r_channel, bins=bins, range=(0, 255), color='red',
-                alpha=alpha, label='Red', density=True)
+                alpha=alpha, label='Red')
         ax.hist(g_channel, bins=bins, range=(0, 255), color='green',
-                alpha=alpha, label='Green', density=True)
+                alpha=alpha, label='Green')
         ax.hist(b_channel, bins=bins, range=(0, 255), color='blue',
-                alpha=alpha, label='Blue', density=True)
+                alpha=alpha, label='Blue')
+
+        # Use log scale for Y-axis to show detail across wide range
+        ax.set_yscale('log')
 
         # Style
         ax.set_xlabel('Pixel Value', fontsize=12)
-        ax.set_ylabel('Density', fontsize=12)
+        ax.set_ylabel('Pixel Count (log scale)', fontsize=12)
         ax.set_title(f'RGB Histogram: {image_path.name}', fontsize=14)
         ax.legend(loc='upper right')
         ax.set_xlim(0, 255)
@@ -1822,9 +2421,12 @@ def generate_luminance_histogram(
                 patch.set_facecolor('yellow')
                 patch.set_edgecolor('orange')
 
+        # Use log scale for Y-axis to show detail across wide range
+        ax.set_yscale('log')
+
         # Style
         ax.set_xlabel('Luminance (0=black, 255=white)', fontsize=12)
-        ax.set_ylabel('Pixel Count', fontsize=12)
+        ax.set_ylabel('Pixel Count (log scale)', fontsize=12)
         ax.set_title(f'Luminance Histogram: {image_path.name}', fontsize=14)
         ax.set_xlim(0, 255)
         ax.grid(True, alpha=0.3)
