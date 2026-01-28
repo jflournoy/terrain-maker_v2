@@ -451,3 +451,123 @@ class TestWrapperParameterPassthrough:
         assert len(sun_lights) > 0, (
             "sun_azimuth/sun_elevation not passed correctly: no sun light created"
         )
+
+
+class TestAboveTiltedDirection:
+    """Tests for 'above-tilted' camera direction.
+
+    This direction is like 'above' but with a slight offset toward southwest,
+    providing just enough tilt to show the 3D skirt/edge extrusion of terrain meshes.
+
+    Camera angle: ~5 degrees from vertical, toward southwest
+    Use case: Showcasing 3D printed terrain with visible edge thickness
+    """
+
+    def test_above_tilted_direction_exists(self, mock_mesh):
+        """The 'above-tilted' direction should be recognized without error."""
+        from src.terrain.core import position_camera_relative
+
+        # Should not raise ValueError for unrecognized direction
+        camera = position_camera_relative(mock_mesh, direction="above-tilted")
+
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    def test_above_tilted_looks_mostly_down(self, mock_mesh):
+        """Camera should look mostly downward (Z component strongly negative)."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative(mock_mesh, direction="above-tilted")
+
+        rot_matrix = camera.rotation_euler.to_matrix()
+        forward = rot_matrix @ Vector((0, 0, -1))
+
+        # Should point mostly down - Z should be strongly negative
+        # Allow more tolerance than pure "above" which requires z < -0.99
+        assert forward.z < -0.95, (
+            f"Camera should look mostly down, but forward.z={forward.z:.3f}"
+        )
+
+    def test_above_tilted_has_slight_offset(self, mock_mesh):
+        """Camera should NOT be directly above - should have SW offset."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative(mock_mesh, direction="above-tilted")
+
+        rot_matrix = camera.rotation_euler.to_matrix()
+        forward = rot_matrix @ Vector((0, 0, -1))
+
+        # Unlike pure "above" which has near-zero X/Y, this should have measurable tilt
+        # Looking from southwest means forward vector has positive X and Y components
+        # (camera is SW of center, looking toward center = +X, +Y)
+        assert forward.x > 0.05, (
+            f"Camera should have X offset to show skirt, but forward.x={forward.x:.3f}"
+        )
+        assert forward.y > 0.05, (
+            f"Camera should have Y offset to show skirt, but forward.y={forward.y:.3f}"
+        )
+
+    def test_above_tilted_position_directly_above(self, mock_mesh):
+        """Camera position should be directly above mesh center (like 'above')."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative(mock_mesh, direction="above-tilted")
+        center = get_mesh_center(mock_mesh)
+
+        # Camera should be directly above center (X,Y match center)
+        assert abs(camera.location.x - center[0]) < 0.1, (
+            f"Camera X={camera.location.x:.2f} should be at mesh center X={center[0]:.2f}"
+        )
+        assert abs(camera.location.y - center[1]) < 0.1, (
+            f"Camera Y={camera.location.y:.2f} should be at mesh center Y={center[1]:.2f}"
+        )
+
+    def test_above_tilted_still_high_elevation(self, mock_mesh):
+        """Camera should still be high above the mesh (like 'above')."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative(mock_mesh, direction="above-tilted")
+        center = get_mesh_center(mock_mesh)
+
+        # Should be well above the mesh center
+        assert camera.location.z > center[2] + 5, (
+            f"Camera Z={camera.location.z:.2f} should be well above mesh center "
+            f"Z={center[2]:.2f}"
+        )
+
+    def test_above_tilted_different_from_pure_above(self, mock_mesh):
+        """'above-tilted' should have different rotation than 'above'."""
+        from src.terrain.core import position_camera_relative
+
+        cam_above = position_camera_relative(mock_mesh, direction="above")
+        cam_tilted = position_camera_relative(mock_mesh, direction="above-tilted")
+
+        # Positions should be the same (both directly above)
+        pos_diff = (
+            abs(cam_above.location.x - cam_tilted.location.x) +
+            abs(cam_above.location.y - cam_tilted.location.y)
+        )
+        assert pos_diff < 0.2, "Both cameras should be positioned directly above"
+
+        # But rotations should differ (tilted has non-zero rotation)
+        rot_above = cam_above.rotation_euler
+        rot_tilted = cam_tilted.rotation_euler
+        rot_diff = abs(rot_above.x - rot_tilted.x) + abs(rot_above.y - rot_tilted.y)
+        assert rot_diff > 0.01, (
+            f"'above-tilted' rotation should differ from 'above'. "
+            f"above={rot_above[:]} vs tilted={rot_tilted[:]}"
+        )
+
+    def test_above_tilted_in_all_directions_list(self, mock_mesh):
+        """'above-tilted' should be included in the full list of supported directions."""
+        from src.terrain.core import position_camera_relative
+
+        # Test alongside other directions to ensure it's a first-class citizen
+        directions = [
+            "north", "south", "east", "west", "above", "above-tilted",
+            "northeast", "northwest", "southeast", "southwest",
+        ]
+
+        for direction in directions:
+            camera = position_camera_relative(mock_mesh, direction=direction)
+            assert camera is not None, f"Failed for direction: {direction}"

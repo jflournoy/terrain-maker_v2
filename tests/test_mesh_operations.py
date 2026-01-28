@@ -1131,12 +1131,23 @@ class TestRectangleEdgeBoundary:
         )
 
         # Should have vertices for the rectangle perimeter
-        # For 4x4 with spacing=1: top(4) + right(4) + bottom(3, skip corner) + left(3, skip corners) = 14 vertices
+        # For 4x4 with spacing=1: creates both surface and base vertices
+        # Surface vertices (first half) + base vertices (second half)
         assert boundary_vertices.shape[0] > 0, "Should generate boundary vertices"
         assert boundary_vertices.shape[1] == 3, "Each vertex should have (x, y, z)"
 
-        # All base vertices should be at base_depth
-        assert np.all(boundary_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+        # Vertex count should be even (surface + base pairs)
+        n_total = boundary_vertices.shape[0]
+        assert n_total % 2 == 0, "Should have equal surface and base vertices"
+
+        # Base vertices (second half) should be at base_depth
+        n_half = n_total // 2
+        base_vertices = boundary_vertices[n_half:]
+        assert np.all(base_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+
+        # Surface vertices (first half) should be at DEM elevation (1.0 in this case)
+        surface_vertices = boundary_vertices[:n_half]
+        assert np.all(surface_vertices[:, 2] == 1.0), "Surface vertices should be at DEM elevation"
 
     def test_generate_rectangle_edge_vertices_preserves_affine_transform(self):
         """TDD RED: Test that edge vertices apply affine transforms correctly.
@@ -1247,7 +1258,8 @@ class TestRectangleEdgeBoundary:
     def test_generate_rectangle_edge_vertices_elevation_lookup(self):
         """TDD RED: Test that elevations are looked up from DEM at edge coordinates.
 
-        Edge vertices should have Z values from the DEM at their pixel locations.
+        Surface vertices should have Z values from the DEM at their pixel locations.
+        Base vertices should be at base_depth.
         """
         from src.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
@@ -1256,8 +1268,8 @@ class TestRectangleEdgeBoundary:
         dem_data = np.array(
             [
                 [10, 20, 30, 40],  # Top row: edge elevations 10, 20, 30, 40
-                [50, 60, 70, 80],  # Interior
-                [90, 100, 110, 120],  # Interior
+                [50, 60, 70, 80],  # Right edge: 80
+                [90, 100, 110, 120],  # Right edge: 120
                 [130, 140, 150, 160],  # Bottom row: edge elevations 130, 140, 150, 160
             ],
             dtype=float,
@@ -1271,11 +1283,30 @@ class TestRectangleEdgeBoundary:
             original_transform=original_transform,
             transforms_list=[],
             edge_sample_spacing=1.0,
-            base_depth=-0.2,  # This is the Z coordinate, not elevation
+            base_depth=-0.2,
         )
 
-        # All base vertices should be at base_depth (flat foundation)
-        assert np.all(boundary_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+        # Vertex count should be even (surface + base pairs)
+        n_total = boundary_vertices.shape[0]
+        assert n_total % 2 == 0, "Should have equal surface and base vertices"
+        n_half = n_total // 2
+
+        # Base vertices (second half) should be at base_depth (flat foundation)
+        base_vertices = boundary_vertices[n_half:]
+        assert np.all(base_vertices[:, 2] == -0.2), "All base vertices should be at base_depth"
+
+        # Surface vertices (first half) should have DEM elevations (not base_depth)
+        surface_vertices = boundary_vertices[:n_half]
+        surface_z = surface_vertices[:, 2]
+        assert not np.any(surface_z == -0.2), "Surface vertices should NOT be at base_depth"
+
+        # Surface elevations should come from DEM edge values
+        # Top edge: 10, 20, 30, 40; Right: 80, 120; Bottom: 160, 150, 140, 130; Left: 90, 50
+        expected_edge_values = {10, 20, 30, 40, 50, 80, 90, 120, 130, 140, 150, 160}
+        actual_elevations = set(surface_z)
+        assert actual_elevations.issubset(expected_edge_values), (
+            f"Surface elevations {actual_elevations} should be from DEM edge values {expected_edge_values}"
+        )
 
     def test_generate_rectangle_edge_vertices_empty_transforms_list(self):
         """TDD RED: Test that empty transforms list works correctly.

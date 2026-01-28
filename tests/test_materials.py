@@ -106,7 +106,7 @@ class TestGetBaseMaterialColor:
 
         # Check error message is helpful
         error_msg = str(exc_info.value)
-        assert "Unknown base material" in error_msg
+        assert "Unknown color preset" in error_msg
         assert "invalid_material" in error_msg
         assert "Valid options" in error_msg
 
@@ -117,6 +117,327 @@ class TestGetBaseMaterialColor:
         for material_name, expected_rgb in BASE_MATERIALS.items():
             result = get_base_material_color(material_name)
             assert result == expected_rgb, f"Material {material_name} did not resolve correctly"
+
+
+# =============================================================================
+# Tests for TERRAIN_MATERIALS and get_terrain_material_params (no Blender required)
+# =============================================================================
+
+
+class TestTerrainMaterials:
+    """Tests for TERRAIN_MATERIALS dictionary and related functions."""
+
+    def test_terrain_materials_exists(self):
+        """Test that TERRAIN_MATERIALS dictionary exists."""
+        from src.terrain.materials import TERRAIN_MATERIALS
+
+        assert isinstance(TERRAIN_MATERIALS, dict)
+        assert len(TERRAIN_MATERIALS) > 0
+
+    def test_terrain_materials_all_presets(self):
+        """Test that all expected terrain material presets are present."""
+        from src.terrain.materials import TERRAIN_MATERIALS
+
+        # Dielectric presets (preserve color accuracy)
+        dielectric_presets = ["matte", "eggshell", "satin", "ceramic", "lacquered", "clearcoat", "velvet"]
+        # Material-style presets (from color materials)
+        material_style_presets = ["clay", "plastic", "ivory", "obsidian", "chrome", "gold", "mineral"]
+        expected_materials = dielectric_presets + material_style_presets
+        for material in expected_materials:
+            assert material in TERRAIN_MATERIALS, f"Missing terrain material: {material}"
+
+    def test_terrain_materials_have_required_keys(self):
+        """Test that all terrain materials have required parameter keys."""
+        from src.terrain.materials import TERRAIN_MATERIALS
+
+        required_keys = ["roughness", "metallic", "specular_ior_level"]
+        for name, params in TERRAIN_MATERIALS.items():
+            for key in required_keys:
+                assert key in params, f"Terrain material '{name}' missing key: {key}"
+
+    def test_terrain_materials_values_in_range(self):
+        """Test that terrain material values are in valid ranges."""
+        from src.terrain.materials import TERRAIN_MATERIALS
+
+        for name, params in TERRAIN_MATERIALS.items():
+            # Roughness should be 0-1
+            assert 0.0 <= params["roughness"] <= 1.0, f"{name} roughness out of range"
+            # Metallic should be 0-1 (some materials like chrome/gold are metallic)
+            assert 0.0 <= params["metallic"] <= 1.0, f"{name} metallic out of range"
+            # Specular IOR level should be 0-1
+            assert 0.0 <= params["specular_ior_level"] <= 1.0, f"{name} specular_ior_level out of range"
+
+    def test_default_terrain_material_exists(self):
+        """Test that DEFAULT_TERRAIN_MATERIAL is defined and valid."""
+        from src.terrain.materials import DEFAULT_TERRAIN_MATERIAL, TERRAIN_MATERIALS
+
+        assert DEFAULT_TERRAIN_MATERIAL in TERRAIN_MATERIALS
+        assert DEFAULT_TERRAIN_MATERIAL == "satin"  # We set satin as default
+
+
+class TestGetTerrainMaterialParams:
+    """Tests for get_terrain_material_params function."""
+
+    def test_get_terrain_material_params_exists(self):
+        """Test that get_terrain_material_params function exists."""
+        from src.terrain.materials import get_terrain_material_params
+
+        assert callable(get_terrain_material_params)
+
+    def test_get_terrain_material_params_preset_lowercase(self):
+        """Test getting terrain material parameters by lowercase name."""
+        from src.terrain.materials import get_terrain_material_params
+
+        result = get_terrain_material_params("satin")
+        assert isinstance(result, dict)
+        assert "roughness" in result
+        assert result["roughness"] == 0.7
+
+    def test_get_terrain_material_params_case_insensitive(self):
+        """Test that terrain material lookup is case-insensitive."""
+        from src.terrain.materials import get_terrain_material_params
+
+        lower = get_terrain_material_params("satin")
+        upper = get_terrain_material_params("SATIN")
+        mixed = get_terrain_material_params("SaTiN")
+
+        assert lower == upper == mixed
+
+    def test_get_terrain_material_params_returns_copy(self):
+        """Test that returned dict is a copy (modifying doesn't affect original)."""
+        from src.terrain.materials import get_terrain_material_params, TERRAIN_MATERIALS
+
+        result = get_terrain_material_params("satin")
+        original_roughness = TERRAIN_MATERIALS["satin"]["roughness"]
+
+        # Modify the result
+        result["roughness"] = 999.0
+
+        # Original should be unchanged
+        assert TERRAIN_MATERIALS["satin"]["roughness"] == original_roughness
+
+    def test_get_terrain_material_params_invalid_name_raises(self):
+        """Test that invalid terrain material name raises ValueError."""
+        from src.terrain.materials import get_terrain_material_params
+
+        with pytest.raises(ValueError) as exc_info:
+            get_terrain_material_params("invalid_material")
+
+        error_msg = str(exc_info.value)
+        assert "Unknown terrain material" in error_msg
+        assert "invalid_material" in error_msg
+
+    def test_get_terrain_material_params_all_presets(self):
+        """Test that all presets can be retrieved."""
+        from src.terrain.materials import get_terrain_material_params, TERRAIN_MATERIALS
+
+        for material_name in TERRAIN_MATERIALS:
+            result = get_terrain_material_params(material_name)
+            assert result is not None
+
+
+# =============================================================================
+# Tests for unified color system (ALL_COLORS and get_color)
+# =============================================================================
+
+
+class TestUnifiedColors:
+    """Tests for the unified color system."""
+
+    def test_all_colors_exists(self):
+        """Test that ALL_COLORS dictionary exists and combines both color sets."""
+        from src.terrain.materials import ALL_COLORS, ROAD_COLORS, BASE_MATERIALS
+
+        assert isinstance(ALL_COLORS, dict)
+        assert len(ALL_COLORS) > 0
+        # Should contain all road colors and all base materials
+        for color in ROAD_COLORS:
+            assert color in ALL_COLORS
+        for color in BASE_MATERIALS:
+            assert color in ALL_COLORS
+
+    def test_get_all_colors_help_returns_string(self):
+        """Test that get_all_colors_help returns a string with all colors."""
+        from src.terrain.materials import get_all_colors_help, ALL_COLORS
+
+        result = get_all_colors_help()
+        assert isinstance(result, str)
+        for color in ALL_COLORS:
+            assert color in result
+
+    def test_get_all_colors_choices_returns_list(self):
+        """Test that get_all_colors_choices returns a list."""
+        from src.terrain.materials import get_all_colors_choices, ALL_COLORS
+
+        result = get_all_colors_choices()
+        assert isinstance(result, list)
+        assert set(result) == set(ALL_COLORS.keys())
+
+    def test_get_color_exists(self):
+        """Test that get_color function exists."""
+        from src.terrain.materials import get_color
+
+        assert callable(get_color)
+
+    def test_get_color_resolves_road_colors(self):
+        """Test that get_color resolves road color presets."""
+        from src.terrain.materials import get_color, ROAD_COLORS
+
+        for color_name, expected_rgb in ROAD_COLORS.items():
+            result = get_color(color_name)
+            assert result == expected_rgb
+
+    def test_get_color_resolves_base_materials(self):
+        """Test that get_color resolves base material presets."""
+        from src.terrain.materials import get_color, BASE_MATERIALS
+
+        for color_name, expected_rgb in BASE_MATERIALS.items():
+            result = get_color(color_name)
+            assert result == expected_rgb
+
+    def test_get_color_case_insensitive(self):
+        """Test that get_color is case-insensitive."""
+        from src.terrain.materials import get_color
+
+        assert get_color("azurite") == get_color("AZURITE") == get_color("Azurite")
+        assert get_color("clay") == get_color("CLAY") == get_color("Clay")
+
+    def test_get_color_rgb_tuple_passthrough(self):
+        """Test that RGB tuples are passed through unchanged."""
+        from src.terrain.materials import get_color
+
+        custom_rgb = (0.6, 0.55, 0.5)
+        result = get_color(custom_rgb)
+        assert result == custom_rgb
+
+    def test_get_color_invalid_name_raises(self):
+        """Test that invalid color name raises ValueError."""
+        from src.terrain.materials import get_color
+
+        with pytest.raises(ValueError) as exc_info:
+            get_color("invalid_color")
+
+        error_msg = str(exc_info.value)
+        assert "Unknown color preset" in error_msg
+        assert "invalid_color" in error_msg
+
+    def test_get_color_terrain_materials_fallback(self):
+        """Test that terrain material names without colors return clay gray."""
+        from src.terrain.materials import get_color, ALL_COLORS, TERRAIN_MATERIALS
+
+        # These terrain materials don't have associated colors in ALL_COLORS
+        shader_only_materials = ["satin", "matte", "eggshell", "ceramic", "lacquered", "clearcoat", "velvet"]
+        clay_rgb = ALL_COLORS["clay"]
+
+        for material in shader_only_materials:
+            # Verify it's a terrain material but not a color
+            assert material in TERRAIN_MATERIALS
+            assert material not in ALL_COLORS
+            # get_color should return clay gray as fallback
+            result = get_color(material)
+            assert result == clay_rgb, f"Expected clay gray for {material}, got {result}"
+
+
+# =============================================================================
+# Tests for helper functions (help text and choices for CLI arguments)
+# =============================================================================
+
+
+class TestMaterialHelperFunctions:
+    """Tests for helper functions that generate help text and choices for CLI."""
+
+    def test_get_road_colors_help_returns_string(self):
+        """Test that get_road_colors_help returns a string."""
+        from src.terrain.materials import get_road_colors_help
+
+        result = get_road_colors_help()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_road_colors_help_contains_all_presets(self):
+        """Test that get_road_colors_help contains all ROAD_COLORS keys."""
+        from src.terrain.materials import get_road_colors_help, ROAD_COLORS
+
+        result = get_road_colors_help()
+        for color_name in ROAD_COLORS:
+            assert color_name in result, f"Missing road color in help: {color_name}"
+
+    def test_get_road_colors_choices_returns_list(self):
+        """Test that get_road_colors_choices returns a list."""
+        from src.terrain.materials import get_road_colors_choices
+
+        result = get_road_colors_choices()
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_get_road_colors_choices_matches_dict(self):
+        """Test that get_road_colors_choices returns ALL_COLORS (unified colors)."""
+        from src.terrain.materials import get_road_colors_choices, ALL_COLORS
+
+        result = get_road_colors_choices()
+        assert set(result) == set(ALL_COLORS.keys())
+
+    def test_get_base_materials_help_returns_string(self):
+        """Test that get_base_materials_help returns a string."""
+        from src.terrain.materials import get_base_materials_help
+
+        result = get_base_materials_help()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_base_materials_help_contains_all_presets(self):
+        """Test that get_base_materials_help contains all BASE_MATERIALS keys."""
+        from src.terrain.materials import get_base_materials_help, BASE_MATERIALS
+
+        result = get_base_materials_help()
+        for material_name in BASE_MATERIALS:
+            assert material_name in result, f"Missing base material in help: {material_name}"
+
+    def test_get_base_materials_choices_returns_list(self):
+        """Test that get_base_materials_choices returns a list."""
+        from src.terrain.materials import get_base_materials_choices
+
+        result = get_base_materials_choices()
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_get_base_materials_choices_matches_dict(self):
+        """Test that get_base_materials_choices returns ALL_COLORS (unified colors)."""
+        from src.terrain.materials import get_base_materials_choices, ALL_COLORS
+
+        result = get_base_materials_choices()
+        assert set(result) == set(ALL_COLORS.keys())
+
+    def test_get_terrain_materials_help_returns_string(self):
+        """Test that get_terrain_materials_help returns a string."""
+        from src.terrain.materials import get_terrain_materials_help
+
+        result = get_terrain_materials_help()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_terrain_materials_help_contains_all_presets(self):
+        """Test that get_terrain_materials_help contains all TERRAIN_MATERIALS keys."""
+        from src.terrain.materials import get_terrain_materials_help, TERRAIN_MATERIALS
+
+        result = get_terrain_materials_help()
+        for material_name in TERRAIN_MATERIALS:
+            assert material_name in result, f"Missing terrain material in help: {material_name}"
+
+    def test_get_terrain_materials_choices_returns_list(self):
+        """Test that get_terrain_materials_choices returns a list."""
+        from src.terrain.materials import get_terrain_materials_choices
+
+        result = get_terrain_materials_choices()
+        assert isinstance(result, list)
+        assert len(result) > 0
+
+    def test_get_terrain_materials_choices_matches_dict(self):
+        """Test that get_terrain_materials_choices matches TERRAIN_MATERIALS keys."""
+        from src.terrain.materials import get_terrain_materials_choices, TERRAIN_MATERIALS
+
+        result = get_terrain_materials_choices()
+        assert set(result) == set(TERRAIN_MATERIALS.keys())
 
 
 # =============================================================================
@@ -152,11 +473,10 @@ class TestApplyColormapMaterial:
         # Should have nodes in the tree
         assert len(mat.node_tree.nodes) > 0
 
-        # Should have essential nodes
+        # Should have essential nodes (pure Principled BSDF, no emission)
         node_types = [node.bl_idname for node in mat.node_tree.nodes]
         assert "ShaderNodeOutputMaterial" in node_types
         assert "ShaderNodeBsdfPrincipled" in node_types
-        assert "ShaderNodeEmission" in node_types
         assert "ShaderNodeVertexColor" in node_types
 
         # Cleanup
@@ -219,11 +539,10 @@ class TestApplyWaterShader:
         # Should have nodes in the tree
         assert len(mat.node_tree.nodes) > 0
 
-        # Should have essential nodes for water shader
+        # Should have essential nodes for water shader (pure Principled BSDF, no emission)
         node_types = [node.bl_idname for node in mat.node_tree.nodes]
         assert "ShaderNodeOutputMaterial" in node_types
         assert "ShaderNodeBsdfPrincipled" in node_types
-        assert "ShaderNodeEmission" in node_types
         assert "ShaderNodeVertexColor" in node_types
         assert "ShaderNodeMixRGB" in node_types
 

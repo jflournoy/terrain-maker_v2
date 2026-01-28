@@ -636,6 +636,167 @@ class TestGenerateFullWaveletDiagnostics:
         assert coeff_path.exists()
 
 
+class TestHistogramLogScale:
+    """Tests for log-scale Y-axis in histogram functions (TDD RED)."""
+
+    def test_rgb_histogram_uses_log_scale_yaxis(self, tmp_path, monkeypatch):
+        """Test that RGB histogram uses log scale on Y-axis."""
+        from src.terrain.diagnostics import generate_rgb_histogram
+        from PIL import Image
+        import matplotlib.pyplot as plt
+
+        # Track calls to set_yscale
+        yscale_calls = []
+        original_set_yscale = plt.Axes.set_yscale
+
+        def mock_set_yscale(self, value, *args, **kwargs):
+            yscale_calls.append(value)
+            return original_set_yscale(self, value, *args, **kwargs)
+
+        monkeypatch.setattr(plt.Axes, "set_yscale", mock_set_yscale)
+
+        # Create test image with varied pixel values
+        img_array = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "test_image.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "histogram.png"
+        result = generate_rgb_histogram(input_path, output_path)
+
+        assert result == output_path
+        assert output_path.exists()
+        # Verify log scale was set
+        assert "log" in yscale_calls, f"Expected 'log' in yscale calls, got: {yscale_calls}"
+
+    def test_luminance_histogram_uses_log_scale_yaxis(self, tmp_path, monkeypatch):
+        """Test that luminance histogram uses log scale on Y-axis."""
+        from src.terrain.diagnostics import generate_luminance_histogram
+        from PIL import Image
+        import matplotlib.pyplot as plt
+
+        # Track calls to set_yscale
+        yscale_calls = []
+        original_set_yscale = plt.Axes.set_yscale
+
+        def mock_set_yscale(self, value, *args, **kwargs):
+            yscale_calls.append(value)
+            return original_set_yscale(self, value, *args, **kwargs)
+
+        monkeypatch.setattr(plt.Axes, "set_yscale", mock_set_yscale)
+
+        # Create test image
+        img_array = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "test_image.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "luminance.png"
+        result = generate_luminance_histogram(input_path, output_path)
+
+        assert result == output_path
+        assert output_path.exists()
+        # Verify log scale was set
+        assert "log" in yscale_calls, f"Expected 'log' in yscale calls, got: {yscale_calls}"
+
+    def test_rgb_histogram_handles_zero_counts_gracefully(self, tmp_path):
+        """Test that RGB histogram handles bins with zero counts (log(0) issue)."""
+        from src.terrain.diagnostics import generate_rgb_histogram
+        from PIL import Image
+
+        # Create image with only a few distinct values - many bins will have 0 counts
+        img_array = np.zeros((50, 50, 3), dtype=np.uint8)
+        img_array[:, :, 0] = 128  # Only red = 128
+        img_array[:, :, 1] = 64   # Only green = 64
+        img_array[:, :, 2] = 200  # Only blue = 200
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "sparse.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "histogram.png"
+        # This should not raise any errors despite many zero-count bins
+        result = generate_rgb_histogram(input_path, output_path)
+
+        assert result == output_path
+        assert output_path.exists()
+
+    def test_luminance_histogram_handles_zero_counts_gracefully(self, tmp_path):
+        """Test that luminance histogram handles bins with zero counts."""
+        from src.terrain.diagnostics import generate_luminance_histogram
+        from PIL import Image
+
+        # Create image with single luminance value - most bins will have 0 counts
+        img_array = np.full((50, 50, 3), 100, dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "uniform.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "luminance.png"
+        # This should not raise any errors despite many zero-count bins
+        result = generate_luminance_histogram(input_path, output_path)
+
+        assert result == output_path
+        assert output_path.exists()
+
+    def test_rgb_histogram_ylabel_indicates_log_scale(self, tmp_path, monkeypatch):
+        """Test that RGB histogram Y-axis label indicates log scale."""
+        from src.terrain.diagnostics import generate_rgb_histogram
+        from PIL import Image
+        import matplotlib.pyplot as plt
+
+        # Track ylabel calls
+        ylabel_calls = []
+        original_set_ylabel = plt.Axes.set_ylabel
+
+        def mock_set_ylabel(self, ylabel, *args, **kwargs):
+            ylabel_calls.append(ylabel)
+            return original_set_ylabel(self, ylabel, *args, **kwargs)
+
+        monkeypatch.setattr(plt.Axes, "set_ylabel", mock_set_ylabel)
+
+        img_array = np.random.randint(0, 256, (50, 50, 3), dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "test.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "histogram.png"
+        result = generate_rgb_histogram(input_path, output_path)
+
+        assert result is not None
+        # Check that at least one ylabel contains "log" (case-insensitive)
+        ylabel_str = " ".join(ylabel_calls).lower()
+        assert "log" in ylabel_str, f"Expected 'log' in ylabel, got: {ylabel_calls}"
+
+    def test_luminance_histogram_ylabel_indicates_log_scale(self, tmp_path, monkeypatch):
+        """Test that luminance histogram Y-axis label indicates log scale."""
+        from src.terrain.diagnostics import generate_luminance_histogram
+        from PIL import Image
+        import matplotlib.pyplot as plt
+
+        # Track ylabel calls
+        ylabel_calls = []
+        original_set_ylabel = plt.Axes.set_ylabel
+
+        def mock_set_ylabel(self, ylabel, *args, **kwargs):
+            ylabel_calls.append(ylabel)
+            return original_set_ylabel(self, ylabel, *args, **kwargs)
+
+        monkeypatch.setattr(plt.Axes, "set_ylabel", mock_set_ylabel)
+
+        img_array = np.random.randint(0, 256, (50, 50, 3), dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        input_path = tmp_path / "test.png"
+        img.save(input_path)
+
+        output_path = tmp_path / "luminance.png"
+        result = generate_luminance_histogram(input_path, output_path)
+
+        assert result is not None
+        # Check that at least one ylabel contains "log" (case-insensitive)
+        ylabel_str = " ".join(ylabel_calls).lower()
+        assert "log" in ylabel_str, f"Expected 'log' in ylabel, got: {ylabel_calls}"
+
+
 class TestHistogramLuminanceCalculation:
     """Tests for correct luminance calculation in generate_luminance_histogram."""
 
