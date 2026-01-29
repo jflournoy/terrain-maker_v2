@@ -18,8 +18,6 @@ from .gridded_data import (
 )
 from .advanced_viz import (
     horn_slope,
-    load_drive_time_data,
-    create_drive_time_curves,
     create_values_legend,
 )
 
@@ -31,7 +29,5 @@ __all__ = [
     "downsample_for_viz",
     "create_mock_snow_data",
     "horn_slope",
-    "load_drive_time_data",
-    "create_drive_time_curves",
     "create_values_legend",
 ]

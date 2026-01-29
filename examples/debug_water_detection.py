@@ -35,7 +35,7 @@ terrain = Terrain(dem_data, transform)
 
 # Configure downsampling
 target_vertices = 960 * 720 * 2
-terrain.configure_for_target_vertices(target_vertices, order=4)
+terrain.configure_for_target_vertices(target_vertices, method="average")
 
 # Apply transforms
 terrain.transforms.append(reproject_raster("EPSG:4326", "EPSG:32617", num_threads=4))

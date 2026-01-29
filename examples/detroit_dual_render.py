@@ -273,7 +273,7 @@ def create_terrain_with_score(
         original_vertices = original_h * original_w
 
         if original_vertices > target_vertices:
-            zoom_factor = terrain.configure_for_target_vertices(target_vertices, order=4)
+            zoom_factor = terrain.configure_for_target_vertices(target_vertices, method="average")
             logger.info(
                 f"Downsampling {name}: {original_vertices:,} → ~{target_vertices:,} vertices "
                 f"(zoom={zoom_factor:.6f})"

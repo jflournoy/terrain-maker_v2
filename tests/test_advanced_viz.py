@@ -14,8 +14,6 @@ from rasterio.transform import Affine
 
 from src.terrain.advanced_viz import (
     horn_slope,
-    load_drive_time_data,
-    create_drive_time_curves,
     create_values_legend,
 )
 

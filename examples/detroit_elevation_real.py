@@ -371,7 +371,7 @@ def main():
 
         # Configure downsampling to target approximately 500,000 vertices
         target_vertices = WIDTH * HEIGHT * 2
-        zoom = terrain.configure_for_target_vertices(target_vertices, order=4)
+        zoom = terrain.configure_for_target_vertices(target_vertices, method="average")
         print(f"      Configured for {target_vertices:,} target vertices")
         print(f"      Calculated zoom_factor: {zoom:.6f}")
 
