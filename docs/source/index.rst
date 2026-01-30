@@ -7,8 +7,8 @@ terrain-maker Documentation
    :maxdepth: 2
    :caption: Getting Started
 
-   quickstart
-   installation
+   quickstart.md
+   installation.md
 
 .. toctree::
    :maxdepth: 2
@@ -32,12 +32,27 @@ terrain-maker Documentation
    api/transforms
    api/rendering
    api/data_loading
+   api/scene_setup
+   api/materials
+   api/roads
+   api/water
+   api/color_mapping
+   api/blender_integration
+   api/cache
+   api/gridded_data
+   api/pipeline
+   api/advanced_viz
+   api/diagnostics
+   api/gpu_ops
+   api/mesh_cache
+   api/mesh_operations
+   api/scoring
 
 .. toctree::
    :maxdepth: 1
    :caption: Additional Resources
 
-   changelog
+   changelog.md
 
 
 Indices and tables

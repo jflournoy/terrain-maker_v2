@@ -533,7 +533,7 @@ def add_roads_layer(
     data layer pipeline ensures proper alignment even if terrain is downsampled
     or reprojected.
 
-    To color roads, use the multi-overlay color mapping system:
+    To color roads, use the multi-overlay color mapping system::
 
         roads_geojson = get_roads(bbox)
         terrain.add_roads_layer(terrain, roads_geojson, bbox, road_width_pixels=3)
@@ -596,7 +596,7 @@ def _color_vertices_from_road_layer(
     """
     Color vertices based on road layer values (DEPRECATED).
 
-    This function is deprecated. Use the multi-overlay color mapping system instead:
+    This function is deprecated. Use the multi-overlay color mapping system instead::
 
         terrain.set_multi_color_mapping(
             base_colormap=...,
