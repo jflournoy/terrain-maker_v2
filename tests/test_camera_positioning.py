@@ -453,6 +453,158 @@ class TestWrapperParameterPassthrough:
         )
 
 
+class TestFittingDistanceMode:
+    """Tests for fitting-distance camera positioning mode.
+
+    TDD RED phase: Define photographer-friendly distance behavior.
+    When distance_mode="fit", distance parameter controls framing tightness,
+    not absolute position. Camera distance adjusts with elevation to maintain
+    consistent framing.
+
+    distance=1.0: Mesh exactly fits in frame
+    distance=1.5: 1.5x farther for wider context
+    distance=0.7: Closer for tighter crop
+    """
+
+    def test_fitting_distance_mode_accepted(self, mock_mesh):
+        """Function should accept distance_mode='fit' parameter."""
+        from src.terrain.core import position_camera_relative
+
+        camera = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.0
+        )
+
+        assert camera is not None
+        assert camera.type == "CAMERA"
+
+    def test_fit_distance_1_fills_frame(self, mock_mesh):
+        """distance=1.0 with mode='fit' should position camera to fill frame with mesh."""
+        from src.terrain.core import position_camera_relative
+        import math
+
+        camera = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.0,
+            elevation=0.5,
+            focal_length=50  # Standard lens
+        )
+
+        # Calculate expected fitting distance based on camera FOV and mesh size
+        # For a 50mm lens: FOV ≈ 39.6 degrees
+        sensor_width = 36.0  # mm
+        fov_radians = 2 * math.atan(sensor_width / (2 * 50))
+
+        # Get mesh width (X dimension)
+        bbox = mock_mesh.bound_box
+        xs = [v[0] for v in bbox]
+        mesh_width = max(xs) - min(xs)
+
+        # Distance to fit mesh in frame: width / (2 * tan(FOV/2))
+        expected_distance = mesh_width / (2 * math.tan(fov_radians / 2))
+
+        # Actual distance from camera to mesh center
+        center = get_mesh_center(mock_mesh)
+        cam_to_center = math.sqrt(
+            (camera.location[0] - center[0])**2 +
+            (camera.location[1] - center[1])**2 +
+            (camera.location[2] - center[2])**2
+        )
+
+        # Should match expected fitting distance
+        assert cam_to_center == pytest.approx(expected_distance, rel=0.1)
+
+    def test_fit_distance_scales_with_multiplier(self, mock_mesh):
+        """distance=1.5 should be 1.5x farther than distance=1.0."""
+        from src.terrain.core import position_camera_relative
+
+        cam1 = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.0,
+            elevation=0.5
+        )
+
+        cam2 = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.5,
+            elevation=0.5
+        )
+
+        center = get_mesh_center(mock_mesh)
+        dist1 = math.sqrt(sum((cam1.location[i] - center[i])**2 for i in range(3)))
+        dist2 = math.sqrt(sum((cam2.location[i] - center[i])**2 for i in range(3)))
+
+        # dist2 should be 1.5x dist1
+        assert dist2 == pytest.approx(1.5 * dist1, rel=0.05)
+
+    def test_fit_maintains_framing_across_elevations(self, mock_mesh):
+        """Changing elevation maintains framing (distance from mesh adjusts)."""
+        from src.terrain.core import position_camera_relative
+
+        # Low elevation view
+        cam_low = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.0,
+            elevation=0.3
+        )
+
+        # High elevation view
+        cam_high = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="fit",
+            distance=1.0,
+            elevation=0.7
+        )
+
+        # Both cameras should be same distance from mesh center
+        # (even though absolute positions differ)
+        center = get_mesh_center(mock_mesh)
+        dist_low = math.sqrt(sum((cam_low.location[i] - center[i])**2 for i in range(3)))
+        dist_high = math.sqrt(sum((cam_high.location[i] - center[i])**2 for i in range(3)))
+
+        assert dist_low == pytest.approx(dist_high, rel=0.05), (
+            f"Fitting distance should stay constant across elevations: "
+            f"low={dist_low:.2f}, high={dist_high:.2f}"
+        )
+
+    def test_diagonal_mode_is_default(self, mock_mesh):
+        """Without distance_mode parameter, should use diagonal mode (backward compat)."""
+        from src.terrain.core import position_camera_relative
+
+        # Default behavior (no distance_mode)
+        cam_default = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance=1.0,
+            elevation=0.5
+        )
+
+        # Explicit diagonal mode
+        cam_diagonal = position_camera_relative(
+            mock_mesh,
+            direction="south",
+            distance_mode="diagonal",
+            distance=1.0,
+            elevation=0.5
+        )
+
+        # Should produce same result
+        assert abs(cam_default.location[0] - cam_diagonal.location[0]) < 0.01
+        assert abs(cam_default.location[1] - cam_diagonal.location[1]) < 0.01
+        assert abs(cam_default.location[2] - cam_diagonal.location[2]) < 0.01
+
+
 class TestAboveTiltedDirection:
     """Tests for 'above-tilted' camera direction.
 

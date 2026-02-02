@@ -1,8 +1,14 @@
-# Detroit Elevation Visualization
+# Great Lakes Elevation Visualization
 
-A complete example showing how to create 3D terrain visualizations from real SRTM elevation data.
+A complete example showing how to create 3D terrain visualizations from real SRTM elevation data covering the Detroit/Great Lakes region.
 
-![Detroit Elevation](../_static/detroit_elevation_south.png)
+| South View | North View |
+|------------|------------|
+| ![South View](../../images/detroit_elevation_south.png) | ![North View](../../images/detroit_elevation_north.png) |
+
+| East View | West View |
+|-----------|-----------|
+| ![East View](../../images/detroit_elevation_east.png) | ![West View](../../images/detroit_elevation_west.png) |
 
 ## Overview
 
@@ -59,7 +65,7 @@ mesh = terrain.create_mesh(
     water_mask=water_mask
 )
 camera = position_camera_relative(mesh, direction='south')
-render_scene_to_file("detroit.png", width=WIDTH, height=HEIGHT)
+render_scene_to_file("great_lakes_elevation.png", width=WIDTH, height=HEIGHT)
 ```
 
 ## Key Functions Used

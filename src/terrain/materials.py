@@ -32,7 +32,7 @@ ROAD_COLORS = {
 
 # Named material presets for mesh bases (edge extrusion, backgrounds, etc.)
 BASE_MATERIALS = {
-    "clay": (0.5, 0.48, 0.45),         # Matte gray clay (default)
+    "clay": (0.7, 0.25, 0.15),         # Earth red clay (wet, unfired)
     "obsidian": (0.02, 0.02, 0.02),    # Dark volcanic glass (dielectric)
     "chrome": (0.9, 0.9, 0.92),        # Metallic chrome
     "plastic": (0.95, 0.95, 0.95),     # Glossy white plastic
@@ -805,7 +805,7 @@ def _configure_principled_for_style(shader_node, style: str) -> None:
         shader_node.inputs["Roughness"].default_value = 0.05
         shader_node.inputs["Metallic"].default_value = 1.0
     elif style_lower == "clay":
-        shader_node.inputs["Base Color"].default_value = (0.5, 0.48, 0.45, 1.0)
+        shader_node.inputs["Base Color"].default_value = (0.7, 0.25, 0.15, 1.0)
         shader_node.inputs["Roughness"].default_value = 1.0
         shader_node.inputs["Metallic"].default_value = 0.0
         shader_node.inputs["Specular IOR Level"].default_value = 0.0

@@ -258,6 +258,8 @@ def position_camera_relative(
     sun_elevation=None,
     focal_length=50,
     ortho_scale=1.2,
+    distance_mode="diagonal",
+    center_in_frame=True,
 ):
     """Position camera relative to mesh using intuitive cardinal directions.
 
@@ -267,10 +269,13 @@ def position_camera_relative(
 
     Args:
         mesh_obj: Blender mesh object to position camera relative to
-        direction: Cardinal direction - one of:
-            'north', 'south', 'east', 'west' (horizontal directions)
-            'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
-            'above' (directly overhead)
+        direction: Compass direction using 16-wind compass rose, one of:
+            Cardinal: 'north', 'south', 'east', 'west'
+            Primary intercardinal: 'northeast', 'southeast', 'southwest', 'northwest'
+            Secondary intercardinal: 'north-northeast', 'east-northeast', 'east-southeast',
+                'south-southeast', 'south-southwest', 'west-southwest', 'west-northwest',
+                'north-northwest'
+            Special: 'above' (directly overhead), 'above-tilted' (overhead but angled)
             Default: 'south'
         distance: Distance multiplier relative to mesh diagonal
             (e.g., 1.5 means 1.5x mesh_diagonal away). Default: 1.5
@@ -287,6 +292,9 @@ def position_camera_relative(
         ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
             Higher values zoom out (show more area), lower values zoom in.
             Only affects orthographic cameras. Default: 1.2
+        distance_mode: How to interpret distance parameter ('diagonal' or 'fit'). Default: 'diagonal'
+        center_in_frame: If True, adjust look_at target to center the mesh's 2D projection
+            in the camera frame, not just point at the 3D geometric center. Default: True
 
     Returns:
         Camera object
@@ -309,6 +317,8 @@ def position_camera_relative(
         sun_elevation=sun_elevation,
         focal_length=focal_length,
         ortho_scale=ortho_scale,
+        distance_mode=distance_mode,
+        center_in_frame=center_in_frame,
     )
 
 
@@ -2864,7 +2874,7 @@ class Terrain:
 
     def create_mesh(
         self,
-        base_depth=-0.2,
+        base_depth=0.2,
         boundary_extension=True,
         scale_factor=100.0,
         height_scale=1.0,
@@ -2873,16 +2883,16 @@ class Terrain:
         detect_water=False,
         water_slope_threshold=0.5,
         water_mask=None,
-        two_tier_edge=False,
+        two_tier_edge=True,
         edge_mid_depth=None,
         edge_base_material="clay",
-        edge_blend_colors=True,
+        edge_blend_colors=False,
         smooth_boundary=False,
         smooth_boundary_window=5,
         use_catmull_rom=False,
         catmull_rom_subdivisions=10,
-        use_rectangle_edges=False,
-        use_fractional_edges=False,
+        use_rectangle_edges=True,
+        use_fractional_edges=True,
         edge_sample_spacing=0.33,
     ):
         """
@@ -2894,8 +2904,10 @@ class Terrain:
         to vertex alpha channel for water rendering.
 
         Args:
-            base_depth (float): Z-coordinate for the bottom of the terrain model (default: -0.2).
+            base_depth (float): Positive depth offset below minimum surface elevation (default: 0.2).
+                Creates a flat base plane at: min_surface_z - base_depth.
                 Used when boundary_extension=True to create side faces.
+                Positive values extend below surface, negative extend above.
             boundary_extension (bool): Whether to create side faces around the terrain boundary
                 to close the mesh (default: True). If False, creates open terrain surface.
             scale_factor (float): Horizontal scale divisor for x/y coordinates (default: 100.0).
@@ -2912,15 +2924,16 @@ class Terrain:
             water_mask (np.ndarray): Pre-computed boolean water mask (True=water, False=land).
                 If provided, this mask is used instead of computing water detection.
                 Allows water detection on unscaled DEM before elevation scaling transforms.
-            two_tier_edge (bool): Enable two-tier edge extrusion (default: False).
+            two_tier_edge (bool): Enable two-tier edge extrusion (default: True).
                 Creates a small colored edge near the surface with a larger uniform base below.
-            edge_mid_depth (float): Depth of middle tier for two-tier edge (default: auto-calculated).
-                If None, automatically set to base_depth * 0.25 (25% down from surface).
+            edge_mid_depth (float): Positive depth offset below surface for middle tier (default: auto-calculated).
+                If None, automatically set to base_depth * 0.25 (typically 0.05).
+                Positive values extend below surface, negative extend above surface.
             edge_base_material (str | tuple): Material for base layer (default: "clay").
                 Either a preset name ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
                 or an RGB tuple (0-1 range).
-            edge_blend_colors (bool): Blend surface colors to mid tier in two-tier mode (default: True).
-                If False, mid tier uses the base_material color for sharper transition.
+            edge_blend_colors (bool): Blend surface colors to mid tier in two-tier mode (default: False).
+                If False, mid tier uses base_material color for sharp transition between mesh and edge.
             smooth_boundary (bool): Apply smoothing to boundary points to eliminate stair-step edges
                 (default: False). Useful for smoother mesh transitions when using two-tier edge.
             smooth_boundary_window (int): Window size for boundary smoothing (default: 5).
@@ -2932,14 +2945,14 @@ class Terrain:
                 when using Catmull-Rom curves (default: 10). Higher values = smoother curve
                 but more vertices. Only used when use_catmull_rom=True.
             use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
-                boundary detection (default: False). ~150x faster than morphological detection.
+                boundary detection (default: True). ~150x faster than morphological detection.
                 Ideal for rectangular DEMs from raster sources. Uses original DEM shape to
                 generate clean, regularly-sampled edge vertices.
             use_fractional_edges (bool): Use fractional edge coordinates that preserve projection
-                curvature (default: False). When enabled with use_rectangle_edges, edge vertices
-                follow the true curved boundary from WGS84→UTM Transverse Mercator projection
-                instead of snapping to integer grid positions. Creates smoother, more
-                geographically accurate edge geometry.
+                curvature (default: True). When enabled with use_rectangle_edges, surface tier aligns
+                with mesh boundary (no gap) while mid/base tiers use fractional X,Y positions to follow
+                smooth WGS84→UTM projection curves. Creates geographically accurate curved edges that
+                connect seamlessly to terrain.
             edge_sample_spacing (float): Pixel spacing for edge/skirt vertices (default: 0.33).
                 Lower values = denser skirt (smoother but more memory). 0.33 = 3x denser than
                 mesh edge. 1.0 = same density as mesh edge. 2.0 = half density (good for large
@@ -2952,23 +2965,26 @@ class Terrain:
             ValueError: If transformed DEM layer is not available (apply_transforms() not called).
 
         Examples:
-            # Default single-tier edge (backwards compatible)
+            # Default two-tier edge with smooth fractional edges and red clay base
             mesh = terrain.create_mesh(boundary_extension=True)
 
-            # Two-tier edge with default clay base
-            mesh = terrain.create_mesh(two_tier_edge=True)
+            # Single-tier edge (backwards compatible)
+            mesh = terrain.create_mesh(two_tier_edge=False)
 
             # Two-tier with gold base material
+            mesh = terrain.create_mesh(edge_base_material="gold")
+
+            # Two-tier with deeper edge (1 unit below min surface, 0.2 units below surface for mid)
             mesh = terrain.create_mesh(
-                two_tier_edge=True,
-                edge_base_material="gold",
+                base_depth=1.0,       # Deep base (1 unit below min surface)
+                edge_mid_depth=0.2    # Deeper colored edge (0.2 units below surface)
             )
 
             # Two-tier with custom RGB color
-            mesh = terrain.create_mesh(
-                two_tier_edge=True,
-                edge_base_material=(0.6, 0.55, 0.5),
-            )
+            mesh = terrain.create_mesh(edge_base_material=(0.6, 0.55, 0.5))
+
+            # Disable fractional edges for simple rectangular boundary
+            mesh = terrain.create_mesh(use_fractional_edges=False)
         """
         start_time = time.time()
         self.logger.info("Creating terrain mesh...")

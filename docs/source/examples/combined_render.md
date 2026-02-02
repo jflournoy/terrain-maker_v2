@@ -172,6 +172,74 @@ python examples/detroit_combined_render.py \
 | `--road-color` | azurite | Color preset |
 | `--road-width` | 3 | Width in pixels |
 
+### Advanced Mesh Features
+
+#### Two-Tier Edge Extrusion
+
+```bash
+# Basic two-tier edge with clay base
+python examples/detroit_combined_render.py --two-tier-edge
+
+# Custom base material (obsidian, chrome, plastic, gold, ivory)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --edge-base-material gold
+
+# Custom RGB base color (0-1 range)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --edge-base-material "0.6,0.55,0.5"
+
+# Disable color blending for sharp transition
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --no-edge-blend-colors
+```
+
+**Key functions:**
+- {func}`~terrain.mesh_operations.create_boundary_extension` - Create edge geometry
+
+#### Boundary Smoothing
+
+```bash
+# Catmull-Rom curve smoothing (eliminates pixel staircase)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --use-catmull-rom
+
+# Custom smoothness (higher = smoother, more vertices)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --use-catmull-rom \
+    --catmull-rom-subdivisions 20
+
+# Combine with morphological smoothing
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --use-catmull-rom \
+    --smooth-boundary
+```
+
+#### Edge Detection Methods
+
+```bash
+# Rectangle-edge sampling (150x faster than morphological)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --use-rectangle-edges
+
+# Fractional edges (preserve projection curvature)
+python examples/detroit_combined_render.py \
+    --two-tier-edge \
+    --use-rectangle-edges \
+    --use-fractional-edges
+```
+
+**Edge methods:**
+- Morphological (default): Accurate but slower
+- Rectangle (``--use-rectangle-edges``): Fast approximation
+- Fractional (``--use-fractional-edges``): Smooth curved boundaries from UTM projection
+
 ## Pipeline Architecture
 
 ```

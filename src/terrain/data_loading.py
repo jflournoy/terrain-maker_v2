@@ -6,6 +6,7 @@ files from various sources.
 """
 
 import logging
+import zipfile
 from pathlib import Path
 import numpy as np
 import rasterio
@@ -15,6 +16,62 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
+def _extract_dem_from_zips(directory: Path, pattern: str = "*.hgt") -> int:
+    """
+    Extract DEM files from ZIP archives if no matching files are found.
+
+    NASADEM downloads come as ZIP files (e.g., NASADEM_HGT_N32W117.zip).
+    This function automatically extracts matching files from ZIPs when needed.
+
+    Args:
+        directory: Directory containing ZIP files
+        pattern: File pattern to extract (e.g., "*.hgt")
+
+    Returns:
+        Number of files extracted
+    """
+    # Check if matching files already exist
+    glob_pattern = pattern
+    existing_files = list(directory.glob(glob_pattern))
+    if existing_files:
+        return 0  # Files already exist, no extraction needed
+
+    # Look for ZIP files
+    zip_files = list(directory.glob("*.zip"))
+    if not zip_files:
+        return 0  # No ZIP files to extract
+
+    logger.info(f"No {pattern} files found, extracting from {len(zip_files)} ZIP archives...")
+
+    extracted_count = 0
+    for zip_path in zip_files:
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                # Extract files matching the pattern
+                # Convert glob pattern to simple extension check
+                ext = pattern.lstrip("*")  # e.g., "*.hgt" -> ".hgt"
+
+                matching_members = [
+                    m for m in zf.namelist()
+                    if m.lower().endswith(ext.lower())
+                ]
+
+                for member in matching_members:
+                    zf.extract(member, directory)
+                    extracted_count += 1
+                    logger.debug(f"  Extracted {member} from {zip_path.name}")
+
+        except zipfile.BadZipFile:
+            logger.warning(f"Skipping invalid ZIP file: {zip_path.name}")
+        except Exception as e:
+            logger.warning(f"Failed to extract from {zip_path.name}: {e}")
+
+    if extracted_count > 0:
+        logger.info(f"Extracted {extracted_count} files from ZIP archives")
+
+    return extracted_count
+
+
 def load_dem_files(
     directory_path: str, pattern: str = "*.hgt", recursive: bool = False
 ) -> tuple[np.ndarray, rasterio.Affine]:
@@ -22,8 +79,11 @@ def load_dem_files(
     Load and merge DEM files from a directory into a single elevation dataset.
     Supports any raster format readable by rasterio (HGT, GeoTIFF, etc.).
 
+    Automatically extracts files from ZIP archives if no matching files are found.
+    This is useful for NASADEM downloads which come as ZIP files.
+
     Args:
-        directory_path: Path to directory containing DEM files
+        directory_path: Path to directory containing DEM files (or ZIP archives)
         pattern: File pattern to match (default: ``*.hgt``)
         recursive: Whether to search subdirectories recursively (default: False)
 
@@ -47,6 +107,9 @@ def load_dem_files(
 
         if not directory.is_dir():
             raise ValueError(f"Path is not a directory: {directory}")
+
+        # Extract from ZIP archives if no matching files exist
+        _extract_dem_from_zips(directory, pattern)
 
         # Find all matching files
         glob_func = directory.rglob if recursive else directory.glob

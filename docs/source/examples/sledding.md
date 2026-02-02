@@ -2,7 +2,7 @@
 
 Combine elevation data with SNODAS snow statistics to identify optimal sledding locations.
 
-![Sledding Scores](../_static/sledding_score.png)
+![Sledding Scores](../../images/05_final/sledding_score.png)
 
 ## Overview
 
@@ -28,41 +28,41 @@ The sledding score pipeline produces visual outputs at each stage, making it eas
 
 ### Step 1: Raw Input Data
 
-The pipeline starts with elevation (DEM) and snow depth data:
+The pipeline starts with elevation (DEM) and snow depth data.
 
 | DEM Elevation | Snow Depth |
 |---------------|------------|
-| ![DEM](../_static/01_raw_dem.png) | ![Snow Depth](../_static/01_raw_snow_depth.png) |
+| ![DEM](../../images/01_raw/dem.png) | ![Snow Depth](../../images/01_raw/snow_depth.png) |
 
 ### Step 2: Slope Statistics
 
-High-resolution slope analysis computes various terrain metrics:
+High-resolution slope analysis computes various terrain metrics.
 
 | Mean Slope | Max Slope | Roughness |
 |------------|-----------|-----------|
-| ![Mean](../_static/02_slope_mean.png) | ![Max](../_static/02_slope_max.png) | ![Roughness](../_static/02_slope_roughness.png) |
+| ![Mean](../../images/02_slope_stats/mean.png) | ![Max](../../images/02_slope_stats/max.png) | ![Roughness](../../images/02_slope_stats/roughness.png) |
 
 ### Step 3: Slope Penalties
 
-Penalty factors are computed for hazardous terrain:
+Penalty factors are computed for hazardous terrain.
 
 | Cliff Penalty | Terrain Consistency | Combined Penalty |
 |---------------|---------------------|------------------|
-| ![Cliff](../_static/03_cliff_penalty.png) | ![Consistency](../_static/03_terrain_consistency.png) | ![Combined](../_static/03_combined_penalty.png) |
+| ![Cliff](../../images/03_slope_penalties/cliff_penalty.png) | ![Consistency](../../images/03_slope_penalties/terrain_consistency.png) | ![Combined](../../images/03_slope_penalties/combined_penalty.png) |
 
 ### Step 4: Score Components
 
-Individual score components before combination:
+Individual score components before combination.
 
 | Snow Score | Slope Score | Coverage Score |
 |------------|-------------|----------------|
-| ![Snow](../_static/04_snow_trapezoid_score.png) | ![Slope](../_static/04_slope_trapezoid_score.png) | ![Coverage](../_static/04_coverage_score.png) |
+| ![Snow](../../images/04_score_components/snow_trapezoid_score.png) | ![Slope](../../images/04_score_components/slope_trapezoid_score.png) | ![Coverage](../../images/04_score_components/coverage_score.png) |
 
 ### Step 5: Final Score
 
-The final sledding score combines all components:
+The final sledding score combines all components.
 
-![Final Sledding Score](../_static/sledding_score.png)
+![Final Sledding Score](../../images/05_final/sledding_score.png)
 
 ## The Code
 

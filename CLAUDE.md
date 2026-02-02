@@ -148,6 +148,71 @@ Should I proceed? [yes/no]
 - `/learn` - Capture insights
 - `/docs` - Update documentation
 
+## Documentation
+
+**This project uses Sphinx for API documentation with `uv` for Python package management.**
+
+### Building Sphinx Docs
+
+```bash
+# Install documentation dependencies (first time only)
+uv sync --extra docs
+
+# Build documentation
+npm run docs:build
+
+# Clean build (removes previous build)
+npm run docs:build:clean
+
+# Serve documentation locally
+npm run docs:serve
+# Then open http://localhost:8080
+
+# Check for broken links
+npm run docs:check
+```
+
+### Documentation Structure
+
+- `docs/source/` - Sphinx RST source files
+- `docs/source/api/` - API reference (19 modules, 100% coverage)
+- `docs/source/examples/` - Usage examples
+- `docs/source/guides/` - User guides
+- `docs/build/html/` - Generated HTML (not in git)
+
+### Adding New API Documentation
+
+When adding new modules, create RST files in `docs/source/api/` and add to `docs/source/index.rst`.
+
+### Documentation Images
+
+Example documentation includes visualization images generated from example scripts. These images are auto-generated using **real data** for production-quality documentation.
+
+```bash
+# Generate all documentation images (uses REAL data, takes 2-5 minutes)
+npm run docs:images
+
+# Full documentation build (images + Sphinx build)
+npm run docs:build:full
+
+# Manual image generation (if needed)
+bash scripts/generate-docs-images.sh
+```
+
+**Note:** Image generation uses real DEM and SNODAS data, which takes several minutes. Ensure data files are present in `data/` directory before running.
+
+**Image locations:**
+- `docs/images/01_raw/` - Raw input data (DEM, snow depth)
+- `docs/images/02_slope_stats/` - Slope analysis visualizations
+- `docs/images/03_slope_penalties/` - Terrain penalty visualizations
+- `docs/images/04_score_components/` - Score component breakdowns
+- `docs/images/05_final/` - Final score visualizations
+
+**Adding new documentation images:**
+1. Update example script to output to `docs/images/` subdirectory
+2. Add script invocation to `scripts/generate-docs-images.sh`
+3. Reference images in markdown with relative paths: `../../images/subdir/image.png`
+
 ## Scripts Using Blender's Python API
 
 **Import bpy directly** - When a script uses terrain maker's Blender rendering capabilities, import bpy at the module level, just like any other dependency.

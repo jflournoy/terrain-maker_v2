@@ -11,6 +11,7 @@ from math import radians, tan, atan, degrees
 
 import bpy
 from mathutils import Euler, Vector
+from bpy_extras.object_utils import world_to_camera_view
 
 
 def hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
@@ -249,6 +250,7 @@ def create_background_plane(
     size_multiplier: float = 2.0,
     receive_shadows: bool = False,
     flat_color: bool = False,
+    roughness: float = 1.0,
 ) -> "bpy.types.Object":
     """Create a background plane for Blender terrain renders.
 
@@ -274,6 +276,9 @@ def create_background_plane(
         flat_color: If True, use emission shader for exact color that ignores
             scene lighting. If False (default), use Principled BSDF that responds
             to lighting (darker colors may appear lighter due to ambient light).
+        roughness: Material roughness value 0.0-1.0 when flat_color=False
+            (default: 1.0 = fully matte). Lower values (0.3-0.5) make the surface
+            less affected by ambient light. Only used when flat_color=False.
 
     Returns:
         Blender plane object with material applied and positioned
@@ -393,7 +398,7 @@ def create_background_plane(
     material = create_matte_material(
         name="BackgroundMaterial",
         color=color,
-        material_roughness=1.0,
+        material_roughness=roughness,
         receive_shadows=receive_shadows,
         flat_color=flat_color,
     )
@@ -655,6 +660,121 @@ def setup_two_point_lighting(
     return lights
 
 
+def compute_mesh_screen_bbox(mesh_obj, camera, scene=None, use_bbox_only=True,
+                             exclude_base=False):
+    """Compute the 2D screen-space bounding box of a mesh.
+
+    Projects mesh vertices to screen space and computes the bounding box
+    in normalized device coordinates (NDC) where (0, 0) is bottom-left and
+    (1, 1) is top-right of the render frame.
+
+    Args:
+        mesh_obj: Blender mesh object or list of mesh objects to project
+        camera: Blender camera object to project from
+        scene: Blender scene (default: bpy.context.scene)
+        use_bbox_only: If True, only project bounding box corners (fast, 99.99% speedup).
+            If False, project all vertices (slow but precise). Default: True.
+        exclude_base: If True, exclude bottom vertices when projecting bbox.
+            For terrain meshes, keep False (default) to include edge extrusion.
+            Background plane is automatically excluded (created after centering).
+
+    Returns:
+        dict with keys:
+            - 'min_x', 'max_x', 'min_y', 'max_y': Bounding box in NDC [0, 1]
+            - 'center_x', 'center_y': Center of bounding box
+            - 'width', 'height': Size of bounding box
+
+    Note:
+        Points outside the camera frustum may have coordinates outside [0, 1].
+        Points behind the camera have negative z and should be filtered.
+
+        For terrain meshes, use_bbox_only=True is recommended (instant vs 10+ seconds).
+        For terrain with base_depth, exclude_base=True centers on surface, not base.
+    """
+    logger = logging.getLogger(__name__)
+
+    if scene is None:
+        scene = bpy.context.scene
+
+    # Normalize input: handle both single mesh and list of meshes
+    if isinstance(mesh_obj, list):
+        meshes = mesh_obj
+    else:
+        meshes = [mesh_obj]
+
+    # Project vertices to screen space
+    screen_coords = []
+    for mesh in meshes:
+        world_matrix = mesh.matrix_world
+
+        # Choose vertices to project based on mode
+        if use_bbox_only:
+            # Fast: Project only bounding box corners
+            bbox = mesh.bound_box
+            if exclude_base:
+                # Blender bbox: indices 0-3 are bottom, 4-7 are top
+                # Only use top 4 corners to exclude extruded base
+                vertices = bbox[4:8]
+            else:
+                # Use all 8 corners
+                vertices = bbox
+        else:
+            # Slow: Project all vertices for maximum precision
+            # TODO: Could filter by Z coordinate if exclude_base=True
+            vertices = mesh.data.vertices
+
+        for vertex in vertices:
+            # Get vertex position (bbox vs mesh.data format differs)
+            if use_bbox_only:
+                vertex_co = Vector(vertex)
+            else:
+                vertex_co = vertex.co
+
+            world_pos = world_matrix @ vertex_co
+            # world_to_camera_view returns (x, y, z) in normalized coordinates
+            # x, y in [0, 1] (0,0 = bottom-left, 1,1 = top-right)
+            # z is depth (negative = behind camera)
+            x, y, z = world_to_camera_view(scene, camera, world_pos)
+
+            # Only include vertices in front of camera
+            if z > 0:
+                screen_coords.append((x, y))
+
+    if not screen_coords:
+        logger.warning("No vertices in front of camera")
+        return {
+            'min_x': 0.5, 'max_x': 0.5,
+            'min_y': 0.5, 'max_y': 0.5,
+            'center_x': 0.5, 'center_y': 0.5,
+            'width': 0.0, 'height': 0.0
+        }
+
+    # Compute bounding box
+    xs = [coord[0] for coord in screen_coords]
+    ys = [coord[1] for coord in screen_coords]
+
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+
+    width = max_x - min_x
+    height = max_y - min_y
+
+    logger.debug(
+        f"Screen bbox: [{min_x:.3f}, {max_x:.3f}] x [{min_y:.3f}, {max_y:.3f}], "
+        f"center: ({center_x:.3f}, {center_y:.3f}), size: {width:.3f} x {height:.3f}"
+    )
+
+    return {
+        'min_x': min_x, 'max_x': max_x,
+        'min_y': min_y, 'max_y': max_y,
+        'center_x': center_x, 'center_y': center_y,
+        'width': width, 'height': height
+    }
+
+
 def setup_camera_and_light(
     camera_angle,
     camera_location,
@@ -701,6 +821,8 @@ def position_camera_relative(
     sun_elevation=None,
     focal_length=50,
     ortho_scale=1.2,
+    distance_mode="diagonal",
+    center_in_frame=True,  # Enable projection-based frame centering by default
 ):
     """Position camera relative to mesh(es) using intuitive cardinal directions.
 
@@ -715,10 +837,13 @@ def position_camera_relative(
     Args:
         mesh_obj: Blender mesh object or list of mesh objects to position camera
             relative to. If a list is provided, a combined bounding box is computed.
-        direction: Cardinal direction - one of:
-            'north', 'south', 'east', 'west' (horizontal directions)
-            'northeast', 'northwest', 'southeast', 'southwest' (diagonals)
-            'above' (directly overhead)
+        direction: Compass direction using 16-wind compass rose, one of:
+            Cardinal: 'north', 'south', 'east', 'west'
+            Primary intercardinal: 'northeast', 'southeast', 'southwest', 'northwest'
+            Secondary intercardinal: 'north-northeast', 'east-northeast', 'east-southeast',
+                'south-southeast', 'south-southwest', 'west-southwest', 'west-northwest',
+                'north-northwest'
+            Special: 'above' (directly overhead), 'above-tilted' (overhead but angled)
             Default: 'south'
         distance: Distance multiplier relative to mesh diagonal
             (e.g., 1.5 means 1.5x mesh_diagonal away). Default: 1.5
@@ -735,6 +860,13 @@ def position_camera_relative(
         ortho_scale: Multiplier for orthographic camera scale relative to mesh diagonal.
             Higher values zoom out (show more area), lower values zoom in.
             Only affects orthographic cameras. Default: 1.2
+        distance_mode: How to interpret the distance parameter. Options:
+            'diagonal' (default): distance relative to mesh diagonal (scale-independent, backward compat)
+            'fit': photographer-friendly framing mode where distance=1.0 fits mesh in frame,
+                   and camera distance adjusts with elevation to maintain framing
+        center_in_frame: If True, adjust look_at target to center the mesh's 2D projection
+            in the camera frame, not just point at the 3D geometric center. This accounts
+            for perspective distortion and viewing angles. Default: True
 
     Returns:
         Camera object
@@ -745,17 +877,33 @@ def position_camera_relative(
     logger = logging.getLogger(__name__)
 
     # Direction vector mappings (Blender Z-up coordinate system)
+    # Uses 16-wind compass rose for fine-grained camera positioning
     DIRECTIONS = {
-        "north": (0, 1, 0),  # +Y
-        "south": (0, -1, 0),  # -Y
-        "east": (1, 0, 0),  # +X
-        "west": (-1, 0, 0),  # -X
-        "above": (0, 0, 1),  # +Z (straight up)
-        "above-tilted": (0.7071, 0.7071, 0),  # Tilt direction: look toward NE (shows SW skirt)
-        "northeast": (0.7071, 0.7071, 0),
-        "northwest": (-0.7071, 0.7071, 0),
-        "southeast": (0.7071, -0.7071, 0),
-        "southwest": (-0.7071, -0.7071, 0),
+        # Cardinal directions (N, E, S, W)
+        "north": (0, 1, 0),  # +Y (0°)
+        "east": (1, 0, 0),  # +X (90°)
+        "south": (0, -1, 0),  # -Y (180°)
+        "west": (-1, 0, 0),  # -X (270°)
+
+        # Primary intercardinal directions (NE, SE, SW, NW)
+        "northeast": (0.7071, 0.7071, 0),  # 45°
+        "southeast": (0.7071, -0.7071, 0),  # 135°
+        "southwest": (-0.7071, -0.7071, 0),  # 225°
+        "northwest": (-0.7071, 0.7071, 0),  # 315°
+
+        # Secondary intercardinal directions (half-winds)
+        "north-northeast": (0.3827, 0.9239, 0),  # 22.5°
+        "east-northeast": (0.9239, 0.3827, 0),  # 67.5°
+        "east-southeast": (0.9239, -0.3827, 0),  # 112.5°
+        "south-southeast": (0.3827, -0.9239, 0),  # 157.5°
+        "south-southwest": (-0.3827, -0.9239, 0),  # 202.5°
+        "west-southwest": (-0.9239, -0.3827, 0),  # 247.5°
+        "west-northwest": (-0.9239, 0.3827, 0),  # 292.5°
+        "north-northwest": (-0.3827, 0.9239, 0),  # 337.5°
+
+        # Special overhead directions
+        "above": (0, 0, 1),  # +Z (straight down)
+        "above-tilted": (0.7071, 0.7071, 0),  # Tilt toward NE (shows SW skirt)
     }
 
     if direction not in DIRECTIONS:
@@ -803,21 +951,78 @@ def position_camera_relative(
     # Get direction vector and calculate camera position
     dir_vector = np.array(DIRECTIONS[direction])
 
+    # Calculate distance based on mode
+    if distance_mode == "fit":
+        # Fitting distance mode: distance is based on FOV and mesh width
+        # distance=1.0 means mesh exactly fits in frame
+        import math
+
+        # Calculate FOV from focal length (for perspective cameras)
+        sensor_width = 36.0  # mm, standard full-frame sensor
+        fov_radians = 2 * math.atan(sensor_width / (2 * focal_length))
+
+        # Calculate visible mesh width based on viewing direction
+        # For cardinal directions, use the perpendicular dimension
+        # For diagonal directions, use the actual diagonal
+        dir_abs = tuple(abs(d) for d in dir_vector)
+
+        if dir_abs[0] > 0 and dir_abs[1] == 0:
+            # East/West view: see Y dimension (depth)
+            visible_width = mesh_size[1]
+        elif dir_abs[1] > 0 and dir_abs[0] == 0:
+            # North/South view: see X dimension (width)
+            visible_width = mesh_size[0]
+        else:
+            # Diagonal views: use diagonal of XY bbox
+            visible_width = math.sqrt(mesh_size[0]**2 + mesh_size[1]**2)
+
+        # Distance to fit mesh in frame (total 3D distance from camera to center)
+        fitting_distance = visible_width / (2 * math.tan(fov_radians / 2))
+        total_target_distance = fitting_distance * distance
+
+        # Calculate vertical offset (elevation component)
+        vertical_offset = elevation * mesh_diagonal
+
+        # Calculate horizontal offset using Pythagorean theorem
+        # total_distance² = horizontal² + vertical²
+        # horizontal = sqrt(total² - vertical²)
+        horizontal_offset_squared = total_target_distance**2 - vertical_offset**2
+
+        if horizontal_offset_squared < 0:
+            # If elevation is too high for the target distance, clamp to minimum
+            horizontal_offset_squared = 0.0
+
+        actual_distance = math.sqrt(horizontal_offset_squared)
+    else:
+        # Diagonal mode (default, backward compatible)
+        # Scale distance by focal length to maintain consistent framing
+        # 50mm is the reference focal length (standard lens)
+        focal_length_scale = focal_length / 50.0
+        actual_distance = distance * mesh_diagonal * focal_length_scale
+
     # For 'above' and 'above-tilted', position directly overhead
     # For others, position offset from center based on direction
     if direction in ("above", "above-tilted"):
         camera_pos = center.copy()
     else:
-        camera_pos = center + dir_vector * distance * mesh_diagonal
+        camera_pos = center + dir_vector * actual_distance
 
-    # Add elevation (height above ground)
-    camera_pos[2] = center[2] + elevation * mesh_diagonal
+    # Add elevation
+    if distance_mode == "fit":
+        # For fit mode, vertical offset already calculated above
+        camera_pos[2] = center[2] + vertical_offset
+    else:
+        # Diagonal mode
+        camera_pos[2] = center[2] + elevation * mesh_diagonal
 
     # Determine look-at target
     if look_at == "center":
         target_pos = center.copy()
     else:
         target_pos = np.array(look_at)
+
+    # Projection-based frame centering will be done after camera is created
+    # (needs actual camera object to compute projections)
 
     # For 'above-tilted', offset the look-at target toward NE to tilt camera toward SW
     # This shows the southwest skirt edge while keeping camera overhead
@@ -864,6 +1069,97 @@ def position_camera_relative(
         focal_length=focal_length,
         camera_type=camera_type,
     )
+
+    # Apply projection-based frame centering if requested
+    if center_in_frame and look_at == "center" and direction not in ("above", "above-tilted"):
+        logger.info("Applying projection-based frame centering...")
+
+        # CRITICAL: Update scene before first projection
+        bpy.context.view_layer.update()
+
+        # Iteratively adjust look-at target to center mesh in frame
+        max_iterations = 5
+        tolerance = 0.02  # 2% of frame (relaxed for large meshes)
+
+        for iteration in range(max_iterations):
+            # Compute current screen-space bounding box
+            bbox = compute_mesh_screen_bbox(meshes, camera, bpy.context.scene)
+
+            # Target is center of frame (0.5, 0.5)
+            offset_x = bbox['center_x'] - 0.5
+            offset_y = bbox['center_y'] - 0.5
+
+            logger.info(
+                f"Iteration {iteration + 1}: screen center ({bbox['center_x']:.3f}, {bbox['center_y']:.3f}), "
+                f"offset ({offset_x:+.3f}, {offset_y:+.3f})"
+            )
+
+            # Check if centered within tolerance
+            if abs(offset_x) < tolerance and abs(offset_y) < tolerance:
+                logger.info(f"✓ Mesh centered in frame after {iteration + 1} iteration(s)")
+                break
+
+            # Calculate world-space adjustment
+            # Screen offset needs to be converted to world space via camera orientation
+            # Camera's local axes: -Z forward, X right, Y up
+            # Screen right (+x) → camera's +X axis
+            # Screen up (+y) → camera's +Y axis
+
+            # Get camera's world-space orientation vectors
+            cam_matrix = camera.matrix_world
+            cam_right = cam_matrix.to_3x3() @ Vector((1, 0, 0))  # Camera's +X (screen right)
+            cam_up = cam_matrix.to_3x3() @ Vector((0, 1, 0))     # Camera's +Y (screen up)
+
+            # Calculate distance from camera to current target for scaling
+            cam_to_target_dist = np.linalg.norm(np.array(camera.location) - target_pos)
+
+            # Calculate adjustment scale based on FOV and distance
+            # Screen-space offset of 1.0 (full frame width) at distance d with FOV f
+            # corresponds to world-space offset of: 2 * d * tan(fov/2)
+            # So for offset_x, world adjustment = offset_x * 2 * d * tan(fov/2)
+            fov_radians = camera.data.angle  # Blender stores FOV in radians
+            fov_scale = 2 * cam_to_target_dist * tan(fov_radians / 2)
+
+            # Apply dampening to avoid overshooting
+            # Higher dampening = faster convergence but risk of overshooting
+            dampening = 0.5
+            adjustment_scale = fov_scale * dampening
+
+            # Adjust target position based on screen offset
+            # POSITIVE because: if mesh appears right of center (offset_x > 0),
+            # we shift look-at target right to re-center
+            # (moving target right makes mesh appear more left in frame)
+            adjustment = offset_x * adjustment_scale * cam_right + offset_y * adjustment_scale * cam_up
+            adjustment_magnitude = np.linalg.norm(adjustment)
+
+            # Safety check: abort if adjustment is too large (likely diverging)
+            max_adjustment = mesh_diagonal * 0.5
+            if adjustment_magnitude > max_adjustment:
+                logger.warning(
+                    f"Adjustment too large ({adjustment_magnitude:.2f} > {max_adjustment:.2f}), "
+                    f"aborting frame centering"
+                )
+                break
+
+            logger.debug(f"  Adjustment: {adjustment_magnitude:.2f} units")
+
+            # Update target position
+            target_pos += np.array(adjustment)
+
+            # Re-orient camera to look at new target
+            cam_to_target = Vector(target_pos - np.array(camera.location)).normalized()
+            track_quat = cam_to_target.to_track_quat("-Z", "Y")
+            camera.rotation_euler = track_quat.to_euler()
+
+            # Update camera matrix for next iteration
+            bpy.context.view_layer.update()
+
+        else:
+            # Max iterations reached
+            logger.warning(
+                f"Frame centering did not converge after {max_iterations} iterations "
+                f"(offset: {offset_x:+.3f}, {offset_y:+.3f})"
+            )
 
     # Create light if sun parameters are provided
     if sun_angle > 0 or sun_energy > 0:

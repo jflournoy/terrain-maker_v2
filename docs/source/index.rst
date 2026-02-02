@@ -14,6 +14,7 @@ terrain-maker Documentation
    :maxdepth: 2
    :caption: Examples
 
+   examples/san_diego_demo
    examples/elevation
    examples/sledding
    examples/combined_render

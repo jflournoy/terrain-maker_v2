@@ -375,7 +375,7 @@ def create_boundary_extension(
     positions,
     boundary_points,
     coord_to_index,
-    base_depth=-0.2,
+    base_depth=0.2,
     two_tier=False,
     mid_depth=None,
     base_material="clay",
@@ -409,14 +409,18 @@ def create_boundary_extension(
         positions (np.ndarray): Array of (n, 3) vertex positions
         boundary_points (list): List of (y, x) tuples representing ordered boundary points
         coord_to_index (dict): Mapping from (y, x) coordinates to vertex indices
-        base_depth (float): Z-coordinate for the bottom of the extension (default: -0.2)
+        base_depth (float): Positive depth offset below minimum surface elevation (default: 0.2).
+                           Creates a flat base plane at: min_surface_z - base_depth.
+                           Positive values extend below surface, negative extend above.
         two_tier (bool): Enable two-tier mode (default: False)
-        mid_depth (float, optional): Z-coordinate for mid tier (default: base_depth * 0.25)
+        mid_depth (float, optional): Positive depth offset below surface for mid tier
+                                    (default: base_depth * 0.25, typically 0.05).
+                                    Positive values extend below surface, negative extend above.
         base_material (str | tuple): Material for base layer - either preset name
                                     ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
                                     or RGB tuple (0-1 range). Default: "clay"
         blend_edge_colors (bool): Blend surface colors to mid tier (default: True)
-                                 If False, mid tier uses base_material color
+                                 If False, mid tier uses base_material color for sharp transition
         surface_colors (np.ndarray, optional): Surface vertex colors (n_vertices, 3) uint8
         smooth_boundary (bool): Apply smoothing to boundary to eliminate stair-step edges
                                (default: False)
@@ -444,10 +448,12 @@ def create_boundary_extension(
         edge_sample_spacing (float): Pixel spacing for edge sampling at original DEM resolution (default: 1.0).
                                      Lower values = denser sampling, more edge pixels.
         use_fractional_edges (bool): Use fractional coordinates that preserve projection curvature
-                                    (default: False). When True, edge vertices follow the true curved
-                                    boundary from WGS84→UTM Transverse Mercator projection instead of
-                                    snapping to integer grid positions. Requires terrain= parameter.
-                                    Automatically enables bilinear interpolation for surface positions.
+                                    (default: False). When True, creates smooth curved edge by:
+                                    1. Surface tier aligned with mesh boundary (bilinear interpolation, no gap)
+                                    2. Mid tier at fractional X,Y positions with offset Z (smooth curve below surface)
+                                    3. Base tier at fractional X,Y positions with flat Z (smooth curved base)
+                                    This eliminates gaps while preserving smooth projection-aware edge curves.
+                                    Requires terrain= parameter.
 
     Returns:
         tuple: When two_tier=False (backwards compatible):
@@ -787,6 +793,10 @@ def create_boundary_extension(
     if not two_tier:
         # ===== SINGLE-TIER MODE (backwards compatible) =====
 
+        # Calculate minimum surface elevation for base depth reference
+        # Base vertices will be positioned at: min_z - base_depth
+        min_surface_z = np.min(positions[:, 2])
+
         if has_smoothed_coords:
             # With smoothing: create new surface vertices at smoothed positions + base vertices
             surface_boundary_verts = np.zeros((n_boundary, 3), dtype=float)
@@ -807,9 +817,10 @@ def create_boundary_extension(
 
                 surface_boundary_verts[i] = pos.copy()
 
-                # Base vertex: same XY, but at base_depth
+                # Base vertex: same XY, flat plane below min surface
+                # (base_depth is positive offset below min surface)
                 base_pos = pos.copy()
-                base_pos[2] = base_depth
+                base_pos[2] = min_surface_z - base_depth
                 base_boundary_verts[i] = base_pos
 
             # Stack surface + base vertices
@@ -887,9 +898,10 @@ def create_boundary_extension(
                 if original_idx is None:
                     continue
 
-                # Copy position but set z to base_depth
+                # Copy position but set z to flat plane below min surface
+                # (base_depth is positive offset below min surface)
                 pos = positions[original_idx].copy()
-                pos[2] = base_depth
+                pos[2] = min_surface_z - base_depth
                 boundary_vertices[i] = pos
 
             # Create side faces efficiently
@@ -996,6 +1008,9 @@ def create_boundary_extension(
         # ===== TWO-TIER MODE =====
 
         # Auto-calculate mid_depth if not provided
+        # mid_depth is a positive offset below surface (e.g., 0.05)
+        # base_depth is positive offset below min surface (e.g., 0.2)
+        # Default: shallow tier at 25% of base depth distance
         if mid_depth is None:
             mid_depth = base_depth * 0.25
 
@@ -1023,6 +1038,10 @@ def create_boundary_extension(
         surface_vertices = None
         if has_smoothed_coords:
             surface_vertices = np.zeros((n_boundary, 3), dtype=float)
+
+        # Calculate minimum surface elevation for base depth reference
+        # Base vertices will be positioned at: min_z - base_depth
+        min_surface_z = np.min(positions[:, 2])
 
         # Create mid and base vertices
         mid_vertices = np.zeros((n_boundary, 3), dtype=float)
@@ -1097,18 +1116,13 @@ def create_boundary_extension(
                             t = np.clip(point_dist / seg_dist, 0, 1)
                             pos[2] = z1 * (1 - t) + z2 * t
 
-                # For fractional edges: compute X,Y directly from fractional coordinates
-                # The bilinear interpolation correctly gets Z, but X,Y get clamped to mesh bounds
-                # which causes stair-stepping. Use the true fractional coords for smooth edges.
-                if use_fractional_edges and model_offset is not None:
-                    # Compute X,Y using same formula as mesh vertices:
-                    # pos_x = x_pixel / scale_factor - centroid_x
-                    # pos_y = y_pixel / scale_factor - centroid_y
-                    pos[0] = x / scale_factor - model_offset[0]
-                    pos[1] = y / scale_factor - model_offset[1]
-                    # Z remains from bilinear interpolation (elevation data)
+                # For fractional edges: DON'T adjust surface tier X,Y
+                # Keep surface vertices aligned with mesh boundary (from bilinear interpolation)
+                # This eliminates gaps - surface tier shares vertex positions with mesh edge
+                # Mid and base tiers will use fractional X,Y for smooth curves
 
-                # Sample positions for diagnostic output (AFTER fractional edge correction)
+                # Sample positions for diagnostic output
+                # Surface tier uses bilinear interpolation (aligned with mesh)
                 if len(position_samples) < 80:
                     position_samples.append({
                         'i': i,
@@ -1116,7 +1130,7 @@ def create_boundary_extension(
                         'x_in': x,
                         'bilinear_x': bilinear_x,
                         'bilinear_y': bilinear_y,
-                        'x_out': pos[0],
+                        'x_out': pos[0],  # Surface tier (snapped to mesh)
                         'y_out': pos[1],
                         'z_out': pos[2],
                     })
@@ -1132,16 +1146,28 @@ def create_boundary_extension(
                 valid_boundary_vertex[i] = True
 
             # Mid vertex: extend downward from surface by mid_depth offset
-            # (mid_depth is shallower, typically -0.2 or so)
+            # (mid_depth is positive depth below surface, typically 0.05 to 0.2)
             pos_mid = pos.copy()
-            pos_mid[2] = pos[2] + mid_depth
+            pos_mid[2] = pos[2] - mid_depth
+
+            # For fractional edges: mid tier uses fractional X,Y for smooth curve
+            # (surface tier stays aligned with mesh, mid/base follow smooth boundary)
+            if use_fractional_edges and model_offset is not None:
+                pos_mid[0] = x / scale_factor - model_offset[0]
+                pos_mid[1] = y / scale_factor - model_offset[1]
+
             mid_vertices[i] = pos_mid
 
-            # Base vertex: flat at absolute base_depth Z coordinate
-            # (base_depth is absolute Z value, typically -0.2 to -0.8)
-            # All base vertices stay at same Z regardless of surface elevation
+            # Base vertex: flat plane below minimum surface elevation
+            # (base_depth is positive offset below min surface, typically 0.2 to 1.0)
             pos_base = pos.copy()
-            pos_base[2] = base_depth
+            pos_base[2] = min_surface_z - base_depth
+
+            # For fractional edges: base tier uses fractional X,Y for smooth curve
+            if use_fractional_edges and model_offset is not None:
+                pos_base[0] = x / scale_factor - model_offset[0]
+                pos_base[1] = y / scale_factor - model_offset[1]
+
             base_vertices[i] = pos_base
 
         # DEBUG: Print interpolation summary
@@ -1170,13 +1196,15 @@ def create_boundary_extension(
             if position_samples:
                 frac_mode = use_fractional_edges and model_offset is not None
                 print(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
-                print(f"  Fractional edge correction: {'ENABLED' if frac_mode else 'DISABLED'}")
+                print(f"  Fractional edge mode: {'ENABLED' if frac_mode else 'DISABLED'}")
                 if frac_mode:
-                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'bilinear':>21} | {'final (corrected)':>21} | {'z':>8}")
-                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*21}-+-{'-'*21}-+-{'-'*8}")
+                    print(f"  Surface tier: Bilinear interpolation (aligned with mesh, no gap)")
+                    print(f"  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)")
+                if frac_mode:
+                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'surface tier (bilinear)':>23} | {'z':>8}")
+                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*23}-+-{'-'*8}")
                     for s in position_samples[:20]:
                         print(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
-                              f"({s['bilinear_x']:9.4f}, {s['bilinear_y']:9.4f}) | "
                               f"({s['x_out']:9.4f}, {s['y_out']:9.4f}) | {s['z_out']:8.4f}")
                 else:
                     print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}")
@@ -1269,9 +1297,9 @@ def create_boundary_extension(
                     print(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
 
             # When using smoothed coordinates (but NOT fractional/Catmull-Rom), bridge original
-            # to new smooth boundary. This eliminates orphaned vertices.
-            # Skip for fractional edges or Catmull-Rom: these create many interpolated points
-            # that don't map to existing mesh vertices, so bridge faces would create diagonals.
+            # mesh edge to new smooth boundary surface tier.
+            # Skip for fractional edges: surface tier already aligned with mesh (no gap)
+            # Skip for Catmull-Rom: creates too many interpolated points
             if has_smoothed_coords and not (use_fractional_edges or use_catmull_rom):
                 # Find nearest original boundary vertices to this smoothed segment
                 # by rounding the smoothed coordinates
@@ -1458,6 +1486,7 @@ def create_boundary_extension(
             # Assign colors based on tier structure
             if has_smoothed_coords:
                 # Three-tier structure: surface + mid + base
+                # Surface tier uses mesh colors, mid/base use edge material or blended
                 boundary_colors[i, :3] = surface_color                           # Surface tier
                 boundary_colors[i + n_boundary, :3] = surface_color             # Mid tier (same as surface)
                 boundary_colors[i + 2 * n_boundary, :3] = base_color_uint8     # Base tier (uniform color)
