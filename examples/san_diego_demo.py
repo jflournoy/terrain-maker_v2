@@ -161,12 +161,12 @@ def main():
         print("\nRendering...")
         setup_render_settings(use_gpu=True, samples=2048, use_denoising=True)
 
-        output_path = args.output_dir / "san_diego_demo.jpg"
+        output_path = args.output_dir / "san_diego_demo.png"
         render_scene_to_file(
-            str(output_path), 
-            width=72*10, 
+            str(output_path),
+            width=72*10,
             height=72*8,
-            file_format="JPEG",
+            file_format="PNG",
             color_mode="RGB")
 
         print(f"✓ Rendered to {output_path}")

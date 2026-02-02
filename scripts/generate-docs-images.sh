@@ -21,6 +21,16 @@ echo ""
 
 cd "$PROJECT_ROOT"
 
+# San Diego demo - complete minimal example
+echo "→ Running San Diego demo (with REAL data)..."
+echo "  Output: docs/images/san_diego_demo.png"
+echo "  Expected time: 1-2 minutes depending on data size"
+echo ""
+
+uv run python examples/san_diego_demo.py --skip-download --output-dir docs/images
+
+echo ""
+
 # Sledding example - generates multiple pipeline visualization stages
 echo "→ Running sledding example (with REAL data)..."
 echo "  Output: docs/images/01_raw/, 02_slope_stats/, 03_slope_penalties/,"
@@ -34,6 +44,9 @@ echo ""
 echo "==================================================================="
 echo "✓ Documentation images generated successfully"
 echo "==================================================================="
+echo ""
+echo "Generated images:"
+echo "  - docs/images/san_diego_demo.png (San Diego terrain demo)"
 echo ""
 echo "Generated image directories:"
 echo "  - docs/images/01_raw/          (DEM, snow depth)"
