@@ -67,6 +67,8 @@ desktop.ini
 .cache/
 tmp/
 temp/
+.tdd-session-*.md
+*.zip
 
 # Logs (except session-history which we intentionally track)
 logs/
@@ -86,6 +88,8 @@ data/cache/**
 data/dem/**
 data/snodas/**
 data/snodas_data
+data/san_diego_dem/
+data/test_srtm/
 !data/samples/
 !data/samples/*.tif
 !data/samples/*.geojson
