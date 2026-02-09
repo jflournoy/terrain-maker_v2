@@ -21,20 +21,26 @@ Grid:
     elevation: float[nrows][ncols]
     nodata: bool[nrows][ncols]         # true for ocean, off-map, masked areas
     outlet: bool[nrows][ncols]         # true for drainage termini
-    flow_dir: int[nrows][ncols]        # D8 direction (0-7 or -1 for outlet/nodata)
+    flow_dir: int[nrows][ncols]        # D8 direction (ESRI codes: 1,2,4,8,16,32,64,128 or 0 for outlet/nodata)
     flow_acc: int[nrows][ncols]        # contributing area (cell count)
     resolved: bool[nrows][ncols]       # used during conditioning
 
-# D8 neighbor encoding (0 = East, counter-clockwise)
-#   5  6  7
-#   4  x  0
-#   3  2  1
+# D8 neighbor encoding: ESRI ArcGIS power-of-2 convention
+# (Uses ESRI's standard encoding for compatibility with GIS workflows)
 #
-# dx = [1, 1, 0, -1, -1, -1, 0, 1]
-# dy = [0, 1, 1,  1,  0, -1, -1, -1]
-# dist = [1, sqrt(2), 1, sqrt(2), 1, sqrt(2), 1, sqrt(2)]
+#   8  4  2
+#  16  x  1
+#  32 64 128
+#
+# Direction codes: 1=E, 2=NE, 4=N, 8=NW, 16=W, 32=SW, 64=S, 128=SE
+# Distances: orthogonal=1, diagonal=sqrt(2)
+#
+# Mapping to Cartesian:
+# dx = [1, 1, 0, -1, -1, -1, 0, 1]      (for directions 1,2,4,8,16,32,64,128)
+# dy = [0, 1, 1,  1,  0, -1, -1, -1]     (for directions 1,2,4,8,16,32,64,128)
 
-NEIGHBORS: list of (dx, dy, distance) for 8 directions
+NEIGHBORS: list of (direction_code, dx, dy, distance) for 8 directions
+         where direction_code is ESRI power-of-2 encoding (1,2,4,8,16,32,64,128)
 ```
 
 ---
@@ -349,41 +355,49 @@ Basins that are NOT breached (because they exceed constraints) will be filled. T
 
 After conditioning, every non-outlet, non-NoData cell should have at least one lower neighbor (guaranteed by the fill step).
 
+Uses ESRI ArcGIS power-of-2 direction codes for compatibility with GIS workflows.
+
 ```
 function compute_d8_flow_direction(grid):
 
     for each cell (r, c):
         if grid.nodata[r][c]:
-            grid.flow_dir[r][c] = -1
+            grid.flow_dir[r][c] = 0  # No flow for NoData
             continue
 
         if grid.outlet[r][c]:
-            grid.flow_dir[r][c] = -1  # Terminal; or point toward ocean/edge
+            grid.flow_dir[r][c] = 0  # Terminal outlets have no flow direction
             continue
 
         max_slope = -infinity
-        best_dir = -1
+        best_dir = 0
 
-        for dir in 0..7:
-            nr = r + dy[dir]
-            nc = c + dx[dir]
+        # ESRI D8 codes: 1=E, 2=NE, 4=N, 8=NW, 16=W, 32=SW, 64=S, 128=SE
+        directions = [(1, 0, 1), (2, -1, 1), (4, -1, 0), (8, -1, -1),
+                      (16, 0, -1), (32, 1, -1), (64, 1, 0), (128, 1, 1)]
+                      # (code, dy, dx)
+
+        for (dir_code, dy, dx) in directions:
+            nr = r + dy
+            nc = c + dx
+            dist = 1.0 if dy*dx == 0 else sqrt(2)
 
             if out_of_bounds(nr, nc):
                 continue
-            if grid.nodata[nr][nc] and not grid.outlet[r][c]:
+            if grid.nodata[nr][nc]:
                 continue
 
-            slope = (grid.elevation[r][c] - grid.elevation[nr][nc]) / dist[dir]
+            slope = (grid.elevation[r][c] - grid.elevation[nr][nc]) / dist
 
             if slope > max_slope:
                 max_slope = slope
-                best_dir = dir
+                best_dir = dir_code
 
         grid.flow_dir[r][c] = best_dir
 
-        # Safety check: if best_dir is still -1, something went wrong
+        # Safety check: if best_dir is still 0, something went wrong
         # in conditioning — this cell has no downslope neighbor
-        if best_dir == -1:
+        if best_dir == 0 and not grid.outlet[r][c]:
             log_warning("Unresolved flat at", r, c)
 ```
 
@@ -392,6 +406,9 @@ function compute_d8_flow_direction(grid):
 ## 5. Stage 4: Flow Accumulation
 
 Compute upstream contributing area for each cell by traversing the flow network.
+
+Uses topological sort (Kahn's algorithm) to process cells in dependency order, ensuring
+each cell's upstream contributions are computed before it contributes to its receiver.
 
 ```
 function compute_flow_accumulation(grid):
@@ -404,37 +421,49 @@ function compute_flow_accumulation(grid):
             grid.flow_acc[r][c] = 1
 
     # Compute in-degree for each cell
+    # in_degree[r][c] = number of upstream cells flowing into (r, c)
     in_degree = int[nrows][ncols] initialized to 0
 
-    for each cell (r, c) where flow_dir[r][c] >= 0:
-        (nr, nc) = downstream_cell(r, c, grid.flow_dir[r][c])
+    for each cell (r, c) where flow_dir[r][c] > 0:  # Valid flow direction
+        (nr, nc) = downstream_cell(r, c, grid.flow_dir[r][c])  # Using ESRI D8 codes
         in_degree[nr][nc] += 1
 
     # Topological sort via queue (Kahn's algorithm)
     queue = Queue()
     for each cell (r, c) where not grid.nodata[r][c]:
         if in_degree[r][c] == 0:
-            queue.push( (r, c) )  # Headwater cells (ridgelines)
+            queue.push( (r, c) )  # Headwater cells (ridgelines, outlets)
+
+    # Track cells that reach in-degree 0 for cycle detection
+    cells_processed = 0
 
     while queue is not empty:
         (r, c) = queue.pop()
+        cells_processed += 1
         dir = grid.flow_dir[r][c]
 
-        if dir < 0:
-            continue  # Outlet or nodata
+        if dir == 0:
+            continue  # Outlet or nodata (no further flow)
 
         (nr, nc) = downstream_cell(r, c, dir)
-        grid.flow_acc[nr][nc] += grid.flow_acc[r][c]
+        if not grid.nodata[nr][nc]:
+            grid.flow_acc[nr][nc] += grid.flow_acc[r][c]
 
-        in_degree[nr][nc] -= 1
-        if in_degree[nr][nc] == 0:
-            queue.push( (nr, nc) )
+            in_degree[nr][nc] -= 1
+            if in_degree[nr][nc] == 0:
+                queue.push( (nr, nc) )
+
+    # Cycle detection: if not all cells were processed, there's a cycle
+    total_non_nodata = count of cells where not grid.nodata
+    if cells_processed != total_non_nodata:
+        log_error("Cycle detected in flow network! Conditioning failed.")
+        return None
 ```
 
 ### Notes
 
 - This is O(n) where n is the number of cells — each cell is visited exactly once.
-- If any cell never reaches in-degree 0 during traversal, there's a cycle in the flow network, which indicates a bug in the conditioning step.
+- **Cycle Detection**: If any cell never reaches in-degree 0 during traversal, there's a cycle in the flow network. This indicates a bug in the conditioning step (Stages 1-2). Should be treated as a fatal error.
 - To extract stream networks, threshold: `stream[r][c] = (flow_acc[r][c] > threshold)`.
 
 ---
