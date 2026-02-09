@@ -774,14 +774,26 @@ def main():
     # Step 6: Condition DEM
     print(f"\n{step_num}. Conditioning DEM (backend={args.backend})...")
 
-    # Create combined mask: ocean + lakes + endorheic basins (pre-mask them)
-    # Lakes are masked to act as drainage connections (prevent unnecessary filling)
-    # Basins are masked to preserve their topography
+    # Create combined mask: ocean + endorheic basins (pre-mask them)
+    # Strategy for lakes:
+    # - Lakes INSIDE endorheic basins → pre-mask (act as sinks/drainage sums like Salton Sea)
+    # - Lakes OUTSIDE basins → DON'T mask (act as connecting segments for river flow)
     conditioning_mask = ocean_mask.copy()
 
-    if lake_mask is not None and np.any(lake_mask):
-        print(f"   Pre-masking {np.sum(lake_mask > 0):,} lake cells as drainage connections")
-        conditioning_mask = conditioning_mask | (lake_mask > 0)
+    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
+        # Only mask lakes that are inside preserved basins
+        lakes_in_basins = lake_mask & basin_mask
+        if np.any(lakes_in_basins):
+            print(f"   Pre-masking {np.sum(lakes_in_basins > 0):,} lake cells inside basins (drainage sinks)")
+            conditioning_mask = conditioning_mask | lakes_in_basins
+
+        # Lakes outside basins are NOT masked (act as connecting segments for river flow)
+        lakes_outside = lake_mask & ~basin_mask
+        if np.any(lakes_outside):
+            print(f"   NOT masking {np.sum(lakes_outside > 0):,} lake cells outside basins (river connectors)")
+    elif lake_mask is not None and np.any(lake_mask):
+        # No basins detected - don't mask any lakes (all are river connectors)
+        print(f"   NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
 
     if basin_mask is not None and np.any(basin_mask):
         print(f"   Pre-masking {np.sum(basin_mask):,} basin cells to preserve topography")
