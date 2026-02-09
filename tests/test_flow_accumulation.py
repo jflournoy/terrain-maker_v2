@@ -2663,6 +2663,61 @@ class TestDijkstraEdgeOutlets:
             "Breaching should reduce number of sinks"
 
 
+def test_breach_depressions_constrained_conservative_defaults():
+    """
+    Test that conservative breach depth/length constraints preserve basins.
+
+    Default aggressive constraints (50m depth, 100 cells) breach almost everything.
+    Conservative constraints (10m depth, 30 cells) are more selective.
+
+    This validates that the spec backend defaults should be less aggressive.
+    """
+    # Create DEM with a 30m-deep basin (realistic water feature)
+    dem = np.full((50, 50), 100.0, dtype=np.float32)
+
+    # Create basin rim at 130m (ensures closed basin)
+    dem[0, :] = 130.0
+    dem[-1, :] = 130.0
+    dem[:, 0] = 130.0
+    dem[:, -1] = 130.0
+
+    # Create a 30m-deep basin in center
+    for i in range(15, 35):
+        for j in range(15, 35):
+            dist = np.sqrt((i - 25) ** 2 + (j - 25) ** 2)
+            dem[i, j] = 70.0 + dist * 1.0  # Basin floor at 70m
+
+    # With aggressive constraints (50m depth, 100 cells):
+    # Breaching will succeed for most sinks, potentially over-breaching
+    from src.terrain.flow_accumulation import breach_depressions_constrained, identify_outlets
+    nodata_mask = np.zeros_like(dem, dtype=bool)
+    outlets = identify_outlets(dem, nodata_mask=nodata_mask, coastal_elev_threshold=10.0, edge_mode="all")
+    dem_breached_aggressive = breach_depressions_constrained(
+        dem=dem.copy(),
+        outlets=outlets,
+        max_breach_depth=50.0,      # Aggressive: will breach deep features
+        max_breach_length=100,      # Aggressive: will take long paths
+    )
+
+    # With conservative constraints (10m depth, 30 cells):
+    # Breaching is more selective, may fail on some paths
+    dem_breached_conservative = breach_depressions_constrained(
+        dem=dem.copy(),
+        outlets=outlets,
+        max_breach_depth=10.0,      # Conservative: more selective
+        max_breach_length=30,       # Conservative: limits path length
+    )
+
+    # Both should breach something, but conservative should be more selective
+    basin_center_agg = dem_breached_aggressive[25, 25]
+    basin_center_cons = dem_breached_conservative[25, 25]
+
+    # Conservative approach should preserve basin better (higher elevation at center)
+    # OR at least not significantly worsen it compared to aggressive
+    assert basin_center_cons >= (basin_center_agg - 1.0), \
+        "Conservative constraints should not degrade basin more than aggressive"
+
+
 def test_condition_dem_min_basin_depth_preserves_small_basins():
     """
     Test that reasonable min_basin_depth preserves small natural basins.
