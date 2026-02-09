@@ -216,6 +216,7 @@ def create_validation_images(
     # Water body specific parameters
     lake_mask: np.ndarray = None,
     lake_outlets: np.ndarray = None,
+    lake_inlets: np.ndarray = None,
     flow_dir_no_lakes: np.ndarray = None,
     drainage_area_no_lakes: np.ndarray = None,
     # Basin preservation parameters
@@ -257,18 +258,63 @@ def create_validation_images(
         lake_display = np.ma.masked_where(lake_mask == 0, lake_mask.astype(float))
         im_lakes = ax.imshow(lake_display, cmap='Blues', alpha=0.7, vmin=0, vmax=num_lakes)
 
-        # Mark outlets in red
-        if lake_outlets is not None:
+        # D8 direction codes to arrow vectors
+        d8_to_vector = {
+            1: (1, 0),      # East
+            2: (1, -1),     # SE
+            4: (0, -1),     # South
+            8: (-1, -1),    # SW
+            16: (-1, 0),    # West
+            32: (-1, 1),    # NW
+            64: (0, 1),     # North
+            128: (1, 1),    # NE
+        }
+
+        # Mark outlets with arrows pointing outward (red)
+        if lake_outlets is not None and np.any(lake_outlets):
             outlet_rows, outlet_cols = np.where(lake_outlets)
-            ax.scatter(outlet_cols, outlet_rows, c='red', s=50, marker='x',
-                      linewidths=2, label=f'Outlets ({len(outlet_rows)})')
+            outlet_dirs = flow_dir[outlet_rows, outlet_cols]
+
+            # Extract flow vectors for outlets
+            outlet_u = np.zeros(len(outlet_rows), dtype=float)
+            outlet_v = np.zeros(len(outlet_rows), dtype=float)
+
+            for i, d8_code in enumerate(outlet_dirs):
+                if d8_code in d8_to_vector:
+                    outlet_u[i], outlet_v[i] = d8_to_vector[int(d8_code)]
+
+            # Draw outlet arrows (red, pointing outward)
+            ax.quiver(outlet_cols, outlet_rows, outlet_u, outlet_v,
+                     color='red', scale=80, scale_units='xy', width=0.001,
+                     label=f'Outlets ({len(outlet_rows)})')
+
+        # Mark inlets with arrows pointing inward (green)
+        if lake_inlets is not None and np.any(lake_inlets):
+            inlet_rows, inlet_cols = np.where(lake_inlets)
+
+            # For inlets, reverse the arrow direction (pointing into the lake)
+            inlet_dirs = flow_dir[inlet_rows, inlet_cols]
+
+            inlet_u = np.zeros(len(inlet_rows), dtype=float)
+            inlet_v = np.zeros(len(inlet_rows), dtype=float)
+
+            for i, d8_code in enumerate(inlet_dirs):
+                if d8_code in d8_to_vector:
+                    # Reverse direction for inlet arrows
+                    u, v = d8_to_vector[int(d8_code)]
+                    inlet_u[i], inlet_v[i] = -u, -v
+
+            # Draw inlet arrows (green, pointing inward)
+            ax.quiver(inlet_cols, inlet_rows, inlet_u, inlet_v,
+                     color='green', scale=80, scale_units='xy', width=0.001,
+                     label=f'Inlets ({len(inlet_rows)})')
 
         plt.colorbar(im_dem, ax=ax, label='Elevation (m)', shrink=0.7)
         ax.set_title(f'3. Water Bodies ({num_lakes} lakes, {lake_pct:.2f}% of area)',
                     fontsize=14, fontweight='bold')
         ax.set_xlabel('Column')
         ax.set_ylabel('Row')
-        if lake_outlets is not None and np.any(lake_outlets):
+        if (lake_outlets is not None and np.any(lake_outlets)) or (lake_inlets is not None and np.any(lake_inlets)):
             ax.legend(loc='upper right')
 
         plt.tight_layout()
@@ -317,100 +363,30 @@ def create_validation_images(
         cmap=CMAP_FILL, label='m', log_scale=True
     )
 
-    # 6. Flow Direction Comparison (if we have before/after)
-    if flow_dir_no_lakes is not None:
-        # Show difference: where did flow direction change due to lakes?
-        flow_changed = (flow_dir != flow_dir_no_lakes) & (lake_mask > 0)
+    # 6. Flow Direction
+    flow_display = flow_dir.astype(float)
+    flow_display[flow_dir == 0] = np.nan
+    save_plot(
+        flow_display, '6. Flow Direction (D8 codes)',
+        output_dir / '06_flow_direction.png',
+        cmap=CMAP_DIRECTION, label='D8 code (1-128)'
+    )
 
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
-
-        # Before (no lakes)
-        flow_no_lakes_display = flow_dir_no_lakes.astype(float)
-        flow_no_lakes_display[flow_dir_no_lakes == 0] = np.nan
-        im1 = ax1.imshow(flow_no_lakes_display, cmap=CMAP_DIRECTION)
-        ax1.set_title('6a. Flow Direction (without lakes)', fontsize=12, fontweight='bold')
-        plt.colorbar(im1, ax=ax1, label='D8 code', shrink=0.8)
-
-        # After (with lakes)
-        flow_display = flow_dir.astype(float)
-        flow_display[flow_dir == 0] = np.nan
-        im2 = ax2.imshow(flow_display, cmap=CMAP_DIRECTION)
-        ax2.set_title('6b. Flow Direction (with lakes)', fontsize=12, fontweight='bold')
-        plt.colorbar(im2, ax=ax2, label='D8 code', shrink=0.8)
-
-        # Difference (where changed)
-        im3 = ax3.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
-        changed_overlay = np.ma.masked_where(~flow_changed, np.ones_like(flow_changed, dtype=float))
-        ax3.imshow(changed_overlay, cmap='Reds', alpha=0.9)
-        ax3.set_title(f'6c. Changed Cells ({np.sum(flow_changed):,} cells)',
-                     fontsize=12, fontweight='bold')
-        plt.colorbar(im3, ax=ax3, label='Elevation (m)', shrink=0.8)
-
-        for ax in [ax1, ax2, ax3]:
-            ax.set_xlabel('Column')
-            ax.set_ylabel('Row')
-
-        plt.tight_layout()
-        plt.savefig(output_dir / '06_flow_direction_comparison.png', dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"  Saved: 06_flow_direction_comparison.png")
-    else:
-        # Just show final flow direction
-        flow_display = flow_dir.astype(float)
-        flow_display[flow_dir == 0] = np.nan
-        save_plot(
-            flow_display, '6. Flow Direction (D8 codes)',
-            output_dir / '06_flow_direction.png',
-            cmap=CMAP_DIRECTION, label='D8 code (1-128)'
-        )
-
-    # 7. Drainage Area Comparison (if available)
-    if drainage_area_no_lakes is not None:
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
-
-        # Before (no lakes) - log scale
-        drain_no_lakes_log = np.log10(drainage_area_no_lakes + 1)
-        im1 = ax1.imshow(drain_no_lakes_log, cmap=CMAP_DRAINAGE)
-        ax1.set_title('7a. Drainage Area (without lakes, log)', fontsize=12, fontweight='bold')
-        plt.colorbar(im1, ax=ax1, label='log10(cells)', shrink=0.8)
-
-        # After (with lakes) - log scale
-        drain_log = np.log10(drainage_area + 1)
-        im2 = ax2.imshow(drain_log, cmap=CMAP_DRAINAGE)
-        ax2.set_title('7b. Drainage Area (with lakes, log)', fontsize=12, fontweight='bold')
-        plt.colorbar(im2, ax=ax2, label='log10(cells)', shrink=0.8)
-
-        # Difference (absolute change in log scale)
-        diff = np.abs(drain_log - drain_no_lakes_log)
-        im3 = ax3.imshow(diff, cmap='Reds')
-        ax3.set_title('7c. Absolute Change (log scale)', fontsize=12, fontweight='bold')
-        plt.colorbar(im3, ax=ax3, label='|Δ log10(cells)|', shrink=0.8)
-
-        for ax in [ax1, ax2, ax3]:
-            ax.set_xlabel('Column')
-            ax.set_ylabel('Row')
-
-        plt.tight_layout()
-        plt.savefig(output_dir / '07_drainage_comparison.png', dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"  Saved: 07_drainage_comparison.png")
-    else:
-        # Just show final drainage area
-        save_plot(
-            drainage_area, '7. Drainage Area (log scale)',
-            output_dir / '07_drainage_area_log.png',
-            cmap=CMAP_DRAINAGE, label='cells', log_scale=True
-        )
+    # 7. Drainage Area
+    save_plot(
+        drainage_area, '7. Drainage Area (log scale)',
+        output_dir / '07_drainage_area.png',
+        cmap=CMAP_DRAINAGE, label='cells', log_scale=True
+    )
 
     # 8. Stream Network with lakes highlighted
-    threshold_5 = np.percentile(drainage_area[drainage_area > 1], 95)
-    streams_5 = drainage_area > threshold_5
+    streams = drainage_area > 1
 
     fig, ax = plt.subplots(figsize=(12, 10))
     im = ax.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
 
     # Overlay streams
-    stream_overlay = np.ma.masked_where(~streams_5, streams_5.astype(float))
+    stream_overlay = np.ma.masked_where(~streams, streams.astype(float))
     ax.imshow(stream_overlay, cmap=CMAP_STREAMS, alpha=0.9)
 
     # Overlay lakes in blue
@@ -419,7 +395,7 @@ def create_validation_images(
         ax.imshow(lake_overlay, cmap='Blues', alpha=0.5)
 
     plt.colorbar(im, ax=ax, label='Elevation (m)', shrink=0.8)
-    ax.set_title(f'8. Stream Network with Lakes (top 5%, threshold={threshold_5:.0f} cells)',
+    ax.set_title(f'8. Stream Network with Lakes',
                 fontsize=14, fontweight='bold')
     ax.set_xlabel('Column')
     ax.set_ylabel('Row')
@@ -656,6 +632,9 @@ def main():
                     lake_outlets[row, col] = True
 
             print(f"   Outlet cells: {np.sum(lake_outlets)}")
+
+            # Identify inlets (water flowing into lakes) - will be done after DEM conditioning
+            lake_inlets = None
     else:
         # Load real water bodies from NHD or HydroLAKES
         print(f"\n2. Loading {args.data_source.upper()} water bodies...")
@@ -745,6 +724,7 @@ def main():
             print(f"   Continuing without lake routing...")
             lake_mask = None
             lake_outlets = None
+            lake_inlets = None
 
     # Step 5: Detect endorheic basins (before conditioning)
     step_num = 5 if args.data_source != 'synthetic' else 4
@@ -815,6 +795,27 @@ def main():
             dem, method=args.fill_method, ocean_mask=conditioning_mask,
             min_basin_size=args.min_basin_size, min_basin_depth=args.min_basin_depth
         )
+
+    # Identify lake inlets (after DEM conditioning)
+    lake_inlets = None
+    if lake_mask is not None and np.any(lake_mask):
+        print(f"\nIdentifying lake inlets...")
+        # Pass outlet_mask so inlets don't include outlet cells
+        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
+        inlets_dict = identify_lake_inlets(lake_mask, dem_conditioned, outlet_mask=outlet_mask_for_inlets)
+
+        if inlets_dict:
+            # Convert inlet dict to boolean mask
+            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
+            for lake_id, inlet_cells in inlets_dict.items():
+                for row, col in inlet_cells:
+                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
+                        lake_inlets[row, col] = True
+
+            inlet_count = np.sum(lake_inlets)
+            print(f"   Inlet cells: {inlet_count}")
+        else:
+            lake_inlets = None
 
     # Step 5: Compute flow direction WITHOUT lakes (for comparison)
     print("\n5. Computing flow direction (without lakes)...")
@@ -928,6 +929,7 @@ def main():
         # Water body specific
         lake_mask=lake_mask,
         lake_outlets=lake_outlets,
+        lake_inlets=lake_inlets,
         flow_dir_no_lakes=flow_dir_no_lakes,
         drainage_area_no_lakes=drainage_area_no_lakes,
         # Basin preservation

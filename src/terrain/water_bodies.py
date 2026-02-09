@@ -422,13 +422,24 @@ def download_hydrolakes(
         GeoJSON FeatureCollection with lake polygons and pour_point properties
     """
     # Check for local HydroLAKES shapefile
-    hydrolakes_path = Path(output_dir) / "HydroLAKES_polys_v10.shp"
+    # First check in project data directory, then in output directory
+    hydrolakes_paths = [
+        Path("data/hydrolakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp"),
+        Path(output_dir) / "HydroLAKES_polys_v10.shp",
+    ]
 
-    if not hydrolakes_path.exists():
+    hydrolakes_path = None
+    for path in hydrolakes_paths:
+        if path.exists():
+            hydrolakes_path = path
+            break
+
+    if hydrolakes_path is None:
         # Return empty with instructions
-        print(f"HydroLAKES shapefile not found at {hydrolakes_path}")
-        print("Download from: https://www.hydrosheds.org/products/hydrolakes")
-        print("Extract HydroLAKES_polys_v10.shp to the output directory")
+        print("HydroLAKES shapefile not found")
+        print("Expected at: data/hydrolakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp")
+        print("Or download from: https://www.hydrosheds.org/products/hydrolakes")
+        print("Extract HydroLAKES_polys_v10.shp to data/hydrolakes/HydroLAKES_polys_v10_shp/")
         return {"type": "FeatureCollection", "features": []}
 
     # Filter shapefile to bbox using geopandas
@@ -436,15 +447,49 @@ def download_hydrolakes(
         import geopandas as gpd
         from shapely.geometry import box
 
-        gdf = gpd.read_file(hydrolakes_path, bbox=bbox)
+        # Convert bbox from (south, west, north, east) to geopandas format (minx, miny, maxx, maxy)
+        south, west, north, east = bbox
+        bbox_geopandas = (west, south, east, north)
+
+        # Load lake polygons
+        gdf = gpd.read_file(hydrolakes_path, bbox=bbox_geopandas)
+
+        # Load pour points shapefile to get outlet coordinates
+        points_path = Path(hydrolakes_path).parent / "HydroLAKES_points_v10.shp"
+        if points_path.exists():
+            try:
+                gdf_points = gpd.read_file(points_path, bbox=bbox_geopandas)
+
+                # Create a mapping of Hylak_id -> outlet coordinates
+                outlets_dict = {}
+                for idx, row in gdf_points.iterrows():
+                    lake_id = row.get('Hylak_id')
+                    geom = row.geometry
+                    if lake_id is not None and geom is not None:
+                        outlets_dict[lake_id] = (geom.x, geom.y)
+
+                # Add outlet coordinates to polygon features
+                for idx, row in gdf.iterrows():
+                    lake_id = row.get('Hylak_id')
+                    if lake_id in outlets_dict:
+                        lon, lat = outlets_dict[lake_id]
+                        row['pour_point'] = [lon, lat]
+                        row['Pour_long'] = lon
+                        row['Pour_lat'] = lat
+            except Exception as e:
+                print(f"Warning: Could not load HydroLAKES pour points: {e}")
 
         # Convert to GeoJSON
         geojson = json.loads(gdf.to_json())
 
-        # Add pour_point from HydroLAKES attributes
+        # Add pour_point from attributes if available
         for feature in geojson.get("features", []):
             props = feature.get("properties", {})
-            if "Pour_lat" in props and "Pour_long" in props:
+            if "pour_point" in props:
+                # Already added from points file
+                pass
+            elif "Pour_lat" in props and "Pour_long" in props:
+                # HydroLAKES pour point fields
                 props["pour_point"] = [props["Pour_long"], props["Pour_lat"]]
 
         return geojson
