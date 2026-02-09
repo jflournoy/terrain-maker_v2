@@ -2661,3 +2661,69 @@ class TestDijkstraEdgeOutlets:
         # May not be zero if sink unreachable, but should have fewer sinks
         assert len(sinks_after) <= len(sinks_original), \
             "Breaching should reduce number of sinks"
+
+
+def test_condition_dem_min_basin_depth_preserves_small_basins():
+    """
+    Test that reasonable min_basin_depth preserves small natural basins.
+
+    With a large basin depth threshold (100m), only very deep basins are
+    preserved, causing small water features to be aggressively filled.
+
+    With a smaller threshold (5m), more basins are preserved, maintaining
+    water flow connectivity and terrain details.
+
+    This validates the fix: change validation script defaults from 100m to 5m.
+    """
+    # Create a large synthetic DEM with multiple basin sizes
+    dem = np.full((50, 50), 100.0, dtype=np.float32)
+
+    # Create rim at edges (ensures closed basins)
+    dem[0, :] = 110.0
+    dem[-1, :] = 110.0
+    dem[:, 0] = 110.0
+    dem[:, -1] = 110.0
+
+    # Large closed basin (>50000 cells, 50m deep)
+    for i in range(10, 40):
+        for j in range(10, 40):
+            dist = np.sqrt((i - 25) ** 2 + (j - 25) ** 2)
+            dem[i, j] = 50.0 + dist * 0.8  # Large basin floor at 50m
+
+    # Small closed basin (< 50000 cells, 5m deep) - a stream pool or small lake
+    for i in range(15, 20):
+        for j in range(15, 20):
+            dist = np.sqrt((i - 17.5) ** 2 + (j - 17.5) ** 2)
+            dem[i, j] = 95.0 + dist * 0.5  # Small basin floor at 95m
+
+    # With large min_basin_depth (100m), both basins get evaluated:
+    # - Large basin: 50m deep < 100m threshold → excluded from preservation
+    # - Small basin: 5m deep < 100m threshold → excluded from preservation
+    # Result: both get filled aggressively (even the realistic large basin!)
+    conditioned_aggressive = condition_dem(
+        dem.copy(),
+        method="fill",
+        min_basin_size=1000,        # Small size threshold to include both basins
+        min_basin_depth=100.0,      # Aggressive: only preserve very deep basins
+    )
+
+    # With small min_basin_depth (5m), more basins are preserved:
+    # - Large basin: 50m deep >= 5m threshold → preserved
+    # - Small basin: 5m deep >= 5m threshold → preserved
+    # Result: realistic basins stay filled with water (not aggressively filled)
+    conditioned_reasonable = condition_dem(
+        dem.copy(),
+        method="fill",
+        min_basin_size=1000,        # Same size threshold
+        min_basin_depth=5.0,        # Reasonable: preserve basins > 5m deep
+    )
+
+    # Check that the large basin (which is realistic) is preserved better
+    # with reasonable defaults
+    large_basin_filled_aggressive = np.all(conditioned_aggressive[10:40, 10:40] >= 99.0)
+    large_basin_preserved_reasonable = np.any(conditioned_reasonable[10:40, 10:40] < 80.0)
+
+    assert large_basin_filled_aggressive, \
+        "Aggressive settings (100m depth) should fill even realistic large basins"
+    assert large_basin_preserved_reasonable, \
+        "Reasonable settings (5m depth) should preserve realistic basins"

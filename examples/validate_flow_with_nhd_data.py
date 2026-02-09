@@ -158,8 +158,8 @@ def main():
     parser.add_argument('--fill-method', type=str, default='breach',
                         choices=['fill', 'breach'],
                         help='Depression filling method (default: breach)')
-    parser.add_argument('--min-basin-depth', type=float, default=100.0,
-                        help='Minimum basin depth (m) to preserve (default: 100.0)')
+    parser.add_argument('--min-basin-depth', type=float, default=5.0,
+                        help='Minimum basin depth (m) to preserve (default: 5.0)')
     parser.add_argument('--min-basin-size', type=int, default=50000,
                         help='Minimum basin size (cells) to preserve (default: 50000)')
     args = parser.parse_args()
