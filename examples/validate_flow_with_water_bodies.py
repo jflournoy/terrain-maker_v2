@@ -804,18 +804,48 @@ def main():
     print("\n6. Computing drainage area (without lakes)...")
     drainage_area_no_lakes = compute_drainage_area(flow_dir_no_lakes)
 
-    # Step 7: Apply lake routing
+    # Step 7: Apply lake routing (with endorheic basin awareness)
     if lake_mask is not None and lake_outlets is not None:
         print("\n7. Applying lake flow routing...")
-        lake_flow = create_lake_flow_routing(lake_mask, lake_outlets, dem_conditioned)
 
-        # Merge: lake cells use lake_flow, others keep terrain_flow
-        flow_dir = np.where(lake_mask > 0, lake_flow, flow_dir_no_lakes)
+        # Check which lakes are inside preserved endorheic basins
+        lakes_in_basin = None
+        lakes_outside_basin = lake_mask.copy()
+
+        if basin_mask is not None and np.any(basin_mask):
+            lakes_in_basin = lake_mask & basin_mask
+            lakes_outside_basin = lake_mask & ~basin_mask
+
+            num_lakes_in = len(np.unique(lakes_in_basin[lakes_in_basin > 0]))
+            num_lakes_out = len(np.unique(lakes_outside_basin[lakes_outside_basin > 0]))
+            cells_in = np.sum(lakes_in_basin > 0)
+            cells_out = np.sum(lakes_outside_basin > 0)
+
+            if num_lakes_in > 0:
+                print(f"   Found {num_lakes_in} water bodies INSIDE preserved basins ({cells_in:,} cells)")
+                print(f"   These will use natural basin flow (no explicit routing)")
+
+            if num_lakes_out > 0:
+                print(f"   Found {num_lakes_out} water bodies OUTSIDE basins ({cells_out:,} cells)")
+                print(f"   These will use explicit outlet routing")
+
+        # Apply explicit routing only to lakes outside basins
+        if lakes_outside_basin is not None and np.any(lakes_outside_basin):
+            # Create mask of outlets only for lakes outside basins
+            lake_outlets_outside = lake_outlets & ~basin_mask if basin_mask is not None else lake_outlets
+
+            lake_flow = create_lake_flow_routing(lakes_outside_basin, lake_outlets_outside, dem_conditioned)
+            flow_dir = np.where(lakes_outside_basin > 0, lake_flow, flow_dir_no_lakes)
+
+            num_outlets_outside = np.sum(lake_outlets_outside)
+            print(f"   Applied explicit routing to {np.sum(lakes_outside_basin > 0):,} cells with {num_outlets_outside} outlets")
+        else:
+            flow_dir = flow_dir_no_lakes
 
         num_lakes = len(np.unique(lake_mask[lake_mask > 0]))
         num_outlets = np.sum(lake_outlets)
         lake_cells = np.sum(lake_mask > 0)
-        print(f"   Routed {num_lakes} lakes ({lake_cells:,} cells) with {num_outlets} outlets")
+        print(f"   Total lakes processed: {num_lakes} ({lake_cells:,} cells)")
     else:
         print("\n7. Skipping lake routing (no lakes detected)")
         flow_dir = flow_dir_no_lakes
