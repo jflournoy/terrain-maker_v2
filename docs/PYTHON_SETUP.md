@@ -7,29 +7,34 @@ The terrain-maker component is a Python 3.11+ geospatial data processing and vis
 ## Prerequisites
 
 - Python 3.11 or higher
-- Conda (recommended) or pip
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - Blender 4.3+ (for 3D rendering features)
 - GDAL/GEOS libraries (for geospatial processing)
 
 ## Installation
 
-### Option 1: Using Conda (Recommended)
+### Using uv (Recommended)
 
 ```bash
-# Create environment from environment.yml
-conda env create -f environment.yml
-conda activate rayshade
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies (creates .venv automatically)
+uv sync
+
+# Run commands via uv
+uv run python examples/your_script.py
 ```
 
-### Option 2: Using pip
+### Using pip (Alternative)
 
 ```bash
 # Create virtual environment
 python3.11 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install from pyproject.toml
+pip install -e .
 ```
 
 ## Data Setup
@@ -219,8 +224,11 @@ If you get import errors, make sure you're in the project root and have activate
 # Check current directory
 pwd  # Should be terrain-maker_v2/
 
-# Activate environment
-conda activate rayshade  # Or: source .venv/bin/activate
+# Use uv to run scripts (auto-activates environment)
+uv run python your_script.py
+
+# Or activate manually
+source .venv/bin/activate
 ```
 
 ### GDAL/Rasterio Issues

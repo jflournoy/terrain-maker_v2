@@ -18,6 +18,8 @@ dependencies = [
     "scikit-learn",  # Required for proximity mask clustering (DBSCAN)
     "opencv-python-headless",  # 500x faster bilateral filter than skimage
     "torch",  # GPU-accelerated area averaging for downsampling
+    "numba",  # JIT compilation for performance-critical loops
+    "pysheds>=0.4",  # Hydrological analysis (flow direction, accumulation)
     "rasterio",
     "geopandas",
     "shapely",
@@ -29,6 +31,8 @@ dependencies = [
     "pyproj",
     "zarr",
     "bpy>=4.0",  # Blender Python module for rendering
+    "NASADEM",  # DEM downloads from NASA Earthdata
+    "earthaccess",  # NASA Earthdata authentication
 ]
 
 [project.optional-dependencies]
@@ -51,7 +55,6 @@ upscale = [
     "realesrgan",  # AI super-resolution for score upscaling
 ]
 all = [
-    "richdem",
     "realesrgan",
 ]
 

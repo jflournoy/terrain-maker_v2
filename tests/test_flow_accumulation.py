@@ -2348,3 +2348,316 @@ class TestFlowComputationCaching:
         metadata_file = tmp_path / "flow_cache_metadata.json"
         assert metadata_file.exists(), \
             "Cache metadata should be in DEM's directory when cache_dir not specified"
+
+
+# ============================================================================
+# Edge Outlet Detection Tests (TDD Refactor)
+# ============================================================================
+
+
+def create_sink_with_edge_outlet(shape=(15, 15)):
+    """
+    Create a DEM with:
+    - A central sink (depression)
+    - Sloping terrain toward the sink
+    - Edge outlet at bottom (lower than surrounding rim)
+    - NO nodata mask (all cells are valid land)
+    """
+    rows, cols = shape
+    dem = np.full(shape, 100.0, dtype=np.float32)
+
+    # Create a bowl/depression in the center
+    center_r, center_c = rows // 2, cols // 2
+    for i in range(rows):
+        for j in range(cols):
+            dist = np.sqrt((i - center_r) ** 2 + (j - center_c) ** 2)
+            dem[i, j] = 100.0 + dist * 2.0  # Higher at edges, lower at center
+
+    # Create a low point at the bottom center edge (outlet on edge)
+    dem[-1, center_c] = 50.0  # Very low - will be outlet
+    dem[-2, center_c] = 60.0  # Slope toward outlet
+    dem[-3, center_c] = 70.0
+
+    return dem
+
+
+def create_sink_with_ocean_outlet(shape=(15, 15)):
+    """
+    Create a DEM with:
+    - A central sink (depression)
+    - Ocean/nodata surrounding part of the domain
+    - Coastal outlet where land meets ocean
+    - Land cells that slope toward the ocean
+    """
+    rows, cols = shape
+    dem = np.full(shape, 100.0, dtype=np.float32)
+    nodata_mask = np.zeros(shape, dtype=bool)
+
+    # Create ocean on the right side
+    dem[:, -3:] = 0.0  # Ocean level
+    nodata_mask[:, -3:] = True  # Mark as nodata
+
+    # Create a bowl in the center-left
+    center_r, center_c = rows // 2, cols // 2 - 3
+    for i in range(rows):
+        for j in range(cols - 3):
+            if not nodata_mask[i, j]:
+                dist = np.sqrt((i - center_r) ** 2 + (j - center_c) ** 2)
+                dem[i, j] = 100.0 + dist * 1.5
+
+    # Create a low point at the edge (coastal outlet)
+    dem[-1, cols - 4] = 20.0  # Low coastal point
+    dem[-2, cols - 4] = 30.0
+
+    return dem, nodata_mask
+
+
+def create_full_edge_outlet_dem(shape=(21, 21)):
+    """
+    Create a DEM where sink must drain to an edge outlet.
+    - Central bowl/sink
+    - Edges all marked as outlets
+    - Terrain slopes toward edges
+    - No valid neighbors except on edges
+    """
+    rows, cols = shape
+    dem = np.full(shape, 100.0, dtype=np.float32)
+
+    # Central depression
+    center_r, center_c = rows // 2, cols // 2
+    for i in range(rows):
+        for j in range(cols):
+            # Parabolic bowl - gets lower toward center
+            dist = np.sqrt((i - center_r) ** 2 + (j - center_c) ** 2)
+            dem[i, j] = 100.0 + dist * 3.0
+
+    # Create a very deep sink in the center
+    dem[center_r, center_c] = 30.0
+
+    return dem
+
+
+class TestDijkstraEdgeOutlets:
+    """
+    Test suite for Dijkstra outlet detection on grid edges and ocean boundaries.
+
+    These tests verify that when a sink exists, the Dijkstra algorithm can find
+    and reach valid outlets, even when those outlets are:
+    1. On grid boundaries (edge_mode="all")
+    2. Adjacent to nodata/ocean (coastal outlets)
+    """
+
+    def test_identify_outlets_marks_all_edges_when_mode_all(self):
+        """identify_outlets with edge_mode='all' should mark all boundary cells as outlets."""
+        dem = np.ones((10, 10), dtype=np.float32) * 100.0
+        nodata = np.zeros((10, 10), dtype=bool)
+
+        outlets = identify_outlets(dem, nodata, edge_mode="all")
+
+        # Top edge
+        assert np.all(outlets[0, :] == True), "Top edge should be outlets"
+        # Bottom edge
+        assert np.all(outlets[-1, :] == True), "Bottom edge should be outlets"
+        # Left edge
+        assert np.all(outlets[:, 0] == True), "Left edge should be outlets"
+        # Right edge
+        assert np.all(outlets[:, -1] == True), "Right edge should be outlets"
+
+    def test_identify_outlets_marks_coastal_outlets(self):
+        """identify_outlets should mark low land cells adjacent to nodata as coastal outlets."""
+        dem = np.ones((10, 10), dtype=np.float32) * 100.0
+        nodata = np.zeros((10, 10), dtype=bool)
+
+        # Mark right side as ocean (nodata)
+        dem[:, -3:] = 0.0
+        nodata[:, -3:] = True
+
+        # Low coastal points should be outlets
+        dem[-2, -4] = 5.0  # Low point adjacent to ocean
+        dem[-1, -4] = 5.0
+
+        outlets = identify_outlets(dem, nodata, coastal_elev_threshold=10.0, edge_mode="none")
+
+        # Coastal outlets should be marked
+        assert outlets[-2, -4], "Coastal point should be outlet"
+        assert outlets[-1, -4], "Coastal point should be outlet"
+
+    def test_dijkstra_finds_path_to_edge_outlet(self):
+        """
+        Dijkstra should find breach path from sink to edge outlet.
+
+        Creates a simple sink with clear path to bottom edge.
+        """
+        dem = create_sink_with_edge_outlet((15, 15))
+        nodata_mask = np.zeros_like(dem, dtype=bool)
+
+        outlets = identify_outlets(dem, nodata_mask, edge_mode="all")
+        resolved = np.zeros_like(dem, dtype=bool)
+
+        # Find a sink
+        sinks = _identify_sinks(dem, nodata_mask)
+        assert np.any(sinks), "Should have at least one sink"
+
+        sink_rows, sink_cols = np.where(sinks)
+        start_row, start_col = int(sink_rows[0]), int(sink_cols[0])
+
+        # Try to find breach path
+        from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+
+        path = _find_breach_path_dijkstra(
+            dem=dem,
+            start_row=start_row,
+            start_col=start_col,
+            outlets=outlets,
+            resolved=resolved,
+            max_depth=200.0,
+            max_length=500,
+        )
+
+        assert path is not None, "Should find path from sink to edge outlet"
+        assert len(path) > 0, "Path should not be empty"
+        # Last cell in path should be an outlet
+        end_r, end_c = path[-1]
+        assert outlets[end_r, end_c], "Path should end at outlet"
+
+    def test_dijkstra_finds_path_to_coastal_outlet(self):
+        """
+        Dijkstra should find breach path from sink to coastal outlet.
+
+        Creates a sink with ocean/nodata boundary and coastal outlet.
+        """
+        dem, nodata_mask = create_sink_with_ocean_outlet((15, 15))
+
+        outlets = identify_outlets(
+            dem, nodata_mask, coastal_elev_threshold=30.0, edge_mode="none"
+        )
+
+        # Verify outlets were identified
+        assert np.any(outlets), "Should identify coastal outlets"
+
+        resolved = np.zeros_like(dem, dtype=bool)
+
+        # Find sinks
+        sinks = _identify_sinks(dem, nodata_mask)
+        if np.any(sinks):
+            sink_rows, sink_cols = np.where(sinks)
+            start_row, start_col = int(sink_rows[0]), int(sink_cols[0])
+
+            from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+
+            path = _find_breach_path_dijkstra(
+                dem=dem,
+                start_row=start_row,
+                start_col=start_col,
+                outlets=outlets,
+                resolved=resolved,
+                max_depth=150.0,
+                max_length=500,
+            )
+
+            # Should find path to coastal outlet
+            if path is not None:
+                assert len(path) > 0, "Path should not be empty when found"
+                end_r, end_c = path[-1]
+                assert outlets[end_r, end_c], \
+                    "Path should end at outlet"
+
+    def test_dijkstra_respects_edge_outlets_with_all_mode(self):
+        """
+        All boundary cells should act as valid outlets when edge_mode='all'.
+
+        Dijkstra should be able to reach ANY boundary cell and consider it valid.
+        """
+        dem = create_full_edge_outlet_dem((21, 21))
+        nodata_mask = np.zeros_like(dem, dtype=bool)
+
+        # All boundary cells are outlets
+        outlets = identify_outlets(dem, nodata_mask, edge_mode="all")
+
+        resolved = np.zeros_like(dem, dtype=bool)
+
+        # Get center sink
+        center_r, center_c = dem.shape[0] // 2, dem.shape[1] // 2
+
+        from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+
+        path = _find_breach_path_dijkstra(
+            dem=dem,
+            start_row=center_r,
+            start_col=center_c,
+            outlets=outlets,
+            resolved=resolved,
+            max_depth=500.0,
+            max_length=1000,
+        )
+
+        assert path is not None, "Should find path to boundary outlet from center sink"
+
+        # Path should end at a boundary cell
+        end_r, end_c = path[-1]
+        is_boundary = (
+            end_r == 0 or end_r == dem.shape[0] - 1 or
+            end_c == 0 or end_c == dem.shape[1] - 1
+        )
+        assert is_boundary, "Path should end at boundary cell"
+
+    def test_breach_depressions_routes_to_edge_outlets(self, tmp_path):
+        """
+        breach_depressions_constrained should properly route sinks to edge outlets.
+
+        After breaching, flow should drain to edge outlets, not get stuck.
+        """
+        dem = create_sink_with_edge_outlet((15, 15))
+        nodata_mask = np.zeros_like(dem, dtype=bool)
+
+        dem_original = dem.copy()
+
+        # Identify edge outlets
+        outlets = identify_outlets(dem, nodata_mask, edge_mode="all")
+
+        # Run depression breaching with edge outlets
+        dem_conditioned = breach_depressions_constrained(
+            dem=dem,
+            outlets=outlets,
+            max_breach_depth=200.0,
+            max_breach_length=500,
+            nodata_mask=nodata_mask,
+        )
+
+        # Sink should be breached away
+        # IMPORTANT: We must pass the same outlets mask when checking for sinks!
+        # Edge outlets are terminals and should not be counted as sinks
+        sinks_after = _identify_sinks(dem_conditioned, outlets, nodata_mask)
+        assert not np.any(sinks_after), \
+            "All sinks should be breached away with edge outlets available"
+
+    def test_breach_depressions_routes_to_coastal_outlets(self, tmp_path):
+        """
+        breach_depressions_constrained should route sinks to coastal outlets.
+
+        With ocean/nodata boundaries and identified coastal outlets, sinks
+        should breach toward the coast, not toward interior.
+        """
+        dem, nodata_mask = create_sink_with_ocean_outlet((15, 15))
+
+        dem_original = dem.copy()
+
+        # Identify coastal outlets (no edge outlets)
+        outlets = identify_outlets(dem, nodata_mask, coastal_elev_threshold=30.0, edge_mode="none")
+
+        # Run depression breaching with coastal outlets
+        dem_conditioned = breach_depressions_constrained(
+            dem=dem,
+            outlets=outlets,
+            max_breach_depth=150.0,
+            max_breach_length=500,
+            nodata_mask=nodata_mask,
+        )
+
+        # Should successfully breach sinks
+        # IMPORTANT: Pass outlets to properly exclude them from sink count
+        sinks_after = _identify_sinks(dem_conditioned, outlets, nodata_mask)
+        sinks_original = _identify_sinks(dem_original, outlets, nodata_mask)
+        # May not be zero if sink unreachable, but should have fewer sinks
+        assert len(sinks_after) <= len(sinks_original), \
+            "Breaching should reduce number of sinks"

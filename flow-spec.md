@@ -1,361 +1,511 @@
-# Flow Accumulation Feature Specification
-## For Elevation Map Blender Render Library
+# Hydrological Flow Routing: Code Specification
 
-### Overview
-Add hydrological flow accumulation analysis to generate two key outputs from DEM data:
-1. **Local annual rainfall** - precipitation at each pixel
-2. **Upslope contributing rainfall** - total water from upstream drainage area
+## Overview
 
-### Inputs
+This document specifies a self-contained hydrological flow routing system operating on a Digital Elevation Model (DEM) raster grid. The pipeline has four stages:
 
-#### Required
-- `dem_path` (str): Path to DEM raster file (GeoTIFF, any standard format)
-- `precipitation_path` (str): Path to annual precipitation raster (mm/year)
-  - Must have same extent/resolution as DEM, or be resampled to match
+1. **Outlet identification** — classify cells that serve as drainage termini
+2. **DEM conditioning** — breach sinks (with constrained depth/length), then minimally fill residuals
+3. **Flow direction** — assign D8 flow directions
+4. **Flow accumulation** — compute upstream contributing area
 
-#### Optional Parameters
-- `output_dir` (str): Directory for output files. Default: same as input DEM
-- `flow_algorithm` (str): Flow routing method. Default: 'd8'
-  - Options: 'd8', 'dinf' (D-infinity for multi-directional flow)
-- `fill_method` (str): Depression filling approach. Default: 'breach'
-  - Options: 'breach', 'fill'
-  - 'breach' is recommended for realistic flow paths
-- `cell_size` (float): Override DEM resolution in meters. Default: extract from raster metadata
-
-### Core Processing Steps
-
-#### 1. Preprocessing
-```
-Load DEM and precipitation rasters
-Verify spatial alignment (extent, resolution, CRS)
-Resample precipitation to match DEM if needed
-```
-
-#### 2. Hydrological Conditioning
-```
-Fill pits (small single-cell depressions)
-Breach or fill depressions (larger flat areas)
-Resolve flats (assign flow direction in flat areas)
-```
-
-#### 3. Flow Direction Calculation
-```
-Apply D8 algorithm:
-  - For each cell, determine steepest downslope neighbor
-  - Encode flow direction (typically 1,2,4,8,16,32,64,128 for 8 neighbors)
-```
-
-#### 4. Flow Accumulation
-```
-Unweighted accumulation:
-  - Count number of upstream cells draining through each pixel
-  - Units: cells or area (cells × cell_size²)
-
-Weighted accumulation (precipitation-weighted):
-  - Sum precipitation values from all upstream cells
-  - Formula: Σ(precipitation_i × cell_area) for all upstream cells i
-  - Units: mm·m² (millimeters × square meters)
-  - Equivalent to cubic meters of water per year when multiplied by cell_size²/1000
-```
-
-### Outputs
-
-#### Required Output Files
-All outputs should be saved as GeoTIFF with same CRS/extent as input DEM:
-
-1. **`flow_direction.tif`**
-   - Flow direction raster (D8 encoding)
-   - Data type: uint8
-   - Values: 1,2,4,8,16,32,64,128 or nodata
-
-2. **`flow_accumulation_area.tif`**
-   - Unweighted drainage area
-   - Data type: float32
-   - Units: cells or square meters (specify in metadata)
-   
-3. **`flow_accumulation_rainfall.tif`** 
-   - Precipitation-weighted accumulation
-   - Data type: float32
-   - Units: mm·m² (document in metadata)
-   - This is the key output: total upstream rainfall
-
-4. **`dem_conditioned.tif`**
-   - Depression-filled/breached DEM
-   - Data type: float32
-   - Units: meters
-
-#### Optional Outputs
-5. **`stream_network.tif`** or **`stream_network.shp`**
-   - Boolean raster or vector polylines
-   - Threshold: cells where flow_accumulation_area > threshold
-   - Recommended threshold: 0.5-1.0 km² drainage area
-
-### Return Values (Python API)
-
-```python
-{
-    'flow_direction': numpy.ndarray or rasterio object,
-    'drainage_area': numpy.ndarray,  # cells draining to each pixel
-    'upstream_rainfall': numpy.ndarray,  # mm·m² of total rainfall
-    'conditioned_dem': numpy.ndarray,
-    'metadata': {
-        'cell_size_m': float,
-        'drainage_area_units': 'cells' or 'square_meters',
-        'total_area_km2': float,
-        'max_drainage_area_km2': float,
-        'max_upstream_rainfall_m3': float,  # converted from mm·m²
-        'algorithm': str,
-        'fill_method': str
-    },
-    'files': {
-        'flow_direction': 'path/to/flow_direction.tif',
-        'drainage_area': 'path/to/flow_accumulation_area.tif',
-        'upstream_rainfall': 'path/to/flow_accumulation_rainfall.tif',
-        'conditioned_dem': 'path/to/dem_conditioned.tif'
-    }
-}
-```
-
-### Example Usage
-
-```python
-from elevation_renderer import flow_accumulation
-
-# Basic usage
-results = flow_accumulation(
-    dem_path='san_diego_dem.tif',
-    precipitation_path='prism_annual_precip.tif'
-)
-
-# Access arrays
-upstream_rainfall = results['upstream_rainfall']  # mm·m² at each pixel
-
-# Convert to annual water volume in cubic meters
-cell_area = results['metadata']['cell_size_m'] ** 2
-annual_water_m3 = upstream_rainfall * cell_area / 1000
-
-# Advanced usage with options
-results = flow_accumulation(
-    dem_path='san_diego_dem.tif',
-    precipitation_path='prism_annual_precip.tif',
-    output_dir='./hydro_outputs',
-    flow_algorithm='dinf',  # Multi-directional flow
-    fill_method='breach',
-    generate_streams=True,
-    stream_threshold_km2=1.0
-)
-```
-
-### Implementation Recommendations
-
-#### Library Choice
-Use **pysheds** or **whitebox** for Python implementation:
-
-**pysheds** (recommended for Python-native workflow):
-```python
-from pysheds.grid import Grid
-
-grid = Grid.from_raster(dem_path)
-dem = grid.read_raster(dem_path)
-
-# Conditioning
-pit_filled = grid.fill_pits(dem)
-flooded = grid.fill_depressions(pit_filled)
-inflated = grid.resolve_flats(flooded)
-
-# Flow direction
-fdir = grid.flowdir(inflated, routing='d8')
-
-# Accumulation
-acc_area = grid.accumulation(fdir, routing='d8')
-
-# Weighted accumulation
-precip = grid.read_raster(precip_path)
-acc_rainfall = grid.accumulation(fdir, weights=precip, routing='d8')
-```
-
-**whitebox** (faster for large datasets, requires binary download):
-```python
-import whitebox
-wbt = whitebox.WhiteboxTools()
-
-wbt.breach_depressions_least_cost(dem=dem_path, output='dem_breached.tif')
-wbt.d8_pointer(dem='dem_breached.tif', output='flow_dir.tif')
-wbt.d8_flow_accumulation(
-    input='dem_breached.tif',
-    output='flow_accum_area.tif'
-)
-wbt.d8_flow_accumulation(
-    input='dem_breached.tif',
-    output='flow_accum_rainfall.tif',
-    weight=precip_path
-)
-```
-
-#### Performance Considerations
-- For DEM > 10,000 × 10,000 pixels: use tiled processing or whitebox
-- For interactive/web applications: pre-compute and cache results
-- Memory usage: ~5× input DEM size (storing intermediate arrays)
-
-#### Validation
-Outputs should satisfy:
-1. All flow directions point downhill (except pits/outlets)
-2. Flow accumulation = 1 at ridgelines/peaks
-3. Flow accumulation increases monotonically downstream
-4. Weighted accumulation ≥ local precipitation × cell area
-5. Mass balance: Σ(precipitation × area) = Σ(outlet flows)
-
-### Edge Cases and Error Handling
-
-#### Input Validation
-```python
-# Check spatial alignment
-assert dem.crs == precip.crs, "CRS mismatch"
-assert dem.bounds == precip.bounds, "Extent mismatch"
-if dem.shape != precip.shape:
-    # Resample precipitation to match DEM
-    precip_resampled = resample(precip, dem.shape, method='bilinear')
-```
-
-#### NoData Handling
-- Preserve nodata pixels throughout pipeline
-- Flow cannot cross nodata boundaries
-- Set accumulation to nodata at nodata pixels
-
-#### Flat Areas
-- Resolve with epsilon gradients or direction rules
-- Document approach in metadata
-
-#### Sinks/Depressions
-- Log count and location of filled/breached depressions
-- Optionally output depression map for quality control
-
-### Integration with Blender
-
-#### Potential Blender Uses
-1. **Geometry displacement**: Use flow accumulation to modulate terrain roughness
-2. **Texture generation**: Map upstream rainfall to shader nodes
-3. **Particle systems**: Emit water particles along high-accumulation paths
-4. **Vegetation distribution**: Dense vegetation in high-accumulation areas
-5. **Animation**: Simulate water flow along drainage network
-
-#### Blender-Specific Output Format
-Optionally export as:
-- **OpenEXR** with multiple channels (elevation, flow_dir, accumulation_area, upstream_rainfall)
-- **Normalized textures** (0-1 range) for direct shader input
-- **32-bit float** for maximum precision
-
-```python
-# Example: Export for Blender
-def export_for_blender(results, output_path):
-    """
-    Export multi-channel EXR for Blender displacement/shading
-    """
-    import OpenEXR
-    import Imath
-    
-    # Normalize arrays to 0-1 for shader use
-    rainfall_norm = normalize(results['upstream_rainfall'])
-    area_norm = normalize(results['drainage_area'])
-    
-    # Create multi-channel EXR
-    header = OpenEXR.Header(width, height)
-    header['channels'] = {
-        'elevation': Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-        'drainage_area': Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-        'upstream_rainfall': Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT))
-    }
-    # ... write EXR
-```
-
-### Testing
-
-#### Unit Tests
-- Test with synthetic DEMs (plane, cone, valley)
-- Verify flow accumulation = analytical solutions
-- Test precipitation weighting with uniform rainfall
-
-#### Integration Tests  
-- Process real-world DEM (e.g., SRTM tile)
-- Compare against reference implementation
-- Validate outputs against known watersheds
-
-#### Example Test Case
-```python
-def test_uniform_rainfall():
-    """Flow accumulation with uniform rain should equal area × rainfall"""
-    dem = create_synthetic_valley()  # 100×100 pixels, 30m resolution
-    precip = np.full_like(dem, 500.0)  # 500 mm/year everywhere
-    
-    results = flow_accumulation(dem, precip)
-    
-    # At outlet, weighted accumulation should equal total basin rainfall
-    outlet_idx = find_outlet(results['flow_direction'])
-    drainage_area_cells = results['drainage_area'][outlet_idx]
-    upstream_rainfall = results['upstream_rainfall'][outlet_idx]
-    
-    expected = drainage_area_cells * 500 * (30**2)  # cells × mm/year × m²/cell
-    assert np.isclose(upstream_rainfall, expected, rtol=0.01)
-```
-
-### Documentation Requirements
-
-#### User-Facing Docs
-- Explain difference between drainage area and upstream rainfall
-- Provide interpretation guide (what do values mean?)
-- Include visualization examples (linear vs log scale)
-- Real-world use cases (watershed delineation, flood modeling, ecology)
-
-#### API Documentation
-- Docstrings for all functions
-- Type hints for all parameters
-- Example code for common workflows
-
-#### Metadata
-Each output GeoTIFF should include:
-```
-TIFFTAG_IMAGEDESCRIPTION: "Precipitation-weighted flow accumulation"
-TIFFTAG_SOFTWARE: "elevation_renderer v1.0"
-Custom tags:
-  - ALGORITHM: "d8"
-  - FILL_METHOD: "breach"
-  - UNITS: "mm·m²" or "cells"
-  - CREATED: ISO timestamp
-  - SOURCE_DEM: input filename
-  - SOURCE_PRECIP: input filename
-```
-
-### Future Enhancements
-
-1. **Multi-directional flow** (D-infinity, MFD algorithms)
-2. **Kinematic routing** (time-of-concentration, hydrograph generation)
-3. **Evapotranspiration** (reduce effective precipitation by ET rates)
-4. **Soil infiltration** (account for permeability, saturation)
-5. **Snowmelt modeling** (elevation-dependent snow accumulation/melt)
-6. **Stream power index** (slope × upstream area for erosion modeling)
-7. **Topographic wetness index** (ln(area / tan(slope)))
-8. **Interactive visualization** (WebGL-based flow path tracing)
+All algorithms operate on a 2D grid of elevation values where NoData cells represent ocean, lakes, or off-map areas.
 
 ---
 
-## Example Output Interpretation
+## 1. Data Structures
 
-For a pixel at coordinates (r, c):
-- `dem[r,c]` = 450m elevation
-- `precipitation[r,c]` = 600 mm/year local rainfall
-- `drainage_area[r,c]` = 2500 cells upstream
-- `upstream_rainfall[r,c]` = 1,500,000 mm·m²
+```
+Grid:
+    nrows, ncols: int
+    elevation: float[nrows][ncols]
+    nodata: bool[nrows][ncols]         # true for ocean, off-map, masked areas
+    outlet: bool[nrows][ncols]         # true for drainage termini
+    flow_dir: int[nrows][ncols]        # D8 direction (0-7 or -1 for outlet/nodata)
+    flow_acc: int[nrows][ncols]        # contributing area (cell count)
+    resolved: bool[nrows][ncols]       # used during conditioning
 
-**Interpretation:**
-- This pixel is at 450m elevation
-- It receives 600mm of rain locally per year
-- 2,500 cells (2500 × 900m² = 2.25 km²) drain through this point
-- The total water from upstream is 1.5M mm·m² = 1,350 m³/year
-- This is equivalent to a stream flow of ~0.043 L/s average annual flow
-- In a storm, this represents the contributing area for peak discharge calculations
+# D8 neighbor encoding (0 = East, counter-clockwise)
+#   5  6  7
+#   4  x  0
+#   3  2  1
+#
+# dx = [1, 1, 0, -1, -1, -1, 0, 1]
+# dy = [0, 1, 1,  1,  0, -1, -1, -1]
+# dist = [1, sqrt(2), 1, sqrt(2), 1, sqrt(2), 1, sqrt(2)]
 
-This information is critical for:
-- Flood risk assessment (how much water can accumulate?)
-- Riparian habitat modeling (perennial vs ephemeral streams)
-- Infrastructure planning (culvert sizing, road crossings)
-- Erosion potential (where does water concentrate?)
+NEIGHBORS: list of (dx, dy, distance) for 8 directions
+```
+
+---
+
+## 2. Stage 1: Outlet Identification
+
+### Goal
+
+Identify cells that act as drainage termini. Water reaching an outlet cell leaves the system.
+
+### Classification Rules
+
+A land cell (not NoData) is an outlet if:
+
+- **Coastal outlet:** The cell is adjacent (8-connected) to an ocean/NoData cell AND the cell's elevation is below a coastal elevation threshold (e.g., 10m above sea level). This prevents high cliffs adjacent to ocean from being spurious outlets.
+- **Edge outlet:** The cell is on the DEM boundary (row 0, row nrows-1, col 0, col ncols-1) AND it is a local minimum along its edge segment, OR it has at least one interior neighbor with steeper slope toward the edge than toward any other neighbor.
+- **Masked basin outlet:** The cell is adjacent to a pre-masked interior NoData region (known lake, endorheic basin). These are optional user-supplied masks.
+
+### Pseudocode
+
+```
+function identify_outlets(grid, coastal_elev_threshold, edge_mode):
+
+    for each cell (r, c) where not grid.nodata[r][c]:
+
+        # --- Coastal outlets ---
+        if any neighbor (nr, nc) is nodata AND grid.elevation[r][c] < coastal_elev_threshold:
+            grid.outlet[r][c] = true
+            continue
+
+        # --- Edge outlets ---
+        if cell is on grid boundary:
+            if edge_mode == "all":
+                grid.outlet[r][c] = true
+            elif edge_mode == "local_minima":
+                # Check if this cell is a local minimum among edge neighbors
+                is_min = true
+                for each edge-adjacent neighbor (nr, nc):
+                    if grid.elevation[nr][nc] < grid.elevation[r][c]:
+                        is_min = false
+                if is_min:
+                    grid.outlet[r][c] = true
+            elif edge_mode == "outward_slope":
+                # Check if any interior neighbor slopes toward this edge cell
+                # more steeply than toward any other neighbor
+                for each interior neighbor (nr, nc):
+                    slope_to_edge = (grid.elevation[nr][nc] - grid.elevation[r][c]) / dist
+                    max_slope_elsewhere = max slope from (nr, nc) to any other neighbor
+                    if slope_to_edge > max_slope_elsewhere:
+                        grid.outlet[r][c] = true
+                        break
+
+        # --- Masked basin outlets (optional) ---
+        if any neighbor (nr, nc) is nodata AND is_interior(nr, nc):
+            # Interior nodata = pre-masked basin
+            grid.outlet[r][c] = true
+```
+
+### Parameters
+
+| Parameter | Description | Typical Value |
+|-----------|-------------|---------------|
+| `coastal_elev_threshold` | Max elevation for coastal outlet | 10m |
+| `edge_mode` | Strategy for boundary outlets | `"all"` or `"local_minima"` |
+
+### Notes
+
+- `edge_mode = "all"` is the safest default — it ensures no artificial endorheic basins form at boundaries. The cost is some fragmentation of edge drainage networks, but this is usually preferable to missed outlets.
+- For domains fully surrounded by coastline (islands), edge outlets may be unnecessary.
+- Outlets should be assigned a virtual elevation of `-infinity` (or a very low sentinel) for the conditioning stage so they always act as sinks in the priority queue.
+
+---
+
+## 3. Stage 2: DEM Conditioning — Constrained Breach + Residual Fill
+
+This is the most complex stage. It has two sub-steps:
+
+### 3.1 Constrained Least-Cost Breaching (Lindsay 2016)
+
+#### Goal
+
+For each depression (pit), carve the least-cost path to an already-resolved (draining) cell, subject to maximum breach depth and length constraints. This removes spurious sinks while preserving large legitimate basins.
+
+#### Algorithm: Priority-Flood Breach
+
+This combines pit identification and breach resolution in a single priority-queue sweep starting from outlets and working inward by ascending elevation.
+
+```
+function breach_depressions(grid, max_breach_depth, max_breach_length, epsilon):
+
+    # Priority queue: (elevation, row, col), min-heap by elevation
+    PQ = MinHeap()
+
+    # Initialize: seed queue with all outlet cells
+    for each cell (r, c) where grid.outlet[r][c]:
+        grid.resolved[r][c] = true
+        PQ.push( (grid.elevation[r][c], r, c) )
+
+    # Also seed with nodata-adjacent cells that aren't outlets
+    # (they border the domain edge implicitly)
+
+    # Process cells in order of ascending elevation
+    while PQ is not empty:
+        (elev, r, c) = PQ.pop()
+
+        for each neighbor (nr, nc, dist) of (r, c):
+            if grid.resolved[nr][nc] or grid.nodata[nr][nc]:
+                continue
+
+            n_elev = grid.elevation[nr][nc]
+
+            if n_elev >= elev:
+                # Neighbor is higher or equal — it drains naturally to (r,c)
+                # (or will after epsilon enforcement)
+                grid.resolved[nr][nc] = true
+                PQ.push( (n_elev, nr, nc) )
+
+            else:
+                # Neighbor is LOWER than current cell — it's in a depression
+                # We need to find a breach path OUT of this depression
+                breach_path = find_breach_path(grid, nr, nc,
+                                               max_breach_depth,
+                                               max_breach_length)
+
+                if breach_path is not None:
+                    # Apply the breach: lower cells along path
+                    apply_breach(grid, breach_path, epsilon)
+                    grid.resolved[nr][nc] = true
+                    PQ.push( (grid.elevation[nr][nc], nr, nc) )
+                else:
+                    # Cannot breach within constraints — mark for filling later
+                    # Push with ORIGINAL elevation; fill step will handle it
+                    grid.resolved[nr][nc] = true
+                    PQ.push( (n_elev, nr, nc) )
+```
+
+**Note:** The above is a simplified sketch. The actual Lindsay (2016) algorithm integrates breaching directly into the priority-flood framework more tightly. An alternative (and possibly cleaner) implementation is a two-pass approach:
+
+#### Alternative: Two-Pass Breach
+
+```
+function breach_depressions_two_pass(grid, max_breach_depth, max_breach_length, epsilon):
+
+    # Pass 1: Identify all sink cells (cells with no downslope neighbor)
+    sinks = []
+    for each cell (r, c) where not grid.nodata[r][c] and not grid.outlet[r][c]:
+        has_downslope = false
+        for each neighbor (nr, nc, dist):
+            if grid.nodata[nr][nc]: continue
+            if grid.elevation[nr][nc] < grid.elevation[r][c]:
+                has_downslope = true
+                break
+        if not has_downslope:
+            sinks.append( (r, c) )
+
+    # Sort sinks by elevation (process lowest first to avoid cascading issues)
+    sort sinks by grid.elevation ascending
+
+    # Pass 2: For each sink, attempt breach
+    for each (r, c) in sinks:
+        # Skip if already resolved by a previous breach
+        if cell_has_downslope_path_to_outlet(grid, r, c):
+            continue
+
+        breach_path = find_breach_path(grid, r, c,
+                                       max_breach_depth,
+                                       max_breach_length)
+        if breach_path is not None:
+            apply_breach(grid, breach_path, epsilon)
+```
+
+#### find_breach_path — Dijkstra Least-Cost Path
+
+```
+function find_breach_path(grid, start_r, start_c, max_depth, max_length):
+    # Find least-cost path from sink to a cell that can drain
+    # (an outlet, or a cell lower than the sink with a path to an outlet)
+    #
+    # Cost metric: total elevation that must be removed along the path
+
+    start_elev = grid.elevation[start_r][start_c]
+
+    # Dijkstra from the sink cell
+    # State: (cumulative_cost, path_length, row, col, parent)
+    DPQ = MinHeap()
+    DPQ.push( (0, 0, start_r, start_c, None) )
+    visited = {}
+    parent_map = {}
+
+    while DPQ is not empty:
+        (cost, length, r, c, parent) = DPQ.pop()
+
+        if (r, c) in visited:
+            continue
+        visited[(r, c)] = cost
+        parent_map[(r, c)] = parent
+
+        # Check termination: have we reached a cell that drains?
+        # A cell "drains" if it's resolved (has a path to an outlet)
+        # and its elevation is <= start_elev (so water flows downhill out)
+        if grid.resolved[r][c] and grid.elevation[r][c] <= start_elev:
+            return reconstruct_path(parent_map, start_r, start_c, r, c)
+
+        if grid.outlet[r][c]:
+            return reconstruct_path(parent_map, start_r, start_c, r, c)
+
+        # Constraint checks
+        if length >= max_length:
+            continue  # Don't expand further from this cell
+
+        for each neighbor (nr, nc, dist) of (r, c):
+            if (nr, nc) in visited or grid.nodata[nr][nc]:
+                continue
+
+            # Cost to breach through this neighbor:
+            # If neighbor is higher than the start sink, we must carve it
+            # down to at most start_elev (minus epsilon per step)
+            target_elev = start_elev  # The breach path must be <= sink elev
+            breach_depth_here = max(0, grid.elevation[nr][nc] - target_elev)
+
+            if breach_depth_here > max_depth:
+                continue  # Would exceed max breach depth at this cell
+
+            new_cost = cost + breach_depth_here
+            new_length = length + 1
+
+            DPQ.push( (new_cost, new_length, nr, nc, (r, c)) )
+
+    # No viable breach path found within constraints
+    return None
+```
+
+#### apply_breach — Carve the Path
+
+```
+function apply_breach(grid, path, epsilon):
+    # path is a list of (r, c) from sink to drain-point
+    # Enforce monotonically decreasing elevation along the path
+
+    # Work backward from the drain-point (end of path) to the sink (start)
+    # The drain-point elevation is the baseline
+    n = len(path)
+    drain_r, drain_c = path[n - 1]
+    base_elev = grid.elevation[drain_r][drain_c]
+
+    for i from (n - 2) down to 0:
+        r, c = path[i]
+        required_elev = base_elev + epsilon * (n - 1 - i)
+        # Only lower cells, never raise them
+        if grid.elevation[r][c] > required_elev:
+            grid.elevation[r][c] = required_elev
+```
+
+### 3.2 Residual Fill — Priority-Flood (Barnes et al. 2014)
+
+After breaching, some sinks may remain (those that couldn't be breached within constraints). Fill these minimally.
+
+```
+function priority_flood_fill(grid, epsilon):
+    # Standard priority-flood with epsilon gradient to resolve flats
+
+    PQ = MinHeap()
+    in_queue = bool[nrows][ncols] initialized to false
+
+    # Seed with all outlet cells and nodata-adjacent land cells
+    for each cell (r, c) where grid.outlet[r][c]:
+        PQ.push( (grid.elevation[r][c], r, c) )
+        in_queue[r][c] = true
+
+    # Also seed with all edge cells (if they are outlets)
+    # and cells adjacent to nodata
+    for each cell (r, c) on grid boundary or adjacent to nodata:
+        if not grid.nodata[r][c] and not in_queue[r][c]:
+            PQ.push( (grid.elevation[r][c], r, c) )
+            in_queue[r][c] = true
+
+    while PQ is not empty:
+        (elev, r, c) = PQ.pop()
+
+        for each neighbor (nr, nc, dist) of (r, c):
+            if in_queue[nr][nc] or grid.nodata[nr][nc]:
+                continue
+
+            in_queue[nr][nc] = true
+
+            if grid.elevation[nr][nc] < elev + epsilon:
+                # This cell is in a depression — raise it
+                grid.elevation[nr][nc] = elev + epsilon
+
+            PQ.push( (grid.elevation[nr][nc], nr, nc) )
+```
+
+### Parameters
+
+| Parameter | Description | Typical Value | Notes |
+|-----------|-------------|---------------|-------|
+| `max_breach_depth` | Max elevation drop at any single cell | 5–50m | Domain-dependent |
+| `max_breach_length` | Max cells in breach path | 10–100 cells | Resolution-dependent |
+| `epsilon` | Minimum elevation drop per cell | 1e-5 to 1e-3 | Must exceed float precision noise |
+
+### Notes on Legitimate Basins
+
+Basins that are NOT breached (because they exceed constraints) will be filled. This creates flat areas. Options:
+
+- **Pre-mask known basins** as NoData before running the pipeline. This is the cleanest approach for known lakes or endorheic basins.
+- **Post-hoc identification:** After filling, any flat area larger than a threshold is likely a real basin. These can be masked and the pipeline re-run.
+- **Tuning constraints:** If too many ridges are being breached, tighten `max_breach_depth` and `max_breach_length`. If too many small sinks survive to the fill step, loosen them.
+
+---
+
+## 4. Stage 3: D8 Flow Direction
+
+After conditioning, every non-outlet, non-NoData cell should have at least one lower neighbor (guaranteed by the fill step).
+
+```
+function compute_d8_flow_direction(grid):
+
+    for each cell (r, c):
+        if grid.nodata[r][c]:
+            grid.flow_dir[r][c] = -1
+            continue
+
+        if grid.outlet[r][c]:
+            grid.flow_dir[r][c] = -1  # Terminal; or point toward ocean/edge
+            continue
+
+        max_slope = -infinity
+        best_dir = -1
+
+        for dir in 0..7:
+            nr = r + dy[dir]
+            nc = c + dx[dir]
+
+            if out_of_bounds(nr, nc):
+                continue
+            if grid.nodata[nr][nc] and not grid.outlet[r][c]:
+                continue
+
+            slope = (grid.elevation[r][c] - grid.elevation[nr][nc]) / dist[dir]
+
+            if slope > max_slope:
+                max_slope = slope
+                best_dir = dir
+
+        grid.flow_dir[r][c] = best_dir
+
+        # Safety check: if best_dir is still -1, something went wrong
+        # in conditioning — this cell has no downslope neighbor
+        if best_dir == -1:
+            log_warning("Unresolved flat at", r, c)
+```
+
+---
+
+## 5. Stage 4: Flow Accumulation
+
+Compute upstream contributing area for each cell by traversing the flow network.
+
+```
+function compute_flow_accumulation(grid):
+
+    # Initialize all cells to 1 (each cell contributes itself)
+    for each cell (r, c):
+        if grid.nodata[r][c]:
+            grid.flow_acc[r][c] = 0
+        else:
+            grid.flow_acc[r][c] = 1
+
+    # Compute in-degree for each cell
+    in_degree = int[nrows][ncols] initialized to 0
+
+    for each cell (r, c) where flow_dir[r][c] >= 0:
+        (nr, nc) = downstream_cell(r, c, grid.flow_dir[r][c])
+        in_degree[nr][nc] += 1
+
+    # Topological sort via queue (Kahn's algorithm)
+    queue = Queue()
+    for each cell (r, c) where not grid.nodata[r][c]:
+        if in_degree[r][c] == 0:
+            queue.push( (r, c) )  # Headwater cells (ridgelines)
+
+    while queue is not empty:
+        (r, c) = queue.pop()
+        dir = grid.flow_dir[r][c]
+
+        if dir < 0:
+            continue  # Outlet or nodata
+
+        (nr, nc) = downstream_cell(r, c, dir)
+        grid.flow_acc[nr][nc] += grid.flow_acc[r][c]
+
+        in_degree[nr][nc] -= 1
+        if in_degree[nr][nc] == 0:
+            queue.push( (nr, nc) )
+```
+
+### Notes
+
+- This is O(n) where n is the number of cells — each cell is visited exactly once.
+- If any cell never reaches in-degree 0 during traversal, there's a cycle in the flow network, which indicates a bug in the conditioning step.
+- To extract stream networks, threshold: `stream[r][c] = (flow_acc[r][c] > threshold)`.
+
+---
+
+## 6. Full Pipeline
+
+```
+function hydrological_flow_routing(dem_path, params):
+
+    grid = load_dem(dem_path)
+
+    # Stage 1: Outlets
+    identify_outlets(grid,
+                     coastal_elev_threshold = params.coastal_threshold,
+                     edge_mode = params.edge_mode)
+
+    # Stage 2a: Breach
+    breach_depressions(grid,
+                       max_breach_depth = params.max_breach_depth,
+                       max_breach_length = params.max_breach_length,
+                       epsilon = params.epsilon)
+
+    # Stage 2b: Fill residuals
+    priority_flood_fill(grid, epsilon = params.epsilon)
+
+    # Stage 3: Flow direction
+    compute_d8_flow_direction(grid)
+
+    # Stage 4: Flow accumulation
+    compute_flow_accumulation(grid)
+
+    return grid
+```
+
+---
+
+## 7. Implementation Considerations
+
+### Memory
+
+For large DEMs (e.g., 10k × 10k = 100M cells), each grid layer at 4 bytes is ~400MB. Minimize concurrent arrays. The `resolved`, `in_queue`, and `outlet` booleans can be packed into a single bitfield or status byte per cell.
+
+### Priority Queue Performance
+
+Both breaching and filling are dominated by priority queue operations. Use a binary heap at minimum. For very large grids, a hierarchical bucket queue (exploiting the fact that elevations are often quantized to integer mm or cm) can be significantly faster.
+
+### Epsilon Selection
+
+- Too small: floating point accumulation errors create ties or reversals
+- Too large: distorts elevations in large filled areas
+- Rule of thumb: `epsilon = 1e-5 * cell_resolution` (e.g., 1e-4 for 10m DEM)
+- For integer DEMs, use `epsilon = 1` in the native units (e.g., 1mm if elevation is in mm)
+
+### Flat Resolution
+
+After filling, flat areas may span many cells. The epsilon gradient imposed during priority-flood provides implicit flat resolution — cells filled later get slightly higher elevations, creating a gradient toward the outlet. This is usually sufficient for D8 but can produce unrealistic parallel drainage on wide flats. For better flat handling, see Garbrecht & Martz (1997) or Barnes et al. (2014) "An Efficient Assignment of Drainage Direction Over Flat Surfaces."
+
+### Parallelism
+
+- Flow accumulation is inherently sequential (topological order dependency)
+- D8 direction is embarrassingly parallel (each cell independent)
+- Priority-flood and breaching are harder to parallelize; domain decomposition with halo exchange is possible but complex. For most applications, the serial versions are fast enough on modern hardware (100M cells in ~30 seconds in C/Rust, ~5 minutes in Python with numpy).
+
+---
+
+## References
+
+- Barnes, R., Lehman, C., & Mulla, D. (2014). Priority-flood: An optimal depression-filling and watershed-labeling algorithm for digital elevation models. *Computers & Geosciences*, 62, 117–127.
+- Garbrecht, J., & Martz, L.W. (1997). The assignment of drainage direction over flat surfaces in raster digital elevation models. *Journal of Hydrology*, 193, 204–213.
+- Lindsay, J.B. (2016). Efficient hybrid breaching-filling sink removal methods for flow path enforcement in digital elevation models. *Hydrological Processes*, 30, 846–857.
+- Lindsay, J.B., & Creed, I.F. (2005). Removal of artifact depressions from digital elevation models. *Hydrological Processes*, 19, 3113–3126.
+- O'Callaghan, J.F., & Mark, D.M. (1984). The extraction of drainage networks from digital elevation data. *Computer Vision, Graphics, and Image Processing*, 28, 323–344.
+- Tarboton, D.G. (1997). A new method for the determination of flow directions and upslope areas in grid digital elevation models. *Water Resources Research*, 33, 309–319.
+
