@@ -558,3 +558,81 @@ def _filter_by_area(geojson: Dict, min_area_km2: float) -> Dict:
             filtered_features.append(feature)
 
     return {"type": "FeatureCollection", "features": filtered_features}
+
+
+def identify_lake_inlets(
+    lake_mask: np.ndarray,
+    dem: np.ndarray,
+    outlet_mask: Optional[np.ndarray] = None,
+) -> Dict[int, list]:
+    """
+    Identify inlet cells for each lake (where water enters from surrounding terrain).
+
+    For each unique lake, finds cells on the lake boundary that are adjacent to
+    lower-elevation non-lake cells. These represent where water naturally flows
+    into the lake from surrounding terrain.
+
+    Parameters
+    ----------
+    lake_mask : np.ndarray
+        Labeled lake mask (0 = no lake, 1+ = lake ID)
+    dem : np.ndarray
+        Conditioned digital elevation model
+    outlet_mask : np.ndarray, optional
+        Boolean outlet mask to exclude outlet cells from inlet identification
+
+    Returns
+    -------
+    dict
+        Mapping of lake_id -> list of (row, col) inlet cell coordinates
+    """
+    inlets = {}
+
+    # D8 neighbor offsets (in row, col format)
+    neighbors = [
+        (-1, 0), (-1, 1),  # N, NE
+        (0, 1), (1, 1),    # E, SE
+        (1, 0), (1, -1),   # S, SW
+        (0, -1), (-1, -1)  # W, NW
+    ]
+
+    # Find unique lake IDs
+    lake_ids = np.unique(lake_mask[lake_mask > 0])
+
+    for lake_id in lake_ids:
+        inlet_cells = []
+        lake_cells = np.where(lake_mask == lake_id)
+
+        if len(lake_cells[0]) == 0:
+            continue
+
+        # Check each lake cell for adjacent non-lake cells with lower elevation
+        for row, col in zip(lake_cells[0], lake_cells[1]):
+            lake_elev = dem[row, col]
+
+            # Check all 8 neighbors
+            for drow, dcol in neighbors:
+                nrow, ncol = row + drow, col + dcol
+
+                # Check bounds
+                if 0 <= nrow < dem.shape[0] and 0 <= ncol < dem.shape[1]:
+                    # Skip if it's another lake cell
+                    if lake_mask[nrow, ncol] > 0:
+                        continue
+
+                    # Skip if it's the outlet
+                    if outlet_mask is not None and outlet_mask[row, col]:
+                        continue
+
+                    neighbor_elev = dem[nrow, ncol]
+
+                    # This is an inlet if neighbor is lower (water flows into lake)
+                    # or equal elevation (neutral flow boundary)
+                    if neighbor_elev <= lake_elev + 0.1:  # Small tolerance for numerical precision
+                        inlet_cells.append((row, col))
+                        break  # One inlet per lake cell is enough
+
+        if inlet_cells:
+            inlets[lake_id] = inlet_cells
+
+    return inlets

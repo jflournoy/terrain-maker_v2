@@ -50,6 +50,7 @@ from src.terrain.flow_accumulation import (
 from src.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
+    identify_lake_inlets,
     create_lake_flow_routing,
 )
 
@@ -537,8 +538,8 @@ def main():
     parser.add_argument('--min-basin-size', type=int, default=50000,
                         help='Minimum basin size (cells) to preserve (legacy backend only, default: 50000)')
     # Spec backend parameters
-    parser.add_argument('--coastal-elev-threshold', type=float, default=10.0,
-                        help='Max elevation for coastal outlets in meters (spec backend, default: 10.0)')
+    parser.add_argument('--coastal-elev-threshold', type=float, default=0.0,
+                        help='Max elevation for coastal outlets in meters (spec backend, default: 0.0)')
     parser.add_argument('--edge-mode', type=str, default='all',
                         choices=['all', 'local_minima', 'outward_slope', 'none'],
                         help='Boundary outlet strategy (spec backend, default: all)')
