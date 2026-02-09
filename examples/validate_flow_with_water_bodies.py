@@ -511,10 +511,10 @@ def main():
     parser.add_argument('--edge-mode', type=str, default='all',
                         choices=['all', 'local_minima', 'outward_slope', 'none'],
                         help='Boundary outlet strategy (spec backend, default: all)')
-    parser.add_argument('--max-breach-depth', type=float, default=10.0,
-                        help='Max vertical breach per cell in meters (spec backend, default: 10.0)')
-    parser.add_argument('--max-breach-length', type=int, default=30,
-                        help='Max breach path length in cells (spec backend, default: 30)')
+    parser.add_argument('--max-breach-depth', type=float, default=25.0,
+                        help='Max vertical breach per cell in meters (spec backend, default: 25.0)')
+    parser.add_argument('--max-breach-length', type=int, default=80,
+                        help='Max breach path length in cells (spec backend, default: 80)')
     parser.add_argument('--epsilon', type=float, default=1e-4,
                         help='Min gradient in filled areas (spec backend, default: 1e-4)')
     args = parser.parse_args()
