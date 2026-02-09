@@ -40,7 +40,9 @@ from src.terrain.flow_accumulation import (
     compute_drainage_area,
     compute_upstream_rainfall,
     condition_dem,
+    condition_dem_spec,
     detect_ocean_mask,
+    detect_endorheic_basins,
     D8_OFFSETS,
 )
 
@@ -215,6 +217,9 @@ def create_validation_images(
     lake_outlets: np.ndarray = None,
     flow_dir_no_lakes: np.ndarray = None,
     drainage_area_no_lakes: np.ndarray = None,
+    # Basin preservation parameters
+    basin_mask: np.ndarray = None,
+    num_basins: int = 0,
 ):
     """Generate visualization images including water body integration."""
 
@@ -269,6 +274,30 @@ def create_validation_images(
         plt.savefig(output_dir / '03_water_bodies.png', dpi=150, bbox_inches='tight')
         plt.close()
         print(f"  Saved: 03_water_bodies.png")
+
+    # 3b. Endorheic Basins (NEW)
+    if basin_mask is not None and np.any(basin_mask):
+        basin_coverage = 100 * np.sum(basin_mask) / basin_mask.size
+
+        fig, ax = plt.subplots(figsize=(12, 10))
+
+        # Show elevation as background
+        im_dem = ax.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
+
+        # Overlay basins in purple/magenta
+        basin_display = np.ma.masked_where(~basin_mask, basin_mask.astype(float))
+        ax.imshow(basin_display, cmap='Purples', alpha=0.7, vmin=0, vmax=1)
+
+        plt.colorbar(im_dem, ax=ax, label='Elevation (m)', shrink=0.8)
+        ax.set_title(f'3b. Detected Endorheic Basins ({basin_coverage:.2f}% of area)',
+                    fontsize=14, fontweight='bold')
+        ax.set_xlabel('Column')
+        ax.set_ylabel('Row')
+
+        plt.tight_layout()
+        plt.savefig(output_dir / '03b_endorheic_basins.png', dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"  Saved: 03b_endorheic_basins.png")
 
     # 4. Conditioned DEM
     save_plot(
@@ -432,6 +461,7 @@ def create_validation_images(
 
     num_lakes = len(np.unique(lake_mask[lake_mask > 0])) if lake_mask is not None else 0
     num_outlets = np.sum(lake_outlets) if lake_outlets is not None else 0
+    basin_cells = np.sum(basin_mask) if basin_mask is not None and np.any(basin_mask) else 0
 
     summary_text = f"""
     ╔══════════════════════════════════════════════════════════╗
@@ -445,11 +475,12 @@ def create_validation_images(
     ║  Drain. Viol.:  {violation_text}                            ║
     ║                                                          ║
     ╠══════════════════════════════════════════════════════════╣
-    ║  Water Bodies                                            ║
+    ║  Water Bodies & Basins                                   ║
     ╠══════════════════════════════════════════════════════════╣
     ║                                                          ║
     ║  Lakes:         {num_lakes:>8}                                  ║
     ║  Outlets:       {num_outlets:>8}                                  ║
+    ║  Endor. Basins: {num_basins:>8}  ({basin_cells:,} cells)     ║
     ║                                                          ║
     ╠══════════════════════════════════════════════════════════╣
     ║  DEM Statistics                                          ║
@@ -517,6 +548,13 @@ def main():
                         help='Max breach path length in cells (spec backend, default: 80)')
     parser.add_argument('--epsilon', type=float, default=1e-4,
                         help='Min gradient in filled areas (spec backend, default: 1e-4)')
+    # Basin detection parameters
+    parser.add_argument('--detect-basins', action='store_true', default=True,
+                        help='Automatically detect and preserve endorheic basins (default: True)')
+    parser.add_argument('--basin-min-size', type=int, default=5000,
+                        help='Minimum endorheic basin size in cells to preserve (default: 5000)')
+    parser.add_argument('--basin-min-depth', type=float, default=1.0,
+                        help='Minimum basin depth in meters to be considered endorheic (default: 1.0)')
     args = parser.parse_args()
 
     # Override target size for full mode if specified
@@ -707,15 +745,45 @@ def main():
             lake_mask = None
             lake_outlets = None
 
-    # Step 5: Condition DEM
+    # Step 5: Detect endorheic basins (before conditioning)
     step_num = 5 if args.data_source != 'synthetic' else 4
+    basin_mask = None
+    endorheic_basins = {}
+
+    if args.detect_basins:
+        print(f"\n{step_num}. Detecting endorheic basins...")
+        basin_mask, endorheic_basins = detect_endorheic_basins(
+            dem,
+            min_size=args.basin_min_size,
+            exclude_mask=ocean_mask,
+            min_depth=args.basin_min_depth,
+        )
+
+        if basin_mask is not None and np.any(basin_mask):
+            num_basins = len(endorheic_basins)
+            basin_coverage = 100 * np.sum(basin_mask) / dem.size
+            print(f"   Found {num_basins} endorheic basin(s)")
+            print(f"   Basin coverage: {basin_coverage:.2f}% of domain")
+            print(f"   Basin sizes: {sorted(endorheic_basins.values(), reverse=True)[:5]} cells")
+        else:
+            print("   No significant endorheic basins detected")
+            basin_mask = None
+
+        step_num += 1
+
+    # Step 6: Condition DEM
     print(f"\n{step_num}. Conditioning DEM (backend={args.backend})...")
 
+    # Create combined mask: ocean + endorheic basins (pre-mask them)
+    conditioning_mask = ocean_mask.copy()
+    if basin_mask is not None and np.any(basin_mask):
+        print(f"   Pre-masking {np.sum(basin_mask):,} basin cells to preserve topography")
+        conditioning_mask = conditioning_mask | basin_mask
+
     if args.backend == 'spec':
-        from src.terrain.flow_accumulation import condition_dem_spec
         dem_conditioned, outlets = condition_dem_spec(
             dem,
-            nodata_mask=ocean_mask,
+            nodata_mask=conditioning_mask,
             coastal_elev_threshold=args.coastal_elev_threshold,
             edge_mode=args.edge_mode,
             max_breach_depth=args.max_breach_depth,
@@ -724,7 +792,7 @@ def main():
         )
     else:
         dem_conditioned = condition_dem(
-            dem, method=args.fill_method, ocean_mask=ocean_mask,
+            dem, method=args.fill_method, ocean_mask=conditioning_mask,
             min_basin_size=args.min_basin_size, min_basin_depth=args.min_basin_depth
         )
 
@@ -812,6 +880,9 @@ def main():
         lake_outlets=lake_outlets,
         flow_dir_no_lakes=flow_dir_no_lakes,
         drainage_area_no_lakes=drainage_area_no_lakes,
+        # Basin preservation
+        basin_mask=basin_mask,
+        num_basins=len(endorheic_basins),
     )
 
     print(f"\n{'='*60}")
