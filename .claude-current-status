@@ -1,685 +1,462 @@
-# Claude Current Status
-Last updated: 2026-02-02
+# Current Status - 2026-02-09
 
-## Current Work: San Diego Demo Documentation (COMPLETED ✅)
+## Latest: TDD Refactor - Basin Preservation Complete ✅
 
-### Added San Diego Demo as First Example (2026-02-02 08:12)
+Successfully reviewed and refactored basin preservation mechanism to ensure large basins (like Salton Sea) are not filled.
 
-**Task:** Add San Diego demo to documentation as the first example, positioned as a minimal soup-to-nuts render example.
+### What Was Done
 
-**Files Modified:**
-1. [docs/source/examples/san_diego_demo.md](docs/source/examples/san_diego_demo.md:1) - Created comprehensive documentation
-2. [docs/images/san_diego_demo.png](docs/images/san_diego_demo.png:1) - Copied rendered image
-3. [docs/source/index.rst](docs/source/index.rst:16) - Updated to make San Diego first example
+**1. Reviewed Basin Preservation Logic**
+- Basin preservation already implemented in `condition_dem()` with two independent mechanisms
+- `min_basin_size`: Detects and preserves endorheic basins >= N cells
+- `max_fill_depth`: Preserves basins requiring > N meters of fill depth
+- Both mechanisms can work together
 
-**Documentation Structure:**
-- **Overview**: Positioned as complete minimal example (~180 lines)
-- **Quick Start**: Simple command-line usage
-- **Complete Pipeline**: 6 steps from download → render
-  1. Download DEM data from NASA
-  2. Load DEM files
-  3. Create and transform terrain
-  4. Setup colors and water detection
-  5. Create mesh
-  6. Setup scene and render
-- **Key Features**: NASA integration, transform pipeline, high-quality rendering
-- **Command-Line Options**: All script arguments documented
-- **API Reference**: Links to 7 key functions
-- **Comparison**: Explains what makes this "minimal" vs other examples
+**2. Added Comprehensive Salton Sea Test**
+- New test: `test_salton_sea_scenario()` in tests/test_flow_accumulation.py (lines 865-975)
+- Validates all six aspects of basin preservation:
+  1. Basin gets filled when preservation disabled
+  2. Basin preserved with size-based threshold
+  3. Basin preserved with depth-based threshold
+  4. Deep basins respected with low fill threshold
+  5. Both thresholds work together
+  6. Endorheic basin detection works correctly
 
-**What Makes This Example Special:**
-- Complete end-to-end workflow (soup-to-nuts)
-- NASA Earthdata download integration
-- Automatic DEM file extraction and merging
-- Transform pipeline demonstration
-- High-quality rendering with HDRI lighting
-- Production-ready output (~180 lines including args/comments)
+**3. Refactored `condition_dem()` for Clarity**
+- Added comprehensive comments explaining basin preservation logic
+- Organized code into clear sections:
+  - Basin preservation logic (lines 3098-3116)
+  - Size-based preservation (lines 3119-3128)
+  - Main depression filling (lines 3130-3140)
+  - Depth-based preservation (lines 3142-3147)
+- Improved docstring with detailed explanation of preservation mechanisms
 
-**Why First?**
-- Most approachable for new users
-- Shows complete workflow without overwhelming features
-- Clear progression: download → load → transform → render
-- Single data source (elevation only, no scores/roads)
-- All essential terrain-maker concepts in one place
+### Test Results
 
-**Next Examples Build On This:**
-- {doc}`elevation` - Multiple camera views, advanced water detection
-- {doc}`sledding` - Score-based coloring with SNODAS data
-- {doc}`combined_render` - Roads, parks, multiple data layers
+All basin-related tests passing:
+- `test_condition_dem_preserves_large_basins` ✅
+- `test_condition_dem_preserves_deep_basins` ✅
+- `test_detect_endorheic_basins` ✅
+- `test_salton_sea_scenario` ✅ (NEW)
+- `TestOutletIdentification::test_masked_basin_outlets` ✅
+
+### Key Takeaway
+
+**The system already correctly preserves large basins like the Salton Sea.** Usage:
+
+```python
+# Preserve basins >= 10,000 cells (Salton Sea-like)
+dem_conditioned = condition_dem(dem, min_basin_size=10000)
+
+# OR: Preserve basins requiring > 50m fill depth
+dem_conditioned = condition_dem(dem, max_fill_depth=50.0)
+
+# OR: Use both mechanisms together
+dem_conditioned = condition_dem(dem, min_basin_size=10000, max_fill_depth=50.0)
+```
+
+### TDD Cycle Completed
+
+- 🔴 RED: Identified requirements through basin preservation tests
+- 🟢 GREEN: Verified existing implementation works correctly
+- 🔄 REFACTOR: Added test coverage and improved code documentation
+- ✅ COMMIT: Ready for production
 
 ---
 
-## Previous Work: Camera Positioning Improvements (COMPLETED ✅)
+## Previous: Flow Computation Caching - COMPLETE ✅
 
-### Projection-Based Frame Centering (2026-01-31) - TDD GREEN PHASE COMPLETE ✅
+Added caching support to `flow_accumulation()` to avoid recomputation of expensive flow analysis.
 
-**TDD Cycle Complete:**
-1. 🔴 **RED**: Wrote 9 tests defining projection and centering behavior
-2. 🟢 **GREEN**: Implemented projection-based centering with iterative convergence
-3. 🔄 **REFACTOR**: Optimized performance (28x speedup) and clarified edge handling
+### New Parameters
 
-**Implementation Summary:**
-- **Function**: `compute_mesh_screen_bbox()` at [scene_setup.py:663-774](src/terrain/scene_setup.py#L663-L774)
-  - Projects mesh vertices to normalized device coordinates (NDC)
-  - Returns screen-space bounding box with center, width, height
-  - Optimized mode: projects only 8 bbox corners instead of all vertices (28x speedup)
-  - Edge extrusion handling: `exclude_base=False` (default) includes extrusion, background excluded
+```python
+flow_accumulation(
+    dem_path="dem.tif",
+    precipitation_path="precip.tif",
+    cache=True,           # Enable caching (default: False)
+    cache_dir="./cache",  # Optional custom cache directory (default: DEM's directory)
+)
+```
 
-- **Integration**: Updated `position_camera_relative()` at [scene_setup.py:982-1071](src/terrain/scene_setup.py#L982-L1071)
-  - Iterative convergence algorithm (max 5 iterations, 2% tolerance)
-  - FOV-based adjustment scaling: `2 * distance * tan(fov/2) * dampening`
-  - Dampening factor: 0.5 for stable convergence
-  - Updates camera target position using orientation vectors (cam_right, cam_up)
+### Cache Key
 
-**Key Fixes:**
-1. **Matrix staleness** (Initial bug): Added `bpy.context.view_layer.update()` before projection
-2. **Convergence direction** (Divergence bug): Changed from negative to positive adjustment
-3. **Performance** (28 sec → <1 sec): Use `use_bbox_only=True` for large meshes
-4. **Edge extrusion** (Clarification): Keep `exclude_base=False` to include extrusion in centering
+Cache is invalidated when any of these change:
+- DEM file modification time
+- backend (spec, legacy, pysheds)
+- max_cells / target_vertices
+- fill_method, mask_ocean, ocean_elevation_threshold
+- coastal_elev_threshold, edge_mode, max_breach_depth, max_breach_length, epsilon
 
-**Blender Coordinate System Quirks:**
-- Camera at `-Z` looking at origin has mirrored view
-- World `+X` appears LEFT on screen, world `-X` appears RIGHT
-- Camera local `+X` → world `-X` (screen-right vector)
-- Camera local `+Y` → world `+Y` (screen-up vector)
+### Cached Files
 
-**Tests:**
-- [tests/test_camera_projection.py](tests/test_camera_projection.py:1) - 6 passing, 3 skipped ✓
-- Tests cover: projection basics, coordinate system, camera orientation
-- Skipped tests: High-level centering convergence (require full integration)
+| File | Contents |
+|------|----------|
+| `flow_direction.tif` | D8 flow direction grid |
+| `flow_accumulation_area.tif` | Drainage area (cell count) |
+| `flow_accumulation_rainfall.tif` | Upstream rainfall |
+| `dem_conditioned.tif` | Pit-filled DEM |
+| `flow_cache_metadata.json` | Parameters + timestamps |
 
-**Status: COMPLETE AND TESTED**
+### Test Results
+
+12 new tests added to `tests/test_flow_accumulation.py::TestFlowComputationCaching`:
+- All 12 passing ✅
+- Full suite: 89/90 passing (1 pre-existing failure)
+
+### TDD Cycle
+
+1. 🔴 RED: Wrote 12 failing tests for caching API
+2. 🟢 GREEN: Implemented cache check/load/save logic
+3. 🔄 REFACTOR: Moved imports to module level
+
+### Key Functions Added
+
+- `_get_cache_key_params()` - Build cache key from parameters
+- `_get_dem_mtime()` - Get DEM file modification time
+- `_validate_cache()` - Check if cache is valid
+- `_load_from_cache()` - Load results from cache files
+- `_save_to_cache()` - Save results + metadata to cache
+
+---
+
+## Previous: Two-Phase Parallel Dijkstra Breaching - COMPLETE ✅
+
+Implemented true multi-core parallelization using Numba prange, bypassing Python's GIL.
+
+### Implementation
+
+**Two-Phase Parallel Approach**:
+
+1. **Phase 1**: Process "black" checkerboard cells in parallel
+   - Sinks are clustered using checkerboard pattern (grid_size = 2 × max_breach_length)
+   - Sinks in same batch are guaranteed to be far enough apart that paths won't overlap
+   - Uses `numba.prange` for true multi-core parallelism
+
+2. **Phase 2**: Process "white" checkerboard cells in parallel
+   - Same parallel approach for remaining sinks
+   - Both phases use all CPU cores
+
+**Key Functions Added**:
+- `_dijkstra_single_sink()` - JIT worker function for parallel calls
+- `_breach_sinks_parallel_batch()` - Parallel batch processor using prange
+- `_cluster_sinks_checkerboard()` - Clusters sinks for parallel processing
+
+### Performance Summary
+
+| Optimization | Speedup | Parallelism |
+|--------------|---------|-------------|
+| Parallel JIT sink identification | 10-20x | ✅ Multi-core |
+| **Parallel Dijkstra breaching** | **10-20x** | ✅ Multi-core (NEW) |
+| JIT Dijkstra compilation | 5-10x | Per-search |
+| Shallow sink filtering | 2-5x | N/A |
+| **Combined** | **~100-400x** | **All cores active** |
+
+### How It Works
+
+```
+Stage 2a: Constrained Breaching
+├── Identify sinks (parallel JIT, all cores)
+├── Cluster sinks (checkerboard pattern)
+├── Phase 1: Process "black" cells (parallel prange, all cores)
+│   └── Apply breaches (serial, updates resolved)
+├── Phase 2: Process "white" cells (parallel prange, all cores)
+│   └── Apply breaches (serial, updates resolved)
+└── Done
+```
+
+### Test Results
+- All 77/78 tests passing ✅
+- 1 pre-existing failure (mass_balance_multiple_outlets)
+
+### Important: max_breach_length Parameter
+
+If breaching fails (0 breached), increase max_breach_length:
 ```bash
-# All tests pass
-uv run pytest tests/test_camera_projection.py -v
-
-# Ready for production use
-python examples/san_diego_demo.py --skip-download
+npm run flow:validate:complete -- --target-size 2500 --bigness full --backend spec --max-breach-length 500
 ```
-
-Expected: Mesh properly centered in frame with edge extrusion included.
 
 ---
 
-### Camera Focal Length & Centering Fixes (2026-01-30)
+## Previous: Spec-Compliant Flow Algorithms - COMPLETE ✅
 
-**Issues Identified:**
-1. **Focal length scaling**: Distance parameter doesn't account for focal length in diagonal mode
-   - 50mm works correctly (reference lens)
-   - 100mm (telephoto) appears too zoomed in at same distance
-   - 24mm (wide angle) appears too zoomed out at same distance
+Successfully implemented spec-compliant flow accumulation algorithms based on flow-spec.md following Test-Driven Development. All 22 unit tests pass, integration test successful.
 
-2. **Frame centering**: Mesh geometric center is at frame center, but mesh as whole appears off-center
-   - Example: From south-southwest view, mesh touches bottom and right edges but has gaps at top and left
-   - Issue: Looking at 3D geometric center doesn't account for perspective distortion
-   - Need: Center the 2D projection of the mesh in the camera frame
+### Implementation Summary
 
-**Fixes Implemented:**
+**New Functions Added:**
+1. `identify_outlets()` - Stage 1: Outlet classification (coastal, edge, masked) - [Line 1070](src/terrain/flow_accumulation.py#L1070)
+2. `breach_depressions_constrained()` - Stage 2a: Lindsay (2016) breaching - [Line 1489](src/terrain/flow_accumulation.py#L1489)
+3. `priority_flood_fill_epsilon()` - Stage 2b: Barnes (2014) fill with epsilon - [Line 1616](src/terrain/flow_accumulation.py#L1616)
+4. `condition_dem_spec()` - Orchestrator for 3-stage pipeline - [Line 1718](src/terrain/flow_accumulation.py#L1718)
 
-✅ **Fix 1: Focal length scaling in diagonal mode**
-- Location: [src/terrain/scene_setup.py:876-880](src/terrain/scene_setup.py#L876-L880)
-- Change: Scale distance by `focal_length / 50.0` to maintain consistent framing
-- Formula: `actual_distance = distance * mesh_diagonal * (focal_length / 50.0)`
-- Rationale: FOV scales inversely with focal length, so distance must scale proportionally
-- Impact: 100mm lens at distance=1.0 now equivalent to 50mm at distance=2.0
+**API Changes:**
+- Updated `flow_accumulation()` with `backend` parameter: "legacy", "spec", or "pysheds"
+- Added spec parameters: `coastal_elev_threshold`, `edge_mode`, `max_breach_depth`, `max_breach_length`, `epsilon`
+- **Default backend changed to "spec"** (alpha - no backward compatibility needed)
 
-✅ **Fix 2: Frame centering with `center_in_frame` parameter**
-- Location: [src/terrain/scene_setup.py:695-710](src/terrain/scene_setup.py#L695-L710)
-- Added parameter: `center_in_frame=True` (default enabled, backward compatible with override)
-- Logic: [src/terrain/scene_setup.py:904-927](src/terrain/scene_setup.py#L904-L927)
-- Adjustments:
-  - **Vertical offset**: If camera above mesh, look lower; if below, look higher
-    - Offset = -0.15 × sign(elevation_diff) × mesh_height
-    - Compensates for perspective making near parts appear larger
-  - **Horizontal offset**: Offset target away from camera direction
-    - Offset = 0.1 × mesh_diagonal in camera direction
-    - Centers mesh horizontally in frame
-- Updated wrapper: [src/terrain/core.py:248-319](src/terrain/core.py#L248-L319)
+### Test Results
 
-**Usage Examples:**
+**Unit Tests: 22/22 passing (100%)**
+- Outlet identification: 8/8 ✅
+- Constrained breaching: 7/7 ✅
+- Priority-flood fill: 7/7 ✅
+
+**Integration Test: PASSED ✅**
+- Legacy backend: 28 outlets, max drainage 3 cells, zero cycles
+- Spec backend: 25 outlets (-11%), max drainage 4 cells, zero cycles
+- Spec backend breached depression (5.0 → 10.0002) vs filled flat (5.0 → 15.0)
+- Flow directions: 93.9% agreement (expected difference)
+
+### Key Benefits
+
+1. **Reduced Fragmentation**: 11% fewer outlets through proper outlet identification
+2. **Better Terrain Preservation**: Selective breaching instead of complete filling
+3. **Fixes High-Res Issues**: Handles noisy DEMs through constrained breaching
+4. **Fixes River Flow**: Proper drainage patterns on all resolutions
+5. **No Workarounds**: Eliminates need for `_fix_coastal_flow`, `fill_small_sinks`
+
+### Quick Test Commands
+
+```bash
+# Run all tests
+uv run pytest tests/test_flow_accumulation.py -v
+
+# Compare backends
+python examples/validate_flow_complete.py --bigness medium --backend legacy --output output/legacy
+python examples/validate_flow_complete.py --bigness medium --backend spec --output output/spec
+```
+
+### Documentation Updated
+
+- [examples/FLOW_TESTING_GUIDE.md](examples/FLOW_TESTING_GUIDE.md) - Added spec backend section with usage examples
+- [.claude-current-status](.claude-current-status) - This file
+
+### Next Steps
+
+1. Test on large real DEMs (San Diego, etc.)
+2. Performance profiling (spec vs legacy runtime)
+3. Parameter tuning guide for different terrain types
+4. Consider making spec default in v1.0.0
+
+---
+
+## Previous: Water Bodies with Inlet/Outlet Handling
+
+Added support for known water bodies (lakes, reservoirs) with proper inlet/outlet routing.
+
+### New Files Created
+
+**`src/terrain/water_bodies.py`** - Core water body handling:
+- `download_water_bodies()` - Download from NHD (USA) or HydroLAKES (global)
+- `rasterize_lakes_to_mask()` - Rasterize lake polygons with Affine transform
+- `identify_outlet_cells()` - Convert outlet coordinates to raster cells
+- `create_lake_flow_routing()` - Route all lake cells toward outlet (BFS)
+- `identify_lake_outlets_from_nhd()` - Find outlets from NHD flowlines
+
+**`tests/test_water_bodies.py`** - 11 tests covering:
+- Lake rasterization (3 tests)
+- Outlet detection (2 tests)
+- Lake flow routing (3 tests)
+- Integration with flow accumulation (1 test)
+- Download functions (2 tests)
+
+### Modified Files
+
+**`src/terrain/flow_accumulation.py`**:
+- Added `lake_mask` and `lake_outlets` parameters
+- Integrated lake flow routing after terrain flow direction computation
+- Lake cells use outlet-directed flow, terrain cells use D8 flow
+
+### Usage
 
 ```python
-# Telephoto lens with focal length compensation (auto-scaled distance)
-camera = position_camera_relative(
-    mesh,
-    direction="south-southwest",
-    camera_type="PERSP",
-    focal_length=100,  # Telephoto
-    distance=1.0,      # Auto-scaled to 2.0× distance vs 50mm
-    elevation=1.0,
-)
+from src.terrain.flow_accumulation import flow_accumulation
+from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
 
-# Wide angle with frame centering
-camera = position_camera_relative(
-    mesh,
-    direction="south-southwest",
-    camera_type="PERSP",
-    focal_length=24,   # Wide angle
-    distance=1.0,      # Auto-scaled to 0.48× distance vs 50mm
-    elevation=1.0,
-    center_in_frame=True,  # Mesh centered in 2D frame (default)
-)
+# Option 1: Manual control
+lakes = download_water_bodies(bbox, "./data", data_source="nhd")
+lake_mask, transform = rasterize_lakes_to_mask(lakes, bbox)
 
-# Disable centering for backward compatibility
-camera = position_camera_relative(
-    mesh,
-    direction="south",
-    focal_length=50,
-    center_in_frame=False,  # Look at geometric center (old behavior)
+result = flow_accumulation(
+    dem_path="dem.tif",
+    precipitation_path="precip.tif",
+    lake_mask=lake_mask,
+    lake_outlets=outlet_mask,
 )
 ```
 
-**Testing Needed:**
-- Test with san_diego_demo.py at different focal lengths (24mm, 50mm, 100mm)
-- Verify framing consistency across focal lengths
-- Verify mesh appears centered in frame from different view directions
-- Check that center_in_frame=False preserves old behavior
+### Test Results
+- 66 tests pass (11 new water body + 55 existing flow)
+- 1 pre-existing failing test (mass balance multiple outlets)
+- 1 skipped (requires network)
 
 ---
 
-## Planned Features (Not Yet Implemented)
+## Previous Session: Flow Accumulation High-Resolution Debugging
 
-### 1. Hachure Style Map Rendering
+### Issue Reported
+User experiencing noise in drainage area at high resolution (~10,000×10,000 pixels).
+Stream networks not working. Suspected flow direction algorithm bugs or insufficient filling.
 
-**Description:** Classical cartographic technique using short parallel lines running in direction of steepest slope, with density indicating terrain steepness.
+### Critical Bug Found and Fixed: `_fix_coastal_flow_directions()`
 
-**Reference:** https://github.com/pinakographos/non-planimetric-hachures (Blender→QGIS workflow)
+**Location:** [src/terrain/flow_accumulation.py:619-703](src/terrain/flow_accumulation.py#L619-L703)
 
-**Implementation approach for terrain-maker:**
-- Use existing slope/aspect computation from DEM
-- Generate hachure line placements along steepest descent paths
-- Configurable spacing (denser = steeper slopes)
-- Render as either:
-  - 2D raster overlay
-  - 3D Blender curve/mesh geometry (could be embossed for 3D printing!)
+**Problem:**
+Function was **unconditionally overriding** flow direction for ALL cells adjacent to masked
+cells (ocean/sinks), even if they had valid downslope inland flow directions.
 
-**Key algorithms needed:**
-- Line placement along flow paths (perpendicular to contours)
-- Spacing algorithm based on slope magnitude
-- Short line filtering
-- Optional avoidance zones (roads, water bodies)
+**Impact:** This forced coastal cells to flow directly to ocean, fragmenting drainage networks
+and creating artificial outlets throughout the domain.
 
-**Advantages over external tools:**
-- Integrated with existing terrain pipeline
-- Could combine with other visualizations
-- 3D embossing for physical models
-- Real-time parameter adjustment
-
----
-
-### 2. Ground-Level Peak Progression View
-
-**Description:** Position camera at ground level to see progression/silhouette of peaks and ridgelines, like standing at a scenic viewpoint.
-
-**Use cases:**
-- Identifying good hiking viewpoints
-- Visualizing what you'd see from a location
-- Creating realistic landscape photography compositions
-- Planning scenic overlooks for trails/roads
-
-**Implementation approach:**
-1. **Viewpoint selection:**
-   - Find high prominence points, valley floors with good sightlines
-   - Viewshed analysis to identify locations with good peak visibility
-   - Rank by "interestingness" (number of visible peaks, skyline variation)
-
-2. **Camera positioning:**
-   - Place camera at terrain elevation + eye height (1.5-2m)
-   - Orient toward peaks/ridgelines
-   - Use realistic focal lengths (24-50mm for landscape)
-   - Optional: Generate skyline profile for analysis
-
-3. **Optional enhancements:**
-   - Atmospheric perspective (distance fog)
-   - Realistic lighting (sun position, golden hour)
-   - Vegetation placement (trees in foreground)
-   - Multiple viewpoints with automatic selection
-
-**Technical requirements:**
-- Efficient viewshed computation (GPU-accelerated?)
-- Peak/prominence detection from DEM
-- Line-of-sight calculations
-- Skyline extraction algorithm
-
----
-
-### 3. Trail Elevation Ribbon Visualization
-
-**Description:** Extract cross-sectional elevation slices perpendicular to a trail, stack them into continuous 3D ribbon, then snake/fold to fit in viewport.
-
-**Use cases:**
-- Understanding trail difficulty (elevation gain as slope)
-- Comparing different trail sections side-by-side
-- Identifying challenging/exposed segments
-- Planning trail routes based on elevation profiles
-
-**Implementation approach:**
-
-1. **Trail definition:**
-   - Input: GPX file, polyline, or series of points
-   - Smooth/resample to uniform spacing
-   - Compute tangent/normal vectors at each point
-
-2. **Cross-section sampling:**
-   - At each trail point, extract perpendicular elevation profile
-   - Sample width: configurable (e.g., ±50m on each side of trail)
-   - Vertical exaggeration option for clarity
-   - Store as 2D profile curves
-
-3. **Ribbon mesh construction:**
-   - Stack profiles sequentially along trail path
-   - Connect adjacent profiles to form continuous mesh surface
-   - UV mapping for textures (elevation colors, distance markers)
-   - Optional: Add "ground plane" below ribbon for context
-
-4. **Layout/snaking algorithm:**
-   - **Spiral layout**: Wind ribbon in expanding spiral
-   - **Serpentine**: Back-and-forth pattern (like reading)
-   - **Custom curves**: Follow bezier/spline path
-   - **Optimized packing**: Minimize viewport size while maintaining readability
-   - Interactive controls: rotation, spacing, overlap
-
-5. **Visualization enhancements:**
-   - Color by elevation, slope, exposure, or distance
-   - Distance markers along trail
-   - Grade percentage labels
-   - Overlay trail features (campsites, water sources, viewpoints)
-   - Cross-reference with 2D map projection
-
-**Technical requirements:**
-- Polyline/GPX parsing
-- Perpendicular sampling from path
-- Mesh generation from stacked profiles
-- Layout algorithms (space-filling curves, optimization)
-- UV mapping for textures
-
-**Similar to:**
-- Trail profile "fences" in GIS software
-- River cross-section analysis in hydrology
-- Architectural section-perspective drawings
-- DNA double helix visualizations (similar ribbon geometry)
-
-**Potential extensions:**
-- Multiple trails on same ribbon (side-by-side comparison)
-- Animated "flythrough" along ribbon
-- Interactive selection to highlight trail segment on 3D map
-- Export as SVG for 2D printing
-
----
-
-## Previous Work: TDD - Camera Fitting Distance Mode (COMPLETED)
-
-### TDD Cycle Complete (2026-01-30 22:43)
-
-**Feature:** Photographer-friendly "fitting distance" camera positioning mode
-
-**🔴 RED Phase:**
-- Created [tests/test_camera_positioning.py::TestFittingDistanceMode](tests/test_camera_positioning.py:456) with 5 failing tests
-- Tests defined behavior: distance=1.0 fills frame, maintains framing across elevations
-- All tests failed initially (expected - no implementation yet)
-
-**🟢 GREEN Phase (COMPLETED):**
-- Updated [src/terrain/scene_setup.py](src/terrain/scene_setup.py:695) with distance_mode parameter
-- Updated [src/terrain/core.py](src/terrain/core.py:248) wrapper to pass distance_mode through
-- Implemented view-direction-dependent visible width calculation:
-  - North/South views: use X dimension (width)
-  - East/West views: use Y dimension (depth)
-  - Diagonal views: use diagonal of XY bbox
-- Implemented 3D distance calculation using Pythagorean theorem:
-  - Total distance = fitting_distance × distance
-  - Vertical offset = elevation × mesh_diagonal
-  - Horizontal offset = √(total² - vertical²)
-- **All 5 tests passing ✓**
-- **All 35 camera positioning tests passing ✓**
-
-**Key Implementation Details:**
+**Fix Applied:**
+Added check to only modify pit cells (`flow_dir == 0`):
 ```python
-# Fitting distance mode calculates camera-to-center distance based on FOV
-if distance_mode == "fit":
-    # Calculate visible width based on viewing direction
-    if north/south: visible_width = mesh_size[0]  # X dimension
-    if east/west: visible_width = mesh_size[1]    # Y dimension
-    if diagonal: visible_width = sqrt(X² + Y²)    # Diagonal
-
-    # Distance to fit mesh in frame
-    fitting_distance = visible_width / (2 * tan(FOV/2))
-    total_target_distance = fitting_distance * distance
-
-    # Use Pythagorean theorem for 3D positioning
-    vertical_offset = elevation * mesh_diagonal
-    horizontal_offset = sqrt(total_target_distance² - vertical_offset²)
+# Only fix cells that are pits (flow_dir == 0)
+if flow_dir[i, j] != 0:
+    continue
 ```
+
+This preserves valid flow directions while still fixing coastal pits.
+
+### Diagnostic Tools Created
+
+1. **[examples/diagnose_flow_parameters.py](examples/diagnose_flow_parameters.py)**
+   - Tests multiple parameter combinations side-by-side
+   - Identifies fragmentation (many small outlets)
+   - Generates comparison visualizations
+   - Usage: `python examples/diagnose_flow_parameters.py --dem <path> --precip <path>`
+
+2. **[examples/test_flow_fix.py](examples/test_flow_fix.py)**
+   - Quick verification with synthetic DEMs
+   - Tests slope and valley patterns
+   - Visual drainage area output
+   - Usage: `python examples/test_flow_fix.py`
+
+### Parameter Recommendations for High-Resolution DEMs
+
+For noisy high-resolution DEMs (>1m resolution):
+```python
+flow_accumulation(
+    dem_path=dem_path,
+    precipitation_path=precip_path,
+    fill_method='fill',           # Complete filling instead of breach
+    min_basin_size=10000,         # Preserve only large basins
+    min_basin_depth=2.0,          # Preserve only deeper basins (>2m)
+    fill_small_sinks=50,          # Fill remaining small sinks
+    max_cells=50000,              # Downsample for performance
+)
+```
+
+### Other Potential Issues (Not Yet Addressed)
+
+1. **min_basin_depth default (0.5m) too small** - At high resolution, many noise artifacts
+   >0.5m get preserved as sinks. Recommend 2.0m+ for noisy DEMs.
+
+2. **Breach epsilon (1e-4) might be insufficient** - 0.1mm gradients might not properly
+   route flow in very flat areas. Consider using `fill_method='fill'` instead.
+
+### Next Steps for User
+
+1. Run `python examples/test_flow_fix.py` to verify coastal fix
+2. Run diagnostics on your actual DEM: `python examples/diagnose_flow_parameters.py --dem <path> --precip <path>`
+3. Based on diagnostic results, adjust parameters (see recommendations above)
+4. If still seeing noise after parameter tuning, may need to investigate flat resolution at extreme scales
+
+## Latest Changes
+
+### Optimized `_fill_small_sinks()` for Computational Efficiency
+
+The original implementation was O(n × m) where n=sinks, m=grid_size. At 5000×5000 with 3,500 sinks, this caused timeouts.
+
+**Optimization Approach:**
+1. Single-pass index collection using vectorized numpy operations
+2. Precompute all sink cell coordinates using `np.where` + `np.argsort`
+3. Work on bounding-box cropped regions instead of full grid
+4. Use precomputed indices for final updates (no full-grid scans)
+
+**New Complexity:** O(m + n × k) where k = average sink size
+
+**Performance Results:**
+- Pathological case (443k single-cell sinks on 2000×2000): 9.4s
+- Realistic terrain (~2,000 sinks on 2000×2000): 0.17s
+- All 56 tests pass
+
+### Added `fill_small_sinks` Parameter to `condition_dem()`
+
+Added ability to fill small sinks (local minima) that would create fragmented drainage.
+
+**New Parameter:**
+- `fill_small_sinks: int = None` - Maximum sink size (cells) to fill
+
+**New Function:**
+- `_fill_small_sinks(dem, max_sink_size, mask)` - Iteratively finds and fills small local minima
+
+**Validation Script:**
+- Added `--fill-small-sinks N` argument to `validate_flow_complete.py`
 
 **Usage:**
-```python
-# Photographer-friendly mode (distance=1.0 fills frame)
-camera = position_camera_relative(
-    mesh,
-    direction="south",
-    distance_mode="fit",  # NEW
-    distance=1.0,         # 1.0 = fills frame, 1.5 = 50% farther
-    elevation=0.5,        # Maintains framing at any elevation
-    focal_length=50       # Affects FOV and fitting distance
-)
-
-# Default diagonal mode (backward compatible)
-camera = position_camera_relative(
-    mesh,
-    distance=1.5  # 1.5× mesh diagonal (old behavior)
-)
+```bash
+# Fill sinks smaller than 50 cells
+npm run flow:validate:complete:full -- --fill-small-sinks 50
 ```
 
-**Benefits:**
-- More intuitive for users thinking like photographers
-- distance parameter directly controls framing tightness
-- Elevation changes maintain consistent framing
-- View-direction-aware (considers what's actually visible)
+### How It Works
+1. After main depression filling (priority flood), finds remaining local minima
+2. Labels connected sink regions
+3. For sinks smaller than threshold, raises elevation to spill point
+4. Prints summary: "Filled X small sinks (Y cells) with max_size=Z"
 
-**🔄 REFACTOR Phase:**
-- Code is clean and well-tested
-- No refactoring needed at this time
-- Feature ready for use
+### Test Results (fill_small_sinks threshold comparison)
 
----
+| Threshold | Sinks Filled | Cells Raised | Interior Outlets | Reduction |
+|-----------|--------------|--------------|------------------|-----------|
+| 1         | 1,209        | 1,209        | 32,518          | baseline  |
+| 50        | 2,137        | 6,717        | 30,703          | 5.6%      |
+| 100       | 2,177        | 9,642        | 29,847          | 8.2%      |
+| 500+      | 2,201        | 13,814       | 28,434          | 12.6%     |
 
-## Previous Work: TDD - DEM Downloader Feature
+Note: Sink filling only reduces interior outlets by ~13%, suggesting most fragmentation comes from BFS flat resolution not reaching all cells (separate issue).
 
-### TDD Cycle Complete (2026-01-29)
+## Previous Session (2026-02-07)
 
-**🔴 RED Phase:**
-- Created [tests/test_dem_downloader.py](tests/test_dem_downloader.py:1) with 6 failing tests
-- Tests cover: bbox downloads, tile calculation, place name geocoding, visualization
-- All tests failed with `ModuleNotFoundError` (expected)
+### Implemented Garbrecht-Martz Dual-Gradient Flat Resolution
 
-**🟢 GREEN Phase:**
-- Created [src/terrain/dem_downloader.py](src/terrain/dem_downloader.py:1) with minimal implementation
-- All 6 tests now pass ✓
-- Functions implemented:
-  - `get_srtm_tile_name()` - SRTM tile naming convention
-  - `calculate_required_srtm_tiles()` - Determine tiles for bbox
-  - `download_dem_by_bbox()` - Download DEM by coordinates
-  - `download_dem_by_place_name()` - Download DEM by place name
-  - `display_bbox_on_map()` - Interactive bbox visualization
-  - `_download_srtm_tile()` - Single tile download (stub)
-  - `_geocode_place_name()` - Place name to bbox (stub)
+Fixed the flat resolution algorithm to match the standard Garbrecht-Martz (1997) approach:
 
-**🔄 REFACTOR Phase (IN PROGRESS):**
-- Current implementation is minimal (stubs for actual downloads)
-- Need to implement actual SRTM download logic
-- Need to add geocoding API integration
-- Consider adding progress bars, retries, validation
+**Root Cause:** The original implementation only used ONE gradient (distance from pour points).
+The standard algorithm uses TWO gradients combined:
+1. Gradient TOWARD lower terrain (pour points) - water flows to outlets
+2. Gradient AWAY from higher terrain (high points) - water flows from ridges
 
-### Next Steps for DEM Downloader
+**Changes Made:**
+- `src/terrain/flow_accumulation.py`:
+  - Added high point detection (flat cells adjacent to higher terrain)
+  - Compute second BFS gradient from high points
+  - Combined gradients using Garbrecht-Martz formula
+  - Changed epsilon from 1e-3 to 1e-4 to avoid rounding fragmentation
+  - Changed rounding from 3 decimals (0.001m) to 2 decimals (0.01m)
 
-**To complete the feature:**
-1. Implement actual SRTM tile downloading from NASA Earthdata
-2. Add geocoding using Nominatim or Google Maps API
-3. Add progress tracking and error handling
-4. Add validation of downloaded HGT files
-5. Consider caching/resume capability
-6. Add CLI interface for easy command-line usage
+- `tests/test_flow_accumulation.py`:
+  - Added `TestDualGradientFlatResolution` class with 4 new tests
+  - All 56 tests pass
 
-**To use the current implementation:**
-```python
-from src.terrain.dem_downloader import download_dem_by_bbox, display_bbox_on_map
+### Validation Results (5000x5000)
 
-# Visualize bbox
-bbox = (42.0, -83.5, 42.5, -83.0)
-display_bbox_on_map(bbox, "detroit_bbox.html")
+```
+Flat resolution: 10,567,645 flat cells found
+Flat resolution: 4,358,273 pour points, 5,199,765 high points
 
-# Download (currently stubs)
-files = download_dem_by_bbox(bbox, "data/detroit_dem", "user", "pass")
+Cycles: 0/1000
+Mass Balance: 100.0%
+Drainage violations: 0 cells
 ```
 
----
+### Algorithm References
 
-## Previous Work: Documentation Finalization
+- Garbrecht & Martz (1997): "The assignment of drainage direction over flat surfaces in raster digital elevation models" - J. Hydrol. 193: 204-213
+- Barnes et al. (2014): "An Efficient Assignment of Drainage Direction Over Flat Surfaces" - arXiv:1511.04433
 
-### Completed (2026-01-29)
-
-**Documentation Commits:**
-
-✅ Committed 15 untracked API RST files:
-- Commit: e2806a5 - Added comprehensive API docs for all 15 modules
-- Files: advanced_viz, blender_integration, cache, color_mapping, diagnostics, gpu_ops, gridded_data, materials, mesh_cache, mesh_operations, pipeline, roads, scene_setup, scoring, water
-- **API documentation: 100% module coverage (19/19 modules)**
-
-✅ Fixed Sphinx documentation formatting issues:
-- Commit: 3ec2b84 - Fixed RST syntax in index.rst and roads.py
-- [docs/source/index.rst](docs/source/index.rst:10): Added explicit .md extensions for markdown files
-- [src/terrain/roads.py](src/terrain/roads.py:536): Added :: for proper RST code blocks in docstrings
-- **Resolved all docstring formatting warnings**
-
-✅ Documentation build verification:
-- Build succeeded (6 warnings, all minor duplicates)
-- Down from original indentation/formatting errors
-- All API modules properly documented and building
-
-### Next Steps for Documentation
-
-**Remaining work:**
-1. Document missing examples (xc_skiing, dual_render, roads, pipeline, two_tier_edge)
-2. Add user guides (Tutorial, Custom Scoring, Colormap Selection, Architecture Overview)
-3. Regenerate documentation images if needed
-4. Address duplicate documentation warnings (roads functions in multiple RST files)
-
----
-
-## Previous Work: Documentation Image Generation & Build Integration
-
-### Task
-Automate documentation image generation and integrate into the Sphinx build process.
-
-### Completed Work (2026-01-29)
-
-**Documentation Image Pipeline (COMPLETED):**
-
-✅ Created automated image generation script:
-- [scripts/generate-docs-images.sh](scripts/generate-docs-images.sh:1) - Runs sledding example with REAL data (--all-steps --snodas-dir data/snodas_data)
-- Outputs to docs/images/ subdirectories (01_raw/, 02_slope_stats/, 03_slope_penalties/, 04_score_components/, 05_final/)
-- Uses real DEM (110 files, 36,001 × 39,601 resolution) and real SNODAS snow data
-- Production-quality images (~30 seconds generation time with cached slope stats)
-
-✅ Updated package.json with new npm scripts:
-- `npm run docs:images` - Generate documentation images
-- `npm run docs:build:full` - Generate images + build Sphinx docs (full pipeline)
-- Both integrated into existing docs workflow
-
-✅ Generated all sledding pipeline visualizations:
-- 2 raw input images (DEM, snow depth)
-- 8 slope statistics images (mean, max, min, std, p95, roughness, aspect, aspect_strength)
-- 6 slope penalty images (base_score, cliff_penalty, terrain_consistency, combined_penalty, final_score, score_reduction)
-- 11 score component images (equation, raw inputs, trapezoid scores, synergy bonus, etc.)
-- 11 final score images (linear, percentile, log, power scales, histogram, percentile map, filtered)
-- **Total: 38 images generated**
-
-✅ Updated [docs/source/examples/sledding.md](docs/source/examples/sledding.md:1):
-- Uncommented all image references (removed TODO markers)
-- Fixed image paths to match actual directory structure (e.g., `../../images/02_slope_stats/mean.png`)
-- All 12 key pipeline images now display in docs
-
-✅ Updated [CLAUDE.md](CLAUDE.md:154) with Documentation Images section:
-- Documented `npm run docs:images` and `npm run docs:build:full` workflows
-- Listed image directory structure
-- Explained how to add new documentation images
-
-✅ Verified documentation build:
-- Build succeeded with 5 warnings (down from 71 image warnings)
-- All 12 sledding images successfully copied during build
-- Remaining warnings are docstring formatting issues in roads.py (unrelated to images)
-- **Image warnings: 71 → 0** ✓
-
-**Impact:**
-- Documentation now auto-generates visualization images from examples
-- No manual image creation needed for docs
-- Images always match current code behavior (regenerated from examples)
-- Production-quality images using real DEM and SNODAS data
-- Reasonable generation time (~30s) with cached slope statistics
-- Docs build process now fully automated: `npm run docs:build:full`
-
-### Previous Work: API Documentation Audit & Update
-
-#### Documentation Gap Analysis
-
-**Modules WITHOUT Sphinx API docs (15 missing):**
-- advanced_viz
-- blender_integration
-- cache
-- color_mapping (HEAVILY used in combined_render!)
-- diagnostics
-- gpu_ops
-- gridded_data
-- materials (HEAVILY used in combined_render!)
-- mesh_cache
-- mesh_operations
-- pipeline
-- roads (HEAVILY used in combined_render!)
-- scene_setup (HEAVILY used in combined_render!)
-- scoring
-- water (HEAVILY used in combined_render!)
-
-**Modules WITH Sphinx API docs (4 only):**
-- core ✓
-- data_loading ✓
-- rendering ✓
-- transforms ✓
-
-**Example documentation status:**
-- [docs/source/examples/combined_render.md](docs/source/examples/combined_render.md:1) exists (195 lines)
-- Covers dual colormaps, roads, DEM smoothing, camera/lighting, print quality
-- May need updates for latest features in detroit_combined_render.py (2963 lines)
-
-**API Reference:**
-- [docs/API_REFERENCE.md](docs/API_REFERENCE.md:1) is comprehensive (43K tokens, auto-generated)
-- Covers all 18 modules with full docstring extraction
-- Appears to be up-to-date
-
-### Detroit Combined Render Analysis
-
-**File:** [examples/detroit_combined_render.py](examples/detroit_combined_render.py:1) (2963 lines)
-
-**Features documented in docstring:**
-- Dual colormaps (boreal-mako + rocket)
-- Proximity-based coloring with park clustering
-- Water detection and coloring
-- Sunset-style lighting
-- Geographic transforms (WGS84 → UTM)
-- Mesh density limiting
-- Print quality output
-- Background plane options
-- Two-tier edge extrusion
-- Catmull-Rom smoothing
-- Fractional edges
-
-**APIs used from undocumented modules:**
-- color_mapping: boreal_mako_cmap
-- scene_setup: create_background_plane
-- blender_integration: apply_vertex_colors, apply_road_mask, apply_ring_colors, apply_vertex_positions
-- materials: apply_terrain_with_obsidian_roads, apply_test_material, get_all_colors_choices, get_all_colors_help, get_terrain_materials_choices, get_terrain_materials_help
-- gridded_data: MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-- roads: add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
-- water: identify_water_by_slope
-
-### Recommendation
-
-Priority order for documentation:
-1. **High Priority (heavily used in examples):**
-   - scene_setup (camera positioning, lighting, background)
-   - materials (terrain materials, road materials, color presets)
-   - roads (OSM integration, rasterization, smoothing)
-   - water (slope-based detection)
-   - color_mapping (custom colormaps like boreal_mako)
-   - blender_integration (vertex colors, mesh operations)
-
-2. **Medium Priority (infrastructure):**
-   - cache (pipeline caching)
-   - gridded_data (memory management, tiling)
-   - pipeline (bounds visualization)
-
-3. **Lower Priority:**
-   - advanced_viz (drive-time curves, legends)
-   - diagnostics (debugging tools)
-   - gpu_ops (GPU acceleration)
-   - mesh_cache (mesh caching)
-   - mesh_operations (advanced mesh ops)
-   - scoring (score combination)
-
-### Completed Work
-
-**Phase 1 High-Priority Documentation (COMPLETED 2026-01-29):**
-
-✅ Created 6 Sphinx RST files:
-- [docs/source/api/scene_setup.rst](docs/source/api/scene_setup.rst:1) - Camera, lighting, backgrounds
-- [docs/source/api/materials.rst](docs/source/api/materials.rst:1) - Color presets, material functions
-- [docs/source/api/roads.rst](docs/source/api/roads.rst:1) - OSM integration, rasterization
-- [docs/source/api/water.rst](docs/source/api/water.rst:1) - Slope-based detection
-- [docs/source/api/color_mapping.rst](docs/source/api/color_mapping.rst:1) - Custom colormaps
-- [docs/source/api/blender_integration.rst](docs/source/api/blender_integration.rst:1) - Vertex ops
-
-✅ Updated [docs/source/index.rst](docs/source/index.rst:29) to include new API docs
-
-✅ Verified docstrings in source files (comprehensive, well-formatted)
-
-✅ Updated [docs/source/examples/combined_render.md](docs/source/examples/combined_render.md:168) with:
-- Two-tier edge extrusion section
-- Edge base materials
-- Catmull-Rom smoothing
-- Fractional edges
-- Rectangle edge detection
-
-**Documentation status after Phase 1:**
-- Modules with Sphinx docs: 10/19 (was 4/19)
-- High-priority modules: 6/6 documented ✓
-- Example docs: Updated with advanced features ✓
-- API reference (auto-generated): Already comprehensive ✓
-
-**Phase 2 Medium-Priority Documentation (COMPLETED 2026-01-29):**
-
-✅ Created 3 Sphinx RST files:
-- [docs/source/api/cache.rst](docs/source/api/cache.rst:1) - DEM/transform/pipeline caching
-- [docs/source/api/gridded_data.rst](docs/source/api/gridded_data.rst:1) - Memory-efficient tiling
-- [docs/source/api/pipeline.rst](docs/source/api/pipeline.rst:1) - Dependency graph execution
-
-**Phase 3 Lower-Priority Documentation (COMPLETED 2026-01-29):**
-
-✅ Created 6 Sphinx RST files:
-- [docs/source/api/advanced_viz.rst](docs/source/api/advanced_viz.rst:1) - Horn slope, legends
-- [docs/source/api/diagnostics.rst](docs/source/api/diagnostics.rst:1) - Debug plotting
-- [docs/source/api/gpu_ops.rst](docs/source/api/gpu_ops.rst:1) - PyTorch GPU acceleration
-- [docs/source/api/mesh_cache.rst](docs/source/api/mesh_cache.rst:1) - Blender mesh caching
-- [docs/source/api/mesh_operations.rst](docs/source/api/mesh_operations.rst:1) - Mesh generation
-- [docs/source/api/scoring.rst](docs/source/api/scoring.rst:1) - Terrain suitability scoring
-
-**Final Documentation Status:**
-- **Modules with Sphinx docs: 19/19 (100% coverage!)** ✓✓✓
-- Started: 4/19 (21%)
-- Finished: 19/19 (100%)
-- **All 15 missing modules documented** ✓
-- **Index updated with all new modules** ✓
-
----
-
-## Previous Work: Fixed Fractional Edge Positioning (2026-01-27)
-
-### Summary
-Fixed two bugs with fractional edge positioning in mesh_operations.py.
-
-### Bug #1: Single-tier offset
-**Location**: src/terrain/mesh_operations.py lines 798-800
-
-**Problem**: Code was overwriting correctly-interpolated centered coordinates with uncentered pixel coordinates.
-
-**Fix**: Removed the override - use interpolated position as-is.
-
-### Bug #2: Stair-stepping from clamped coordinates
-**Location**: src/terrain/mesh_operations.py and src/terrain/core.py
-
-**Problem**: Edge coordinates exceeding mesh bounds were clamped, causing stair-stepping.
-
-**Fix**: For fractional edges, compute X,Y directly from fractional pixel coordinates:
-```python
-if use_fractional_edges and model_offset is not None:
-    pos[0] = x / scale_factor - model_offset[0]  # True fractional X
-    pos[1] = y / scale_factor - model_offset[1]  # True fractional Y
-    # Z remains from bilinear interpolation
-```
+## Open Plan
+See `~/.claude/plans/lively-growing-karp.md` for full investigation notes
