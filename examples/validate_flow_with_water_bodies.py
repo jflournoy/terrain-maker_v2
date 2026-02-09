@@ -774,8 +774,15 @@ def main():
     # Step 6: Condition DEM
     print(f"\n{step_num}. Conditioning DEM (backend={args.backend})...")
 
-    # Create combined mask: ocean + endorheic basins (pre-mask them)
+    # Create combined mask: ocean + lakes + endorheic basins (pre-mask them)
+    # Lakes are masked to act as drainage connections (prevent unnecessary filling)
+    # Basins are masked to preserve their topography
     conditioning_mask = ocean_mask.copy()
+
+    if lake_mask is not None and np.any(lake_mask):
+        print(f"   Pre-masking {np.sum(lake_mask > 0):,} lake cells as drainage connections")
+        conditioning_mask = conditioning_mask | (lake_mask > 0)
+
     if basin_mask is not None and np.any(basin_mask):
         print(f"   Pre-masking {np.sum(basin_mask):,} basin cells to preserve topography")
         conditioning_mask = conditioning_mask | basin_mask
