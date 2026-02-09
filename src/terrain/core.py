@@ -1370,6 +1370,9 @@ class Terrain:
         if crs is None:
             raise ValueError("crs is required (or use same_extent_as to inherit from reference layer)")
 
+        # Store target_layer reference for post-transform alignment
+        target_layer_ref = target_layer
+
         # Determine target CRS and transform
         if target_layer is not None:
             if target_layer not in self.data_layers:
@@ -1420,6 +1423,7 @@ class Terrain:
                 "transform": transform,
                 "crs": crs,
                 "transformed": False,
+                "target_layer": None,
             }
             self.logger.info(f"Added layer '{name}' with original CRS {crs}")
             return
@@ -1452,6 +1456,7 @@ class Terrain:
                     "original_transform": transform,
                     "original_crs": crs,
                     "transformed": False,
+                    "target_layer": target_layer_ref,
                 }
 
                 self.logger.info(f"Successfully added layer '{name}' (reprojected):")
@@ -1470,6 +1475,7 @@ class Terrain:
                 "transform": transform,
                 "crs": crs,
                 "transformed": False,
+                "target_layer": target_layer_ref,
             }
             self.logger.info(f"Added layer '{name}' (no reprojection needed)")
 
@@ -1792,6 +1798,85 @@ class Terrain:
 
         self.logger.info("Transforms applied successfully")
 
+        # Post-processing: Align layers with target_layer to match target's final shape
+        self._align_layers_to_targets()
+
+    def _align_layers_to_targets(self):
+        """
+        Post-processing step after apply_transforms() to align layers with their targets.
+
+        For layers added with target_layer parameter, this resamples them to match
+        the target layer's FINAL transformed shape. This ensures layers with different
+        source resolutions all end up at the same final resolution.
+
+        This is called automatically at the end of apply_transforms().
+        """
+        from rasterio.warp import reproject, Resampling
+
+        layers_to_align = []
+        for name, layer in self.data_layers.items():
+            target_ref = layer.get("target_layer")
+            if target_ref and layer.get("transformed", False):
+                layers_to_align.append((name, target_ref))
+
+        if not layers_to_align:
+            return
+
+        self.logger.info(f"Aligning {len(layers_to_align)} layers to their targets...")
+
+        for name, target_ref in layers_to_align:
+            if target_ref not in self.data_layers:
+                self.logger.warning(
+                    f"Target layer '{target_ref}' not found for layer '{name}', skipping alignment"
+                )
+                continue
+
+            layer = self.data_layers[name]
+            target = self.data_layers[target_ref]
+
+            if not target.get("transformed", False):
+                self.logger.warning(
+                    f"Target layer '{target_ref}' not transformed yet, skipping alignment for '{name}'"
+                )
+                continue
+
+            # Get current and target shapes
+            current_shape = layer["transformed_data"].shape
+            target_shape = target["transformed_data"].shape
+
+            if current_shape == target_shape:
+                self.logger.debug(f"Layer '{name}' already matches target shape {target_shape}")
+                continue
+
+            self.logger.info(
+                f"Resampling '{name}' from {current_shape} to match '{target_ref}' {target_shape}"
+            )
+
+            # Resample to match target shape
+            aligned_data = np.zeros(target_shape, dtype=layer["transformed_data"].dtype)
+
+            try:
+                reproject(
+                    layer["transformed_data"],
+                    aligned_data,
+                    src_transform=layer["transformed_transform"],
+                    src_crs=layer["transformed_crs"],
+                    dst_transform=target["transformed_transform"],
+                    dst_crs=target["transformed_crs"],
+                    resampling=Resampling.bilinear,
+                )
+
+                # Update layer with aligned data
+                layer["transformed_data"] = aligned_data
+                layer["transformed_transform"] = target["transformed_transform"]
+                layer["transformed_crs"] = target["transformed_crs"]
+
+                self.logger.info(f"✓ Aligned '{name}' to match '{target_ref}'")
+
+            except Exception as e:
+                self.logger.error(f"Failed to align '{name}' to '{target_ref}': {str(e)}")
+                # Don't raise - continue with other layers
+
     def configure_for_target_vertices(
         self, target_vertices: int, method: str = "average"
     ) -> float:
@@ -1963,9 +2048,30 @@ class Terrain:
             f"({water_percent_highres:.1f}%)"
         )
 
-        # Now downsample the water mask to match the transformed (downsampled) DEM
-        transformed_dem = self.data_layers["dem"]["transformed_data"]
-        target_shape = transformed_dem.shape
+        # Now downsample the water mask to match the FINAL transformed DEM
+        # (after ALL transforms including adaptive downsampling)
+        # We need to apply ALL transforms to get the actual final shape
+        final_dem = original_dem.copy()
+        final_transform = original_transform
+        final_crs = original_crs
+
+        for transform_func in self.transforms:
+            try:
+                final_dem, final_transform, new_crs = transform_func(
+                    final_dem, final_transform
+                )
+                if new_crs is not None:
+                    final_crs = new_crs
+            except Exception as e:
+                self.logger.error(
+                    f"Failed applying transform {transform_func.__name__} for final shape: {e}"
+                )
+                raise
+
+        target_shape = final_dem.shape
+        self.logger.debug(
+            f"  Final DEM shape after all transforms: {target_shape}"
+        )
 
         if water_mask_highres.shape == target_shape:
             self.logger.info(f"  Water mask already matches target shape {target_shape}")
@@ -3049,6 +3155,25 @@ class Terrain:
             from scipy.ndimage import distance_transform_edt
 
             water_mask = _water_mask_for_coloring
+
+            # Validate and resample water mask to match colors shape if needed
+            expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_data.shape
+            if water_mask.shape != expected_shape:
+                self.logger.warning(
+                    f"Water mask shape {water_mask.shape} does not match colors shape {expected_shape}. "
+                    f"Resampling water mask to match colors. This can happen when colors are computed from "
+                    f"a different layer than DEM (e.g., score layers)."
+                )
+                # Resample water mask to match colors shape
+                zoom_y = expected_shape[0] / water_mask.shape[0]
+                zoom_x = expected_shape[1] / water_mask.shape[1]
+                water_mask = zoom(
+                    water_mask.astype(np.float32),
+                    zoom=(zoom_y, zoom_x),
+                    order=0,  # Nearest neighbor for boolean
+                    prefilter=False,
+                ).astype(np.bool_)
+
             water_distances = distance_transform_edt(water_mask)
 
             # Define gradient colors: blue to dark blue (Great Lakes depth)

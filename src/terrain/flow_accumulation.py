@@ -609,8 +609,10 @@ def flow_accumulation(
 
         # Step 3: Compute flow directions
         print("Computing flow directions...")
-        flow_direction = compute_flow_direction(conditioned_dem, mask=ocean_mask)
-        # Note: No _fix_coastal_flow_directions needed - outlets handle it properly
+        # CRITICAL: Combine ocean/nodata with all identified outlets (edge, coastal, masked basin)
+        # so that ALL outlet types are properly used as flow direction terminals
+        outlet_mask = ocean_mask | outlets
+        flow_direction = compute_flow_direction(conditioned_dem, mask=outlet_mask)
 
     elif backend == "pysheds":
         if not PYSHEDS_AVAILABLE:

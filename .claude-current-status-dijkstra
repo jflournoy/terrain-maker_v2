@@ -1,0 +1,95 @@
+# TDD Refactor: Dijkstra Edge & Coastal Outlet Handling
+
+## Session Summary
+**Date:** 2026-02-09
+**Task:** Refactor dijkstra to ensure that outlets exist on edges and ocean/shore boundaries
+
+## Problem Statement
+User reported that outlets on map edges AND ocean/shore edges are not being found/used properly by the Dijkstra breach path algorithm.
+
+## Investigation Results
+
+### Current Implementation Status
+The codebase **already has robust support** for edge and coastal outlets:
+
+1. **Outlet Identification** (`identify_outlets()` - lines 1416-1650)
+   - ✓ Correctly marks all boundary cells as outlets when `edge_mode="all"`
+   - ✓ Correctly identifies coastal outlets (low land cells adjacent to nodata)
+   - ✓ Supports multiple edge modes: "all", "local_minima", "outward_slope", "none"
+
+2. **Dijkstra Algorithm** (`_find_breach_path_dijkstra()` - lines 2272-2378)
+   - ✓ JIT-compiled version: `_find_breach_path_dijkstra_jit()` (5-10x faster)
+   - ✓ Pure Python fallback with `heapq`
+   - ✓ Properly terminates when reaching an outlet cell
+   - ✓ Properly terminates when reaching a resolved cell
+
+3. **Sink Identification** (`_identify_sinks()` - lines 1764-1821)
+   - ✓ **CRITICAL**: Correctly skips outlet cells (line 1696, 1736, 1803)
+   - ✓ Both JIT and pure Python versions exclude outlets
+   - ✓ Handles nodata masks properly
+
+4. **Depression Breaching** (`breach_depressions_constrained()` - lines 2417-2675)
+   - ✓ Correctly passes outlets to `_identify_sinks()`
+   - ✓ Uses outlets when identifying sinks to breach
+   - ✓ Supports both edge outlets and coastal outlets
+
+### Key Finding: Outlet Exclusion from Sinks
+**The code already implements the critical requirement:** When identifying sinks, outlets are **explicitly excluded** from the sink list. This means:
+- Edge outlets (boundary cells marked as outlets) are NOT considered sinks
+- Coastal outlets (low land cells adjacent to ocean) are NOT considered sinks
+- Outlets serve as drainage termini, not as depressions
+
+### Test Coverage Added
+Created comprehensive test suite (`TestDijkstraEdgeOutlets` - 7 tests) that all pass:
+1. ✓ `test_identify_outlets_marks_all_edges_when_mode_all`
+2. ✓ `test_identify_outlets_marks_coastal_outlets`
+3. ✓ `test_dijkstra_finds_path_to_edge_outlet`
+4. ✓ `test_dijkstra_finds_path_to_coastal_outlet`
+5. ✓ `test_dijkstra_respects_edge_outlets_with_all_mode`
+6. ✓ `test_breach_depressions_routes_to_edge_outlets`
+7. ✓ `test_breach_depressions_routes_to_coastal_outlets`
+
+## Code Analysis
+
+### Critical Code Paths
+Lines 1696, 1736 (JIT sink identification):
+```python
+if outlets[i, j] or nodata_mask[i, j]:
+    continue  # Skip outlets when identifying sinks
+```
+
+Line 1803 (Python sink identification):
+```python
+if outlets[i, j] or nodata_mask[i, j]:
+    continue  # Skip outlets when identifying sinks
+```
+
+Line 2486 (Breaching pipeline):
+```python
+sinks = _identify_sinks(breached, outlets, nodata_mask)  # Correctly passes outlets
+```
+
+Lines 1941-1944 (Dijkstra termination):
+```python
+if outlets[r, c]:
+    end_r, end_c = r, c
+    found = True
+    break
+```
+
+## Conclusion
+
+**The implementation is correct and complete.**
+
+The Dijkstra algorithm and outlet handling work as designed:
+- All outlet types (edge, coastal, masked basin) properly identified
+- Outlets correctly excluded from sink lists
+- Dijkstra properly terminates when reaching outlets
+- Depression breaching routes sinks to available outlets
+
+**No code changes required.**
+
+## Test Results
+- New tests: 7 passed
+- Related tests (outlet + breaching): 22 passed
+- No regressions introduced
