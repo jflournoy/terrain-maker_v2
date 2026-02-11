@@ -282,6 +282,29 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/86/41/00a6b000f222f0fa4c6d9e1d6dcc9811a374cabb8abb9d408b77de39648c/basicsr-1.4.2.tar.gz", hash = "sha256:b89b595a87ef964cda9913b4d99380ddb6554c965577c0c10cb7b78e31301e87", size = 172524, upload-time = "2022-08-30T04:33:55.259Z" }
 
 [[package]]
+name = "basicsr-fixed"
+version = "1.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "addict" },
+    { name = "future" },
+    { name = "lmdb" },
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "pillow" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "scikit-image" },
+    { name = "scipy" },
+    { name = "tb-nightly" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+    { name = "yapf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/06/f41e0d7b6404be190545cc81afb27f84497f8feb33ff6f3175e693817709/basicsr-fixed-1.4.2.tar.gz", hash = "sha256:a9dd0989bc4af9e0dda656c83e61f9b01ff89da1f432018e575e56ad25e0d684", size = 173663, upload-time = "2025-01-20T06:00:05.849Z" }
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -4208,6 +4231,7 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "realesrgan" },
+    { name = "torchvision" },
 ]
 dev = [
     { name = "black" },
@@ -4226,11 +4250,14 @@ ml = [
     { name = "lightgbm" },
 ]
 upscale = [
+    { name = "basicsr-fixed" },
     { name = "realesrgan" },
+    { name = "torchvision" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "basicsr-fixed", marker = "extra == 'upscale'", specifier = ">=1.4.2" },
     { name = "black", marker = "extra == 'dev'" },
     { name = "bpy", specifier = ">=4.0" },
     { name = "earthaccess" },
@@ -4251,7 +4278,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "rasterio" },
     { name = "realesrgan", marker = "extra == 'all'" },
-    { name = "realesrgan", marker = "extra == 'upscale'" },
+    { name = "realesrgan", marker = "extra == 'upscale'", specifier = ">=0.3.0" },
     { name = "requests" },
     { name = "scikit-image" },
     { name = "scikit-learn" },
@@ -4261,6 +4288,8 @@ requires-dist = [
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "torch" },
+    { name = "torchvision", marker = "extra == 'all'" },
+    { name = "torchvision", marker = "extra == 'upscale'", specifier = ">=0.15.0" },
     { name = "tqdm" },
     { name = "zarr" },
 ]

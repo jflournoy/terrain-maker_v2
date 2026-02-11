@@ -239,6 +239,7 @@ def _load_from_cache(cache_dir: Path) -> Dict:
         "drainage_area": drainage_area,
         "upstream_rainfall": upstream_rainfall,
         "conditioned_dem": conditioned_dem,
+        "breached_dem": None,  # Not saved to cache, available only on first run
         "metadata": metadata,
         "files": files,
     }
@@ -298,6 +299,9 @@ def flow_accumulation(
     max_breach_length: int = 100,
     epsilon: Optional[float] = None,
     masked_basin_outlets: Optional[np.ndarray] = None,
+    # Basin detection parameters
+    detect_basins: bool = False,
+    min_basin_depth: float = 1.0,
     # Common parameters
     cell_size: Optional[float] = None,
     max_cells: Optional[int] = None,
@@ -307,6 +311,10 @@ def flow_accumulation(
     backend: Literal["legacy", "spec", "pysheds"] = "spec",
     lake_mask: Optional[np.ndarray] = None,
     lake_outlets: Optional[np.ndarray] = None,
+    # Precipitation upscaling parameters
+    upscale_precip: bool = False,
+    upscale_factor: int = 4,
+    upscale_method: str = "auto",
     # Caching parameters
     cache: bool = False,
     cache_dir: Optional[str] = None,
@@ -386,6 +394,23 @@ def flow_accumulation(
     lake_outlets : np.ndarray (bool), optional
         Boolean mask of lake outlet cells. Required if lake_mask is provided.
         Outlets receive accumulated flow from all lake cells.
+    detect_basins : bool, default False
+        If True, automatically detect and preserve endorheic basins (closed drainage
+        basins). Basins are masked during DEM conditioning to preserve their original
+        topography. Works with spec backend only.
+    min_basin_depth : float, default 1.0
+        Minimum basin depth (meters) to be considered endorheic. Only used when
+        detect_basins=True. Basins shallower than this threshold are not preserved.
+    upscale_precip : bool, default False
+        If True, upscale precipitation data to match DEM resolution using ESRGAN/bilateral
+        upscaling before computing upstream rainfall. This preserves fine-scale precipitation
+        patterns and reduces coastal artifacts. Upscaling happens BEFORE ocean masking.
+    upscale_factor : int, default 4
+        Target upscaling factor for precipitation (2, 4, or 8). Only used if upscale_precip=True.
+    upscale_method : str, default "auto"
+        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan" (Real-ESRGAN
+        neural network), "bilateral" (bilateral filter), or "bicubic" (simple interpolation).
+        Only used if upscale_precip=True.
     cache : bool, default False
         If True, cache computation results and load from cache if valid.
         Cache is invalidated if DEM file is modified or parameters change.
@@ -513,25 +538,177 @@ def flow_accumulation(
         dem_shape = downsampled_shape
         downsampling_applied = True
 
+        # Also downsample lake_mask and lake_outlets if provided
+        if lake_mask is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
+            print(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
+
+        if lake_outlets is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
+            print(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
+
         print(f"  ✓ Downsampled DEM to {dem_shape}", flush=True)
     elif max_cells is not None:
         print(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
               f"no downsampling needed")
 
-    # Load precipitation
+    # Load precipitation (cropped to DEM bounds using library function)
     print("  flow_accumulation: loading precipitation...", flush=True)
-    with rasterio.open(precip_path) as src:
-        precip_data = src.read(1).astype(np.float32)
-        precip_transform = src.transform
-        precip_crs = src.crs
+    from src.terrain.data_loading import load_geotiff_cropped_to_dem
 
-        print(f"  flow_accumulation: precipitation loaded {precip_data.shape}", flush=True)
+    precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
+        precip_path,
+        dem_shape=dem_shape,
+        dem_transform=dem_transform,
+        dem_crs=dem_crs,
+        use_windowed_read=True,
+    )
 
-        # Check spatial alignment and resample if needed
-        if precip_data.shape != dem_shape:
+    print(f"  flow_accumulation: precipitation loaded {precip_data.shape}", flush=True)
+
+    # Fill missing values (nodata) using nearest neighbor interpolation
+    # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
+    nodata_mask = (
+        np.isnan(precip_data) |
+        (precip_data < -1000) |  # Catch extreme negative nodata values like -9999, -32768
+        (precip_data < 0)         # Any negative value is invalid for precipitation
+    )
+
+    if np.any(nodata_mask):
+        num_missing = np.sum(nodata_mask)
+        total_pixels = precip_data.size
+        pct_missing = 100.0 * num_missing / total_pixels
+        print(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...", flush=True)
+
+        from scipy.ndimage import distance_transform_edt
+
+        # Find indices of nearest valid values
+        # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
+        indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)
+
+        # Fill missing values with nearest valid neighbors
+        # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
+        precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
+
+        print(f"  ✓ Imputation complete", flush=True)
+
+    # Check spatial alignment and resample if needed
+    if precip_data.shape != dem_shape:
+        # Calculate required scale factor
+        scale_y = dem_shape[0] / precip_data.shape[0]
+        scale_x = dem_shape[1] / precip_data.shape[1]
+        is_upscaling = scale_y > 1.0 and scale_x > 1.0
+
+        # Use ESRGAN upscaling if requested AND actually upscaling
+        if upscale_precip and is_upscaling:
+            print(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...", flush=True)
+
+            # Use upscale_scores if scale is uniform and an integer
+            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
+                from src.terrain.transforms import upscale_scores
+                scale_int = int(round(scale_y))
+                precip_upscaled = upscale_scores(
+                    precip_data,
+                    scale=scale_int,
+                    method=upscale_method,
+                    nodata_value=0.0
+                )
+                precip_data = precip_upscaled
+                print(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
+            else:
+                # Non-uniform scaling - Detroit-style approach for GPU acceleration
+                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
+                # Step 2: Downsample to exact target with rasterio reproject
+                import math
+                avg_scale = (scale_y + scale_x) / 2
+                # Round UP to next power of 2 (e.g., 29.458 → 32)
+                power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
+
+                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
+                    # Use ESRGAN for over-upscaling, then downsample
+                    print(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...", flush=True)
+
+                    from src.terrain.transforms import upscale_scores
+
+                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    precip_esrgan = upscale_scores(
+                        precip_data,
+                        scale=power_of_2_scale,
+                        method=upscale_method,
+                        nodata_value=0.0
+                    )
+
+                    # Step 2: Downsample to exact target shape with rasterio reproject
+                    from rasterio.warp import reproject, Resampling
+                    precip_final = np.empty(dem_shape, dtype=np.float32)
+
+                    # Create transforms for intermediate and target shapes
+                    if precip_transform is not None and dem_transform is not None:
+                        # Calculate intermediate transform (after ESRGAN upscaling)
+                        esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
+
+                        reproject(
+                            source=precip_esrgan,
+                            destination=precip_final,
+                            src_transform=esrgan_transform,
+                            src_crs=precip_crs,
+                            dst_transform=dem_transform,
+                            dst_crs=dem_crs,
+                            resampling=Resampling.bilinear,
+                        )
+                    else:
+                        # No transform available - use scipy zoom for final adjustment
+                        from scipy.ndimage import zoom
+                        scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
+                        scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
+                        precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
+
+                    precip_data = precip_final
+                    print(f"  ✓ ESRGAN {power_of_2_scale}x → {precip_esrgan.shape} → downsampled to {precip_final.shape}", flush=True)
+                else:
+                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
+                    from rasterio.warp import reproject, Resampling
+                    print(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...", flush=True)
+
+                    precip_resampled = np.empty(dem_shape, dtype=np.float32)
+                    reproject(
+                        source=precip_data,
+                        destination=precip_resampled,
+                        src_transform=precip_transform,
+                        src_crs=precip_crs,
+                        dst_transform=dem_transform,
+                        dst_crs=dem_crs,
+                        resampling=Resampling.bilinear
+                    )
+                    precip_data = precip_resampled
+                    print(f"  ✓ Resampled precipitation to {precip_data.shape}", flush=True)
+        elif upscale_precip and not is_upscaling:
+            # User requested upscaling but data is being downscaled - inform and use standard resampling
+            print(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...", flush=True)
+            from rasterio.warp import reproject, Resampling
+
+            precip_resampled = np.empty(dem_shape, dtype=np.float32)
+            reproject(
+                source=precip_data,
+                destination=precip_resampled,
+                src_transform=precip_transform,
+                src_crs=precip_crs,
+                dst_transform=dem_transform,
+                dst_crs=dem_crs,
+                resampling=Resampling.bilinear
+            )
+            precip_data = precip_resampled
+            print(f"  ✓ Downsampled precipitation to {precip_data.shape}")
+        else:
+            # Standard resampling (no upscaling requested)
             print(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...", flush=True)
 
-            # Resample precipitation to match DEM
             from rasterio.warp import reproject, Resampling
 
             precip_resampled = np.empty(dem_shape, dtype=np.float32)
@@ -547,7 +724,7 @@ def flow_accumulation(
             )
 
             precip_data = precip_resampled
-            print(f"✓ Resampled precipitation to {precip_data.shape}")
+            print(f"  ✓ Resampled precipitation to {precip_data.shape}")
 
     # Determine cell size (convert from degrees to meters if geographic CRS)
     if cell_size is None:
@@ -600,11 +777,45 @@ def flow_accumulation(
         ocean_pct = 100 * ocean_cells / ocean_mask.size
         print(f"  Ocean detected: {ocean_cells:,} cells ({ocean_pct:.1f}%)")
 
-    # Note: We DON'T mask basins from flow computation to allow internal drainage patterns.
-    # Basins are only preserved from filling (via condition_dem), but flow is computed inside them.
-    # This lets us see how water drains through closed basins like the Imperial Valley.
+    # Step 1b: Detect endorheic basins (if enabled and using spec backend)
+    basin_mask = None
+    if detect_basins and backend == "spec":
+        print(f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)...")
+        basin_mask, endorheic_basins = detect_endorheic_basins(
+            dem_data,
+            min_size=min_basin_size,
+            min_depth=min_basin_depth,
+            exclude_mask=ocean_mask,
+        )
 
-    # Use ocean mask for flow computation
+        if basin_mask is not None and np.any(basin_mask):
+            num_basins = len(endorheic_basins)
+            basin_coverage = 100 * np.sum(basin_mask) / dem_data.size
+            print(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of domain)")
+            print(f"  Basins will be masked during conditioning to preserve topography")
+        else:
+            print("  No significant endorheic basins detected")
+            basin_mask = None
+    elif detect_basins and backend != "spec":
+        import warnings
+        warnings.warn(
+            f"detect_basins=True is only supported with backend='spec'. "
+            f"Use min_basin_size parameter with legacy backend instead.",
+            UserWarning
+        )
+
+    # Create combined conditioning mask for spec backend
+    # Strategy: ocean + endorheic basins + selective lakes
+    # (Lakes handled later in the pipeline based on basin location)
+    conditioning_mask = ocean_mask.copy() if ocean_mask is not None else np.zeros(dem_data.shape, dtype=bool)
+
+    if basin_mask is not None and np.any(basin_mask):
+        conditioning_mask = conditioning_mask | basin_mask
+        print(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
+              f"({100*np.sum(conditioning_mask)/conditioning_mask.size:.1f}%)")
+
+    # Use ocean mask for flow computation (flow direction terminals)
+    # Note: Basins are NOT masked from flow - flow is computed inside them
     flow_mask = ocean_mask if ocean_mask is not None else None
 
     # Branch based on backend
@@ -630,9 +841,11 @@ def flow_accumulation(
             )
 
         # Step 2: Condition DEM using spec-compliant pipeline
-        conditioned_dem, outlets = condition_dem_spec(
+        # Use combined conditioning mask (ocean + basins) to preserve topography
+        nodata_mask_for_spec = conditioning_mask if detect_basins else ocean_mask
+        conditioned_dem, outlets, breached_dem = condition_dem_spec(
             dem_data,
-            nodata_mask=ocean_mask,
+            nodata_mask=nodata_mask_for_spec,
             coastal_elev_threshold=coastal_elev_threshold,
             edge_mode=edge_mode,
             max_breach_depth=max_breach_depth,
@@ -763,22 +976,31 @@ def flow_accumulation(
         drainage_area = np.array(acc).astype(np.float32)
 
         print("  pysheds: Computing upstream rainfall (weighted)...")
+        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
+        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
+        precip_for_pysheds = precip_data.copy()
+        if ocean_mask is not None and np.any(ocean_mask):
+            precip_for_pysheds[ocean_mask] = 0
         # Wrap precipitation as Raster for weighted accumulation
-        precip_raster = Raster(precip_data, viewfinder=viewfinder)
+        precip_raster = Raster(precip_for_pysheds, viewfinder=viewfinder)
         weighted_acc = grid.accumulation(fdir, weights=precip_raster)
         upstream_rainfall = np.array(weighted_acc).astype(np.float32)
 
-        # Apply ocean mask to accumulation outputs
+        # Apply ocean mask to drainage area output (already masked for upstream_rainfall)
         if ocean_mask is not None and np.any(ocean_mask):
             drainage_area[ocean_mask] = 0
-            upstream_rainfall[ocean_mask] = 0
     else:
         # Use custom backend
         print("Computing drainage area...")
         drainage_area = compute_drainage_area(flow_direction)
 
         print("Computing upstream rainfall...")
-        upstream_rainfall = compute_upstream_rainfall(flow_direction, precip_data)
+        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
+        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
+        precip_masked = precip_data.copy()
+        if ocean_mask is not None and np.any(ocean_mask):
+            precip_masked[ocean_mask] = 0
+        upstream_rainfall = compute_upstream_rainfall(flow_direction, precip_masked)
 
     # Compute metadata
     total_area_km2 = (dem_shape[0] * dem_shape[1] * cell_size**2) / 1e6
@@ -799,6 +1021,9 @@ def flow_accumulation(
         "original_shape": original_shape,
         "downsampled_shape": dem_shape if downsampling_applied else original_shape,
         "downsample_factor": downsample_factor,
+        # Store serializable versions of transform and crs
+        "transform": tuple(dem_transform),  # Affine as 6-tuple (a, b, c, d, e, f)
+        "crs": str(dem_crs),  # CRS as string (e.g., "EPSG:4326")
     }
 
     # Add target_vertices to metadata if specified
@@ -833,6 +1058,7 @@ def flow_accumulation(
         "drainage_area": drainage_area,
         "upstream_rainfall": upstream_rainfall,
         "conditioned_dem": conditioned_dem,
+        "breached_dem": breached_dem,
         "metadata": metadata,
         "files": files,
     }
@@ -1544,6 +1770,68 @@ def compute_upstream_rainfall(flow_dir: np.ndarray, precipitation: np.ndarray) -
                 to_process.append(receiver)
 
     return upstream_rainfall
+
+
+def compute_discharge_potential(
+    drainage_area: np.ndarray,
+    upstream_rainfall: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute discharge potential combining drainage area and rainfall.
+
+    Discharge potential represents where the largest water flows occur,
+    combining topographic convergence (drainage area) with climate (rainfall).
+    Higher values indicate locations where both large watersheds AND high
+    precipitation combine to produce significant discharge.
+
+    Parameters
+    ----------
+    drainage_area : np.ndarray
+        Drainage area in cells (from compute_drainage_area)
+    upstream_rainfall : np.ndarray
+        Upstream rainfall accumulation (from compute_upstream_rainfall)
+
+    Returns
+    -------
+    np.ndarray
+        Discharge potential index: drainage_area × (upstream_rainfall / mean_rainfall)
+        Units are dimensionless, scaled relative to mean rainfall
+
+    Notes
+    -----
+    The formula normalizes upstream rainfall by mean to produce a dimensionless
+    multiplier. This means:
+    - Discharge potential = drainage_area when rainfall is uniform
+    - Cells with above-average rainfall have higher discharge potential
+    - Cells with below-average rainfall have lower discharge potential
+
+    This is useful for identifying where actual river discharge would be highest,
+    accounting for both watershed size and precipitation patterns.
+
+    Examples
+    --------
+    >>> drainage_area = np.array([[1, 2], [4, 8]], dtype=np.float32)
+    >>> upstream_rainfall = np.array([[100, 200], [400, 800]], dtype=np.float32)
+    >>> discharge = compute_discharge_potential(drainage_area, upstream_rainfall)
+    >>> discharge.shape
+    (2, 2)
+    """
+    # Handle edge cases
+    upstream_valid = upstream_rainfall[upstream_rainfall > 0]
+    if len(upstream_valid) == 0:
+        # No valid rainfall data - return drainage area as-is
+        return drainage_area.astype(np.float32)
+
+    mean_rainfall = np.mean(upstream_valid)
+
+    # Compute discharge potential
+    # Formula: drainage × (rainfall / mean_rainfall)
+    discharge = drainage_area.astype(np.float32) * (upstream_rainfall / mean_rainfall)
+
+    # Ensure zeros stay zero (avoid NaN from 0/0)
+    discharge[upstream_rainfall == 0] = 0
+
+    return discharge
 
 
 def identify_outlets(
@@ -3046,6 +3334,8 @@ def condition_dem_spec(
         Breached and filled DEM
     outlets : np.ndarray (bool)
         Outlet mask (useful for diagnostics and visualization)
+    breached_dem : np.ndarray
+        DEM after breaching but before filling (for fill depth calculation)
 
     Notes
     -----
@@ -3111,7 +3401,7 @@ def condition_dem_spec(
     ...                 [5, 3, 5],
     ...                 [5, 5, 5]], dtype=np.float32)
     >>> nodata = np.zeros((3, 3), dtype=bool)
-    >>> conditioned, outlets = condition_dem_spec(dem, nodata)
+    >>> conditioned, outlets, breached = condition_dem_spec(dem, nodata)
     >>> # Outlets: [[False, False, False],
     >>> #           [False, True,  False],
     >>> #           [False, False, False]]
@@ -3158,11 +3448,12 @@ def condition_dem_spec(
     # Ensure masked cells maintain original elevation
     filled[nodata_mask] = dem[nodata_mask]
 
-    # Ensure we never lowered elevations (only raised for filling)
-    filled = np.maximum(filled, dem)
+    # Ensure we never lowered elevations below what breaching produced
+    # (breaching can lower elevations to create flow paths)
+    filled = np.maximum(filled, breached)
 
     print("  DEM conditioning complete (spec-compliant pipeline)")
-    return filled, outlets
+    return filled, outlets, breached
 
 
 def detect_ocean_mask(

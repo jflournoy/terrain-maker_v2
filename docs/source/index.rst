@@ -23,6 +23,7 @@ terrain-maker Documentation
    :maxdepth: 2
    :caption: Guides
 
+   guides/flow-routing
    guides/diagnostics
 
 .. toctree::
@@ -30,6 +31,7 @@ terrain-maker Documentation
    :caption: API Reference
 
    api/core
+   api/flow_accumulation
    api/transforms
    api/rendering
    api/data_loading
@@ -37,6 +39,7 @@ terrain-maker Documentation
    api/materials
    api/roads
    api/water
+   api/water_bodies
    api/color_mapping
    api/blender_integration
    api/cache

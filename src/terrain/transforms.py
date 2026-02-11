@@ -1626,10 +1626,13 @@ def upscale_scores(
                 used_method = "bicubic"
                 break
         except ImportError as e:
-            logger.debug(f"Method '{m}' not available: {e}")
+            # Log at INFO level so user can see why ESRGAN isn't working
+            logger.info(f"Method '{m}' not available: {e}")
+            logger.info(f"  Falling back to next method...")
             continue
         except Exception as e:
             logger.warning(f"Method '{m}' failed: {e}")
+            logger.warning(f"  Falling back to next method...")
             continue
 
     if result is None:
@@ -1657,19 +1660,83 @@ def upscale_scores(
 
 
 def _upscale_esrgan(normalized: np.ndarray, scale: int) -> np.ndarray:
-    """Upscale using Real-ESRGAN neural network."""
+    """Upscale using Real-ESRGAN neural network.
+
+    For large scales (>4x), uses multi-step upscaling by chaining multiple
+    ESRGAN passes (e.g., 32x = 4x × 4x × 2x).
+    """
     logger = logging.getLogger(__name__)
 
     try:
         from realesrgan import RealESRGANer
         from basicsr.archs.rrdbnet_arch import RRDBNet
         import torch
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
-            "Real-ESRGAN not installed. Install with: uv pip install realesrgan"
+            f"Real-ESRGAN import failed: {e}\n"
+            f"Install with: uv sync --extra upscale"
         )
 
     logger.info("Using Real-ESRGAN for AI upscaling...")
+
+    # Determine device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"  Running on: {device}")
+
+    # For large scales, chain multiple ESRGAN passes
+    # RealESRGAN-x4plus pre-trained model only supports 4x
+    # Break down: 32x = 4x × 4x × 2x, 16x = 4x × 4x, 8x = 4x × 2x
+    if scale > 4:
+        # Decompose scale into chain of 4x and 2x passes
+        import math
+        num_4x_passes = 0
+        remaining_scale = scale
+
+        # Use as many 4x passes as possible
+        while remaining_scale >= 4 and remaining_scale % 4 == 0:
+            num_4x_passes += 1
+            remaining_scale //= 4
+
+        # Handle remaining scale (should be 1, 2, or odd number)
+        if remaining_scale > 1 and remaining_scale != 2:
+            # For odd scales or scales not power-of-2, log warning and round
+            logger.warning(
+                f"Scale {scale} not evenly divisible by 4. "
+                f"Using {num_4x_passes} passes of 4x + 1 pass of {remaining_scale}x"
+            )
+
+        passes = [(4, num_4x_passes)]
+        if remaining_scale == 2:
+            passes.append((2, 1))
+        elif remaining_scale > 2:
+            passes.append((remaining_scale, 1))
+
+        logger.info(f"  Multi-step upscaling for {scale}x: " +
+                   " × ".join([f"{s}x" for s, n in passes for _ in range(n)]))
+
+        # Apply each pass
+        current = normalized
+        try:
+            for step_scale, num_passes in passes:
+                for pass_idx in range(num_passes):
+                    current = _upscale_esrgan_single(current, step_scale, device)
+                    logger.info(f"    ✓ Pass {pass_idx + 1}: {step_scale}x → shape {current.shape}")
+        except Exception as e:
+            logger.error(f"  Multi-step ESRGAN failed at pass {pass_idx + 1} (scale={step_scale}x): {e}")
+            raise
+
+        return current
+    else:
+        # Single pass for 2x or 4x
+        return _upscale_esrgan_single(normalized, scale, device)
+
+
+def _upscale_esrgan_single(normalized: np.ndarray, scale: int, device) -> np.ndarray:
+    """Single-pass ESRGAN upscaling (supports 2x or 4x only)."""
+    logger = logging.getLogger(__name__)
+
+    from realesrgan import RealESRGANer
+    from basicsr.archs.rrdbnet_arch import RRDBNet
 
     # Convert to uint8 image (ESRGAN expects 0-255)
     img_uint8 = (normalized * 255).astype(np.uint8)
@@ -1677,24 +1744,45 @@ def _upscale_esrgan(normalized: np.ndarray, scale: int) -> np.ndarray:
     # ESRGAN expects HWC format with 3 channels
     img_rgb = np.stack([img_uint8, img_uint8, img_uint8], axis=-1)
 
-    # Determine device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"  Running on: {device}")
-
-    # Initialize model (RealESRGAN-x4plus for general images)
+    # Initialize model with matching scale
     model = RRDBNet(
         num_in_ch=3,
         num_out_ch=3,
         num_feat=64,
         num_block=23,
         num_grow_ch=32,
-        scale=scale
+        scale=scale  # Must match pre-trained weights (2 or 4)
     )
 
-    # Use default model weights
+    # Use default Real-ESRGAN pre-trained models from GitHub releases
+    # Download to weights directory if not present
+    import os
+    from pathlib import Path
+
+    weights_dir = Path.home() / '.cache' / 'realesrgan' / 'weights'
+    weights_dir.mkdir(parents=True, exist_ok=True)
+
+    if scale == 4:
+        model_filename = 'RealESRGAN_x4plus.pth'
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
+    elif scale == 2:
+        model_filename = 'RealESRGAN_x2plus.pth'
+        model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth'
+    else:
+        raise ValueError(f"Scale {scale} not supported by Real-ESRGAN (only 2x and 4x)")
+
+    model_path = weights_dir / model_filename
+
+    # Download if not present
+    if not model_path.exists():
+        logger.info(f"  Downloading {model_filename} (~67MB, one-time)...")
+        import urllib.request
+        urllib.request.urlretrieve(model_url, model_path)
+        logger.info(f"  ✓ Downloaded to {model_path}")
+
     upsampler = RealESRGANer(
         scale=scale,
-        model_path=None,  # Will download default weights
+        model_path=str(model_path),
         model=model,
         tile=400,  # Process in tiles to save memory
         tile_pad=10,
