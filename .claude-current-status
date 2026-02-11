@@ -1,4 +1,40 @@
-# Current Status - 2026-02-11 09:56
+# Current Status - 2026-02-11 11:10
+
+## COMPLETED: Reverted Per-Cell Enforcement in _apply_breach ✅
+
+**Task:** Follow the WhiteboxTools pattern for max_breach_depth constraint semantics.
+
+**Problem:** Previous changes added per-cell enforcement (`final_elev = max(required_elev, original_elev - max_breach_depth)`) that was violating the WhiteboxTools/Lindsay algorithm design.
+
+**Understanding:** The WhiteboxTools breach algorithm uses max_breach_depth constraint in two places:
+1. **Dijkstra uphill exploration** (line 2313-2314 in Dijkstra functions): Prevents exploring neighbors more than max_breach_depth ABOVE the sink
+   - Constraint: `breach_depth_here = dem[neighbor] - dem[sink]` and `if breach_depth_here > max_depth: continue`
+   - This controls HOW AGGRESSIVELY the algorithm explores uphill, limiting uphill neighbors by elevation relative to sink
+
+2. **Outlet depth check** (added in commit e7e06ba): Prevents sinks from being lowered BELOW outlets by more than max_breach_depth
+   - Check: `sink_lowering = start_elev - dem[outlet]` and `if sink_lowering > max_depth: reject outlet`
+   - This ensures the path termination doesn't violate the constraint
+
+3. **Breach application** (the _apply_breach function): Just applies epsilon gradient, NO per-cell limits
+   - The function lowers cells according to position in breach path
+   - Per-cell enforcement is NOT part of the reference implementation
+
+**Fix Applied (commit cfd4c96):**
+1. Reverted _apply_breach function signature to remove max_breach_depth parameter
+2. Removed per-cell enforcement logic (min_allowed_elev, final_elev clamping)
+3. Updated function to just: `dem[r, c] = required_elev` (if dem[r, c] > required_elev)
+4. Updated all three call sites to pass only (dem, path, epsilon)
+
+**Result:**
+- Algorithm now matches WhiteboxTools pattern exactly
+- Constraint controls uphill exploration (Dijkstra) + outlet depth check (termination)
+- Breach application applies epsilon gradient without per-cell limits
+- Per-cell lowering amount determined by: path length × epsilon + position in path
+
+**Files Changed:**
+- `src/terrain/flow_accumulation.py`: _apply_breach function (lines 2819-2852) + 3 call sites
+
+---
 
 ## CRITICAL FIX: Breach Depth Constraint Not Being Enforced ✅
 

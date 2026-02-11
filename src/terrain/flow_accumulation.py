@@ -1064,6 +1064,7 @@ def flow_accumulation(
         "upstream_rainfall": upstream_rainfall,
         "conditioned_dem": conditioned_dem,
         "breached_dem": breached_dem,
+        "lake_mask": lake_mask,  # Downsampled lake mask (or None if not provided)
         "metadata": metadata,
         "files": files,
     }
