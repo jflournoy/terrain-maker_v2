@@ -672,12 +672,18 @@ def main():
             source_layers=["upstream_rainfall_log"],
         )
 
-    # Use HydroLAKES lake mask if available (already aligned via terrain_align)
-    # Reuse lake_mask_aligned from diagnostic section to ensure resolution matches
-    # This avoids expensive high-res water detection that can cause GPU OOM
-    if lake_mask_aligned is not None:
-        water_mask = (lake_mask_aligned > 0).astype(np.uint8)
-        print(f"Using HydroLAKES water mask: {np.sum(water_mask > 0):,} water cells")
+    # Detect water from the final downsampled terrain (at mesh resolution)
+    # This ensures water_mask matches the colors shape after all transforms
+    if lake_mask is not None and np.any(lake_mask > 0):
+        # Add lake mask as data layer to terrain so it can be used for water coloring
+        # At this point terrain has been transformed to final mesh resolution
+        print("Detecting water from HydroLAKES lake mask...")
+        water_mask = terrain.detect_water_highres(
+            slope_threshold=0.0000000000000001,
+            fill_holes=False,
+            scale_factor=0.0001,
+        )
+        print(f"Water mask at mesh resolution: {water_mask.shape}, {np.sum(water_mask > 0):,} water cells")
     else:
         # Fallback to slope-based water detection
         print("No lake mask available, detecting water by slope...")
