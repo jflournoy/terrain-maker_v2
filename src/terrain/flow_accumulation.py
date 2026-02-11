@@ -297,6 +297,7 @@ def flow_accumulation(
     edge_mode: Literal["all", "local_minima", "outward_slope", "none"] = "all",
     max_breach_depth: float = 50.0,
     max_breach_length: int = 100,
+    parallel_method: str = "checkerboard",
     epsilon: Optional[float] = None,
     masked_basin_outlets: Optional[np.ndarray] = None,
     # Basin detection parameters
@@ -818,6 +819,9 @@ def flow_accumulation(
     # Note: Basins are NOT masked from flow - flow is computed inside them
     flow_mask = ocean_mask if ocean_mask is not None else None
 
+    # Initialize breached_dem (only set by spec backend, None for others)
+    breached_dem = None
+
     # Branch based on backend
     if backend == "spec":
         # === SPEC-COMPLIANT BACKEND ===
@@ -852,6 +856,7 @@ def flow_accumulation(
             max_breach_length=max_breach_length,
             epsilon=epsilon,
             masked_basin_outlets=masked_basin_outlets,
+            parallel_method=parallel_method,
         )
 
         # Step 3: Compute flow directions
@@ -2360,9 +2365,13 @@ def _find_breach_path_dijkstra_jit(
 
         # Check termination: reached outlet
         if outlets[r, c]:
-            end_r, end_c = r, c
-            found = True
-            break
+            # Verify outlet is not deeper than max_depth below sink
+            # (to prevent breaching sink by more than max_depth)
+            sink_lowering = start_elev - dem[r, c]
+            if sink_lowering <= max_depth:
+                end_r, end_c = r, c
+                found = True
+                break
 
         # Check termination: reached resolved cell at or below start elevation
         if resolved[r, c] and dem[r, c] <= start_elev:
@@ -2516,9 +2525,13 @@ def _dijkstra_single_sink(
 
         # Termination: reached outlet
         if outlets[r, c]:
-            end_r, end_c = r, c
-            found = True
-            break
+            # Verify outlet is not deeper than max_depth below sink
+            # (to prevent breaching sink by more than max_depth)
+            sink_lowering = start_elev - dem[r, c]
+            if sink_lowering <= max_depth:
+                end_r, end_c = r, c
+                found = True
+                break
 
         # Length constraint
         if length >= max_length:
@@ -2761,7 +2774,11 @@ def _find_breach_path_dijkstra(
 
         # Check termination: reached outlet
         if outlets[r, c]:
-            return _reconstruct_path(parent_map, start_row, start_col, r, c)
+            # Verify outlet is not deeper than max_depth below sink
+            # (to prevent breaching sink by more than max_depth)
+            sink_lowering = start_elev - dem[r, c]
+            if sink_lowering <= max_depth:
+                return _reconstruct_path(parent_map, start_row, start_col, r, c)
 
         # Check termination: reached resolved cell at or below start elevation
         if resolved[r, c] and dem[r, c] <= start_elev:
@@ -2842,6 +2859,7 @@ def breach_depressions_constrained(
     max_breach_length: int = 100,
     epsilon: float = 1e-4,
     nodata_mask: Optional[np.ndarray] = None,
+    parallel_method: str = "checkerboard",
 ) -> np.ndarray:
     """
     Remove depressions via constrained breaching (Stage 2a of flow-spec.md).
@@ -2865,6 +2883,13 @@ def breach_depressions_constrained(
         Small gradient for breach paths (meters per cell)
     nodata_mask : np.ndarray (bool), optional
         Cells to exclude from breaching
+    parallel_method : {"checkerboard", "iterative"}, default "checkerboard"
+        Parallelization strategy for breach path finding:
+        - "checkerboard": Two-phase parallel processing using checkerboard partitioning.
+          Fast but can only terminate at outlets (misses chaining opportunities).
+        - "iterative": Iterative refinement that runs multiple rounds, allowing each
+          round's breaches to become termination targets for the next round. Finds
+          more breaches via chaining but may be slower.
 
     Returns
     -------
@@ -2973,12 +2998,96 @@ def breach_depressions_constrained(
     avg_dim = (rows + cols) / 2
     parallel_useful = max_breach_length < avg_dim / 4  # Sinks likely near outlets
 
-    if not parallel_useful and NUMBA_AVAILABLE:
+    if not parallel_useful and NUMBA_AVAILABLE and parallel_method != "iterative":
         print(f"    Note: max_breach_length ({max_breach_length}) is large relative to DEM ({rows}x{cols})")
         print(f"    Using serial JIT (better for interior sinks that chain together)")
 
-    # Use two-phase parallel processing with numba prange
-    if NUMBA_AVAILABLE and total_sinks > 100 and parallel_useful:
+    # Iterative refinement parallel processing
+    if parallel_method == "iterative" and NUMBA_AVAILABLE and total_sinks > 0:
+        # Iterative refinement: run parallel batches repeatedly, updating terminals each round
+        # This allows chaining: sinks resolved in round N become terminals for round N+1
+        try:
+            from numba import get_num_threads
+            num_threads = get_num_threads()
+            print(f"    Using iterative refinement parallel breaching ({num_threads} CPU cores)")
+        except:
+            print(f"    Using iterative refinement parallel breaching")
+
+        grid_size = 2 * max_breach_length
+        remaining_sinks = list(significant_sinks)
+        iteration = 0
+        max_iterations = 100  # Safety limit
+
+        while remaining_sinks and iteration < max_iterations:
+            iteration += 1
+            iteration_breached = 0
+
+            # Current terminals = outlets + all resolved cells from previous iterations
+            terminals = outlets | resolved
+
+            # Cluster remaining sinks using checkerboard pattern
+            batch_black, batch_white = _cluster_sinks_checkerboard(
+                remaining_sinks, grid_size, (rows, cols)
+            )
+
+            print(f"    Iteration {iteration}: {len(remaining_sinks):,} sinks remaining...")
+
+            newly_resolved_sinks = []
+
+            for batch, phase_name in [(batch_black, "black"), (batch_white, "white")]:
+                if not batch:
+                    continue
+
+                # Prepare arrays for batch
+                batch_r = np.array([s[0] for s in batch], dtype=np.int32)
+                batch_c = np.array([s[1] for s in batch], dtype=np.int32)
+
+                # Run parallel Dijkstra with current terminals
+                found, paths_r, paths_c, path_lengths = _breach_sinks_parallel_batch(
+                    breached, batch_r, batch_c, terminals,
+                    max_breach_depth, max_breach_length
+                )
+
+                # Apply successful breaches
+                for i in range(len(batch)):
+                    sink_r, sink_c = batch_r[i], batch_c[i]
+
+                    if resolved[sink_r, sink_c]:
+                        already_resolved_count += 1
+                        newly_resolved_sinks.append((sink_r, sink_c))
+                        continue
+
+                    if found[i]:
+                        path_len = path_lengths[i]
+                        path = [(int(paths_r[i, j]), int(paths_c[i, j])) for j in range(path_len)]
+                        _apply_breach(breached, path, epsilon)
+                        for r, c in path:
+                            resolved[r, c] = True
+                        breached_count += 1
+                        iteration_breached += 1
+                        newly_resolved_sinks.append((sink_r, sink_c))
+
+            # Remove resolved sinks from remaining list
+            resolved_set = set(newly_resolved_sinks)
+            remaining_sinks = [
+                s for s in remaining_sinks
+                if (s[0], s[1]) not in resolved_set
+            ]
+
+            print(f"      Breached {iteration_breached:,} sinks this iteration, {len(remaining_sinks):,} remaining")
+
+            # If no progress, stop iterating
+            if iteration_breached == 0:
+                print(f"    No new breaches in iteration {iteration}, stopping refinement")
+                break
+
+        # Count remaining as failed
+        failed_count = len(remaining_sinks)
+        if failed_count > 0:
+            print(f"    {failed_count:,} sinks could not be breached (will be filled in Stage 2b)")
+
+    # Use two-phase parallel processing with numba prange (checkerboard method)
+    elif parallel_method == "checkerboard" and NUMBA_AVAILABLE and total_sinks > 100 and parallel_useful:
         # Two-phase parallel processing: uses numba prange for true multi-core parallelism
         try:
             from numba import get_num_threads
@@ -3298,7 +3407,8 @@ def condition_dem_spec(
     max_breach_length: int = 100,
     epsilon: Optional[float] = None,
     masked_basin_outlets: Optional[np.ndarray] = None,
-) -> Tuple[np.ndarray, np.ndarray]:
+    parallel_method: str = "checkerboard",
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Condition DEM using spec-compliant 4-stage pipeline.
 
@@ -3437,7 +3547,8 @@ def condition_dem_spec(
 
     print("  Stage 2a: Constrained breaching...")
     breached = breach_depressions_constrained(
-        dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask
+        dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
+        parallel_method=parallel_method
     )
 
     print("  Stage 2b: Priority-flood fill residuals...")

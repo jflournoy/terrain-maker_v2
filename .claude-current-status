@@ -1,4 +1,112 @@
-# Current Status - 2026-02-11 09:00
+# Current Status - 2026-02-11 09:56
+
+## CRITICAL FIX: Breach Depth Constraint Not Being Enforced ✅
+
+**User report:** "strangely the breach depth map shows that the max breach depth is 814.4m even though the max breach depth setting is 25"
+
+**Investigation:** Added debug output to identify the issue:
+- epsilon value: 1.44e-03 m/cell = 1.44 mm per cell (correct, very small)
+- Observed breach depths: 26-34m, exceeding the 25m max_breach_depth setting
+- Despite tiny epsilon, breach depth was reaching 814.4m in the original demo
+
+**Root cause identified:**
+The Dijkstra breach path finding algorithm was correctly limiting neighbors to not be more than max_depth above the sink. However, it was NOT preventing the sink itself from being lowered more than max_depth when the path reached an outlet that was far below the sink.
+
+Example: If a sink is at 100m and an outlet is at 65m, the breaching algorithm would:
+1. Find a valid path (neighbors checked, all within constraint)
+2. Apply the breach by lowering the sink from 100m down to ~65m (35m lowering!)
+3. This violates the max_breach_depth=25m constraint by 10m
+
+The constraint check was:
+```python
+breach_depth_here = dem[neighbor] - dem[sink]
+if breach_depth_here > max_depth: continue  # Skip neighbors too high above sink
+```
+
+But this didn't prevent the final outcome from lowering the sink below the outlet by more than max_depth.
+
+**Fix applied:** Added constraint check when terminating at an outlet
+- [flow_accumulation.py:2367-2374](src/terrain/flow_accumulation.py#L2367-L2374) - JIT version (_find_breach_path_dijkstra_jit)
+- [flow_accumulation.py:2772-2779](src/terrain/flow_accumulation.py#L2772-L2779) - Non-JIT version (_find_breach_path_dijkstra)
+- [flow_accumulation.py:2528-2535](src/terrain/flow_accumulation.py#L2528-L2535) - Parallel version (_dijkstra_single_sink)
+
+New constraint check before accepting an outlet as terminus:
+```python
+if outlets[r, c]:
+    # Verify outlet is not deeper than max_depth below sink
+    sink_lowering = start_elev - dem[r, c]
+    if sink_lowering <= max_depth:
+        # Accept this outlet and terminate here
+        ...
+```
+
+**Result:**
+- Breach depths now properly constrained to <= max_breach_depth
+- Sinks cannot be lowered more than max_breach_depth below any outlet they breach to
+- The algorithm rejects outlets that are too deep, allowing other paths to be found or the sink to be filled instead
+
+**Testing:**
+- Script completed successfully with the fix
+- Diagnostic plots generated (04b_breach_depth.png)
+- No more debug warnings for excessive lowering
+
+---
+
+## NEW: Iterative Refinement Parallel Breaching Method ✅
+
+**User question:** "is the way we're parallelizing breaching legitimate?"
+
+**Problem identified:** The checkerboard parallel breaching method can only terminate at outlets, missing chaining opportunities. This means interior sinks that could chain to earlier breaches are instead filled.
+
+**Research:** Reviewed literature on parallel depression handling:
+- Barnes (2016) Parallel Priority-Flood - tile-based filling, no parallel breaching
+- Lindsay (2016) Hybrid Breach-Fill - serial, efficient but not parallel
+- Hariri et al. (2021) Parallel Hybrid Breach-Fill - watershed-partitioned parallelism
+- FastFlow (2024) GPU depression routing - O(log²n) convergence
+
+**Solution implemented:** Iterative refinement method
+
+**How it works:**
+1. Run parallel batch with `terminals = outlets | resolved`
+2. Apply successful breaches, mark paths as resolved
+3. Repeat with remaining sinks (now they can chain to resolved paths)
+4. Continue until no new breaches found
+5. Failed sinks go to Stage 2b (priority-flood fill)
+
+**New parameter:** `parallel_method` in `breach_depressions_constrained()`
+- `"checkerboard"` (default): Current two-phase parallel (outlets-only termination)
+- `"iterative"`: Iterative refinement that enables chaining
+
+**Key change:** [flow_accumulation.py:2988-3068](src/terrain/flow_accumulation.py#L2988-L3068)
+
+**Benefits:**
+- ✅ Finds more breaches via chaining (interior sinks connect to earlier breaches)
+- ✅ Preserves parallelism within each iteration
+- ✅ Automatically discovers watershed structure through convergence
+- ✅ Backward compatible (checkerboard is default)
+
+**Test suite:** [tests/test_iterative_breaching.py](tests/test_iterative_breaching.py)
+- 8 tests covering chaining scenarios, convergence, edge cases
+- All tests pass
+
+**Usage:**
+```python
+from terrain.flow_accumulation import breach_depressions_constrained
+
+# Use iterative refinement for better breach coverage
+breached = breach_depressions_constrained(
+    dem, outlets,
+    max_breach_depth=50.0,
+    max_breach_length=100,
+    parallel_method="iterative",  # NEW: enables chaining
+)
+```
+
+**Pre-existing test failures (not caused by this change):**
+- `test_cache_invalidates_on_different_backend` - `breached_dem` undefined for legacy backend
+- `test_mass_balance_multiple_outlets` - unrelated mass balance issue
+
+---
 
 ## CRITICAL FIX: flow_accumulation() Not Returning breached_dem ✅
 
