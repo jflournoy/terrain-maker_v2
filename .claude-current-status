@@ -1,6 +1,29 @@
-# Current Status - 2026-02-10 23:04
+# Current Status - 2026-02-11 09:00
 
-## ISSUE FOUND & FIXED: San Diego Demo Not Passing Breached DEM to Diagnostics ✅
+## CRITICAL FIX: flow_accumulation() Not Returning breached_dem ✅
+
+**Problem:** Even though `flow_accumulation()` was unpacking `breached_dem` from `condition_dem_spec()` on line 845, it was NOT adding it to the result dictionary. This meant:
+- Breach depth diagnostic plot never appeared
+- Fill depth still showed wrong values (because diagnostic code couldn't find breached_dem)
+- Debug code added to san_diego_flow_demo.py was checking for `flow_result.get('breached_dem')` which returned None
+
+**Root Cause:** The result dictionary constructed on lines 1055-1062 was missing the `breached_dem` key entirely.
+
+**Fix Applied:**
+1. [flow_accumulation.py:1060](src/terrain/flow_accumulation.py#L1060) - Added `"breached_dem": breached_dem` to main result dict
+2. [flow_accumulation.py:242](src/terrain/flow_accumulation.py#L242) - Added `"breached_dem": None` to cache loading (not persisted to cache, only available on fresh run)
+
+**Result:**
+- flow_accumulation() now properly returns breached_dem in results
+- san_diego_flow_demo.py debug code will now detect and use breached_dem
+- Breach depth and fill depth diagnostic plots will now both be generated correctly
+- Issue is now completely resolved ✅
+
+**Commit:** b8c994c
+
+---
+
+## PREVIOUS: ISSUE FOUND & FIXED: San Diego Demo Not Passing Breached DEM to Diagnostics ✅
 
 **Problem:** san_diego_flow_demo.py was calling `create_flow_diagnostics()` without passing the `breached_dem` parameter, so:
 - Fill depth plot was still showing wrong values
