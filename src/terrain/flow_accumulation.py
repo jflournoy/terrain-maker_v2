@@ -2816,7 +2816,7 @@ def _find_breach_path_dijkstra(
     return None
 
 
-def _apply_breach(dem: np.ndarray, path: list, epsilon: float, max_breach_depth: float = 50.0) -> None:
+def _apply_breach(dem: np.ndarray, path: list, epsilon: float) -> None:
     """
     Carve breach path into DEM with monotonic gradient.
 
@@ -2824,7 +2824,6 @@ def _apply_breach(dem: np.ndarray, path: list, epsilon: float, max_breach_depth:
     lower than the previous cell in the path.
 
     Only lowers cells, never raises them.
-    Enforces per-cell maximum lowering limit.
 
     Parameters
     ----------
@@ -2834,8 +2833,6 @@ def _apply_breach(dem: np.ndarray, path: list, epsilon: float, max_breach_depth:
         Breach path [(row, col), ...] from sink to drain
     epsilon : float
         Small gradient for breach paths (meters per cell)
-    max_breach_depth : float, default 50.0
-        Maximum elevation drop allowed at any single cell (meters)
     """
     n = len(path)
     if n < 2:
@@ -2848,15 +2845,11 @@ def _apply_breach(dem: np.ndarray, path: list, epsilon: float, max_breach_depth:
     # Work backward toward sink
     for i in range(n - 2, -1, -1):
         r, c = path[i]
-        original_elev = dem[r, c]
         # Each cell should be epsilon higher than the next cell in path
         required_elev = base_elev + epsilon * (n - 1 - i)
         # Only lower cells, never raise them
         if dem[r, c] > required_elev:
-            # But enforce max_breach_depth: don't lower more than max_breach_depth
-            min_allowed_elev = original_elev - max_breach_depth
-            final_elev = max(required_elev, min_allowed_elev)
-            dem[r, c] = final_elev
+            dem[r, c] = required_elev
 
 
 def breach_depressions_constrained(
@@ -3067,7 +3060,7 @@ def breach_depressions_constrained(
                     if found[i]:
                         path_len = path_lengths[i]
                         path = [(int(paths_r[i, j]), int(paths_c[i, j])) for j in range(path_len)]
-                        _apply_breach(breached, path, epsilon, max_breach_depth)
+                        _apply_breach(breached, path, epsilon)
                         for r, c in path:
                             resolved[r, c] = True
                         breached_count += 1
@@ -3147,7 +3140,7 @@ def breach_depressions_constrained(
                     if found[i]:
                         path_len = path_lengths[i]
                         path = [(int(paths_r[i, j]), int(paths_c[i, j])) for j in range(path_len)]
-                        _apply_breach(breached, path, epsilon, max_breach_depth)
+                        _apply_breach(breached, path, epsilon)
                         for r, c in path:
                             resolved[r, c] = True
                         batch_breached += 1
@@ -3209,7 +3202,7 @@ def breach_depressions_constrained(
 
             if path is not None:
                 # Apply breach
-                _apply_breach(breached, path, epsilon, max_breach_depth)
+                _apply_breach(breached, path, epsilon)
 
                 # Mark all cells in path as resolved
                 for r, c in path:
