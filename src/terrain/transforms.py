@@ -1602,9 +1602,10 @@ def upscale_scores(
     else:
         normalized = np.zeros_like(data)
 
-    # Try methods in order of preference
+    # Try methods in order of preference: quality → speed
     if method == "auto":
-        methods_to_try = ["esrgan", "bilateral"]
+        # ESRGAN (best quality) → bilinear (fast, good quality) → nearest (fastest fallback)
+        methods_to_try = ["esrgan", "bilinear", "nearest"]
     else:
         methods_to_try = [method]
 
@@ -1625,6 +1626,16 @@ def upscale_scores(
                 result = zoom(normalized, scale, order=3, mode="reflect")
                 used_method = "bicubic"
                 break
+            elif m == "bilinear":
+                # Fast upscaling with bilinear interpolation
+                result = zoom(normalized, scale, order=1, mode="reflect")
+                used_method = "bilinear"
+                break
+            elif m == "nearest":
+                # Fastest upscaling with nearest neighbor
+                result = zoom(normalized, scale, order=0, mode="constant")
+                used_method = "nearest"
+                break
         except ImportError as e:
             # Log at INFO level so user can see why ESRGAN isn't working
             logger.info(f"Method '{m}' not available: {e}")
@@ -1636,10 +1647,10 @@ def upscale_scores(
             continue
 
     if result is None:
-        # Last resort: simple bicubic
-        logger.warning("All upscaling methods failed, using basic bicubic")
-        result = zoom(normalized, scale, order=3, mode="reflect")
-        used_method = "bicubic"
+        # Last resort: fastest possible (nearest neighbor)
+        logger.warning("All upscaling methods failed, using fastest fallback (nearest neighbor)")
+        result = zoom(normalized, scale, order=0, mode="constant")
+        used_method = "nearest"
 
     # Denormalize back to original range
     result = result * (data_max - data_min) + data_min
