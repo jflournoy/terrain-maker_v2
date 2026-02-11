@@ -163,6 +163,13 @@ def main():
         default=150,
         help="Max breach path length in cells (default: 150)",
     )
+    parser.add_argument(
+        "--parallel-method",
+        type=str,
+        choices=["checkerboard", "iterative"],
+        default="checkerboard",
+        help="Parallel breaching method: 'checkerboard' (fast, outlets-only) or 'iterative' (slower, enables chaining)",
+    )
     args = parser.parse_args()
 
     # Apply --fast defaults
@@ -392,9 +399,10 @@ def main():
         backend="spec",
         edge_mode="all",
         coastal_elev_threshold=-20.0,  # Allow outlets below sea level (Salton Sea)
-        # Breaching constraints (configurable via --max-breach-depth and --max-breach-length)
+        # Breaching constraints (configurable via CLI arguments)
         max_breach_depth=args.max_breach_depth,
         max_breach_length=args.max_breach_length,
+        parallel_method=args.parallel_method,
         # Basin preservation (uses adaptive scaling: 1/1000 of total cells)
         detect_basins=True,       # Automatically detect and preserve endorheic basins
         # min_basin_size: uses default (5000) which triggers adaptive scaling
@@ -624,19 +632,7 @@ def main():
         crs=dem_crs,
     )
 
-    # Add pre-loaded lake mask as data layer (loaded before flow computation)
-    # Lake mask will go through same transforms as DEM (no target_layer to avoid double-transform)
-    if lake_mask is not None and np.any(lake_mask > 0):
-        terrain.add_data_layer(
-            "lakes",
-            lake_mask.astype(np.float32),
-            transform,  # Original DEM transform (lake_mask was rasterized at DEM resolution)
-            crs=dem_crs,  # Use actual CRS, not hardcoded
-        )
-        print(f"  Added lake mask as data layer: {np.sum(lake_mask > 0):,} lake cells")
-
-    # Apply transforms BEFORE water detection
-    # This ensures water detection happens on downsampled terrain
+    # Apply transforms to DEM and data layers
     terrain.apply_transforms()
 
     # Set colormap based on user choice
@@ -672,27 +668,6 @@ def main():
             source_layers=["upstream_rainfall_log"],
         )
 
-    # Detect water from the final downsampled terrain (at mesh resolution)
-    # This ensures water_mask matches the colors shape after all transforms
-    if lake_mask is not None and np.any(lake_mask > 0):
-        # Add lake mask as data layer to terrain so it can be used for water coloring
-        # At this point terrain has been transformed to final mesh resolution
-        print("Detecting water from HydroLAKES lake mask...")
-        water_mask = terrain.detect_water_highres(
-            slope_threshold=0.0000000000000001,
-            fill_holes=False,
-            scale_factor=0.0001,
-        )
-        print(f"Water mask at mesh resolution: {water_mask.shape}, {np.sum(water_mask > 0):,} water cells")
-    else:
-        # Fallback to slope-based water detection
-        print("No lake mask available, detecting water by slope...")
-        water_mask = terrain.detect_water_highres(
-            slope_threshold=0.0000000000000001,
-            fill_holes=False,
-            scale_factor=0.0001,
-        )
-
     # Create mesh
     terrain.compute_colors()
 
@@ -709,7 +684,6 @@ def main():
         height_scale=args.height_scale,
         center_model=True,
         boundary_extension=True,
-        water_mask=water_mask,
         base_depth=1.0,
     )
     print(f"✓ Created mesh: {len(mesh.data.vertices):,} vertices")

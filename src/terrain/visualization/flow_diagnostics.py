@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 import matplotlib
+from src.terrain.flow_accumulation import compute_flow_direction, compute_drainage_area
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
@@ -408,6 +409,71 @@ def plot_drainage_area(
     )
 
 
+def plot_drainage_area_comparison(
+    dem: np.ndarray,
+    dem_conditioned: np.ndarray,
+    ocean_mask: np.ndarray,
+    output_path: Path,
+) -> Path:
+    """
+    Create comparison plot of drainage area from raw vs conditioned DEM.
+
+    Shows three panels:
+    - Drainage area from raw DEM (left)
+    - Drainage area from conditioned DEM (middle)
+    - Absolute difference between them (right)
+
+    This verifies that conditioning (breaching + filling) affects flow routing.
+    """
+    # Compute drainage areas
+    flow_dir_raw = compute_flow_direction(dem, mask=ocean_mask)
+    drainage_raw = compute_drainage_area(flow_dir_raw)
+
+    flow_dir_cond = compute_flow_direction(dem_conditioned, mask=ocean_mask)
+    drainage_cond = compute_drainage_area(flow_dir_cond)
+
+    drainage_diff = np.abs(drainage_raw - drainage_cond)
+
+    # Create figure with 3 subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle("Drainage Area Comparison: Raw vs Conditioned DEM", fontsize=14, fontweight="bold")
+
+    # Plot 1: Drainage from raw DEM
+    im1 = axes[0].imshow(np.log10(drainage_raw + 1), cmap=FLOW_COLORMAPS["drainage"], origin='upper')
+    axes[0].set_title("Drainage Area from Raw DEM (log10)")
+    axes[0].set_ylabel("Row")
+    cbar1 = plt.colorbar(im1, ax=axes[0])
+    cbar1.set_label("log10(cells)")
+
+    # Plot 2: Drainage from conditioned DEM
+    im2 = axes[1].imshow(np.log10(drainage_cond + 1), cmap=FLOW_COLORMAPS["drainage"], origin='upper')
+    axes[1].set_title("Drainage Area from Conditioned DEM (log10)")
+    cbar2 = plt.colorbar(im2, ax=axes[1])
+    cbar2.set_label("log10(cells)")
+
+    # Plot 3: Difference
+    im3 = axes[2].imshow(drainage_diff, cmap="hot", origin='upper')
+    axes[2].set_title("Drainage Area Difference (|raw - conditioned|)")
+    axes[2].set_ylabel("Row")
+    cbar3 = plt.colorbar(im3, ax=axes[2])
+    cbar3.set_label("cells")
+
+    # Add statistics text
+    diff_count = np.sum(drainage_diff > 0)
+    diff_pct = 100 * diff_count / dem.size
+    fig.text(0.5, 0.02,
+             f"Cells with difference: {diff_count:,} ({diff_pct:.2f}%) | "
+             f"Max difference: {drainage_diff.max():.1f} cells | "
+             f"Mean difference: {drainage_diff.mean():.1f} cells",
+             ha='center', fontsize=10)
+
+    plt.tight_layout(rect=[0, 0.04, 1, 0.96])
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+    return output_path
+
+
 def plot_stream_network(
     dem: np.ndarray,
     drainage_area: np.ndarray,
@@ -737,6 +803,9 @@ def create_flow_diagnostics(
     # 7. Drainage Area
     plot_drainage_area(drainage_area, output_dir / "07_drainage_area.png", lake_mask)
 
+    # 7b. Drainage Area Comparison (Raw vs Conditioned)
+    plot_drainage_area_comparison(dem, dem_conditioned, ocean_mask, output_dir / "07b_drainage_area_comparison.png")
+
     # 8. Stream Network
     plot_stream_network(
         dem, drainage_area, output_dir / "08_stream_network_with_lakes.png",
@@ -788,5 +857,5 @@ def create_flow_diagnostics(
         is_real_precip=is_real_precip,
     )
 
-    print(f"  Generated {13 if lake_mask is not None else 11} diagnostic images")
+    print(f"  Generated {14 if lake_mask is not None else 12} diagnostic images")
     return output_dir

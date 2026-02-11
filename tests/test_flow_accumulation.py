@@ -1145,8 +1145,9 @@ class TestFlowSpecValidation:
         upstream_rainfall = compute_upstream_rainfall(flow_dir, precip)
         drainage_area = compute_drainage_area(flow_dir)
 
-        # Find all outlets (direction=0 with drainage > 1, or at ocean boundary)
-        outlets = (flow_dir == 0) & (drainage_area > 1)
+        # Find all outlets (direction=0 with drainage > 1, excluding ocean cells)
+        # Ocean cells have flow_dir=0 but are sinks, not outlets
+        outlets = (flow_dir == 0) & (drainage_area > 1) & ~ocean_mask
         # Also include cells that flow into ocean (next to ocean)
         for i in range(rows):
             for j in range(cols):
