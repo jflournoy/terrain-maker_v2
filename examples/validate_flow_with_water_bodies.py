@@ -38,20 +38,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
-    compute_upstream_rainfall,
-    condition_dem,
-    condition_dem_spec,
     detect_ocean_mask,
-    detect_endorheic_basins,
     D8_OFFSETS,
 )
+
+# Import flow pipeline (encapsulates validated basin preservation pattern)
+from src.terrain.flow_pipeline import compute_flow_with_basins
 
 # Import water body functions
 from src.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
-    identify_lake_inlets,
-    create_lake_flow_routing,
+)
+
+# Import visualization functions from library
+from src.terrain.visualization.flow_diagnostics import (
+    save_flow_plot,
+    FLOW_COLORMAPS,
+    D8_VECTORS,
 )
 
 # Import validation functions from validate_flow_complete
@@ -63,14 +67,6 @@ from validate_flow_complete import (
     find_coastal_subset,
     load_real_precipitation,
     BIGNESS_SIZES,
-    CMAP_ELEVATION,
-    CMAP_BINARY,
-    CMAP_FILL,
-    CMAP_DIRECTION,
-    CMAP_DRAINAGE,
-    CMAP_STREAMS,
-    CMAP_PRECIP,
-    CMAP_RAINFALL,
 )
 
 
@@ -162,41 +158,6 @@ def create_synthetic_lakes(dem: np.ndarray, dem_transform: Affine) -> tuple:
     return lake_mask, outlets_dict
 
 
-def save_plot(data: np.ndarray, title: str, output_path: Path, cmap: str,
-              label: str = '', log_scale: bool = False, mask: np.ndarray = None,
-              overlay_data: np.ndarray = None, overlay_cmap: str = None,
-              vmin: float = None, vmax: float = None):
-    """Save a single plot to file."""
-    fig, ax = plt.subplots(figsize=(12, 10))
-
-    # Handle masking
-    plot_data = data.copy().astype(float)
-    if mask is not None:
-        plot_data = np.ma.masked_where(mask, plot_data)
-
-    # Plot main data
-    if log_scale and np.any(plot_data > 0):
-        plot_data = np.log10(plot_data + 1)
-        label = f'log10({label})' if label else 'log10'
-
-    im = ax.imshow(plot_data, cmap=cmap, interpolation='nearest', vmin=vmin, vmax=vmax)
-    plt.colorbar(im, ax=ax, label=label, shrink=0.8)
-
-    # Add overlay if provided
-    if overlay_data is not None and overlay_cmap is not None:
-        overlay_masked = np.ma.masked_where(~overlay_data, overlay_data.astype(float))
-        ax.imshow(overlay_masked, cmap=overlay_cmap, alpha=0.7)
-
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    ax.set_xlabel('Column')
-    ax.set_ylabel('Row')
-
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"  Saved: {output_path.name}")
-
-
 def create_validation_images(
     dem: np.ndarray,
     dem_conditioned: np.ndarray,
@@ -229,18 +190,18 @@ def create_validation_images(
     print(f"\nSaving images to: {output_dir}")
 
     # 1. Original DEM
-    save_plot(
+    save_flow_plot(
         dem, f'1. Original DEM ({dem.shape[0]}x{dem.shape[1]})',
         output_dir / '01_dem_original.png',
-        cmap=CMAP_ELEVATION, label='Elevation (m)'
+        cmap=FLOW_COLORMAPS["elevation"], label='Elevation (m)'
     )
 
     # 2. Ocean Mask
     ocean_pct = 100 * np.sum(ocean_mask) / ocean_mask.size
-    save_plot(
+    save_flow_plot(
         ocean_mask.astype(float), f'2. Ocean Mask ({ocean_pct:.1f}% ocean)',
         output_dir / '02_ocean_mask.png',
-        cmap=CMAP_BINARY, label='Ocean (1) / Land (0)'
+        cmap=FLOW_COLORMAPS["binary"], label='Ocean (1) / Land (0)'
     )
 
     # 3. Water Bodies (NEW)
@@ -252,23 +213,11 @@ def create_validation_images(
         fig, ax = plt.subplots(figsize=(12, 10))
 
         # Show elevation as background
-        im_dem = ax.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
+        im_dem = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
 
         # Overlay lakes in blue
         lake_display = np.ma.masked_where(lake_mask == 0, lake_mask.astype(float))
         im_lakes = ax.imshow(lake_display, cmap='Blues', alpha=0.7, vmin=0, vmax=num_lakes)
-
-        # D8 direction codes to arrow vectors
-        d8_to_vector = {
-            1: (1, 0),      # East
-            2: (1, -1),     # SE
-            4: (0, -1),     # South
-            8: (-1, -1),    # SW
-            16: (-1, 0),    # West
-            32: (-1, 1),    # NW
-            64: (0, 1),     # North
-            128: (1, 1),    # NE
-        }
 
         # Mark outlets with arrows pointing outward (red)
         if lake_outlets is not None and np.any(lake_outlets):
@@ -280,8 +229,8 @@ def create_validation_images(
             outlet_v = np.zeros(len(outlet_rows), dtype=float)
 
             for i, d8_code in enumerate(outlet_dirs):
-                if d8_code in d8_to_vector:
-                    outlet_u[i], outlet_v[i] = d8_to_vector[int(d8_code)]
+                if d8_code in D8_VECTORS:
+                    outlet_u[i], outlet_v[i] = D8_VECTORS[int(d8_code)]
 
             # Draw outlet arrows (red, pointing outward)
             ax.quiver(outlet_cols, outlet_rows, outlet_u, outlet_v,
@@ -299,9 +248,9 @@ def create_validation_images(
             inlet_v = np.zeros(len(inlet_rows), dtype=float)
 
             for i, d8_code in enumerate(inlet_dirs):
-                if d8_code in d8_to_vector:
+                if d8_code in D8_VECTORS:
                     # Reverse direction for inlet arrows
-                    u, v = d8_to_vector[int(d8_code)]
+                    u, v = D8_VECTORS[int(d8_code)]
                     inlet_u[i], inlet_v[i] = -u, -v
 
             # Draw inlet arrows (green, pointing inward)
@@ -329,7 +278,7 @@ def create_validation_images(
         fig, ax = plt.subplots(figsize=(12, 10))
 
         # Show elevation as background
-        im_dem = ax.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
+        im_dem = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
 
         # Overlay basins in purple/magenta
         basin_display = np.ma.masked_where(~basin_mask, basin_mask.astype(float))
@@ -347,55 +296,60 @@ def create_validation_images(
         print(f"  Saved: 03b_endorheic_basins.png")
 
     # 4. Conditioned DEM
-    save_plot(
+    save_flow_plot(
         dem_conditioned, '4. Conditioned DEM (depression-filled)',
         output_dir / '04_dem_conditioned.png',
-        cmap=CMAP_ELEVATION, label='Elevation (m)'
+        cmap=FLOW_COLORMAPS["elevation"], label='Elevation (m)'
     )
 
     # 5. Fill Depth
     fill_depth = dem_conditioned - dem
     fill_depth[ocean_mask] = 0
     fill_max = np.max(fill_depth)
-    save_plot(
+    save_flow_plot(
         fill_depth, f'5. Depression Fill Depth (max={fill_max:.1f}m)',
         output_dir / '05_fill_depth.png',
-        cmap=CMAP_FILL, label='m', log_scale=True
+        cmap=FLOW_COLORMAPS["fill"], label='m', log_scale=True
     )
 
     # 6. Flow Direction
     flow_display = flow_dir.astype(float)
     flow_display[flow_dir == 0] = np.nan
-    save_plot(
+    save_flow_plot(
         flow_display, '6. Flow Direction (D8 codes)',
         output_dir / '06_flow_direction.png',
-        cmap=CMAP_DIRECTION, label='D8 code (1-128)'
+        cmap=FLOW_COLORMAPS["direction"], label='D8 code (1-128)'
     )
 
     # 7. Drainage Area
-    save_plot(
+    lake_overlay_mask = (lake_mask > 0) if lake_mask is not None else None
+    save_flow_plot(
         drainage_area, '7. Drainage Area (log scale)',
         output_dir / '07_drainage_area.png',
-        cmap=CMAP_DRAINAGE, label='cells', log_scale=True
+        cmap=FLOW_COLORMAPS["drainage"], label='cells', log_scale=True,
+        overlay_data=lake_overlay_mask, overlay_cmap='Blues'
     )
 
     # 8. Stream Network with lakes highlighted
-    streams = drainage_area > 1
+    # Use top 5% drainage area threshold for stream visualization
+    stream_threshold = np.percentile(drainage_area[drainage_area > 0], 95)
+    streams = drainage_area >= stream_threshold
 
     fig, ax = plt.subplots(figsize=(12, 10))
-    im = ax.imshow(dem, cmap=CMAP_ELEVATION, alpha=0.6)
+    im = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
 
     # Overlay streams
     stream_overlay = np.ma.masked_where(~streams, streams.astype(float))
-    ax.imshow(stream_overlay, cmap=CMAP_STREAMS, alpha=0.9)
+    ax.imshow(stream_overlay, cmap=FLOW_COLORMAPS["streams"], alpha=0.9)
 
     # Overlay lakes in blue
     if lake_mask is not None:
         lake_overlay = np.ma.masked_where(lake_mask == 0, np.ones_like(lake_mask, dtype=float))
         ax.imshow(lake_overlay, cmap='Blues', alpha=0.5)
 
+    stream_count = np.sum(streams)
     plt.colorbar(im, ax=ax, label='Elevation (m)', shrink=0.8)
-    ax.set_title(f'8. Stream Network with Lakes',
+    ax.set_title(f'8. Stream Network with Lakes (top 5%, {stream_count:,} cells)',
                 fontsize=14, fontweight='bold')
     ax.set_xlabel('Column')
     ax.set_ylabel('Row')
@@ -411,17 +365,38 @@ def create_validation_images(
     else:
         precip_title = '9. Synthetic Precipitation (elevation-based)'
         precip_label = 'mm/year (synthetic)'
-    save_plot(
+    save_flow_plot(
         precip, precip_title,
         output_dir / '09_precipitation.png',
-        cmap=CMAP_PRECIP, label=precip_label
+        cmap=FLOW_COLORMAPS["precip"], label=precip_label
     )
 
     # 10. Upstream Rainfall
-    save_plot(
+    save_flow_plot(
         upstream_rainfall, '10. Upstream Rainfall',
         output_dir / '10_upstream_rainfall.png',
-        cmap=CMAP_RAINFALL, label='mm·m²', log_scale=True
+        cmap=FLOW_COLORMAPS["rainfall"], label='mm·m²', log_scale=True,
+        overlay_data=lake_overlay_mask, overlay_cmap='Blues'
+    )
+
+    # 10b. Discharge Potential (rainfall-weighted drainage, log scale)
+    # Combines drainage area with upstream rainfall to show where biggest flows occur
+    mean_rainfall = np.mean(upstream_rainfall[upstream_rainfall > 0]) if np.any(upstream_rainfall > 0) else 1.0
+    discharge_potential = drainage_area.astype(np.float32) * (upstream_rainfall / mean_rainfall)
+    save_flow_plot(
+        discharge_potential, '10b. Discharge Potential - Log Scale (drainage × rainfall)',
+        output_dir / '10b_discharge_potential_log.png',
+        cmap=FLOW_COLORMAPS["rainfall"], label='Discharge Index', log_scale=True,
+        overlay_data=lake_overlay_mask, overlay_cmap='Blues'
+    )
+
+    # 10c. Discharge Potential (linear scale)
+    # Same metric as 10b but linear scale to show absolute discharge magnitudes
+    save_flow_plot(
+        discharge_potential, '10c. Discharge Potential - Linear Scale (drainage × rainfall)',
+        output_dir / '10c_discharge_potential_linear.png',
+        cmap=FLOW_COLORMAPS["rainfall"], label='Discharge Index', log_scale=False,
+        overlay_data=lake_overlay_mask, overlay_cmap='Blues'
     )
 
     # 11. Validation Summary
@@ -726,170 +701,61 @@ def main():
             lake_outlets = None
             lake_inlets = None
 
-    # Step 5: Detect endorheic basins (before conditioning)
+    # Step 3-8: Compute flow using validated pipeline
     step_num = 5 if args.data_source != 'synthetic' else 4
-    basin_mask = None
-    endorheic_basins = {}
+    print(f"\n{step_num}. Computing flow with basin preservation pipeline...")
 
-    if args.detect_basins:
-        print(f"\n{step_num}. Detecting endorheic basins...")
-        basin_mask, endorheic_basins = detect_endorheic_basins(
-            dem,
-            min_size=args.basin_min_size,
-            exclude_mask=ocean_mask,
-            min_depth=args.basin_min_depth,
-        )
-
-        if basin_mask is not None and np.any(basin_mask):
-            num_basins = len(endorheic_basins)
-            basin_coverage = 100 * np.sum(basin_mask) / dem.size
-            print(f"   Found {num_basins} endorheic basin(s)")
-            print(f"   Basin coverage: {basin_coverage:.2f}% of domain")
-            print(f"   Basin sizes: {sorted(endorheic_basins.values(), reverse=True)[:5]} cells")
-        else:
-            print("   No significant endorheic basins detected")
-            basin_mask = None
-
-        step_num += 1
-
-    # Step 6: Condition DEM
-    print(f"\n{step_num}. Conditioning DEM (backend={args.backend})...")
-
-    # Create combined mask: ocean + endorheic basins (pre-mask them)
-    # Strategy for lakes:
-    # - Lakes INSIDE endorheic basins → pre-mask (act as sinks/drainage sums like Salton Sea)
-    # - Lakes OUTSIDE basins → DON'T mask (act as connecting segments for river flow)
-    conditioning_mask = ocean_mask.copy()
-
-    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
-        # Only mask lakes that are inside preserved basins
-        lakes_in_basins = lake_mask & basin_mask
-        if np.any(lakes_in_basins):
-            print(f"   Pre-masking {np.sum(lakes_in_basins > 0):,} lake cells inside basins (drainage sinks)")
-            conditioning_mask = conditioning_mask | lakes_in_basins
-
-        # Lakes outside basins are NOT masked (act as connecting segments for river flow)
-        lakes_outside = lake_mask & ~basin_mask
-        if np.any(lakes_outside):
-            print(f"   NOT masking {np.sum(lakes_outside > 0):,} lake cells outside basins (river connectors)")
-    elif lake_mask is not None and np.any(lake_mask):
-        # No basins detected - don't mask any lakes (all are river connectors)
-        print(f"   NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
-
-    if basin_mask is not None and np.any(basin_mask):
-        print(f"   Pre-masking {np.sum(basin_mask):,} basin cells to preserve topography")
-        conditioning_mask = conditioning_mask | basin_mask
-
-    if args.backend == 'spec':
-        dem_conditioned, outlets = condition_dem_spec(
-            dem,
-            nodata_mask=conditioning_mask,
-            coastal_elev_threshold=args.coastal_elev_threshold,
-            edge_mode=args.edge_mode,
-            max_breach_depth=args.max_breach_depth,
-            max_breach_length=args.max_breach_length,
-            epsilon=args.epsilon,
-        )
-    else:
-        dem_conditioned = condition_dem(
-            dem, method=args.fill_method, ocean_mask=conditioning_mask,
-            min_basin_size=args.min_basin_size, min_basin_depth=args.min_basin_depth
-        )
-
-    # Identify lake inlets (after DEM conditioning)
-    lake_inlets = None
-    if lake_mask is not None and np.any(lake_mask):
-        print(f"\nIdentifying lake inlets...")
-        # Pass outlet_mask so inlets don't include outlet cells
-        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
-        inlets_dict = identify_lake_inlets(lake_mask, dem_conditioned, outlet_mask=outlet_mask_for_inlets)
-
-        if inlets_dict:
-            # Convert inlet dict to boolean mask
-            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
-            for lake_id, inlet_cells in inlets_dict.items():
-                for row, col in inlet_cells:
-                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
-                        lake_inlets[row, col] = True
-
-            inlet_count = np.sum(lake_inlets)
-            print(f"   Inlet cells: {inlet_count}")
-        else:
-            lake_inlets = None
-
-    # Step 5: Compute flow direction WITHOUT lakes (for comparison)
-    print("\n5. Computing flow direction (without lakes)...")
-    flow_dir_no_lakes = compute_flow_direction(dem_conditioned, mask=ocean_mask)
-
-    # Compute drainage area without lakes
-    print("\n6. Computing drainage area (without lakes)...")
-    drainage_area_no_lakes = compute_drainage_area(flow_dir_no_lakes)
-
-    # Step 7: Apply lake routing (with endorheic basin awareness)
-    if lake_mask is not None and lake_outlets is not None:
-        print("\n7. Applying lake flow routing...")
-
-        # Check which lakes are inside preserved endorheic basins
-        lakes_in_basin = None
-        lakes_outside_basin = lake_mask.copy()
-
-        if basin_mask is not None and np.any(basin_mask):
-            lakes_in_basin = lake_mask & basin_mask
-            lakes_outside_basin = lake_mask & ~basin_mask
-
-            num_lakes_in = len(np.unique(lakes_in_basin[lakes_in_basin > 0]))
-            num_lakes_out = len(np.unique(lakes_outside_basin[lakes_outside_basin > 0]))
-            cells_in = np.sum(lakes_in_basin > 0)
-            cells_out = np.sum(lakes_outside_basin > 0)
-
-            if num_lakes_in > 0:
-                print(f"   Found {num_lakes_in} water bodies INSIDE preserved basins ({cells_in:,} cells)")
-                print(f"   These will use natural basin flow (no explicit routing)")
-
-            if num_lakes_out > 0:
-                print(f"   Found {num_lakes_out} water bodies OUTSIDE basins ({cells_out:,} cells)")
-                print(f"   These will use explicit outlet routing")
-
-        # Apply explicit routing only to lakes outside basins
-        if lakes_outside_basin is not None and np.any(lakes_outside_basin):
-            # Create mask of outlets only for lakes outside basins
-            lake_outlets_outside = lake_outlets & ~basin_mask if basin_mask is not None else lake_outlets
-
-            lake_flow = create_lake_flow_routing(lakes_outside_basin, lake_outlets_outside, dem_conditioned)
-            flow_dir = np.where(lakes_outside_basin > 0, lake_flow, flow_dir_no_lakes)
-
-            num_outlets_outside = np.sum(lake_outlets_outside)
-            print(f"   Applied explicit routing to {np.sum(lakes_outside_basin > 0):,} cells with {num_outlets_outside} outlets")
-        else:
-            flow_dir = flow_dir_no_lakes
-
-        num_lakes = len(np.unique(lake_mask[lake_mask > 0]))
-        num_outlets = np.sum(lake_outlets)
-        lake_cells = np.sum(lake_mask > 0)
-        print(f"   Total lakes processed: {num_lakes} ({lake_cells:,} cells)")
-    else:
-        print("\n7. Skipping lake routing (no lakes detected)")
-        flow_dir = flow_dir_no_lakes
-
-    # Step 8: Compute drainage area WITH lakes
-    print("\n8. Computing drainage area (with lakes)...")
-    drainage_area = compute_drainage_area(flow_dir)
-
-    # Step 9: Compute upstream rainfall
-    print("\n9. Computing upstream rainfall...")
-
-    # Try to load real precipitation
+    # Load precipitation for upstream rainfall computation
+    print("  Loading precipitation data...")
     precip, is_real_precip = load_real_precipitation(dem.shape, args.output)
-
     if not is_real_precip:
         print("  No real precipitation data found, using synthetic (elevation-based)")
         precip = 200 + (dem - dem.min()) / (dem.max() - dem.min() + 1) * 300
         precip = precip.astype(np.float32)
 
-    precip[ocean_mask] = 0
-    upstream_rainfall = compute_upstream_rainfall(flow_dir, precip)
+    # Call validated flow pipeline
+    flow_results = compute_flow_with_basins(
+        dem=dem,
+        dem_transform=dem_transform,
+        precipitation=precip,
+        lake_mask=lake_mask,
+        lake_outlets=lake_outlets,
+        detect_basins=args.detect_basins,
+        min_basin_size=args.basin_min_size,
+        min_basin_depth=args.basin_min_depth,
+        backend=args.backend,
+        coastal_elev_threshold=args.coastal_elev_threshold,
+        edge_mode=args.edge_mode,
+        max_breach_depth=args.max_breach_depth,
+        max_breach_length=args.max_breach_length,
+        epsilon=args.epsilon,
+        ocean_threshold=0.0,
+        ocean_border_only=True,
+        verbose=False,  # Suppress verbose output (we have our own progress messages)
+    )
 
-    # Step 10: Validate
+    # Extract results
+    flow_dir = flow_results["flow_direction"]
+    drainage_area = flow_results["drainage_area"]
+    dem_conditioned = flow_results["dem_conditioned"]
+    basin_mask = flow_results["basin_mask"]
+    lake_inlets = flow_results["lake_inlets"]
+    upstream_rainfall = flow_results["upstream_rainfall"]
+
+    # Count basins for reporting
+    endorheic_basins = {}
+    if basin_mask is not None and np.any(basin_mask):
+        from scipy.ndimage import label
+        labeled_basins, num_basins = label(basin_mask)
+        for basin_id in range(1, num_basins + 1):
+            endorheic_basins[basin_id] = np.sum(labeled_basins == basin_id)
+
+    # Compute flow WITHOUT lakes for comparison visualizations
+    print("  Computing flow without lakes (for comparison)...")
+    flow_dir_no_lakes = compute_flow_direction(dem_conditioned, mask=ocean_mask)
+    drainage_area_no_lakes = compute_drainage_area(flow_dir_no_lakes)
+
+    # Step 9: Validate
     print("\n10. Validating...")
     cycles, sample_size = validate_no_cycles(flow_dir, sample_size=1000)
     mass_balance = compute_mass_balance(flow_dir, drainage_area)

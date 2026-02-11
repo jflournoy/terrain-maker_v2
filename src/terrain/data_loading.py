@@ -542,3 +542,81 @@ def load_filtered_hgt_files(
     finally:
         for ds in dem_datasets:
             ds.close()
+
+
+def load_geotiff_cropped_to_dem(
+    geotiff_path: Path,
+    dem_shape: tuple,
+    dem_transform,
+    dem_crs: str,
+    use_windowed_read: bool = True,
+) -> tuple:
+    """
+    Load a GeoTIFF file cropped to DEM's geographic bounds.
+
+    This is a common pattern for loading auxiliary data (precipitation, land cover, etc.)
+    that needs to be aligned with a DEM. The function:
+    1. Crops to DEM's geographic bounds (via windowed reading if same CRS)
+    2. Returns data with its transform for further processing
+
+    Args:
+        geotiff_path: Path to GeoTIFF file (e.g., precipitation, land cover)
+        dem_shape: DEM shape (height, width) as tuple
+        dem_transform: DEM's affine transform
+        dem_crs: DEM's coordinate reference system (e.g., "EPSG:4326")
+        use_windowed_read: If True and CRS match, use windowed reading for efficiency
+
+    Returns:
+        tuple: (data, transform, crs) where:
+            - data: np.ndarray cropped to DEM bounds
+            - transform: Affine transform for the cropped data
+            - crs: Coordinate reference system
+
+    Example:
+        >>> precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
+        ...     precip_path, dem.shape, dem_transform, "EPSG:4326"
+        ... )
+        >>> # precip_data is now cropped to DEM's geographic bounds
+
+    Notes:
+        - If CRS match and windowed reading is enabled, only loads overlapping region (memory efficient)
+        - If CRS differ, loads full file (caller should use rasterio.reproject)
+        - Falls back to full read if windowed read fails
+    """
+    logger.info(f"Loading {geotiff_path.name} cropped to DEM bounds...")
+
+    with rasterio.open(geotiff_path) as src:
+        src_crs = src.crs
+
+        # If CRS differ, can't use windowed reading - return full file
+        if src_crs != dem_crs:
+            logger.info(f"  CRS differ ({src_crs} vs {dem_crs}), loading full file for reprojection")
+            data = src.read(1).astype(np.float32)
+            return data, src.transform, src_crs
+
+        # Same CRS - use windowed reading if enabled
+        if use_windowed_read:
+            try:
+                from rasterio.windows import from_bounds
+                from rasterio.transform import array_bounds
+
+                # Get DEM bounds
+                dem_bounds = array_bounds(dem_shape[0], dem_shape[1], dem_transform)
+
+                # Calculate window that overlaps with DEM
+                window = from_bounds(*dem_bounds, transform=src.transform)
+
+                # Read windowed data
+                data = src.read(1, window=window).astype(np.float32)
+                transform = src.window_transform(window)
+
+                logger.info(f"  ✓ Cropped {src.shape} → {data.shape} using windowed read")
+                return data, transform, src_crs
+
+            except Exception as e:
+                logger.warning(f"  Windowed read failed ({e}), falling back to full read")
+
+        # Fallback: load full file
+        logger.info(f"  Loading full file ({src.shape})")
+        data = src.read(1).astype(np.float32)
+        return data, src.transform, src_crs

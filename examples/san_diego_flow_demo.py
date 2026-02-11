@@ -23,6 +23,7 @@ Usage:
     python examples/san_diego_flow_demo.py
     python examples/san_diego_flow_demo.py --skip-download  # if you already have DEM
     python examples/san_diego_flow_demo.py --precip path/to/precip.tif  # use custom precip data
+    python examples/san_diego_flow_demo.py --max-breach-depth 50 --max-breach-length 200  # tune breaching
 """
 
 import sys
@@ -59,55 +60,24 @@ from src.terrain.core import (
 )
 from src.terrain.scene_setup import create_background_plane, setup_hdri_lighting
 from src.terrain.materials import apply_colormap_material
-from src.terrain.flow_accumulation import flow_accumulation
+from src.terrain.flow_accumulation import (
+    flow_accumulation,
+    compute_flow_direction,
+    compute_drainage_area,
+    compute_upstream_rainfall,
+    compute_discharge_potential,
+    condition_dem,
+    detect_ocean_mask,
+    detect_endorheic_basins,
+)
+from src.terrain.water_bodies import (
+    download_water_bodies,
+    rasterize_lakes_to_mask,
+    identify_outlet_cells,
+)
 from src.terrain.precipitation_downloader import download_precipitation
 from src.terrain.color_mapping import elevation_colormap
-
-
-def visualize_flow_with_matplotlib(result: dict, output_dir: Path) -> None:
-    """
-    Create 2D matplotlib visualizations of flow results.
-
-    Parameters
-    ----------
-    result : dict
-        Flow accumulation results
-    output_dir : Path
-        Directory to save plots
-    """
-    import matplotlib.pyplot as plt
-
-    print("\nCreating 2D visualizations...")
-
-    drainage_area = result["drainage_area"]
-    upstream_rainfall = result["upstream_rainfall"]
-
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Plot 1: Drainage Area (log scale)
-    ax = axes[0]
-    drainage_log = np.log10(drainage_area + 1)
-    im1 = ax.imshow(drainage_log, cmap="Blues", interpolation="bilinear")
-    ax.set_title("Drainage Area (log10 cells)", fontsize=14, fontweight="bold")
-    ax.set_xlabel("X (pixels)")
-    ax.set_ylabel("Y (pixels)")
-    plt.colorbar(im1, ax=ax, label="log10(cells)")
-
-    # Plot 2: Upstream Rainfall (log scale)
-    ax = axes[1]
-    rainfall_log = np.log10(upstream_rainfall + 1)
-    im2 = ax.imshow(rainfall_log, cmap="viridis", interpolation="bilinear")
-    ax.set_title("Upstream Rainfall (log10 mm·m²)", fontsize=14, fontweight="bold")
-    ax.set_xlabel("X (pixels)")
-    ax.set_ylabel("Y (pixels)")
-    plt.colorbar(im2, ax=ax, label="log10(mm·m²)")
-
-    plt.tight_layout()
-
-    output_path = output_dir / "flow_analysis_2d.png"
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
-    print(f"✓ Saved 2D visualization to {output_path}")
-    plt.close()
+from src.terrain.visualization.flow_diagnostics import create_flow_diagnostics
 
 
 def main():
@@ -128,11 +98,92 @@ def main():
     parser.add_argument(
         "--color-by",
         type=str,
-        choices=["elevation", "drainage", "rainfall"],
+        choices=["elevation", "drainage", "rainfall", "discharge"],
         default="rainfall",
-        help="Color terrain by: elevation, drainage area, or upstream rainfall",
+        help="Color terrain by: elevation, drainage area, upstream rainfall, or discharge potential",
+    )
+    parser.add_argument(
+        "--no-water-bodies",
+        action="store_true",
+        help="Disable water body integration (lakes/reservoirs)",
+    )
+    parser.add_argument(
+        "--data-source",
+        type=str,
+        choices=["synthetic", "nhd", "hydrolakes"],
+        default="hydrolakes",
+        help="Water body data source: synthetic, nhd (USA), or hydrolakes (global)",
+    )
+    parser.add_argument(
+        "--min-lake-area",
+        type=float,
+        default=0.1,
+        help="Minimum lake area in km² to include (default: 0.1)",
+    )
+    # Resolution/quality args for prototyping
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Fast prototyping mode: 500K vertices, 128 samples, 480p render",
+    )
+    parser.add_argument(
+        "--target-vertices",
+        type=int,
+        default=None,
+        help="Target vertex count for mesh (default: 10M, --fast: 500K)",
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=None,
+        help="Render samples (default: 2048, --fast: 128)",
+    )
+    parser.add_argument(
+        "--render-scale",
+        type=float,
+        default=None,
+        help="Render resolution scale (default: 1.0, --fast: 0.5)",
+    )
+    parser.add_argument(
+        "--height-scale",
+        type=float,
+        default=None,
+        help="Terrain height exaggeration (default: 8.0, --fast: 4.0)",
+    )
+    # Flow algorithm parameters
+    parser.add_argument(
+        "--max-breach-depth",
+        type=float,
+        default=25.0,
+        help="Max vertical breach per cell in meters (default: 25.0)",
+    )
+    parser.add_argument(
+        "--max-breach-length",
+        type=int,
+        default=150,
+        help="Max breach path length in cells (default: 150)",
     )
     args = parser.parse_args()
+
+    # Apply --fast defaults
+    if args.fast:
+        if args.target_vertices is None:
+            args.target_vertices = 1_000_000  # Higher resolution for smoother coastlines
+        if args.samples is None:
+            args.samples = 128
+        if args.render_scale is None:
+            args.render_scale = 0.5
+        if args.height_scale is None:
+            args.height_scale = 4.0
+    else:
+        if args.target_vertices is None:
+            args.target_vertices = 10_000_000
+        if args.samples is None:
+            args.samples = 2048
+        if args.render_scale is None:
+            args.render_scale = 1.0
+        if args.height_scale is None:
+            args.height_scale = 8.0
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.dem_dir.mkdir(parents=True, exist_ok=True)
@@ -169,23 +220,33 @@ def main():
     # Step 3: Prepare precipitation data
     print("DEBUG: About to check precipitation...", flush=True)
     print(f"DEBUG: precip={args.precip}, exists={args.precip.exists() if args.precip else 'N/A'}", flush=True)
+
+    precip_path = None
+
+    # First, check if user provided explicit path
     if args.precip and args.precip.exists():
         print(f"\nUsing precipitation data from {args.precip}", flush=True)
         precip_path = args.precip
     else:
-        # Download WorldClim precipitation data (global dataset covering USA + Mexico)
-        # Use actual DEM bounds to ensure full coverage
-        # NOTE: Using WorldClim instead of PRISM because San Diego DEM extends into Mexico.
-        # PRISM only covers continental USA, missing ~26.5% of this DEM (south of border).
-        print("\nDownloading real WorldClim precipitation data...")
-        print(f"  Using DEM bounds: {dem_bbox}")
-        print(f"  WorldClim covers USA + Mexico (global dataset)")
-        precip_path = download_precipitation(
-            bbox=dem_bbox,
-            output_dir=str(args.output_dir),
-            dataset="worldclim",  # Global coverage (not just USA)
-            use_real_data=True,
-        )
+        # Check for existing WorldClim file in output directory
+        existing_precip = list(args.output_dir.glob("wc2.1_*.tif"))
+        if existing_precip:
+            print(f"\nFound existing precipitation data: {existing_precip[0]}", flush=True)
+            precip_path = existing_precip[0]
+        else:
+            # Download WorldClim precipitation data (global dataset covering USA + Mexico)
+            # Use actual DEM bounds to ensure full coverage
+            # NOTE: Using WorldClim instead of PRISM because San Diego DEM extends into Mexico.
+            # PRISM only covers continental USA, missing ~26.5% of this DEM (south of border).
+            print("\nDownloading real WorldClim precipitation data...")
+            print(f"  Using DEM bounds: {dem_bbox}")
+            print(f"  WorldClim covers USA + Mexico (global dataset)")
+            precip_path = download_precipitation(
+                bbox=dem_bbox,
+                output_dir=str(args.output_dir),
+                dataset="worldclim",  # Global coverage (not just USA)
+                use_real_data=True,
+            )
 
     # Step 4: Save merged DEM for flow accumulation
     print("\nPreparing DEM for flow accumulation...", flush=True)
@@ -221,27 +282,152 @@ def main():
 
     print(f"✓ Saved merged DEM: {merged_dem_path}", flush=True)
 
-    # Step 5: Compute flow accumulation
+    # Step 5: Load water bodies BEFORE flow computation
+    # Water bodies affect DEM conditioning and flow routing
+    lake_mask = None
+    lake_outlets = None
+
+    if not args.no_water_bodies:
+        print("\nLoading water bodies (HydroLAKES)...")
+        try:
+            import json
+
+            water_bodies_dir = args.output_dir / "water_bodies"
+            water_bodies_dir.mkdir(parents=True, exist_ok=True)
+
+            geojson_path = download_water_bodies(
+                bbox=dem_bbox,
+                output_dir=str(water_bodies_dir),
+                data_source=args.data_source,
+                min_area_km2=args.min_lake_area,
+            )
+
+            with open(geojson_path, "r") as f:
+                lakes_geojson = json.load(f)
+
+            num_features = len(lakes_geojson.get("features", []))
+            if num_features > 0:
+                print(f"  Loaded {num_features} water bodies from {args.data_source}")
+
+                # Rasterize lakes to mask matching DEM shape
+                resolution = abs(transform.a)  # pixel width in degrees
+                lake_mask_raw, lake_transform = rasterize_lakes_to_mask(lakes_geojson, dem_bbox, resolution)
+
+                # Resample to match DEM shape if needed
+                if lake_mask_raw.shape != dem.shape:
+                    from scipy.ndimage import zoom
+                    scale_y = dem.shape[0] / lake_mask_raw.shape[0]
+                    scale_x = dem.shape[1] / lake_mask_raw.shape[1]
+                    lake_mask = zoom(lake_mask_raw, (scale_y, scale_x), order=0)
+                else:
+                    lake_mask = lake_mask_raw
+
+                print(f"  Lake mask shape: {lake_mask.shape}, {np.sum(lake_mask > 0):,} lake cells")
+
+                # Identify outlet cells from HydroLAKES pour points
+                outlets_dict = {}
+                for idx, feature in enumerate(lakes_geojson["features"], start=1):
+                    props = feature.get("properties", {})
+                    # HydroLAKES uses Pour_long/Pour_lat
+                    if "Pour_long" in props and "Pour_lat" in props:
+                        outlets_dict[idx] = (props["Pour_long"], props["Pour_lat"])
+
+                if outlets_dict:
+                    lake_outlets_raw = identify_outlet_cells(lake_mask_raw, outlets_dict, lake_transform)
+                    if lake_outlets_raw.shape != dem.shape:
+                        from scipy.ndimage import zoom
+                        scale_y = dem.shape[0] / lake_outlets_raw.shape[0]
+                        scale_x = dem.shape[1] / lake_outlets_raw.shape[1]
+                        lake_outlets = zoom(lake_outlets_raw.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
+                    else:
+                        lake_outlets = lake_outlets_raw
+                    print(f"  Lake outlets: {np.sum(lake_outlets):,} cells")
+            else:
+                print("  No water bodies found in bounding box")
+        except Exception as e:
+            print(f"  Warning: Could not load water bodies: {e}")
+            import traceback
+            traceback.print_exc()
+            lake_mask = None
+            lake_outlets = None
+
+    # Step 6: Detect endorheic basins for preservation
+    # Basins are added to conditioning mask to prevent breaching/filling
+    # This preserves natural closed basins like the Salton Sea
+    print("\nDetecting endorheic basins...")
+    ocean_mask = detect_ocean_mask(dem, threshold=0.0, border_only=True)
+
+    # Detect basins with tuned thresholds from validation work
+    basin_mask, endorheic_basins = detect_endorheic_basins(
+        dem,
+        min_size=10000,  # ~200-250 km² at downsampled resolution
+        min_depth=5.0,    # Require significant depth to avoid small depressions
+        exclude_mask=ocean_mask,
+    )
+
+    if basin_mask is not None and np.any(basin_mask):
+        num_basins = len(endorheic_basins)
+        basin_coverage = 100 * np.sum(basin_mask) / dem.size
+        print(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of area)")
+        print(f"  Basins will be masked during conditioning to preserve topography")
+    else:
+        print("  No significant endorheic basins detected")
+        basin_mask = None
+
+    # Step 7: Compute flow accumulation with tuned parameters
     print("\nComputing flow accumulation...", flush=True)
-    print(f"DEBUG: Step 5 starting - calling flow_accumulation()", flush=True)
     flow_output_dir = args.output_dir / "flow_outputs"
 
-    # Use adaptive resolution: compute flow at 3x render resolution for speed
-    # Render target: 10M vertices, so flow computed at ~30M cells (vs 77.7M full DEM)
-    TARGET_RENDER_VERTICES = 10_000_000
+    # Use adaptive resolution based on target vertices
+    print(f"  Target vertices: {args.target_vertices:,} ({'--fast mode' if args.fast else 'full quality'})")
 
-    print(f"DEBUG: DEM path: {merged_dem_path}", flush=True)
-    print(f"DEBUG: Precip path: {precip_path}", flush=True)
-    print(f"DEBUG: Output dir: {flow_output_dir}", flush=True)
-
+    # Tuned parameters from validate_flow_with_water_bodies.py:
+    # --backend spec --edge-mode all --coastal-elev-threshold -20
+    # Basin preservation via detect_basins parameter (validated approach)
     flow_result = flow_accumulation(
         dem_path=str(merged_dem_path),
         precipitation_path=str(precip_path),
         output_dir=str(flow_output_dir),
-        fill_method="breach",
-        target_vertices=TARGET_RENDER_VERTICES,  # Auto-downsample for performance
-        min_basin_size=2500,  # Conservative: preserve basins > ~20 km² (scaled by downsample²)
+        # Tuned algorithm parameters
+        backend="spec",
+        edge_mode="all",
+        coastal_elev_threshold=-20.0,  # Allow outlets below sea level (Salton Sea)
+        # Breaching constraints (configurable via --max-breach-depth and --max-breach-length)
+        max_breach_depth=args.max_breach_depth,
+        max_breach_length=args.max_breach_length,
+        # Basin preservation (uses adaptive scaling: 1/1000 of total cells)
+        detect_basins=True,       # Automatically detect and preserve endorheic basins
+        # min_basin_size: uses default (5000) which triggers adaptive scaling
+        min_basin_depth=5.0,      # Require significant depth to avoid small depressions
+        # Precipitation upscaling (ESRGAN before ocean masking)
+        upscale_precip=True,      # Upscale precipitation to DEM resolution
+        upscale_factor=4,         # 4x upscaling
+        upscale_method="auto",    # Try ESRGAN, fall back to bilateral
+        # Water body integration
+        lake_mask=lake_mask,
+        lake_outlets=lake_outlets,
+        # Resolution
+        target_vertices=args.target_vertices,
     )
+
+    # DEBUG: Check breached_dem status
+    print("\nDEBUG: Checking breached_dem...")
+    print(f"  breached_dem is None: {flow_result.get('breached_dem') is None}")
+    if flow_result.get('breached_dem') is not None:
+        bd = flow_result.get('breached_dem')
+        cd = flow_result['conditioned_dem']
+        print(f"  breached_dem shape: {bd.shape}, dtype: {bd.dtype}")
+        print(f"  conditioned_dem shape: {cd.shape}, dtype: {cd.dtype}")
+        print(f"  min(breached): {bd.min():.2f}, max(breached): {bd.max():.2f}")
+        print(f"  min(conditioned): {cd.min():.2f}, max(conditioned): {cd.max():.2f}")
+        fill_depth = cd - bd
+        print(f"  min(conditioned - breached): {fill_depth.min():.2f}, max: {fill_depth.max():.2f}")
+        negative_count = np.sum(fill_depth < 0)
+        if negative_count > 0:
+            print(f"  WARNING: {negative_count:,} cells with negative fill depth!")
+            print(f"  Negative value range: {fill_depth[fill_depth < 0].min():.2f} to {fill_depth[fill_depth < 0].max():.2f}")
+    else:
+        print("  WARNING: breached_dem is None - breach depth plot will not be created!")
 
     # Print summary
     metadata = flow_result["metadata"]
@@ -259,48 +445,195 @@ def main():
     print(f"  Max upstream water: {metadata['max_upstream_rainfall_m3']:.0f} m³/year")
     print(f"{'=' * 60}\n")
 
-    # Create 2D visualizations
-    visualize_flow_with_matplotlib(flow_result, args.output_dir)
+    # Create aligned data for both diagnostics and 3D rendering using Terrain object
+    print("\nPreparing aligned data layers...")
+
+    # Use flow resolution DEM as base for alignment (ensures diagnostics match flow computation resolution)
+    flow_dem = flow_result["conditioned_dem"] if not metadata["downsampling_applied"] else flow_result["conditioned_dem"]
+    flow_transform = Affine(*flow_result["metadata"]["transform"])
+    flow_crs = flow_result["metadata"]["crs"]
+
+    # Create Terrain object for data alignment (at flow resolution)
+    terrain_align = Terrain(flow_dem, flow_transform, dem_crs=flow_crs)
+
+    # Add original-resolution data layers - Terrain will handle alignment via target_layer
+    # This replaces manual scipy.zoom resampling with the library's alignment mechanism
+
+    # Load precipitation data with proper masking and transform
+    with rasterio.open(precip_path) as src:
+        precip_data = src.read(1)
+        precip_transform = src.transform
+        precip_crs = src.crs
+
+        # Mask invalid values (WorldClim can have extreme negative values like -3.4e38)
+        # Valid precipitation range: 0 to 20,000 mm/year (reasonable global max)
+        precip_data = np.where((precip_data >= 0) & (precip_data < 20000), precip_data, 0)
+        print(f"  Precipitation range: [{np.min(precip_data):.1f}, {np.max(precip_data):.1f}] mm/year")
+
+    # Add all data layers with original transforms - library handles reprojection/resampling
+    terrain_align.add_data_layer("dem_original", dem, transform, crs="EPSG:4326", target_layer="dem")
+    terrain_align.add_data_layer("ocean_mask", ocean_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
+    terrain_align.add_data_layer("precip", precip_data, precip_transform, crs=str(precip_crs), target_layer="dem")
+
+    if basin_mask is not None:
+        terrain_align.add_data_layer("basin_mask", basin_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
+
+    if lake_mask is not None:
+        terrain_align.add_data_layer("lake_mask", lake_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
+
+    if lake_outlets is not None:
+        terrain_align.add_data_layer("lake_outlets", lake_outlets.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
+
+    # Apply transforms to align all data
+    terrain_align.apply_transforms()
+
+    # Extract aligned data for diagnostics (all at flow resolution)
+    print("\nCreating diagnostic visualizations...")
+    dem_aligned = terrain_align.data_layers["dem_original"]["data"]
+    ocean_mask_aligned = terrain_align.data_layers["ocean_mask"]["data"].astype(bool)
+    precip_aligned = terrain_align.data_layers["precip"]["data"]
+    basin_mask_aligned = terrain_align.data_layers["basin_mask"]["data"].astype(bool) if "basin_mask" in terrain_align.data_layers else None
+    lake_mask_aligned = terrain_align.data_layers["lake_mask"]["data"].astype(np.uint16) if "lake_mask" in terrain_align.data_layers else None
+    lake_outlets_aligned = terrain_align.data_layers["lake_outlets"]["data"].astype(bool) if "lake_outlets" in terrain_align.data_layers else None
+
+    # Generate all flow diagnostic plots with aligned data
+    num_basins = len(endorheic_basins) if endorheic_basins else 0
+
+    # Get breached DEM if available (spec backend only)
+    # breached_dem is already at flow resolution, no alignment needed
+    breached_dem_for_diag = flow_result.get("breached_dem")
+
+    create_flow_diagnostics(
+        dem=dem_aligned,
+        dem_conditioned=flow_result["conditioned_dem"],
+        ocean_mask=ocean_mask_aligned,
+        flow_dir=flow_result["flow_direction"],
+        drainage_area=flow_result["drainage_area"],
+        upstream_rainfall=flow_result["upstream_rainfall"],
+        precip=precip_aligned,
+        output_dir=args.output_dir,
+        lake_mask=lake_mask_aligned,
+        lake_outlets=lake_outlets_aligned,
+        basin_mask=basin_mask_aligned,
+        breached_dem=breached_dem_for_diag,
+        num_basins=num_basins,
+        is_real_precip=True,  # Using real WorldClim data
+    )
 
     # Step 6: Create 3D terrain visualization
     print("\nCreating 3D terrain...")
     clear_scene()
 
-    # Load DEM (library will automatically align layers to match after transforms)
+    # Load DEM (ground truth for 3D rendering)
     print(f"Loading DEM from {args.dem_dir}...")
-    terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
+    # Get CRS from flow metadata (flow was computed from this DEM, so CRS should match)
+    dem_crs = metadata.get("crs", "EPSG:4326")
+    terrain = Terrain(dem, transform, dem_crs=dem_crs)
 
     # Add transforms: reproject to UTM, flip, scale, downsample
     terrain.add_transform(reproject_raster("EPSG:4326", "EPSG:32611", num_threads=4))
     terrain.add_transform(flip_raster(axis="horizontal"))
     terrain.add_transform(scale_elevation(scale_factor=0.0001))
-    terrain.configure_for_target_vertices(10_000_000, method="average")
+    terrain.configure_for_target_vertices(args.target_vertices, method="average")
 
     # Add flow accumulation results as data layers
     print("Adding flow data layers...")
-    drainage_area = flow_result["drainage_area"]
-    upstream_rainfall = flow_result["upstream_rainfall"]
+
+    # If flow data was downsampled, resample to match DEM using geographically-aware reprojection
+    # This ensures geographic metadata (transform, CRS) is preserved correctly
+    if metadata["downsampling_applied"]:
+        print(f"  Resampling flow data from {metadata['downsampled_shape']} to {dem.shape}...")
+        from rasterio.warp import reproject, Resampling
+
+        # Extract flow data at downsampled resolution
+        drainage_area_ds = flow_result["drainage_area"]
+        upstream_rainfall_ds = flow_result["upstream_rainfall"]
+        flow_transform_ds = Affine(*flow_result["metadata"]["transform"])
+
+        # Prepare output arrays at DEM resolution
+        drainage_area = np.zeros(dem.shape, dtype=np.float32)
+        upstream_rainfall = np.zeros(dem.shape, dtype=np.float32)
+
+        # Get CRS from metadata (don't hardcode - handle any projection)
+        flow_crs = metadata.get("crs", "EPSG:4326")
+
+        # Reproject using rasterio (geographically-aware, respects transforms)
+        # This handles different resolution, alignment, AND projection
+        reproject(
+            source=drainage_area_ds,
+            destination=drainage_area,
+            src_transform=flow_transform_ds,
+            src_crs=flow_crs,  # Use actual CRS from flow computation
+            dst_transform=transform,
+            dst_crs=dem_crs,  # Use actual DEM CRS
+            resampling=Resampling.bilinear,
+        )
+
+        reproject(
+            source=upstream_rainfall_ds,
+            destination=upstream_rainfall,
+            src_transform=flow_transform_ds,
+            src_crs=flow_crs,
+            dst_transform=transform,
+            dst_crs=dem_crs,
+            resampling=Resampling.bilinear,
+        )
+
+        # Use original DEM transform for resampled data
+        flow_transform = transform
+        print(f"  ✓ Reprojected with geographic awareness (src: {flow_transform_ds}, dst: {transform})")
+    else:
+        # No downsampling - use flow data as-is
+        drainage_area = flow_result["drainage_area"]
+        upstream_rainfall = flow_result["upstream_rainfall"]
+        flow_transform = Affine(*flow_result["metadata"]["transform"])
+
+    # Compute discharge potential
+    discharge_potential = compute_discharge_potential(drainage_area, upstream_rainfall)
 
     # Use log scale for better visualization
     drainage_log = np.log10(drainage_area + 1)
     rainfall_log = np.log10(upstream_rainfall + 1)
+    discharge_log = np.log10(discharge_potential + 1)
 
-    # Add as data layers (will be resampled to match terrain)
+    # Debug: Print drainage value range
+    print(f"  Drainage area range: {drainage_area.min():.1f} - {drainage_area.max():.1f}")
+    print(f"  Drainage log range: {drainage_log.min():.3f} - {drainage_log.max():.3f}")
+    print(f"  Non-zero drainage cells: {np.sum(drainage_area > 0):,}")
+
+    # Add as data layers WITHOUT target_layer (now same resolution as DEM)
+    # All layers will go through same transforms (reproject, flip, downsample)
     terrain.add_data_layer(
         "drainage_area_log",
         drainage_log.astype(np.float32),
-        transform,
-        crs="EPSG:4326",
-        target_layer="dem",
+        flow_transform,
+        crs=dem_crs,  # Use actual CRS, not hardcoded
     )
 
     terrain.add_data_layer(
         "upstream_rainfall_log",
         rainfall_log.astype(np.float32),
-        transform,
-        crs="EPSG:4326",
-        target_layer="dem",
+        flow_transform,
+        crs=dem_crs,
     )
+
+    terrain.add_data_layer(
+        "discharge_potential_log",
+        discharge_log.astype(np.float32),
+        flow_transform,
+        crs=dem_crs,
+    )
+
+    # Add pre-loaded lake mask as data layer (loaded before flow computation)
+    # Lake mask will go through same transforms as DEM (no target_layer to avoid double-transform)
+    if lake_mask is not None and np.any(lake_mask > 0):
+        terrain.add_data_layer(
+            "lakes",
+            lake_mask.astype(np.float32),
+            transform,  # Original DEM transform (lake_mask was rasterized at DEM resolution)
+            crs=dem_crs,  # Use actual CRS, not hardcoded
+        )
+        print(f"  Added lake mask as data layer: {np.sum(lake_mask > 0):,} lake cells")
 
     # Apply transforms BEFORE water detection
     # This ensures water detection happens on downsampled terrain
@@ -315,9 +648,22 @@ def main():
         )
     elif args.color_by == "drainage":
         print("Coloring by drainage area (log scale)...")
+        # Use viridis instead of Blues - Blues starts with white at 0 which
+        # makes ocean-masked areas (drainage=0) appear white
+        # Set min_elev to exclude zeros from normalization
         terrain.set_color_mapping(
-            lambda drain: elevation_colormap(drain, cmap_name="Blues"),
+            lambda drain: elevation_colormap(
+                drain,
+                cmap_name="viridis",
+                min_elev=0.1,  # Exclude zeros (masked ocean cells)
+            ),
             source_layers=["drainage_area_log"],
+        )
+    elif args.color_by == "discharge":
+        print("Coloring by discharge potential (log scale)...")
+        terrain.set_color_mapping(
+            lambda discharge: elevation_colormap(discharge, cmap_name="plasma"),
+            source_layers=["discharge_potential_log"],
         )
     else:  # rainfall
         print("Coloring by upstream rainfall (log scale)...")
@@ -326,19 +672,35 @@ def main():
             source_layers=["upstream_rainfall_log"],
         )
 
-    # Detect water AFTER transforms (on downsampled terrain)
-    # This ensures water mask matches the final terrain dimensions
-    water_mask = terrain.detect_water_highres(
-        slope_threshold=0.0000000000000001,
-        fill_holes=False,
-        scale_factor=0.0001,
-    )
+    # Use HydroLAKES lake mask if available (already aligned via terrain_align)
+    # Reuse lake_mask_aligned from diagnostic section to ensure resolution matches
+    # This avoids expensive high-res water detection that can cause GPU OOM
+    if lake_mask_aligned is not None:
+        water_mask = (lake_mask_aligned > 0).astype(np.uint8)
+        print(f"Using HydroLAKES water mask: {np.sum(water_mask > 0):,} water cells")
+    else:
+        # Fallback to slope-based water detection
+        print("No lake mask available, detecting water by slope...")
+        water_mask = terrain.detect_water_highres(
+            slope_threshold=0.0000000000000001,
+            fill_holes=False,
+            scale_factor=0.0001,
+        )
 
     # Create mesh
     terrain.compute_colors()
+
+    # Debug: Check color distribution
+    print(f"\n  Color stats after compute_colors():")
+    print(f"    Unique colors: {len(np.unique(terrain.colors, axis=0))}")
+    print(f"    Color range R: {terrain.colors[:, 0].min():.3f} - {terrain.colors[:, 0].max():.3f}")
+    print(f"    Color range G: {terrain.colors[:, 1].min():.3f} - {terrain.colors[:, 1].max():.3f}")
+    print(f"    Color range B: {terrain.colors[:, 2].min():.3f} - {terrain.colors[:, 2].max():.3f}")
+    print(f"    Available layers: {list(terrain.data_layers.keys())}")
+
     mesh = terrain.create_mesh(
         scale_factor=100,
-        height_scale=8.0,
+        height_scale=args.height_scale,
         center_model=True,
         boundary_extension=True,
         water_mask=water_mask,
@@ -386,13 +748,18 @@ def main():
 
     # Step 8: Render
     if not args.no_render:
-        print("\nRendering...")
-        setup_render_settings(use_gpu=True, samples=2048, use_denoising=True)
+        # Calculate render dimensions
+        base_width, base_height = 720, 576  # 10x8 inches at 72 DPI
+        render_width = int(base_width * args.render_scale)
+        render_height = int(base_height * args.render_scale)
+
+        print(f"\nRendering ({render_width}x{render_height}, {args.samples} samples)...")
+        setup_render_settings(use_gpu=True, samples=args.samples, use_denoising=True)
 
         output_filename = f"san_diego_flow_{args.color_by}.png"
         output_path = args.output_dir / output_filename
         render_scene_to_file(
-            str(output_path), width=72 * 10, height=72 * 8, file_format="PNG", color_mode="RGB"
+            str(output_path), width=render_width, height=render_height, file_format="PNG", color_mode="RGB"
         )
 
         print(f"✓ Rendered to {output_path}")
@@ -401,7 +768,7 @@ def main():
 
     print("\n✓ Done!")
     print(f"\nOutput files:")
-    print(f"  2D visualization: {args.output_dir / 'flow_analysis_2d.png'}")
+    print(f"  Diagnostic plots: {args.output_dir}/01_*.png through 11_*.png")
     print(f"  3D render: {args.output_dir / f'san_diego_flow_{args.color_by}.png'}")
     print(f"  Flow GeoTIFFs: {flow_output_dir}/")
 

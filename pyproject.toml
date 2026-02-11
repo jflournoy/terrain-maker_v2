@@ -52,9 +52,12 @@ ml = [
     "lightgbm",
 ]
 upscale = [
-    "realesrgan",  # AI super-resolution for score upscaling
+    "torchvision>=0.15.0",  # Required by basicsr-fixed and realesrgan
+    "basicsr-fixed>=1.4.2",  # Fixed version with torchvision 0.17+ compatibility
+    "realesrgan>=0.3.0",  # AI super-resolution for score upscaling
 ]
 all = [
+    "torchvision",
     "realesrgan",
 ]
 
