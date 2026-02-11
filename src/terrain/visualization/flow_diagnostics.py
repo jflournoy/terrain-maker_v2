@@ -313,6 +313,9 @@ def plot_breach_depth(
     breach_depth = dem - breached_dem  # How much we lowered elevations
     breach_depth[ocean_mask] = 0
 
+    # Ensure strictly non-negative (clip any numerical errors to zero)
+    breach_depth = np.maximum(breach_depth, 0)
+
     # Compute statistics (only where breaching occurred)
     breached_mask = breach_depth > 0.01  # Breached cells (>1cm threshold)
     if np.any(breached_mask):
@@ -355,6 +358,10 @@ def plot_fill_depth(
         fill_depth = dem_conditioned - dem
 
     fill_depth[ocean_mask] = 0
+
+    # Ensure strictly non-negative (clip any numerical errors to zero)
+    fill_depth = np.maximum(fill_depth, 0)
+
     fill_max = np.max(fill_depth)
     return save_flow_plot(
         fill_depth,
@@ -362,7 +369,7 @@ def plot_fill_depth(
         output_path,
         cmap=FLOW_COLORMAPS["fill"],
         label="m",
-        log_scale=False
+        log_scale=True
     )
 
 
