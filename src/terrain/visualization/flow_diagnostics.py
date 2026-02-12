@@ -536,6 +536,9 @@ def plot_stream_overlay(
     lake_mask: Optional[np.ndarray] = None,
     base_log_scale: bool = True,
     stream_log_scale: bool = True,
+    variable_width: bool = False,
+    min_width: int = 1,
+    max_width: int = 4,
 ) -> Path:
     """
     Plot stream network colored by a metric, overlaid on a base map.
@@ -573,6 +576,12 @@ def plot_stream_overlay(
         Apply log10 to base data (default: True)
     stream_log_scale : bool
         Apply log10 to stream color data (default: True)
+    variable_width : bool
+        Scale stream line width by metric value (default: False)
+    min_width : int
+        Minimum stream width in pixels when variable_width=True (default: 1)
+    max_width : int
+        Maximum stream width in pixels when variable_width=True (default: 4)
 
     Returns
     -------
@@ -598,6 +607,67 @@ def plot_stream_overlay(
     stream_plot = stream_color_data.copy().astype(np.float32)
     if stream_log_scale and np.any(stream_plot > 0):
         stream_plot = np.log10(stream_plot + 1)
+
+    # Variable width: expand stream pixels based on metric value with smooth tapering
+    if variable_width and np.any(stream_mask):
+        from scipy.ndimage import maximum_filter, gaussian_filter, distance_transform_edt
+
+        # Normalize stream values to determine radius (1 to max_width)
+        stream_vals = stream_plot[stream_mask]
+        val_min, val_max = np.min(stream_vals), np.max(stream_vals)
+
+        if val_max > val_min:
+            # Compute per-pixel target width based on metric value
+            # Higher values = wider streams
+            width_map = np.zeros_like(stream_plot)
+            normalized_vals = (stream_plot[stream_mask] - val_min) / (val_max - val_min)
+            width_map[stream_mask] = min_width + normalized_vals * (max_width - min_width)
+
+            # Smooth the width map along streams for gradual tapering
+            # Use distance-weighted diffusion constrained to stream neighborhood
+            # First, expand slightly to allow smoothing across stream pixels
+            expanded_for_smooth = maximum_filter(width_map, size=3)
+            smooth_mask = expanded_for_smooth > 0
+
+            # Gaussian smooth the width values (only affects stream region)
+            smoothed_width = gaussian_filter(width_map, sigma=max_width)
+
+            # Keep only within expanded stream region and normalize
+            smoothed_width = np.where(smooth_mask, smoothed_width, 0)
+            # Re-normalize to preserve width range
+            smooth_stream_vals = smoothed_width[smooth_mask & (smoothed_width > 0)]
+            if len(smooth_stream_vals) > 0:
+                sw_min, sw_max = np.min(smooth_stream_vals), np.max(smooth_stream_vals)
+                if sw_max > sw_min:
+                    smoothed_width[smooth_mask] = min_width + (smoothed_width[smooth_mask] - sw_min) / (sw_max - sw_min) * (max_width - min_width)
+
+            # Create expanded stream by applying variable dilation based on smoothed width
+            expanded_values = np.zeros_like(stream_plot)
+            expanded_values[stream_mask] = stream_plot[stream_mask]
+
+            # Process by radius (from largest to smallest so big rivers dominate)
+            for radius in range(max_width, min_width - 1, -1):
+                # Find stream pixels that should have at least this radius
+                radius_mask = stream_mask & (smoothed_width >= radius - 0.5)
+
+                if np.any(radius_mask):
+                    # Create a temporary grid with just these pixels' values
+                    radius_values = np.zeros_like(stream_plot)
+                    radius_values[radius_mask] = stream_plot[radius_mask]
+
+                    # Expand using maximum filter
+                    size = 2 * radius + 1
+                    expanded_radius = maximum_filter(radius_values, size=size)
+
+                    # Update expanded values (larger values win)
+                    update_mask = expanded_radius > expanded_values
+                    expanded_values[update_mask] = expanded_radius[update_mask]
+
+            # Update stream_mask and stream_plot to use expanded versions
+            stream_mask = expanded_values > 0
+            stream_plot = np.where(stream_mask, expanded_values, stream_plot)
+
+            print(f"    Variable width applied: {min_width}-{max_width}px with smooth tapering")
 
     # Get colormaps
     base_cmap_obj = plt.get_cmap(base_cmap)
