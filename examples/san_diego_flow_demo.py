@@ -123,6 +123,17 @@ def main():
         help="Percentile threshold for stream extraction (default: 95 = top 5%%)",
     )
     parser.add_argument(
+        "--variable-width",
+        action="store_true",
+        help="Scale stream line width by metric value (thicker = higher value)",
+    )
+    parser.add_argument(
+        "--max-stream-width",
+        type=int,
+        default=3,
+        help="Maximum stream width in pixels when --variable-width is enabled (default: 3)",
+    )
+    parser.add_argument(
         "--no-water-bodies",
         action="store_true",
         help="Disable water body integration (lakes/reservoirs)",
@@ -560,19 +571,22 @@ def main():
     )
 
     # Overlay 1: Discharge-colored streams on discharge base (same metric)
+    width_suffix = "_varwidth" if args.variable_width else ""
     plot_stream_overlay(
         base_data=diag_discharge,
         stream_threshold_data=flow_result["drainage_area"],
         stream_color_data=diag_discharge,
-        output_path=args.output_dir / "12_stream_overlay_discharge_on_discharge.png",
+        output_path=args.output_dir / f"12_stream_overlay_discharge_on_discharge{width_suffix}.png",
         base_cmap="viridis",
         stream_cmap="plasma",
-        percentile=95,
+        percentile=args.stream_percentile,
         stream_alpha=1.0,  # Opaque streams
         base_label="Discharge Potential",
         stream_label="Discharge Potential",
         title="Discharge-Colored Streams on Discharge Map",
         lake_mask=lake_mask_aligned,
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width,
     )
 
     # Overlay 2: Same as above but with semi-transparent streams
@@ -580,15 +594,17 @@ def main():
         base_data=diag_discharge,
         stream_threshold_data=flow_result["drainage_area"],
         stream_color_data=diag_discharge,
-        output_path=args.output_dir / "12b_stream_overlay_discharge_semitransparent.png",
+        output_path=args.output_dir / f"12b_stream_overlay_discharge_semitransparent{width_suffix}.png",
         base_cmap="viridis",
         stream_cmap="plasma",
-        percentile=95,
+        percentile=args.stream_percentile,
         stream_alpha=0.7,  # Semi-transparent for blending
         base_label="Discharge Potential",
         stream_label="Discharge Potential",
         title="Discharge Streams (Semi-Transparent) on Discharge Map",
         lake_mask=lake_mask_aligned,
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width,
     )
 
     # Overlay 3: Discharge-colored streams on elevation (topo + flow)
@@ -596,16 +612,18 @@ def main():
         base_data=dem_aligned,
         stream_threshold_data=flow_result["drainage_area"],
         stream_color_data=diag_discharge,
-        output_path=args.output_dir / "13_stream_overlay_discharge_on_elevation.png",
+        output_path=args.output_dir / f"13_stream_overlay_discharge_on_elevation{width_suffix}.png",
         base_cmap="terrain",
         stream_cmap="plasma",
-        percentile=95,
+        percentile=args.stream_percentile,
         stream_alpha=1.0,
         base_label="Elevation (m)",
         stream_label="Discharge Potential",
         title="Discharge-Colored Streams on Elevation",
         lake_mask=lake_mask_aligned,
         base_log_scale=False,  # Elevation doesn't need log scale
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width,
     )
 
     # Overlay 4: Upstream rainfall-colored streams on drainage area
@@ -613,15 +631,53 @@ def main():
         base_data=flow_result["drainage_area"],
         stream_threshold_data=flow_result["drainage_area"],
         stream_color_data=flow_result["upstream_rainfall"],
-        output_path=args.output_dir / "14_stream_overlay_rainfall_on_drainage.png",
+        output_path=args.output_dir / f"14_stream_overlay_rainfall_on_drainage{width_suffix}.png",
         base_cmap="viridis",
         stream_cmap="cividis",
-        percentile=95,
+        percentile=args.stream_percentile,
         stream_alpha=1.0,
         base_label="Drainage Area (cells)",
         stream_label="Upstream Rainfall",
         title="Rainfall-Colored Streams on Drainage Area",
         lake_mask=lake_mask_aligned,
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width,
+    )
+
+    # Overlay 5: Discharge-colored streams on drainage area
+    plot_stream_overlay(
+        base_data=flow_result["drainage_area"],
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=diag_discharge,
+        output_path=args.output_dir / f"15_stream_overlay_discharge_on_drainage{width_suffix}.png",
+        base_cmap="viridis",
+        stream_cmap="plasma",
+        percentile=args.stream_percentile,
+        stream_alpha=1.0,
+        base_label="Drainage Area (cells)",
+        stream_label="Discharge Potential",
+        title="Discharge-Colored Streams on Drainage Area",
+        lake_mask=lake_mask_aligned,
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width,
+    )
+
+    # Overlay 6: Variable width example (always enabled) - discharge on drainage
+    plot_stream_overlay(
+        base_data=flow_result["drainage_area"],
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=diag_discharge,
+        output_path=args.output_dir / "16_stream_overlay_variable_width.png",
+        base_cmap="viridis",
+        stream_cmap="plasma",
+        percentile=args.stream_percentile,
+        stream_alpha=1.0,
+        base_label="Drainage Area (cells)",
+        stream_label="Discharge Potential",
+        title="Variable Width Streams (width ∝ discharge)",
+        lake_mask=lake_mask_aligned,
+        variable_width=True,  # Always enabled for this example
+        max_width=args.max_stream_width,
     )
 
     # Step 6: Create 3D terrain visualization
