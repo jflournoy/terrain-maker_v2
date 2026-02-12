@@ -3706,7 +3706,8 @@ def detect_endorheic_basins(
 
     # Create mask for large basins (vectorized operation)
     basin_mask = np.zeros_like(dem, dtype=bool)
-    large_basin_ids = [bid for bid, size in basin_sizes.items() if size >= min_size]
+    effective_min_size = min_size if min_size is not None else 10
+    large_basin_ids = [bid for bid, size in basin_sizes.items() if size >= effective_min_size]
     if large_basin_ids:
         basin_mask = np.isin(labeled, large_basin_ids)
 
