@@ -90,9 +90,13 @@ data/snodas/**
 data/snodas_data
 data/san_diego_dem/
 data/test_srtm/
+data/hydrolakes/
 !data/samples/
 !data/samples/*.tif
 !data/samples/*.geojson
+
+# Large output files
+examples/output/flow_data/
 
 # Terrain-maker cache directories
 .dem_cache/
