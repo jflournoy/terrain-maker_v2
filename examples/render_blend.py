@@ -87,7 +87,7 @@ Examples:
 
     # Determine output path
     if args.output is None:
-        args.output = args.blend_file.with_suffix("").with_suffix("_render.png")
+        args.output = args.blend_file.with_suffix("").parent / (args.blend_file.stem + "_render.png")
 
     print(f"Loading: {args.blend_file}")
     bpy.ops.wm.open_mainfile(filepath=str(args.blend_file))
