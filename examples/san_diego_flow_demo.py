@@ -76,7 +76,10 @@ from src.terrain.water_bodies import (
 )
 from src.terrain.precipitation_downloader import download_precipitation
 from src.terrain.color_mapping import elevation_colormap
-from src.terrain.visualization.flow_diagnostics import create_flow_diagnostics
+from src.terrain.visualization.flow_diagnostics import (
+    create_flow_diagnostics,
+    plot_stream_overlay,
+)
 
 
 def main():
@@ -99,7 +102,25 @@ def main():
         type=str,
         choices=["elevation", "drainage", "rainfall", "discharge"],
         default="rainfall",
-        help="Color terrain by: elevation, drainage area, upstream rainfall, or discharge potential",
+        help="Color base terrain by: elevation, drainage area, upstream rainfall, or discharge potential",
+    )
+    parser.add_argument(
+        "--stream-overlay",
+        action="store_true",
+        help="Enable stream network overlay on top of base map",
+    )
+    parser.add_argument(
+        "--stream-color-by",
+        type=str,
+        choices=["drainage", "rainfall", "discharge"],
+        default="discharge",
+        help="Color stream overlay by: drainage area, upstream rainfall, or discharge potential (default: discharge)",
+    )
+    parser.add_argument(
+        "--stream-percentile",
+        type=float,
+        default=95,
+        help="Percentile threshold for stream extraction (default: 95 = top 5%%)",
     )
     parser.add_argument(
         "--no-water-bodies",
@@ -168,6 +189,11 @@ def main():
         choices=["checkerboard", "iterative"],
         default="checkerboard",
         help="Parallel breaching method: 'checkerboard' (fast, outlets-only) or 'iterative' (slower, enables chaining)",
+    )
+    parser.add_argument(
+        "--breach",
+        action="store_true",
+        help="Enable breaching step (disabled by default). Breaching is expensive and often unnecessary.",
     )
     # Basin detection parameters
     parser.add_argument(
@@ -393,8 +419,9 @@ def main():
         edge_mode="all",
         coastal_elev_threshold=-20.0,  # Allow outlets below sea level (Salton Sea)
         # Breaching constraints (configurable via CLI arguments)
-        max_breach_depth=args.max_breach_depth,
-        max_breach_length=args.max_breach_length,
+        # Breaching disabled by default (expensive), use --breach to enable
+        max_breach_depth=args.max_breach_depth if args.breach else 0.0,
+        max_breach_length=args.max_breach_length if args.breach else 0,
         parallel_method=args.parallel_method,
         # Basin preservation (configurable via --min-basin-depth and --min-basin-size)
         detect_basins=True,       # Automatically detect and preserve endorheic basins
@@ -522,6 +549,81 @@ def main():
         is_real_precip=True,  # Using real WorldClim data
     )
 
+    # Step 5b: Generate stream overlay visualizations
+    # These show streams colored by metric values, overlaid on base maps
+    print("\nGenerating stream overlay visualizations...")
+
+    # Compute discharge potential for diagnostics (same as 3D rendering)
+    diag_discharge = compute_discharge_potential(
+        flow_result["drainage_area"],
+        flow_result["upstream_rainfall"],
+    )
+
+    # Overlay 1: Discharge-colored streams on discharge base (same metric)
+    plot_stream_overlay(
+        base_data=diag_discharge,
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=diag_discharge,
+        output_path=args.output_dir / "12_stream_overlay_discharge_on_discharge.png",
+        base_cmap="viridis",
+        stream_cmap="plasma",
+        percentile=95,
+        stream_alpha=1.0,  # Opaque streams
+        base_label="Discharge Potential",
+        stream_label="Discharge Potential",
+        title="Discharge-Colored Streams on Discharge Map",
+        lake_mask=lake_mask_aligned,
+    )
+
+    # Overlay 2: Same as above but with semi-transparent streams
+    plot_stream_overlay(
+        base_data=diag_discharge,
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=diag_discharge,
+        output_path=args.output_dir / "12b_stream_overlay_discharge_semitransparent.png",
+        base_cmap="viridis",
+        stream_cmap="plasma",
+        percentile=95,
+        stream_alpha=0.7,  # Semi-transparent for blending
+        base_label="Discharge Potential",
+        stream_label="Discharge Potential",
+        title="Discharge Streams (Semi-Transparent) on Discharge Map",
+        lake_mask=lake_mask_aligned,
+    )
+
+    # Overlay 3: Discharge-colored streams on elevation (topo + flow)
+    plot_stream_overlay(
+        base_data=dem_aligned,
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=diag_discharge,
+        output_path=args.output_dir / "13_stream_overlay_discharge_on_elevation.png",
+        base_cmap="terrain",
+        stream_cmap="plasma",
+        percentile=95,
+        stream_alpha=1.0,
+        base_label="Elevation (m)",
+        stream_label="Discharge Potential",
+        title="Discharge-Colored Streams on Elevation",
+        lake_mask=lake_mask_aligned,
+        base_log_scale=False,  # Elevation doesn't need log scale
+    )
+
+    # Overlay 4: Upstream rainfall-colored streams on drainage area
+    plot_stream_overlay(
+        base_data=flow_result["drainage_area"],
+        stream_threshold_data=flow_result["drainage_area"],
+        stream_color_data=flow_result["upstream_rainfall"],
+        output_path=args.output_dir / "14_stream_overlay_rainfall_on_drainage.png",
+        base_cmap="viridis",
+        stream_cmap="cividis",
+        percentile=95,
+        stream_alpha=1.0,
+        base_label="Drainage Area (cells)",
+        stream_label="Upstream Rainfall",
+        title="Rainfall-Colored Streams on Drainage Area",
+        lake_mask=lake_mask_aligned,
+    )
+
     # Step 6: Create 3D terrain visualization
     print("\nCreating 3D terrain...")
     clear_scene()
@@ -626,41 +728,92 @@ def main():
         crs=dem_crs,
     )
 
+    # Create stream mask and stream discharge layer for 3D overlay
+    # Extract streams as top percentile of drainage area
+    valid_drainage = drainage_area[drainage_area > 0]
+    if len(valid_drainage) > 0:
+        stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
+        stream_mask = drainage_area >= stream_threshold
+        # Stream discharge: discharge values only at stream pixels, 0 elsewhere
+        stream_discharge = np.where(stream_mask, discharge_log, 0).astype(np.float32)
+        terrain.add_data_layer(
+            "stream_discharge",
+            stream_discharge,
+            flow_transform,
+            crs=dem_crs,
+        )
+        print(f"  Stream cells (top {100-args.stream_percentile:.0f}%): {np.sum(stream_mask):,}")
+    else:
+        stream_mask = np.zeros_like(drainage_area, dtype=bool)
+        print("  Warning: No valid drainage data for stream extraction")
+
     # Apply transforms to DEM and data layers
     terrain.apply_transforms()
 
     # Set colormap based on user choice
     if args.color_by == "elevation":
-        print("Coloring by elevation...")
-        terrain.set_color_mapping(
-            lambda elev: elevation_colormap(elev, cmap_name="terrain"),
-            source_layers=["dem"],
-        )
+        base_colormap = lambda elev: elevation_colormap(elev, cmap_name="terrain")
+        base_layer = "dem"
+        base_label = "elevation"
     elif args.color_by == "drainage":
-        print("Coloring by drainage area (log scale)...")
-        # Use viridis instead of Blues - Blues starts with white at 0 which
-        # makes ocean-masked areas (drainage=0) appear white
-        # Set min_elev to exclude zeros from normalization
-        terrain.set_color_mapping(
-            lambda drain: elevation_colormap(
-                drain,
-                cmap_name="viridis",
-                min_elev=0.1,  # Exclude zeros (masked ocean cells)
-            ),
-            source_layers=["drainage_area_log"],
-        )
+        base_colormap = lambda drain: elevation_colormap(drain, cmap_name="viridis", min_elev=0.1)
+        base_layer = "drainage_area_log"
+        base_label = "drainage area (log)"
     elif args.color_by == "discharge":
-        print("Coloring by discharge potential (log scale)...")
-        terrain.set_color_mapping(
-            lambda discharge: elevation_colormap(discharge, cmap_name="plasma"),
-            source_layers=["discharge_potential_log"],
-        )
+        base_colormap = lambda discharge: elevation_colormap(discharge, cmap_name="plasma")
+        base_layer = "discharge_potential_log"
+        base_label = "discharge potential (log)"
     else:  # rainfall
-        print("Coloring by upstream rainfall (log scale)...")
-        terrain.set_color_mapping(
-            lambda rain: elevation_colormap(rain, cmap_name="viridis"),
-            source_layers=["upstream_rainfall_log"],
+        base_colormap = lambda rain: elevation_colormap(rain, cmap_name="viridis")
+        base_layer = "upstream_rainfall_log"
+        base_label = "upstream rainfall (log)"
+
+    # Apply color mapping - with or without stream overlay
+    if args.stream_overlay:
+        # Determine stream color layer based on --stream-color-by
+        if args.stream_color_by == "drainage":
+            stream_layer = "drainage_area_log"
+            stream_label = "drainage"
+        elif args.stream_color_by == "rainfall":
+            stream_layer = "upstream_rainfall_log"
+            stream_label = "rainfall"
+        else:  # discharge
+            stream_layer = "discharge_potential_log"
+            stream_label = "discharge"
+
+        print(f"Coloring by {base_label} + stream overlay ({stream_label}, top {100-args.stream_percentile:.0f}%)...")
+
+        # Create stream-specific data layer (stream values only where streams exist)
+        stream_data = terrain.data_layers[stream_layer]["transformed_data"]
+        stream_mask_data = terrain.data_layers["stream_discharge"]["transformed_data"] > 0
+        stream_values = np.where(stream_mask_data, stream_data, 0).astype(np.float32)
+
+        # Add the stream-colored layer
+        terrain.data_layers["stream_colored"] = {
+            "data": stream_values,
+            "transformed_data": stream_values,
+            "transform": terrain.data_layers[stream_layer].get("transform"),
+            "crs": terrain.data_layers[stream_layer].get("crs"),
+        }
+
+        def stream_colormap(data):
+            return elevation_colormap(data, cmap_name="plasma")
+
+        terrain.set_multi_color_mapping(
+            base_colormap=base_colormap,
+            base_source_layers=[base_layer],
+            overlays=[
+                {
+                    "colormap": stream_colormap,
+                    "source_layers": ["stream_colored"],
+                    "threshold": 0.01,
+                    "priority": 10,
+                },
+            ],
         )
+    else:
+        print(f"Coloring by {base_label}...")
+        terrain.set_color_mapping(base_colormap, source_layers=[base_layer])
 
     # Create mesh
     terrain.compute_colors()
