@@ -3546,11 +3546,16 @@ def condition_dem_spec(
     num_outlets = np.sum(outlets)
     print(f"    Found {num_outlets:,} outlet cells")
 
-    print("  Stage 2a: Constrained breaching...")
-    breached = breach_depressions_constrained(
-        dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
-        parallel_method=parallel_method
-    )
+    # Skip breaching if disabled (max_breach_depth <= 0 or max_breach_length <= 0)
+    if max_breach_depth <= 0 or max_breach_length <= 0:
+        print("  Stage 2a: Breaching SKIPPED (disabled via parameters)")
+        breached = dem.copy()
+    else:
+        print(f"  Stage 2a: Constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
+        breached = breach_depressions_constrained(
+            dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
+            parallel_method=parallel_method
+        )
 
     print("  Stage 2b: Priority-flood fill residuals...")
     filled = priority_flood_fill_epsilon(
