@@ -68,7 +68,6 @@ from src.terrain.flow_accumulation import (
     compute_discharge_potential,
     condition_dem,
     detect_ocean_mask,
-    detect_endorheic_basins,
 )
 from src.terrain.water_bodies import (
     download_water_bodies,
@@ -170,12 +169,25 @@ def main():
         default="checkerboard",
         help="Parallel breaching method: 'checkerboard' (fast, outlets-only) or 'iterative' (slower, enables chaining)",
     )
+    # Basin detection parameters
+    parser.add_argument(
+        "--min-basin-depth",
+        type=float,
+        default=5.0,
+        help="Min depth (meters) to be considered an endorheic basin (default: 5.0). Lower = preserve shallower basins.",
+    )
+    parser.add_argument(
+        "--min-basin-size",
+        type=int,
+        default=None,
+        help="Min size (cells) to be considered an endorheic basin. Default: adaptive (1/1000 of total cells).",
+    )
     args = parser.parse_args()
 
     # Apply --fast defaults
     if args.fast:
         if args.target_vertices is None:
-            args.target_vertices = 1_000_000  # Higher resolution for smoother coastlines
+            args.target_vertices = 1_500_000  # Increased for better detail
         if args.samples is None:
             args.samples = 128
         if args.render_scale is None:
@@ -358,28 +370,9 @@ def main():
             lake_mask = None
             lake_outlets = None
 
-    # Step 6: Detect endorheic basins for preservation
-    # Basins are added to conditioning mask to prevent breaching/filling
-    # This preserves natural closed basins like the Salton Sea
-    print("\nDetecting endorheic basins...")
+    # Step 6: Detect ocean mask for diagnostics
+    # (Basin detection happens inside flow_accumulation() with CLI args)
     ocean_mask = detect_ocean_mask(dem, threshold=0.0, border_only=True)
-
-    # Detect basins with tuned thresholds from validation work
-    basin_mask, endorheic_basins = detect_endorheic_basins(
-        dem,
-        min_size=10000,  # ~200-250 km² at downsampled resolution
-        min_depth=5.0,    # Require significant depth to avoid small depressions
-        exclude_mask=ocean_mask,
-    )
-
-    if basin_mask is not None and np.any(basin_mask):
-        num_basins = len(endorheic_basins)
-        basin_coverage = 100 * np.sum(basin_mask) / dem.size
-        print(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of area)")
-        print(f"  Basins will be masked during conditioning to preserve topography")
-    else:
-        print("  No significant endorheic basins detected")
-        basin_mask = None
 
     # Step 7: Compute flow accumulation with tuned parameters
     print("\nComputing flow accumulation...", flush=True)
@@ -403,10 +396,10 @@ def main():
         max_breach_depth=args.max_breach_depth,
         max_breach_length=args.max_breach_length,
         parallel_method=args.parallel_method,
-        # Basin preservation (uses adaptive scaling: 1/1000 of total cells)
+        # Basin preservation (configurable via --min-basin-depth and --min-basin-size)
         detect_basins=True,       # Automatically detect and preserve endorheic basins
-        # min_basin_size: uses default (5000) which triggers adaptive scaling
-        min_basin_depth=5.0,      # Require significant depth to avoid small depressions
+        min_basin_size=args.min_basin_size,  # None = adaptive (1/1000 of total cells)
+        min_basin_depth=args.min_basin_depth,  # Require significant depth to avoid small depressions
         # Precipitation upscaling (ESRGAN before ocean masking)
         upscale_precip=True,      # Upscale precipitation to DEM resolution
         upscale_factor=4,         # 4x upscaling
@@ -483,8 +476,8 @@ def main():
     terrain_align.add_data_layer("ocean_mask", ocean_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
     terrain_align.add_data_layer("precip", precip_data, precip_transform, crs=str(precip_crs), target_layer="dem")
 
-    if basin_mask is not None:
-        terrain_align.add_data_layer("basin_mask", basin_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
+    # Note: basin_mask is not available here (detected internally by flow_accumulation)
+    # Diagnostics will use basin_mask=None
 
     if lake_mask is not None:
         terrain_align.add_data_layer("lake_mask", lake_mask.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
@@ -505,7 +498,8 @@ def main():
     lake_outlets_aligned = terrain_align.data_layers["lake_outlets"]["data"].astype(bool) if "lake_outlets" in terrain_align.data_layers else None
 
     # Generate all flow diagnostic plots with aligned data
-    num_basins = len(endorheic_basins) if endorheic_basins else 0
+    # Note: num_basins not available (basin detection happens inside flow_accumulation)
+    num_basins = 0
 
     # Get breached DEM if available (spec backend only)
     # breached_dem is already at flow resolution, no alignment needed
@@ -708,7 +702,7 @@ def main():
     setup_hdri_lighting(
         sun_elevation=15.0,
         sun_rotation=225.0,
-        sun_intensity=0.05,
+        sun_intensity=0.04,  # Dimmed slightly for --fast mode
         air_density=0.05,
         visible_to_camera=False,
         sky_strength=1.75,
