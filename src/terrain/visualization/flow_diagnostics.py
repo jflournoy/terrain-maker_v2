@@ -66,10 +66,12 @@ def save_flow_plot(
     mask: Optional[np.ndarray] = None,
     overlay_data: Optional[np.ndarray] = None,
     overlay_cmap: Optional[str] = None,
+    overlay_alpha: float = 0.7,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
     figsize: tuple = (12, 10),
     dpi: int = 150,
+    pixel_perfect: bool = True,
 ) -> Path:
     """
     Save a single flow diagnostic plot to file.
@@ -94,47 +96,114 @@ def save_flow_plot(
         Boolean array for overlay
     overlay_cmap : str, optional
         Colormap for overlay
+    overlay_alpha : float, optional
+        Alpha for overlay (default: 0.7)
     vmin, vmax : float, optional
         Colorbar limits
     figsize : tuple, optional
         Figure size in inches
     dpi : int, optional
         Output resolution
+    pixel_perfect : bool, optional
+        If True, save pixel-perfect raw image + annotated thumbnail (default: True)
 
     Returns
     -------
     Path
-        Path to saved file
+        Path to saved file (raw version if pixel_perfect=True)
     """
-    fig, ax = plt.subplots(figsize=figsize)
+    output_path = Path(output_path)
 
-    # Handle masking
+    # Handle masking and prepare plot data
     plot_data = data.copy().astype(float)
     if mask is not None:
         plot_data = np.ma.masked_where(mask, plot_data)
 
     # Apply log scale
+    display_label = label
     if log_scale and np.any(plot_data > 0):
         plot_data = np.log10(plot_data + 1)
-        label = f"log10({label})" if label else "log10"
+        display_label = f"log10({label})" if label else "log10"
 
-    im = ax.imshow(plot_data, cmap=cmap, interpolation="nearest", vmin=vmin, vmax=vmax)
-    plt.colorbar(im, ax=ax, label=label, shrink=0.8)
+    # Get colormap
+    cmap_obj = plt.get_cmap(cmap)
 
-    # Add overlay if provided
+    # Normalize data for colormap
+    if vmin is None:
+        vmin = np.nanmin(plot_data) if not isinstance(plot_data, np.ma.MaskedArray) else np.nanmin(plot_data.compressed())
+    if vmax is None:
+        vmax = np.nanmax(plot_data) if not isinstance(plot_data, np.ma.MaskedArray) else np.nanmax(plot_data.compressed())
+
+    if vmax > vmin:
+        norm_data = (plot_data - vmin) / (vmax - vmin)
+    else:
+        norm_data = np.zeros_like(plot_data)
+
+    # Handle masked arrays
+    if isinstance(plot_data, np.ma.MaskedArray):
+        norm_data = np.ma.filled(norm_data, 0.0)
+
+    # Apply colormap to get RGB
+    rgb_image = cmap_obj(norm_data)[:, :, :3]  # Drop alpha
+
+    # Add overlay if provided (blend on top)
     if overlay_data is not None and overlay_cmap is not None:
-        overlay_masked = np.ma.masked_where(~overlay_data, overlay_data.astype(float))
-        ax.imshow(overlay_masked, cmap=overlay_cmap, alpha=0.7)
+        overlay_cmap_obj = plt.get_cmap(overlay_cmap)
+        overlay_mask = overlay_data.astype(bool)
+        overlay_rgb = overlay_cmap_obj(np.ones_like(overlay_data, dtype=float))[:, :, :3]
+        for c in range(3):
+            rgb_image[:, :, c] = np.where(
+                overlay_mask,
+                overlay_alpha * overlay_rgb[:, :, c] + (1 - overlay_alpha) * rgb_image[:, :, c],
+                rgb_image[:, :, c]
+            )
 
-    ax.set_title(title, fontsize=14, fontweight="bold")
-    ax.set_xlabel("Column")
-    ax.set_ylabel("Row")
+    if pixel_perfect:
+        # 1. Save RAW pixel-perfect version
+        plt.imsave(output_path, rgb_image)
+        print(f"  Saved raw (pixel-perfect): {output_path.name} [{data.shape[0]}×{data.shape[1]} pixels]")
 
-    plt.tight_layout()
-    output_path = Path(output_path)
-    plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
-    plt.close()
-    print(f"  Saved: {output_path.name}")
+        # 2. Save ANNOTATED thumbnail
+        thumb_path = output_path.with_stem(output_path.stem + "_annotated")
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Show the composite image
+        ax.imshow(rgb_image, origin='upper')
+
+        # Add colorbar using ScalarMappable
+        from matplotlib.cm import ScalarMappable
+        from matplotlib.colors import Normalize
+        sm = ScalarMappable(cmap=cmap, norm=Normalize(vmin=vmin, vmax=vmax))
+        sm.set_array([])
+        plt.colorbar(sm, ax=ax, label=display_label, shrink=0.8)
+
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.set_xlabel("Column")
+        ax.set_ylabel("Row")
+
+        plt.tight_layout()
+        plt.savefig(thumb_path, dpi=dpi, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved annotated thumbnail: {thumb_path.name}")
+    else:
+        # Legacy mode: single matplotlib figure
+        fig, ax = plt.subplots(figsize=figsize)
+        im = ax.imshow(plot_data, cmap=cmap, interpolation="nearest", vmin=vmin, vmax=vmax)
+        plt.colorbar(im, ax=ax, label=display_label, shrink=0.8)
+
+        if overlay_data is not None and overlay_cmap is not None:
+            overlay_masked = np.ma.masked_where(~overlay_data, overlay_data.astype(float))
+            ax.imshow(overlay_masked, cmap=overlay_cmap, alpha=overlay_alpha)
+
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.set_xlabel("Column")
+        ax.set_ylabel("Row")
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
+        plt.close()
+        print(f"  Saved: {output_path.name}")
+
     return output_path
 
 
@@ -183,18 +252,47 @@ def plot_water_bodies(
     If flow_dir is provided, draws quiver arrows showing:
     - Red arrows: outlets (water leaving lakes)
     - Green arrows: inlets (water entering lakes)
+
+    Saves pixel-perfect raw image + annotated thumbnail with arrows.
     """
+    output_path = Path(output_path)
     num_lakes = len(np.unique(lake_mask[lake_mask > 0]))
     lake_pct = 100 * np.sum(lake_mask > 0) / lake_mask.size
 
+    # Create pixel-perfect composite image
+    cmap_obj = plt.get_cmap(FLOW_COLORMAPS["elevation"])
+
+    # Normalize DEM for colormap
+    dem_min, dem_max = np.nanmin(dem), np.nanmax(dem)
+    if dem_max > dem_min:
+        dem_norm = (dem - dem_min) / (dem_max - dem_min)
+    else:
+        dem_norm = np.zeros_like(dem)
+
+    # Base image from DEM
+    rgb_image = cmap_obj(dem_norm)[:, :, :3]
+
+    # Overlay lakes in blue (same color as ocean in 3D render)
+    lake_pixels = lake_mask > 0
+    lake_color = np.array([25, 85, 125]) / 255.0  # Medium blue matching ocean
+    lake_alpha = 0.7
+    for c in range(3):
+        rgb_image[:, :, c] = np.where(
+            lake_pixels,
+            lake_alpha * lake_color[c] + (1 - lake_alpha) * rgb_image[:, :, c],
+            rgb_image[:, :, c]
+        )
+
+    # 1. Save RAW pixel-perfect version
+    plt.imsave(output_path, rgb_image)
+    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
+
+    # 2. Save ANNOTATED thumbnail with arrows
+    thumb_path = output_path.with_stem(output_path.stem + "_annotated")
     fig, ax = plt.subplots(figsize=(12, 10))
 
-    # Show elevation as background
-    im_dem = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
-
-    # Overlay lakes in blue
-    lake_display = np.ma.masked_where(lake_mask == 0, lake_mask.astype(float))
-    ax.imshow(lake_display, cmap="Blues", alpha=0.7, vmin=0, vmax=max(num_lakes, 1))
+    # Show the composite image
+    ax.imshow(rgb_image, origin='upper')
 
     # Draw outlet arrows (red, pointing outward)
     if flow_dir is not None and lake_outlets is not None and np.any(lake_outlets):
@@ -233,7 +331,13 @@ def plot_water_bodies(
             label=f"Inlets ({len(inlet_rows)})"
         )
 
-    plt.colorbar(im_dem, ax=ax, label="Elevation (m)", shrink=0.7)
+    # Add colorbar using ScalarMappable
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    sm = ScalarMappable(cmap=FLOW_COLORMAPS["elevation"], norm=Normalize(vmin=dem_min, vmax=dem_max))
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label="Elevation (m)", shrink=0.7)
+
     ax.set_title(
         f"Water Bodies ({num_lakes} lakes, {lake_pct:.2f}% of area)",
         fontsize=14, fontweight="bold"
@@ -246,10 +350,10 @@ def plot_water_bodies(
         ax.legend(loc="upper right")
 
     plt.tight_layout()
-    output_path = Path(output_path)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {output_path.name}")
+    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+
     return output_path
 
 
@@ -258,19 +362,48 @@ def plot_endorheic_basins(
     basin_mask: np.ndarray,
     output_path: Path,
 ) -> Path:
-    """Plot endorheic basins overlaid on DEM."""
+    """Plot endorheic basins overlaid on DEM. Pixel-perfect output."""
+    output_path = Path(output_path)
     basin_coverage = 100 * np.sum(basin_mask) / basin_mask.size
 
-    fig, ax = plt.subplots(figsize=(12, 10))
+    # Create pixel-perfect composite
+    cmap_obj = plt.get_cmap(FLOW_COLORMAPS["elevation"])
 
-    # Show elevation as background
-    im_dem = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
+    # Normalize DEM for colormap
+    dem_min, dem_max = np.nanmin(dem), np.nanmax(dem)
+    if dem_max > dem_min:
+        dem_norm = (dem - dem_min) / (dem_max - dem_min)
+    else:
+        dem_norm = np.zeros_like(dem)
+
+    # Base image from DEM
+    rgb_image = cmap_obj(dem_norm)[:, :, :3]
 
     # Overlay basins in purple
-    basin_display = np.ma.masked_where(~basin_mask, basin_mask.astype(float))
-    ax.imshow(basin_display, cmap="Purples", alpha=0.7, vmin=0, vmax=1)
+    basin_color = np.array([0.6, 0.2, 0.8])  # Purple
+    basin_alpha = 0.7
+    for c in range(3):
+        rgb_image[:, :, c] = np.where(
+            basin_mask,
+            basin_alpha * basin_color[c] + (1 - basin_alpha) * rgb_image[:, :, c],
+            rgb_image[:, :, c]
+        )
 
-    plt.colorbar(im_dem, ax=ax, label="Elevation (m)", shrink=0.8)
+    # 1. Save RAW pixel-perfect version
+    plt.imsave(output_path, rgb_image)
+    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
+
+    # 2. Save ANNOTATED thumbnail
+    thumb_path = output_path.with_stem(output_path.stem + "_annotated")
+    fig, ax = plt.subplots(figsize=(12, 10))
+    ax.imshow(rgb_image, origin='upper')
+
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    sm = ScalarMappable(cmap=FLOW_COLORMAPS["elevation"], norm=Normalize(vmin=dem_min, vmax=dem_max))
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label="Elevation (m)", shrink=0.8)
+
     ax.set_title(
         f"Endorheic Basins ({basin_coverage:.2f}% of area)",
         fontsize=14, fontweight="bold"
@@ -279,10 +412,10 @@ def plot_endorheic_basins(
     ax.set_ylabel("Row")
 
     plt.tight_layout()
-    output_path = Path(output_path)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {output_path.name}")
+    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+
     return output_path
 
 
@@ -482,42 +615,80 @@ def plot_stream_network(
     percentile: float = 95,
 ) -> Path:
     """
-    Plot stream network extracted from drainage area.
+    Plot stream network extracted from drainage area. Pixel-perfect output.
 
     Streams are defined as cells with drainage area >= percentile threshold.
     """
+    output_path = Path(output_path)
+
     # Use top percentile drainage area threshold for stream visualization
     stream_threshold = np.percentile(drainage_area[drainage_area > 0], percentile)
     streams = drainage_area >= stream_threshold
+    stream_count = np.sum(streams)
 
-    fig, ax = plt.subplots(figsize=(12, 10))
-    im = ax.imshow(dem, cmap=FLOW_COLORMAPS["elevation"], alpha=0.6)
+    # Create pixel-perfect composite
+    cmap_obj = plt.get_cmap(FLOW_COLORMAPS["elevation"])
+    stream_cmap_obj = plt.get_cmap(FLOW_COLORMAPS["streams"])
+
+    # Normalize DEM for colormap
+    dem_min, dem_max = np.nanmin(dem), np.nanmax(dem)
+    if dem_max > dem_min:
+        dem_norm = (dem - dem_min) / (dem_max - dem_min)
+    else:
+        dem_norm = np.zeros_like(dem)
+
+    # Base image from DEM
+    rgb_image = cmap_obj(dem_norm)[:, :, :3]
 
     # Overlay streams
-    stream_overlay = np.ma.masked_where(~streams, streams.astype(float))
-    ax.imshow(stream_overlay, cmap=FLOW_COLORMAPS["streams"], alpha=0.9)
-
-    # Overlay lakes in blue
-    if lake_mask is not None:
-        lake_overlay = np.ma.masked_where(
-            lake_mask == 0, np.ones_like(lake_mask, dtype=float)
+    stream_color = np.array([0.0, 0.8, 1.0])  # Cyan for streams
+    stream_alpha = 0.9
+    for c in range(3):
+        rgb_image[:, :, c] = np.where(
+            streams,
+            stream_alpha * stream_color[c] + (1 - stream_alpha) * rgb_image[:, :, c],
+            rgb_image[:, :, c]
         )
-        ax.imshow(lake_overlay, cmap="Blues", alpha=0.5)
 
-    stream_count = np.sum(streams)
-    plt.colorbar(im, ax=ax, label="Elevation (m)", shrink=0.8)
+    # Overlay lakes in blue (same color as ocean in 3D render)
+    if lake_mask is not None:
+        lake_pixels = lake_mask > 0
+        lake_color = np.array([25, 85, 125]) / 255.0  # Medium blue matching ocean
+        lake_alpha = 0.5
+        for c in range(3):
+            rgb_image[:, :, c] = np.where(
+                lake_pixels,
+                lake_alpha * lake_color[c] + (1 - lake_alpha) * rgb_image[:, :, c],
+                rgb_image[:, :, c]
+            )
+
+    # 1. Save RAW pixel-perfect version
+    plt.imsave(output_path, rgb_image)
+    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels, {stream_count:,} stream cells]")
+
+    # 2. Save ANNOTATED thumbnail
+    thumb_path = output_path.with_stem(output_path.stem + "_annotated")
+    fig, ax = plt.subplots(figsize=(12, 10))
+    ax.imshow(rgb_image, origin='upper')
+
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+    sm = ScalarMappable(cmap=FLOW_COLORMAPS["elevation"], norm=Normalize(vmin=dem_min, vmax=dem_max))
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label="Elevation (m)", shrink=0.8)
+
     ax.set_title(
-        f"Stream Network with Lakes (top {100-percentile:.0f}%, {stream_count:,} cells)",
+        f"Stream Network with Lakes (top {100-percentile:.1f}%, {stream_count:,} cells)",
         fontsize=14, fontweight="bold"
     )
     ax.set_xlabel("Column")
     ax.set_ylabel("Row")
 
     plt.tight_layout()
-    output_path = Path(output_path)
-    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {output_path.name}")
+    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+
     return output_path
 
 
@@ -707,10 +878,11 @@ def plot_stream_overlay(
             base_rgb[:, :, c]
         )
 
-    # Overlay lakes in blue if provided
+    # Overlay lakes in blue if provided (same color as ocean in 3D render)
     if lake_mask is not None:
         lake_pixels = lake_mask > 0
-        lake_color = np.array([0.1, 0.3, 0.6])  # Dark blue
+        # Use same blue as ocean in 3D render (edge_color from core.py create_mesh)
+        lake_color = np.array([25, 85, 125]) / 255.0  # Medium blue matching ocean
         lake_alpha = 0.7
         for c in range(3):
             composite[:, :, c] = np.where(
@@ -1051,10 +1223,21 @@ def create_flow_diagnostics(
     # 7b. Drainage Area Comparison (Raw vs Conditioned)
     plot_drainage_area_comparison(dem, dem_conditioned, ocean_mask, output_dir / "07b_drainage_area_comparison.png")
 
-    # 8. Stream Network
+    # 8. Stream Network (multiple percentiles)
+    # 8a. Default (95th percentile = top 5%)
     plot_stream_network(
-        dem, drainage_area, output_dir / "08_stream_network_with_lakes.png",
-        lake_mask=lake_mask
+        dem, drainage_area, output_dir / "08a_stream_network_95pct.png",
+        lake_mask=lake_mask, percentile=95
+    )
+    # 8b. 97.5th percentile (top 2.5%)
+    plot_stream_network(
+        dem, drainage_area, output_dir / "08b_stream_network_97.5pct.png",
+        lake_mask=lake_mask, percentile=97.5
+    )
+    # 8c. 99th percentile (top 1%)
+    plot_stream_network(
+        dem, drainage_area, output_dir / "08c_stream_network_99pct.png",
+        lake_mask=lake_mask, percentile=99
     )
 
     # 9. Precipitation
