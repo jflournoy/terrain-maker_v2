@@ -521,6 +521,181 @@ def plot_stream_network(
     return output_path
 
 
+def plot_stream_overlay(
+    base_data: np.ndarray,
+    stream_threshold_data: np.ndarray,
+    stream_color_data: np.ndarray,
+    output_path: Path,
+    base_cmap: str = "viridis",
+    stream_cmap: str = "plasma",
+    percentile: float = 95,
+    stream_alpha: float = 1.0,
+    base_label: str = "Base Metric",
+    stream_label: str = "Stream Metric",
+    title: str = "Stream Network Overlay",
+    lake_mask: Optional[np.ndarray] = None,
+    base_log_scale: bool = True,
+    stream_log_scale: bool = True,
+) -> Path:
+    """
+    Plot stream network colored by a metric, overlaid on a base map.
+
+    Creates visualization with streams extracted from one metric and colored
+    by another (or the same) metric, over a full-coverage base map.
+
+    Parameters
+    ----------
+    base_data : np.ndarray
+        Data for background map coloring (e.g., discharge_potential, elevation)
+    stream_threshold_data : np.ndarray
+        Data for extracting streams (usually drainage_area for percentile threshold)
+    stream_color_data : np.ndarray
+        Data for coloring stream pixels (e.g., discharge_potential, upstream_rainfall)
+    output_path : Path
+        Output file path
+    base_cmap : str
+        Matplotlib colormap for base map (default: viridis)
+    stream_cmap : str
+        Matplotlib colormap for streams (default: plasma)
+    percentile : float
+        Percentile threshold for stream extraction (default: 95 = top 5%)
+    stream_alpha : float
+        Stream transparency: 1.0 = opaque, 0.7 = semi-transparent (default: 1.0)
+    base_label : str
+        Colorbar label for base map
+    stream_label : str
+        Label describing stream metric (used in title)
+    title : str
+        Plot title
+    lake_mask : np.ndarray, optional
+        Lake mask for overlay (integer IDs or boolean)
+    base_log_scale : bool
+        Apply log10 to base data (default: True)
+    stream_log_scale : bool
+        Apply log10 to stream color data (default: True)
+
+    Returns
+    -------
+    Path
+        Path to saved raw pixel-perfect file
+    """
+    output_path = Path(output_path)
+
+    # Extract stream mask using percentile threshold
+    valid_threshold = stream_threshold_data[stream_threshold_data > 0]
+    if len(valid_threshold) == 0:
+        print(f"  Warning: No valid stream data, skipping {output_path.name}")
+        return output_path
+    stream_threshold = np.percentile(valid_threshold, percentile)
+    stream_mask = stream_threshold_data >= stream_threshold
+
+    # Prepare base data (log scale if requested)
+    base_plot = base_data.copy().astype(np.float32)
+    if base_log_scale and np.any(base_plot > 0):
+        base_plot = np.log10(base_plot + 1)
+
+    # Prepare stream color data (log scale if requested)
+    stream_plot = stream_color_data.copy().astype(np.float32)
+    if stream_log_scale and np.any(stream_plot > 0):
+        stream_plot = np.log10(stream_plot + 1)
+
+    # Get colormaps
+    base_cmap_obj = plt.get_cmap(base_cmap)
+    stream_cmap_obj = plt.get_cmap(stream_cmap)
+
+    # Normalize base data to 0-1
+    base_min, base_max = np.nanmin(base_plot), np.nanmax(base_plot)
+    if base_max > base_min:
+        base_norm = (base_plot - base_min) / (base_max - base_min)
+    else:
+        base_norm = np.zeros_like(base_plot)
+
+    # Create base RGB image
+    base_rgb = base_cmap_obj(base_norm)[:, :, :3]  # Drop alpha
+
+    # Normalize stream data to 0-1 (only for stream pixels)
+    stream_values = stream_plot[stream_mask]
+    if len(stream_values) > 0:
+        stream_min, stream_max = np.nanmin(stream_values), np.nanmax(stream_values)
+        if stream_max > stream_min:
+            stream_norm = (stream_plot - stream_min) / (stream_max - stream_min)
+        else:
+            stream_norm = np.zeros_like(stream_plot)
+    else:
+        stream_norm = np.zeros_like(stream_plot)
+
+    # Create stream RGBA (colored by metric, not binary)
+    stream_rgba = stream_cmap_obj(stream_norm)
+
+    # Composite: blend streams over base
+    composite = base_rgb.copy()
+    # Apply stream pixels with alpha blending
+    for c in range(3):
+        composite[:, :, c] = np.where(
+            stream_mask,
+            stream_alpha * stream_rgba[:, :, c] + (1 - stream_alpha) * base_rgb[:, :, c],
+            base_rgb[:, :, c]
+        )
+
+    # Overlay lakes in blue if provided
+    if lake_mask is not None:
+        lake_pixels = lake_mask > 0
+        lake_color = np.array([0.1, 0.3, 0.6])  # Dark blue
+        lake_alpha = 0.7
+        for c in range(3):
+            composite[:, :, c] = np.where(
+                lake_pixels,
+                lake_alpha * lake_color[c] + (1 - lake_alpha) * composite[:, :, c],
+                composite[:, :, c]
+            )
+
+    # 1. Save RAW pixel-perfect version
+    plt.imsave(output_path, composite)
+    stream_count = np.sum(stream_mask)
+    print(f"  Saved raw (pixel-perfect): {output_path.name} [{base_data.shape[0]}×{base_data.shape[1]} pixels, {stream_count:,} stream cells]")
+
+    # 2. Save ANNOTATED thumbnail
+    thumb_path = output_path.with_stem(output_path.stem + "_annotated")
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Show composite
+    ax.imshow(composite, origin='upper')
+
+    # Add colorbars for both base and stream
+    # Create dummy ScalarMappables for colorbars
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
+
+    base_label_full = f"log10({base_label})" if base_log_scale else base_label
+    stream_label_full = f"log10({stream_label})" if stream_log_scale else stream_label
+
+    # Base colorbar (left side)
+    sm_base = ScalarMappable(cmap=base_cmap, norm=Normalize(vmin=base_min, vmax=base_max))
+    cbar_base = plt.colorbar(sm_base, ax=ax, location='left', shrink=0.6, pad=0.02)
+    cbar_base.set_label(base_label_full, fontsize=9)
+
+    # Stream colorbar (right side)
+    if len(stream_values) > 0:
+        sm_stream = ScalarMappable(cmap=stream_cmap, norm=Normalize(vmin=stream_min, vmax=stream_max))
+        cbar_stream = plt.colorbar(sm_stream, ax=ax, location='right', shrink=0.6, pad=0.02)
+        cbar_stream.set_label(f"Streams: {stream_label_full}", fontsize=9)
+
+    alpha_desc = "opaque" if stream_alpha >= 1.0 else f"α={stream_alpha:.1f}"
+    ax.set_title(
+        f"{title}\n(top {100-percentile:.0f}% streams, {stream_count:,} cells, {alpha_desc})",
+        fontsize=11, fontweight="bold"
+    )
+    ax.set_xlabel("Column", fontsize=9)
+    ax.set_ylabel("Row", fontsize=9)
+
+    plt.tight_layout()
+    plt.savefig(thumb_path, dpi=100, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+
+    return output_path
+
+
 def plot_precipitation(
     precip: np.ndarray,
     output_path: Path,
