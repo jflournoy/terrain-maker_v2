@@ -761,13 +761,19 @@ def main():
     print(f"  Drainage log range: {drainage_log.min():.3f} - {drainage_log.max():.3f}")
     print(f"  Non-zero drainage cells: {np.sum(drainage_area > 0):,}")
 
-    # Add as data layers WITHOUT target_layer (now same resolution as DEM)
-    # All layers will go through same transforms (reproject, flip, downsample)
+    # Apply transforms to DEM only first (reproject, flip, scale, downsample)
+    # Color data layers will be added AFTER so they don't get scaled by scale_elevation
+    terrain.apply_transforms()
+
+    # Now add color data layers using same_extent_as to match transformed DEM
+    # These won't go through scale_elevation since transforms already applied
+    print("Adding color data layers (post-transform)...")
     terrain.add_data_layer(
         "drainage_area_log",
         drainage_log.astype(np.float32),
         flow_transform,
-        crs=dem_crs,  # Use actual CRS, not hardcoded
+        crs=dem_crs,
+        target_layer="dem",  # Align to transformed DEM grid
     )
 
     terrain.add_data_layer(
@@ -775,6 +781,7 @@ def main():
         rainfall_log.astype(np.float32),
         flow_transform,
         crs=dem_crs,
+        target_layer="dem",
     )
 
     terrain.add_data_layer(
@@ -782,6 +789,7 @@ def main():
         discharge_log.astype(np.float32),
         flow_transform,
         crs=dem_crs,
+        target_layer="dem",
     )
 
     # Create stream mask and stream discharge layer for 3D overlay
@@ -797,14 +805,12 @@ def main():
             stream_discharge,
             flow_transform,
             crs=dem_crs,
+            target_layer="dem",
         )
         print(f"  Stream cells (top {100-args.stream_percentile:.0f}%): {np.sum(stream_mask):,}")
     else:
         stream_mask = np.zeros_like(drainage_area, dtype=bool)
         print("  Warning: No valid drainage data for stream extraction")
-
-    # Apply transforms to DEM and data layers
-    terrain.apply_transforms()
 
     # Set colormap based on user choice
     if args.color_by == "elevation":
