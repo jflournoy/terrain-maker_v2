@@ -846,8 +846,8 @@ def main():
         print(f"Coloring by {base_label} + stream overlay ({stream_label}, top {100-args.stream_percentile:.0f}%)...")
 
         # Create stream-specific data layer (stream values only where streams exist)
-        stream_data = terrain.data_layers[stream_layer]["transformed_data"]
-        stream_mask_data = terrain.data_layers["stream_discharge"]["transformed_data"] > 0
+        stream_data = terrain.data_layers[stream_layer]["data"]
+        stream_mask_data = terrain.data_layers["stream_discharge"]["data"] > 0
         stream_values = np.where(stream_mask_data, stream_data, 0).astype(np.float32)
 
         # Add the stream-colored layer
