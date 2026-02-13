@@ -52,6 +52,38 @@ except (AttributeError, TypeError):
 
 
 # =============================================================================
+# Modern Terrain Colormap
+# =============================================================================
+# Contemporary cartography-inspired palette (MapBox/Natural Earth style):
+# Deep ocean → Coastal teal → Lowland sage → Highland tan → Alpine gray → Snow peaks
+# Muted, desaturated colors with smooth luminance progression
+# Designed to look sophisticated and work well with hillshade overlays
+
+_MODERN_TERRAIN_COLORS = [
+    # (position, R, G, B) - all values 0-1
+    (0.00, 0.15, 0.25, 0.35),   # Deep ocean: dark desaturated blue
+    (0.08, 0.20, 0.35, 0.42),   # Shallow water: muted teal-blue
+    (0.15, 0.28, 0.42, 0.38),   # Coastal: blue-green transition
+    (0.25, 0.35, 0.45, 0.32),   # Lowland: muted sage green
+    (0.40, 0.48, 0.50, 0.38),   # Foothills: olive-tan transition
+    (0.55, 0.58, 0.52, 0.42),   # Highland: warm tan
+    (0.70, 0.62, 0.55, 0.48),   # Upland: muted brown-tan
+    (0.85, 0.68, 0.65, 0.62),   # Alpine: warm gray
+    (0.95, 0.82, 0.80, 0.78),   # High peaks: pale warm gray
+    (1.00, 0.95, 0.94, 0.93),   # Snow: near-white with warm tint
+]
+
+modern_terrain_cmap = LinearSegmentedColormap.from_list(
+    'modern_terrain', _MODERN_TERRAIN_COLORS, N=256
+)
+try:
+    import matplotlib
+    matplotlib.colormaps.register(modern_terrain_cmap, force=True)
+except (AttributeError, TypeError):
+    plt.register_cmap(cmap=modern_terrain_cmap)
+
+
+# =============================================================================
 # Boreal-Mako Colormap (Perceptually Uniform)
 # =============================================================================
 # Winter forest palette: boreal green → blue → cyan → white
