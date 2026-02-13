@@ -613,11 +613,17 @@ def plot_stream_network(
     output_path: Path,
     lake_mask: Optional[np.ndarray] = None,
     percentile: float = 95,
+    base_dim: float = 0.4,
 ) -> Path:
     """
     Plot stream network extracted from drainage area. Pixel-perfect output.
 
     Streams are defined as cells with drainage area >= percentile threshold.
+
+    Parameters
+    ----------
+    base_dim : float
+        Dim factor for base DEM (0.0 = black, 1.0 = full brightness). Default 0.4.
     """
     output_path = Path(output_path)
 
@@ -628,7 +634,6 @@ def plot_stream_network(
 
     # Create pixel-perfect composite
     cmap_obj = plt.get_cmap(FLOW_COLORMAPS["elevation"])
-    stream_cmap_obj = plt.get_cmap(FLOW_COLORMAPS["streams"])
 
     # Normalize DEM for colormap
     dem_min, dem_max = np.nanmin(dem), np.nanmax(dem)
@@ -637,16 +642,16 @@ def plot_stream_network(
     else:
         dem_norm = np.zeros_like(dem)
 
-    # Base image from DEM
-    rgb_image = cmap_obj(dem_norm)[:, :, :3]
+    # Base image from DEM (dimmed to make streams visible)
+    rgb_image = cmap_obj(dem_norm)[:, :, :3] * base_dim
 
-    # Overlay streams
-    stream_color = np.array([0.0, 0.8, 1.0])  # Cyan for streams
-    stream_alpha = 0.9
+    # Overlay streams (bright cyan on dimmed background)
+    stream_color = np.array([0.0, 0.9, 1.0])  # Bright cyan for streams
+    stream_alpha = 1.0  # Fully opaque streams
     for c in range(3):
         rgb_image[:, :, c] = np.where(
             streams,
-            stream_alpha * stream_color[c] + (1 - stream_alpha) * rgb_image[:, :, c],
+            stream_color[c],  # Full brightness streams on dimmed background
             rgb_image[:, :, c]
         )
 
@@ -710,6 +715,7 @@ def plot_stream_overlay(
     variable_width: bool = False,
     min_width: int = 1,
     max_width: int = 4,
+    base_dim: float = 0.5,
 ) -> Path:
     """
     Plot stream network colored by a metric, overlaid on a base map.
@@ -753,6 +759,9 @@ def plot_stream_overlay(
         Minimum stream width in pixels when variable_width=True (default: 1)
     max_width : int
         Maximum stream width in pixels when variable_width=True (default: 4)
+    base_dim : float
+        Dim factor for base map (0.0 = black, 1.0 = full brightness). Default 0.5.
+        Dimming the base makes streams more visible.
 
     Returns
     -------
@@ -851,8 +860,8 @@ def plot_stream_overlay(
     else:
         base_norm = np.zeros_like(base_plot)
 
-    # Create base RGB image
-    base_rgb = base_cmap_obj(base_norm)[:, :, :3]  # Drop alpha
+    # Create base RGB image (dimmed to make streams more visible)
+    base_rgb = base_cmap_obj(base_norm)[:, :, :3] * base_dim  # Drop alpha, apply dim
 
     # Normalize stream data to 0-1 (only for stream pixels)
     stream_values = stream_plot[stream_mask]
