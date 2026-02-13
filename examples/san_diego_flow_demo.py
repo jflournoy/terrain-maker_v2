@@ -410,9 +410,6 @@ def main():
           f"lon [{dem_bbox[1]:.4f}, {dem_bbox[3]:.4f}]", flush=True)
 
     # Step 3: Prepare precipitation data
-    print("DEBUG: About to check precipitation...", flush=True)
-    print(f"DEBUG: precip={args.precip}, exists={args.precip.exists() if args.precip else 'N/A'}", flush=True)
-
     precip_path = None
 
     # First, check if user provided explicit path
@@ -420,10 +417,17 @@ def main():
         print(f"\nUsing precipitation data from {args.precip}", flush=True)
         precip_path = args.precip
     else:
-        # Check for existing WorldClim file in output directory
-        existing_precip = list(args.output_dir.glob("wc2.1_*.tif"))
+        # Check for existing WorldClim file matching the selected dataset
+        # Use dataset-specific glob pattern to avoid using wrong resolution
+        dataset_patterns = {
+            "worldclim_30s": "data/worldclim_30s/wc2.1_30s_bio_*.tif",
+            "worldclim": f"{args.output_dir}/wc2.1_2.5m_bio_*.tif",
+            "prism": f"{args.output_dir}/PRISM_*.tif",
+        }
+        pattern = dataset_patterns.get(args.precip_dataset, f"{args.output_dir}/wc2.1_*.tif")
+        existing_precip = list(Path().glob(pattern))
         if existing_precip:
-            print(f"\nFound existing precipitation data: {existing_precip[0]}", flush=True)
+            print(f"\nFound existing {args.precip_dataset} precipitation data: {existing_precip[0]}", flush=True)
             precip_path = existing_precip[0]
         else:
             # Download precipitation data using selected dataset
@@ -449,21 +453,16 @@ def main():
 
     # Step 4: Save merged DEM for flow accumulation
     print("\nPreparing DEM for flow accumulation...", flush=True)
-    print("DEBUG: Step 4 starting", flush=True)
     flow_data_dir = args.output_dir / "flow_data"
     flow_data_dir.mkdir(parents=True, exist_ok=True)
     merged_dem_path = flow_data_dir / "merged_dem.tif"
 
     # Save merged DEM as GeoTIFF
-    print("DEBUG: Importing rasterio...", flush=True)
     import rasterio
     from rasterio import Affine
 
     # Check if file already exists - skip if so
-    if merged_dem_path.exists():
-        print(f"DEBUG: Merged DEM already exists, skipping write", flush=True)
-    else:
-        print(f"DEBUG: Writing DEM {dem.shape} to {merged_dem_path}...", flush=True)
+    if not merged_dem_path.exists():
         height, width = dem.shape
         with rasterio.open(
             merged_dem_path,
