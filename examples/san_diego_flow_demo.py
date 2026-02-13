@@ -82,6 +82,18 @@ from src.terrain.visualization.flow_diagnostics import (
 )
 
 
+def get_cmap_name(cmap_spec: str) -> tuple[str, bool]:
+    """Parse colormap spec, returning (cmap_name, is_reversed).
+
+    Supports "-" prefix for reversed colormaps:
+    - "viridis" -> ("viridis", False)
+    - "-viridis" -> ("viridis", True) -> uses "viridis_r"
+    """
+    if cmap_spec.startswith("-"):
+        return cmap_spec[1:] + "_r", True
+    return cmap_spec, False
+
+
 def main():
     import argparse
 
@@ -121,6 +133,21 @@ def main():
         type=float,
         default=95,
         help="Percentile threshold for stream extraction (default: 95 = top 5%%)",
+    )
+    parser.add_argument(
+        "--base-cmap",
+        type=str,
+        default=None,
+        help="Colormap for base terrain. Prefix with '-' to reverse (e.g., '-viridis'). "
+             "Options: viridis, plasma, inferno, magma, cividis, terrain. "
+             "Default depends on --color-by.",
+    )
+    parser.add_argument(
+        "--stream-cmap",
+        type=str,
+        default="plasma",
+        help="Colormap for stream overlay. Prefix with '-' to reverse (e.g., '-plasma'). "
+             "Options: viridis, plasma, inferno, magma, cividis. Default: plasma.",
     )
     parser.add_argument(
         "--variable-width",
@@ -876,22 +903,38 @@ def main():
         print("  Warning: No valid drainage data for stream extraction")
 
     # Set colormap based on user choice
+    # Determine default base colormap if not specified
+    if args.base_cmap is None:
+        default_cmaps = {
+            "elevation": "terrain",
+            "drainage": "-viridis",  # reversed so high values are dark
+            "discharge": "-plasma",
+            "rainfall": "-viridis",
+        }
+        args.base_cmap = default_cmaps[args.color_by]
+
+    # Parse colormap names (handle "-" prefix for reversed)
+    base_cmap_name, _ = get_cmap_name(args.base_cmap)
+    stream_cmap_name, _ = get_cmap_name(args.stream_cmap)
+
     if args.color_by == "elevation":
-        base_colormap = lambda elev: elevation_colormap(elev, cmap_name="terrain")
+        base_colormap = lambda elev: elevation_colormap(elev, cmap_name=base_cmap_name)
         base_layer = "dem"
         base_label = "elevation"
     elif args.color_by == "drainage":
-        base_colormap = lambda drain: elevation_colormap(drain, cmap_name="viridis", min_elev=0.1)
+        base_colormap = lambda drain: elevation_colormap(drain, cmap_name=base_cmap_name, min_elev=0.1)
         base_layer = "drainage_area_log"
         base_label = "drainage area (log)"
     elif args.color_by == "discharge":
-        base_colormap = lambda discharge: elevation_colormap(discharge, cmap_name="plasma")
+        base_colormap = lambda discharge: elevation_colormap(discharge, cmap_name=base_cmap_name)
         base_layer = "discharge_potential_log"
         base_label = "discharge potential (log)"
     else:  # rainfall
-        base_colormap = lambda rain: elevation_colormap(rain, cmap_name="viridis")
+        base_colormap = lambda rain: elevation_colormap(rain, cmap_name=base_cmap_name)
         base_layer = "upstream_rainfall_log"
         base_label = "upstream rainfall (log)"
+
+    print(f"Using colormaps: base={args.base_cmap} ({base_cmap_name}), stream={args.stream_cmap} ({stream_cmap_name})")
 
     # Apply color mapping - with or without stream overlay
     if args.stream_overlay:
@@ -922,7 +965,7 @@ def main():
         }
 
         def stream_colormap(data):
-            return elevation_colormap(data, cmap_name="plasma")
+            return elevation_colormap(data, cmap_name=stream_cmap_name)
 
         terrain.set_multi_color_mapping(
             base_colormap=base_colormap,
