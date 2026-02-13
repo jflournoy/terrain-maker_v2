@@ -184,6 +184,14 @@ def main():
              "Higher values move camera farther above terrain.",
     )
     parser.add_argument(
+        "--ortho-scale",
+        type=float,
+        default=None,
+        help="Orthographic camera scale (zoom). Only affects orthographic cameras (--camera above/above-tilted). "
+             "Higher values = zoom out (show more area), lower values = zoom in (more detail). "
+             "Default: 1.1 for above views, 1.2 for other ortho views.",
+    )
+    parser.add_argument(
         "--variable-width",
         action="store_true",
         help="Scale stream line width by metric value (thicker = higher value)",
@@ -1152,6 +1160,12 @@ def main():
     else:
         camera_elevation = 3.0 if is_above else 1.0  # High elevation for overhead view
 
+    # Determine ortho scale (zoom for orthographic cameras)
+    if args.ortho_scale is not None:
+        ortho_scale = args.ortho_scale
+    else:
+        ortho_scale = 1.1 if is_above else 1.2
+
     camera = position_camera_relative(
         mesh,
         direction=args.camera,
@@ -1159,9 +1173,15 @@ def main():
         focal_length=50,
         distance=1.0 if not is_above else 2.0,
         elevation=camera_elevation,
-        ortho_scale=1.1 if is_above else 1.2,
+        ortho_scale=ortho_scale,
     )
-    print(f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'}, elevation={camera_elevation:.1f})")
+
+    # Print camera info with relevant parameters
+    camera_info = f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'}, elevation={camera_elevation:.1f}"
+    if is_above:
+        camera_info += f", ortho_scale={ortho_scale:.2f}"
+    camera_info += ")"
+    print(camera_info)
 
     # Sky lighting
     setup_hdri_lighting(
