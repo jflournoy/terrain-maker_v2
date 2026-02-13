@@ -48,6 +48,51 @@ Consider TDD especially for complex features or when requirements are unclear.
 
 **ALWAYS use `date` command for dates** - Never assume or guess dates. Always run `date "+%Y-%m-%d"` when you need the current date for documentation, commits, or any other purpose.
 
+**NEVER operate on full-resolution data for expensive operations** - Operations like distance transforms, morphological operations, or complex array manipulations WILL OOM on large DEMs. Always understand which data is at full resolution vs downsampled resolution.
+
+### Memory Management & Data Resolution
+
+**Critical Rule: Understand your data resolution at every step**
+
+The terrain processing pipeline uses multiple resolutions:
+1. **Original DEM**: Full resolution from source files (potentially 10K×10K+ pixels)
+2. **Flow computation**: Downsampled to target_vertices (typically 1-2K×1-2K pixels)
+3. **Mesh vertices**: Further downsampled for 3D rendering (controlled by vertices-per-pixel)
+
+**Memory-intensive operations to avoid on full-resolution data:**
+- `scipy.ndimage.distance_transform_edt()` - Creates arrays matching input size + index arrays
+- `scipy.ndimage.morphological_*()` - Can create large intermediate arrays
+- Convolution/filtering operations with large kernels
+- Any operation that creates temporary arrays the size of the input
+
+**Safe approaches:**
+1. **Operate at flow resolution** - Flow data is already downsampled, use that resolution
+2. **Downsample first** - If you need full DEM, downsample it before expensive operations
+3. **Check array sizes** - Before expensive ops, print array shapes and calculate memory requirements
+4. **Use streaming/chunked processing** - For operations that support it
+
+**Example of BAD approach** (caused OOM):
+```python
+# DON'T: This operates on full-resolution DEM (could be 10K×10K)
+distances, indices = distance_transform_edt(~stream_mask, return_indices=True)
+# Creates: distances (10K×10K floats) + indices (2× 10K×10K ints) = ~2GB+
+```
+
+**Example of GOOD approach**:
+```python
+# DO: Check resolution first, or operate on downsampled data
+print(f"Array size: {stream_mask.shape} = {stream_mask.size:,} pixels")
+if stream_mask.size > 5_000_000:  # >5M pixels
+    print("WARNING: Array too large for distance transform, skipping variable-width")
+    # OR: downsample the data first
+```
+
+**When implementing new features:**
+1. Always check what resolution your input data is at
+2. For expensive operations, work with flow resolution or mesh resolution data
+3. If you must use full resolution, add memory checks and warnings
+4. Document which resolution the feature operates on
+
 ## AI Integrity Principles
 
 **CRITICAL: Always provide honest, objective recommendations based on technical merit, not user bias.**
