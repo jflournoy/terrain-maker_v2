@@ -161,7 +161,7 @@ def main():
         "--target-vertices",
         type=int,
         default=None,
-        help="Target vertex count for mesh (default: 10M, --fast: 500K)",
+        help="Target vertex count for mesh. Overrides --vertices-per-pixel calculation.",
     )
     parser.add_argument(
         "--samples",
@@ -173,13 +173,40 @@ def main():
         "--render-scale",
         type=float,
         default=None,
-        help="Render resolution scale (default: 1.0, --fast: 0.5)",
+        help="Render resolution scale (default: 1.0, --fast: 0.5). Overridden by --width/--height.",
     )
     parser.add_argument(
         "--height-scale",
         type=float,
         default=None,
         help="Terrain height exaggeration (default: 8.0, --fast: 4.0)",
+    )
+    # New resolution arguments
+    parser.add_argument(
+        "--width",
+        type=float,
+        default=None,
+        help="Render width in inches. Pixels = width × DPI. Overrides --render-scale.",
+    )
+    parser.add_argument(
+        "--height",
+        type=float,
+        default=None,
+        help="Render height in inches. Pixels = height × DPI. Overrides --render-scale.",
+    )
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=72,
+        help="DPI for output (default: 72). Render pixels = inches × DPI.",
+    )
+    parser.add_argument(
+        "--vertices-per-pixel",
+        type=float,
+        default=None,
+        help="Vertices per render pixel. Auto-calculates --target-vertices from render dimensions. "
+             "Example: 10.0 means 10 vertices per pixel (e.g., 10\"×8\" @ 72 DPI = 4.1M vertices). "
+             "Higher = more mesh detail. Overridden by explicit --target-vertices.",
     )
     # Flow algorithm parameters
     parser.add_argument(
@@ -221,23 +248,59 @@ def main():
     )
     args = parser.parse_args()
 
-    # Apply --fast defaults
+    # Base render dimensions (10x8 inches)
+    base_width_in, base_height_in = 10.0, 8.0
+
+    # Determine render dimensions in inches, then convert to pixels
+    # Priority: explicit --width/--height > --render-scale > --fast defaults
+    if args.width is not None or args.height is not None:
+        # Use explicit dimensions in inches, defaulting to base aspect ratio if only one specified
+        if args.width is not None and args.height is not None:
+            width_in, height_in = args.width, args.height
+        elif args.width is not None:
+            width_in = args.width
+            height_in = width_in * base_height_in / base_width_in
+        else:  # args.height is not None
+            height_in = args.height
+            width_in = height_in * base_width_in / base_height_in
+        args.render_scale = 1.0  # Not used when explicit dimensions provided
+    else:
+        # Use --render-scale (or defaults) applied to base dimensions
+        if args.render_scale is None:
+            args.render_scale = 0.5 if args.fast else 1.0
+        width_in = base_width_in * args.render_scale
+        height_in = base_height_in * args.render_scale
+
+    # Convert inches to pixels using DPI
+    render_width = int(width_in * args.dpi)
+    render_height = int(height_in * args.dpi)
+
+    # Store computed render dimensions
+    args.render_width = render_width
+    args.render_height = render_height
+    args.width_in = width_in
+    args.height_in = height_in
+
+    # Calculate target vertices from vertices-per-pixel if specified
+    if args.target_vertices is None:
+        if args.vertices_per_pixel is not None:
+            total_pixels = render_width * render_height
+            args.target_vertices = int(total_pixels * args.vertices_per_pixel)
+            print(f"Calculated target vertices: {args.target_vertices:,} "
+                  f"({width_in:.1f}\"×{height_in:.1f}\" @ {args.dpi} DPI = {render_width}×{render_height}px × {args.vertices_per_pixel} vpp)")
+        else:
+            # Use defaults
+            args.target_vertices = 1_500_000 if args.fast else 10_000_000
+
+    # Apply remaining --fast defaults
     if args.fast:
-        if args.target_vertices is None:
-            args.target_vertices = 1_500_000  # Increased for better detail
         if args.samples is None:
             args.samples = 128
-        if args.render_scale is None:
-            args.render_scale = 0.5
         if args.height_scale is None:
             args.height_scale = 4.0
     else:
-        if args.target_vertices is None:
-            args.target_vertices = 10_000_000
         if args.samples is None:
             args.samples = 2048
-        if args.render_scale is None:
-            args.render_scale = 1.0
         if args.height_scale is None:
             args.height_scale = 8.0
 
@@ -937,12 +1000,11 @@ def main():
 
     # Step 8: Render
     if not args.no_render:
-        # Calculate render dimensions
-        base_width, base_height = 720, 576  # 10x8 inches at 72 DPI
-        render_width = int(base_width * args.render_scale)
-        render_height = int(base_height * args.render_scale)
+        # Use pre-calculated render dimensions
+        render_width = args.render_width
+        render_height = args.render_height
 
-        print(f"\nRendering ({render_width}x{render_height}, {args.samples} samples)...")
+        print(f"\nRendering ({args.width_in:.1f}\"×{args.height_in:.1f}\" @ {args.dpi} DPI = {render_width}×{render_height}px, {args.samples} samples)...")
         setup_render_settings(use_gpu=True, samples=args.samples, use_denoising=True)
 
         output_filename = f"san_diego_flow_{args.color_by}.png"
