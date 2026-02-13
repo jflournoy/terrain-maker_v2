@@ -52,25 +52,26 @@ except (AttributeError, TypeError):
 
 
 # =============================================================================
-# Modern Terrain Colormap
+# Modern Terrain Colormap (Land-focused)
 # =============================================================================
-# Contemporary cartography-inspired palette (MapBox/Natural Earth style):
-# Deep ocean → Coastal teal → Lowland sage → Highland tan → Alpine gray → Snow peaks
-# Muted, desaturated colors with smooth luminance progression
-# Designed to look sophisticated and work well with hillshade overlays
+# Contemporary cartography-inspired palette for LAND elevations only.
+# Water (ocean/lakes) is handled separately via water_mask, so this colormap
+# focuses on terrestrial features:
+# Desert basin/beach → Coastal scrub → Chaparral → Foothills → Mountains → Peaks
+# Muted, desaturated colors with smooth luminance progression.
 
 _MODERN_TERRAIN_COLORS = [
     # (position, R, G, B) - all values 0-1
-    (0.00, 0.15, 0.25, 0.35),   # Deep ocean: dark desaturated blue
-    (0.08, 0.20, 0.35, 0.42),   # Shallow water: muted teal-blue
-    (0.15, 0.28, 0.42, 0.38),   # Coastal: blue-green transition
-    (0.25, 0.35, 0.45, 0.32),   # Lowland: muted sage green
-    (0.40, 0.48, 0.50, 0.38),   # Foothills: olive-tan transition
-    (0.55, 0.58, 0.52, 0.42),   # Highland: warm tan
-    (0.70, 0.62, 0.55, 0.48),   # Upland: muted brown-tan
-    (0.85, 0.68, 0.65, 0.62),   # Alpine: warm gray
-    (0.95, 0.82, 0.80, 0.78),   # High peaks: pale warm gray
-    (1.00, 0.95, 0.94, 0.93),   # Snow: near-white with warm tint
+    (0.00, 0.76, 0.70, 0.55),   # Desert basin/beach: warm sand (below sea level areas)
+    (0.10, 0.72, 0.68, 0.52),   # Low desert: pale tan
+    (0.20, 0.62, 0.60, 0.45),   # Dry scrubland: tan-olive
+    (0.30, 0.50, 0.52, 0.38),   # Coastal chaparral: muted sage
+    (0.45, 0.45, 0.48, 0.35),   # Lowland: olive-sage
+    (0.55, 0.52, 0.48, 0.38),   # Foothills: tan-brown
+    (0.70, 0.55, 0.50, 0.45),   # Highland: warm brown
+    (0.82, 0.60, 0.56, 0.52),   # Mountain: muted brown-gray
+    (0.92, 0.72, 0.70, 0.68),   # Alpine: cool gray
+    (1.00, 0.92, 0.91, 0.90),   # Peaks: pale gray (not pure white)
 ]
 
 modern_terrain_cmap = LinearSegmentedColormap.from_list(
