@@ -875,7 +875,7 @@ def main():
     # Apply gamma correction to elevation if requested
     if args.color_by == "elevation" and args.gamma != 1.0:
         print(f"  Applying gamma correction to elevation: γ={args.gamma:.2f}")
-        elev_data = terrain.data_layers["dem"]["data"].copy()
+        elev_data = terrain.data_layers["dem"]["transformed_data"].copy()
 
         # Get valid elevation range (exclude extreme negative values like water)
         valid_mask = elev_data > -1000
@@ -1024,10 +1024,20 @@ def main():
         print(f"  Lake mask: {np.sum(lake_mask > 0):,} cells")
 
     # Create combined water mask from aligned data layers
+    # DEBUG: Check aligned layer shapes
+    print(f"\n  DEBUG - Aligned data layer shapes:")
+    dem_aligned = terrain.data_layers["dem"]["data"]
+    ocean_aligned = terrain.data_layers["ocean_mask"]["data"]
+    print(f"    DEM (aligned): {dem_aligned.shape}")
+    print(f"    Ocean mask (aligned): {ocean_aligned.shape}")
+    if "lake_mask" in terrain.data_layers:
+        lake_aligned = terrain.data_layers["lake_mask"]["data"]
+        print(f"    Lake mask (aligned): {lake_aligned.shape}")
+
     water_mask_combined = terrain.data_layers["ocean_mask"]["data"].astype(bool)
     if "lake_mask" in terrain.data_layers:
         water_mask_combined = water_mask_combined | terrain.data_layers["lake_mask"]["data"].astype(bool)
-    print(f"  Combined water mask: {np.sum(water_mask_combined):,} cells")
+    print(f"  Combined water mask: {np.sum(water_mask_combined):,} cells, shape: {water_mask_combined.shape}")
 
     # Set colormap based on user choice
     # Determine default base colormap if not specified
@@ -1120,6 +1130,26 @@ def main():
     print(f"    Color range G: {terrain.colors[:, 1].min():.3f} - {terrain.colors[:, 1].max():.3f}")
     print(f"    Color range B: {terrain.colors[:, 2].min():.3f} - {terrain.colors[:, 2].max():.3f}")
     print(f"    Available layers: {list(terrain.data_layers.keys())}")
+
+    # DEBUG: Check array shapes before mesh creation
+    dem_data = terrain.data_layers["dem"]["transformed_data"]
+    print(f"\n  DEBUG - Array shapes before create_mesh():")
+    print(f"    DEM (transformed): {dem_data.shape} = {dem_data.size:,} pixels")
+    print(f"    water_mask_combined: {water_mask_combined.shape} = {water_mask_combined.size:,} pixels")
+    print(f"    Shape match: {water_mask_combined.shape == dem_data.shape}")
+
+    # Calculate memory requirements for distance_transform_edt
+    # distance_transform_edt creates: distances (float32) + indices (2× int64) = ~20 bytes/pixel
+    water_memory_mb = (water_mask_combined.size * 20) / (1024 * 1024)
+    print(f"    Memory for distance_transform_edt: ~{water_memory_mb:.0f} MB")
+
+    if water_mask_combined.shape != dem_data.shape:
+        print(f"    WARNING: Water mask will be resampled during mesh creation!")
+        expected_shape = dem_data.shape
+        expected_size = expected_shape[0] * expected_shape[1]
+        expected_memory_mb = (expected_size * 20) / (1024 * 1024)
+        print(f"    Resampled shape will be: {expected_shape} = {expected_size:,} pixels")
+        print(f"    Resampled memory: ~{expected_memory_mb:.0f} MB")
 
     mesh = terrain.create_mesh(
         scale_factor=100,
