@@ -909,6 +909,33 @@ def main():
         stream_mask = np.zeros_like(drainage_area, dtype=bool)
         print("  Warning: No valid drainage data for stream extraction")
 
+    # Add water masks for 3D rendering (ocean + lakes)
+    print("Adding water masks...")
+    terrain.add_data_layer(
+        "ocean_mask",
+        ocean_mask.astype(np.float32),
+        transform,
+        crs=dem_crs,
+        target_layer="dem",
+    )
+    print(f"  Ocean mask: {np.sum(ocean_mask):,} cells")
+
+    if lake_mask is not None:
+        terrain.add_data_layer(
+            "lake_mask",
+            (lake_mask > 0).astype(np.float32),
+            transform,
+            crs=dem_crs,
+            target_layer="dem",
+        )
+        print(f"  Lake mask: {np.sum(lake_mask > 0):,} cells")
+
+    # Create combined water mask from aligned data layers
+    water_mask_combined = terrain.data_layers["ocean_mask"]["data"].astype(bool)
+    if "lake_mask" in terrain.data_layers:
+        water_mask_combined = water_mask_combined | terrain.data_layers["lake_mask"]["data"].astype(bool)
+    print(f"  Combined water mask: {np.sum(water_mask_combined):,} cells")
+
     # Set colormap based on user choice
     # Determine default base colormap if not specified
     if args.base_cmap is None:
@@ -1007,6 +1034,7 @@ def main():
         center_model=True,
         boundary_extension=True,
         base_depth=1.0,
+        water_mask=water_mask_combined,  # Apply water coloring (ocean + lakes)
     )
     print(f"✓ Created mesh: {len(mesh.data.vertices):,} vertices")
 
@@ -1024,7 +1052,7 @@ def main():
         camera_type="ORTHO" if is_above else "PERSP",
         focal_length=50,
         distance=1.0 if not is_above else 2.0,
-        elevation=1.0 if not is_above else 0.0,
+        elevation=1.0 if not is_above else 3.0,  # High elevation for overhead view
         ortho_scale=1.1 if is_above else 1.2,
     )
     print(f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'})")
