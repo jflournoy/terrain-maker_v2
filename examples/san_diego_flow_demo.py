@@ -926,6 +926,41 @@ def main():
     if len(valid_drainage) > 0:
         stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
         stream_mask = drainage_area >= stream_threshold
+
+        # Apply variable-width expansion if requested
+        if args.variable_width:
+            from scipy.ndimage import distance_transform_edt
+
+            print(f"  Applying variable width stream expansion (max {args.max_stream_width} pixels)...")
+
+            # Use discharge potential as the width metric (higher discharge = wider stream)
+            width_metric = discharge_potential
+
+            # Normalize discharge to [0, max_stream_width] for stream pixels only
+            stream_values = width_metric[stream_mask]
+            if stream_values.size > 0 and stream_values.max() > stream_values.min():
+                min_val, max_val = stream_values.min(), stream_values.max()
+                width_normalized = ((width_metric - min_val) / (max_val - min_val)) * args.max_stream_width
+            else:
+                width_normalized = np.ones_like(width_metric) * args.max_stream_width
+
+            # Compute distance to nearest stream pixel for all pixels
+            # indices gives us the (y, x) coordinates of the nearest stream pixel
+            distances, indices = distance_transform_edt(~stream_mask, return_indices=True)
+
+            # For each pixel, get the width threshold from its nearest stream pixel
+            nearest_y, nearest_x = indices[0], indices[1]
+            nearest_width = width_normalized[nearest_y, nearest_x]
+
+            # Expand stream mask to include pixels within their nearest stream's width radius
+            expanded_stream_mask = distances <= nearest_width
+
+            # Update stream mask with expanded version
+            original_stream_count = np.sum(stream_mask)
+            stream_mask = expanded_stream_mask
+            expanded_stream_count = np.sum(stream_mask)
+            print(f"    Expanded from {original_stream_count:,} to {expanded_stream_count:,} stream pixels")
+
         # Stream discharge: discharge values only at stream pixels, 0 elsewhere
         stream_discharge = np.where(stream_mask, discharge_log, 0).astype(np.float32)
         terrain.add_data_layer(
