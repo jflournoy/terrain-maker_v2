@@ -12,12 +12,13 @@ Builds on san_diego_demo.py to add flow accumulation analysis:
 Shows integration of flow accumulation with terrain visualization using real climate data.
 
 NOTE: Uses WorldClim instead of PRISM because San Diego DEM extends into Mexico.
-PRISM only covers continental USA, but WorldClim provides global coverage at ~4.5km resolution.
+PRISM only covers continental USA, but WorldClim provides global coverage.
+Default is WorldClim 30-second (~1km) resolution for high-quality precipitation data.
 
 Requirements:
 - Blender Python API (bpy)
 - NASA Earthdata credentials in .env file
-- Internet connection for WorldClim data download (~10MB, one-time)
+- Internet connection for WorldClim data download (~1GB for 30s, ~10MB for 2.5m)
 
 Usage:
     python examples/san_diego_flow_demo.py
@@ -82,16 +83,16 @@ from src.terrain.visualization.flow_diagnostics import (
 )
 
 
-def get_cmap_name(cmap_spec: str) -> tuple[str, bool]:
-    """Parse colormap spec, returning (cmap_name, is_reversed).
+def get_cmap_name(cmap_spec: str) -> str:
+    """Return colormap name, handling reversed colormaps.
 
-    Supports "-" prefix for reversed colormaps:
-    - "viridis" -> ("viridis", False)
-    - "-viridis" -> ("viridis", True) -> uses "viridis_r"
+    Matplotlib natively supports '_r' suffix for reversed colormaps:
+    - "viridis" -> normal viridis
+    - "viridis_r" -> reversed viridis
+
+    This function just passes through the name - matplotlib handles the rest.
     """
-    if cmap_spec.startswith("-"):
-        return cmap_spec[1:] + "_r", True
-    return cmap_spec, False
+    return cmap_spec
 
 
 def main():
@@ -102,6 +103,13 @@ def main():
     parser.add_argument("--no-render", action="store_true", help="Skip 3D rendering")
     parser.add_argument(
         "--precip", type=Path, default=None, help="Path to precipitation GeoTIFF (optional)"
+    )
+    parser.add_argument(
+        "--precip-dataset",
+        type=str,
+        choices=["worldclim_30s", "worldclim", "prism"],
+        default="worldclim_30s",
+        help="Precipitation dataset: worldclim_30s (~1km, default), worldclim (~4.5km), prism (USA only)",
     )
     parser.add_argument(
         "--output-dir", type=Path, default=Path("examples/output"), help="Output directory"
@@ -138,15 +146,15 @@ def main():
         "--base-cmap",
         type=str,
         default=None,
-        help="Colormap for base terrain. Prefix with '-' to reverse (e.g., '-viridis'). "
-             "Options: viridis, plasma, inferno, magma, cividis, terrain. "
+        help="Colormap for base terrain. Use '_r' suffix to reverse (e.g., 'viridis_r'). "
+             "Options: viridis, plasma, inferno, magma, cividis, terrain, modern_terrain. "
              "Default depends on --color-by.",
     )
     parser.add_argument(
         "--stream-cmap",
         type=str,
         default="plasma",
-        help="Colormap for stream overlay. Prefix with '-' to reverse (e.g., '-plasma'). "
+        help="Colormap for stream overlay. Use '_r' suffix to reverse (e.g., 'plasma_r'). "
              "Options: viridis, plasma, inferno, magma, cividis. Default: plasma.",
     )
     parser.add_argument(
@@ -940,16 +948,16 @@ def main():
     # Determine default base colormap if not specified
     if args.base_cmap is None:
         default_cmaps = {
-            "elevation": "terrain",
-            "drainage": "-viridis",  # reversed so high values are dark
-            "discharge": "-plasma",
-            "rainfall": "-viridis",
+            "elevation": "modern_terrain",
+            "drainage": "viridis_r",  # reversed so high values are dark
+            "discharge": "plasma_r",
+            "rainfall": "viridis_r",
         }
         args.base_cmap = default_cmaps[args.color_by]
 
-    # Parse colormap names (handle "-" prefix for reversed)
-    base_cmap_name, _ = get_cmap_name(args.base_cmap)
-    stream_cmap_name, _ = get_cmap_name(args.stream_cmap)
+    # Get colormap names (use _r suffix for reversed, e.g., viridis_r)
+    base_cmap_name = get_cmap_name(args.base_cmap)
+    stream_cmap_name = get_cmap_name(args.stream_cmap)
 
     if args.color_by == "elevation":
         base_colormap = lambda elev: elevation_colormap(elev, cmap_name=base_cmap_name)
