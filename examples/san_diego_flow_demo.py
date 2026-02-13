@@ -160,6 +160,16 @@ def main():
              "Options: viridis, plasma, inferno, magma, cividis. Default: plasma.",
     )
     parser.add_argument(
+        "--gamma",
+        type=float,
+        default=1.0,
+        help="Gamma correction for elevation colormap (power-law transform). "
+             "< 1.0 expands mid-elevations (e.g., 0.5 = gentle log-like), "
+             "= 1.0 is linear (default, no transform), "
+             "> 1.0 compresses mid-elevations (e.g., 2.0 emphasizes extremes). "
+             "Only applies when --color-by elevation.",
+    )
+    parser.add_argument(
         "--camera",
         type=str,
         default="south-southwest",
@@ -892,6 +902,29 @@ def main():
     # Apply transforms to DEM only first (reproject, flip, scale, downsample)
     # Color data layers will be added AFTER so they don't get scaled by scale_elevation
     terrain.apply_transforms()
+
+    # Apply gamma correction to elevation if requested
+    if args.color_by == "elevation" and args.gamma != 1.0:
+        print(f"  Applying gamma correction to elevation: γ={args.gamma:.2f}")
+        elev_data = terrain.data_layers["dem"]["data"].copy()
+
+        # Get valid elevation range (exclude extreme negative values like water)
+        valid_mask = elev_data > -1000
+        elev_min = np.min(elev_data[valid_mask])
+        elev_max = np.max(elev_data[valid_mask])
+        elev_range = elev_max - elev_min
+
+        if elev_range > 0:
+            # Normalize to [0, 1], apply gamma (power law), scale back
+            elev_norm = np.clip((elev_data - elev_min) / elev_range, 0, 1)
+            elev_gamma = np.power(elev_norm, args.gamma)
+            elev_transformed = elev_gamma * elev_range + elev_min
+
+            # Update DEM layer with gamma-corrected values
+            terrain.data_layers["dem"]["data"] = elev_transformed
+            terrain.data_layers["dem"]["transformed_data"] = elev_transformed
+
+            print(f"    Elevation range: [{elev_min:.1f}, {elev_max:.1f}] m")
 
     # Now add color data layers using same_extent_as to match transformed DEM
     # These won't go through scale_elevation since transforms already applied
