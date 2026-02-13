@@ -150,6 +150,13 @@ def main():
              "Options: viridis, plasma, inferno, magma, cividis. Default: plasma.",
     )
     parser.add_argument(
+        "--camera",
+        type=str,
+        default="south-southwest",
+        help="Camera direction: north, south, east, west, northeast, southeast, southwest, "
+             "northwest, above, above-tilted. Default: south-southwest.",
+    )
+    parser.add_argument(
         "--variable-width",
         action="store_true",
         help="Scale stream line width by metric value (thicker = higher value)",
@@ -1009,15 +1016,18 @@ def main():
     # Step 7: Setup scene
     print("\nSetting up scene...")
 
-    # Camera
+    # Camera - use orthographic for top-down views, perspective otherwise
+    is_above = args.camera in ("above", "above-tilted")
     camera = position_camera_relative(
         mesh,
-        direction="south-southwest",
-        camera_type="PERSP",
+        direction=args.camera,
+        camera_type="ORTHO" if is_above else "PERSP",
         focal_length=50,
-        distance=1.0,
-        elevation=1.0,
+        distance=1.0 if not is_above else 2.0,
+        elevation=1.0 if not is_above else 0.0,
+        ortho_scale=1.1 if is_above else 1.2,
     )
+    print(f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'})")
 
     # Sky lighting
     setup_hdri_lighting(
