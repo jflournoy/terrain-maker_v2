@@ -101,6 +101,7 @@ def main():
     parser = argparse.ArgumentParser(description="San Diego Flow Accumulation Demo")
     parser.add_argument("--skip-download", action="store_true", help="Skip DEM download")
     parser.add_argument("--no-render", action="store_true", help="Skip 3D rendering")
+    parser.add_argument("--diagnostics", action="store_true", help="Generate diagnostic plots (01-16)")
     parser.add_argument(
         "--precip", type=Path, default=None, help="Path to precipitation GeoTIFF (optional)"
     )
@@ -163,6 +164,13 @@ def main():
         default="south-southwest",
         help="Camera direction: north, south, east, west, northeast, southeast, southwest, "
              "northwest, above, above-tilted. Default: south-southwest.",
+    )
+    parser.add_argument(
+        "--camera-height",
+        type=float,
+        default=None,
+        help="Camera height/elevation. Default: 1.0 for perspective views, 3.0 for above views. "
+             "Higher values move camera farther above terrain.",
     )
     parser.add_argument(
         "--variable-width",
@@ -395,17 +403,24 @@ def main():
             print(f"\nFound existing precipitation data: {existing_precip[0]}", flush=True)
             precip_path = existing_precip[0]
         else:
-            # Download WorldClim precipitation data (global dataset covering USA + Mexico)
+            # Download precipitation data using selected dataset
             # Use actual DEM bounds to ensure full coverage
-            # NOTE: Using WorldClim instead of PRISM because San Diego DEM extends into Mexico.
-            # PRISM only covers continental USA, missing ~26.5% of this DEM (south of border).
-            print("\nDownloading real WorldClim precipitation data...")
+            # NOTE: Default worldclim_30s (~1km) provides best resolution for cross-border areas
+            # PRISM only covers continental USA, missing Mexico portion of San Diego DEM
+            dataset_info = {
+                "worldclim_30s": ("WorldClim 30-second (~1km)", "data/worldclim_30s"),
+                "worldclim": ("WorldClim 2.5-minute (~4.5km)", str(args.output_dir)),
+                "prism": ("PRISM (~4km, USA only)", str(args.output_dir)),
+            }
+            dataset_name, output_dir = dataset_info[args.precip_dataset]
+            print(f"\nDownloading {dataset_name} precipitation data...")
             print(f"  Using DEM bounds: {dem_bbox}")
-            print(f"  WorldClim covers USA + Mexico (global dataset)")
+            if args.precip_dataset == "prism":
+                print("  Warning: PRISM only covers USA - Mexico portion will have no data")
             precip_path = download_precipitation(
                 bbox=dem_bbox,
-                output_dir=str(args.output_dir),
-                dataset="worldclim",  # Global coverage (not just USA)
+                output_dir=output_dir,
+                dataset=args.precip_dataset,
                 use_real_data=True,
             )
 
@@ -632,158 +647,161 @@ def main():
     terrain_align.apply_transforms()
 
     # Extract aligned data for diagnostics (all at flow resolution)
-    print("\nCreating diagnostic visualizations...")
-    dem_aligned = terrain_align.data_layers["dem_original"]["data"]
-    ocean_mask_aligned = terrain_align.data_layers["ocean_mask"]["data"].astype(bool)
-    precip_aligned = terrain_align.data_layers["precip"]["data"]
-    basin_mask_aligned = terrain_align.data_layers["basin_mask"]["data"].astype(bool) if "basin_mask" in terrain_align.data_layers else None
-    lake_mask_aligned = terrain_align.data_layers["lake_mask"]["data"].astype(np.uint16) if "lake_mask" in terrain_align.data_layers else None
-    lake_outlets_aligned = terrain_align.data_layers["lake_outlets"]["data"].astype(bool) if "lake_outlets" in terrain_align.data_layers else None
+    if args.diagnostics:
+        print("\nCreating diagnostic visualizations...")
+        dem_aligned = terrain_align.data_layers["dem_original"]["data"]
+        ocean_mask_aligned = terrain_align.data_layers["ocean_mask"]["data"].astype(bool)
+        precip_aligned = terrain_align.data_layers["precip"]["data"]
+        basin_mask_aligned = terrain_align.data_layers["basin_mask"]["data"].astype(bool) if "basin_mask" in terrain_align.data_layers else None
+        lake_mask_aligned = terrain_align.data_layers["lake_mask"]["data"].astype(np.uint16) if "lake_mask" in terrain_align.data_layers else None
+        lake_outlets_aligned = terrain_align.data_layers["lake_outlets"]["data"].astype(bool) if "lake_outlets" in terrain_align.data_layers else None
 
-    # Generate all flow diagnostic plots with aligned data
-    # Note: num_basins not available (basin detection happens inside flow_accumulation)
-    num_basins = 0
+        # Generate all flow diagnostic plots with aligned data
+        # Note: num_basins not available (basin detection happens inside flow_accumulation)
+        num_basins = 0
 
-    # Get breached DEM if available (spec backend only)
-    # breached_dem is already at flow resolution, no alignment needed
-    breached_dem_for_diag = flow_result.get("breached_dem")
+        # Get breached DEM if available (spec backend only)
+        # breached_dem is already at flow resolution, no alignment needed
+        breached_dem_for_diag = flow_result.get("breached_dem")
 
-    create_flow_diagnostics(
-        dem=dem_aligned,
-        dem_conditioned=flow_result["conditioned_dem"],
-        ocean_mask=ocean_mask_aligned,
-        flow_dir=flow_result["flow_direction"],
-        drainage_area=flow_result["drainage_area"],
-        upstream_rainfall=flow_result["upstream_rainfall"],
-        precip=precip_aligned,
-        output_dir=args.output_dir,
-        lake_mask=lake_mask_aligned,
-        lake_outlets=lake_outlets_aligned,
-        basin_mask=basin_mask_aligned,
-        breached_dem=breached_dem_for_diag,
-        num_basins=num_basins,
-        is_real_precip=True,  # Using real WorldClim data
-    )
+        create_flow_diagnostics(
+            dem=dem_aligned,
+            dem_conditioned=flow_result["conditioned_dem"],
+            ocean_mask=ocean_mask_aligned,
+            flow_dir=flow_result["flow_direction"],
+            drainage_area=flow_result["drainage_area"],
+            upstream_rainfall=flow_result["upstream_rainfall"],
+            precip=precip_aligned,
+            output_dir=args.output_dir,
+            lake_mask=lake_mask_aligned,
+            lake_outlets=lake_outlets_aligned,
+            basin_mask=basin_mask_aligned,
+            breached_dem=breached_dem_for_diag,
+            num_basins=num_basins,
+            is_real_precip=True,  # Using real WorldClim data
+        )
 
-    # Step 5b: Generate stream overlay visualizations
-    # These show streams colored by metric values, overlaid on base maps
-    print("\nGenerating stream overlay visualizations...")
+        # Generate stream overlay visualizations
+        # These show streams colored by metric values, overlaid on base maps
+        print("\nGenerating stream overlay visualizations...")
 
-    # Compute discharge potential for diagnostics (same as 3D rendering)
-    diag_discharge = compute_discharge_potential(
-        flow_result["drainage_area"],
-        flow_result["upstream_rainfall"],
-    )
+        # Compute discharge potential for diagnostics (same as 3D rendering)
+        diag_discharge = compute_discharge_potential(
+            flow_result["drainage_area"],
+            flow_result["upstream_rainfall"],
+        )
 
-    # Overlay 1: Discharge-colored streams on discharge base (same metric)
-    width_suffix = "_varwidth" if args.variable_width else ""
-    plot_stream_overlay(
-        base_data=diag_discharge,
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=diag_discharge,
-        output_path=args.output_dir / f"12_stream_overlay_discharge_on_discharge{width_suffix}.png",
-        base_cmap="viridis",
-        stream_cmap="plasma",
-        percentile=args.stream_percentile,
-        stream_alpha=1.0,  # Opaque streams
-        base_label="Discharge Potential",
-        stream_label="Discharge Potential",
-        title="Discharge-Colored Streams on Discharge Map",
-        lake_mask=lake_mask_aligned,
-        variable_width=args.variable_width,
-        max_width=args.max_stream_width,
-    )
+        # Overlay 1: Discharge-colored streams on discharge base (same metric)
+        width_suffix = "_varwidth" if args.variable_width else ""
+        plot_stream_overlay(
+            base_data=diag_discharge,
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=diag_discharge,
+            output_path=args.output_dir / f"12_stream_overlay_discharge_on_discharge{width_suffix}.png",
+            base_cmap="viridis",
+            stream_cmap="plasma",
+            percentile=args.stream_percentile,
+            stream_alpha=1.0,  # Opaque streams
+            base_label="Discharge Potential",
+            stream_label="Discharge Potential",
+            title="Discharge-Colored Streams on Discharge Map",
+            lake_mask=lake_mask_aligned,
+            variable_width=args.variable_width,
+            max_width=args.max_stream_width,
+        )
 
-    # Overlay 2: Same as above but with semi-transparent streams
-    plot_stream_overlay(
-        base_data=diag_discharge,
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=diag_discharge,
-        output_path=args.output_dir / f"12b_stream_overlay_discharge_semitransparent{width_suffix}.png",
-        base_cmap="viridis",
-        stream_cmap="plasma",
-        percentile=args.stream_percentile,
-        stream_alpha=0.7,  # Semi-transparent for blending
-        base_label="Discharge Potential",
-        stream_label="Discharge Potential",
-        title="Discharge Streams (Semi-Transparent) on Discharge Map",
-        lake_mask=lake_mask_aligned,
-        variable_width=args.variable_width,
-        max_width=args.max_stream_width,
-    )
+        # Overlay 2: Same as above but with semi-transparent streams
+        plot_stream_overlay(
+            base_data=diag_discharge,
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=diag_discharge,
+            output_path=args.output_dir / f"12b_stream_overlay_discharge_semitransparent{width_suffix}.png",
+            base_cmap="viridis",
+            stream_cmap="plasma",
+            percentile=args.stream_percentile,
+            stream_alpha=0.7,  # Semi-transparent for blending
+            base_label="Discharge Potential",
+            stream_label="Discharge Potential",
+            title="Discharge Streams (Semi-Transparent) on Discharge Map",
+            lake_mask=lake_mask_aligned,
+            variable_width=args.variable_width,
+            max_width=args.max_stream_width,
+        )
 
-    # Overlay 3: Discharge-colored streams on elevation (topo + flow)
-    plot_stream_overlay(
-        base_data=dem_aligned,
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=diag_discharge,
-        output_path=args.output_dir / f"13_stream_overlay_discharge_on_elevation{width_suffix}.png",
-        base_cmap="terrain",
-        stream_cmap="plasma",
-        percentile=args.stream_percentile,
-        stream_alpha=1.0,
-        base_label="Elevation (m)",
-        stream_label="Discharge Potential",
-        title="Discharge-Colored Streams on Elevation",
-        lake_mask=lake_mask_aligned,
-        base_log_scale=False,  # Elevation doesn't need log scale
-        variable_width=args.variable_width,
-        max_width=args.max_stream_width,
-    )
+        # Overlay 3: Discharge-colored streams on elevation (topo + flow)
+        plot_stream_overlay(
+            base_data=dem_aligned,
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=diag_discharge,
+            output_path=args.output_dir / f"13_stream_overlay_discharge_on_elevation{width_suffix}.png",
+            base_cmap="terrain",
+            stream_cmap="plasma",
+            percentile=args.stream_percentile,
+            stream_alpha=1.0,
+            base_label="Elevation (m)",
+            stream_label="Discharge Potential",
+            title="Discharge-Colored Streams on Elevation",
+            lake_mask=lake_mask_aligned,
+            base_log_scale=False,  # Elevation doesn't need log scale
+            variable_width=args.variable_width,
+            max_width=args.max_stream_width,
+        )
 
-    # Overlay 4: Upstream rainfall-colored streams on drainage area
-    plot_stream_overlay(
-        base_data=flow_result["drainage_area"],
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=flow_result["upstream_rainfall"],
-        output_path=args.output_dir / f"14_stream_overlay_rainfall_on_drainage{width_suffix}.png",
-        base_cmap="viridis",
-        stream_cmap="cividis",
-        percentile=args.stream_percentile,
-        stream_alpha=1.0,
-        base_label="Drainage Area (cells)",
-        stream_label="Upstream Rainfall",
-        title="Rainfall-Colored Streams on Drainage Area",
-        lake_mask=lake_mask_aligned,
-        variable_width=args.variable_width,
-        max_width=args.max_stream_width,
-    )
+        # Overlay 4: Upstream rainfall-colored streams on drainage area
+        plot_stream_overlay(
+            base_data=flow_result["drainage_area"],
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=flow_result["upstream_rainfall"],
+            output_path=args.output_dir / f"14_stream_overlay_rainfall_on_drainage{width_suffix}.png",
+            base_cmap="viridis",
+            stream_cmap="cividis",
+            percentile=args.stream_percentile,
+            stream_alpha=1.0,
+            base_label="Drainage Area (cells)",
+            stream_label="Upstream Rainfall",
+            title="Rainfall-Colored Streams on Drainage Area",
+            lake_mask=lake_mask_aligned,
+            variable_width=args.variable_width,
+            max_width=args.max_stream_width,
+        )
 
-    # Overlay 5: Discharge-colored streams on drainage area
-    plot_stream_overlay(
-        base_data=flow_result["drainage_area"],
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=diag_discharge,
-        output_path=args.output_dir / f"15_stream_overlay_discharge_on_drainage{width_suffix}.png",
-        base_cmap="viridis",
-        stream_cmap="plasma",
-        percentile=args.stream_percentile,
-        stream_alpha=1.0,
-        base_label="Drainage Area (cells)",
-        stream_label="Discharge Potential",
-        title="Discharge-Colored Streams on Drainage Area",
-        lake_mask=lake_mask_aligned,
-        variable_width=args.variable_width,
-        max_width=args.max_stream_width,
-    )
+        # Overlay 5: Discharge-colored streams on drainage area
+        plot_stream_overlay(
+            base_data=flow_result["drainage_area"],
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=diag_discharge,
+            output_path=args.output_dir / f"15_stream_overlay_discharge_on_drainage{width_suffix}.png",
+            base_cmap="viridis",
+            stream_cmap="plasma",
+            percentile=args.stream_percentile,
+            stream_alpha=1.0,
+            base_label="Drainage Area (cells)",
+            stream_label="Discharge Potential",
+            title="Discharge-Colored Streams on Drainage Area",
+            lake_mask=lake_mask_aligned,
+            variable_width=args.variable_width,
+            max_width=args.max_stream_width,
+        )
 
-    # Overlay 6: Variable width example (always enabled) - discharge on drainage
-    plot_stream_overlay(
-        base_data=flow_result["drainage_area"],
-        stream_threshold_data=flow_result["drainage_area"],
-        stream_color_data=diag_discharge,
-        output_path=args.output_dir / "16_stream_overlay_variable_width.png",
-        base_cmap="viridis",
-        stream_cmap="plasma",
-        percentile=args.stream_percentile,
-        stream_alpha=1.0,
-        base_label="Drainage Area (cells)",
-        stream_label="Discharge Potential",
-        title="Variable Width Streams (width ∝ discharge)",
-        lake_mask=lake_mask_aligned,
-        variable_width=True,  # Always enabled for this example
-        max_width=args.max_stream_width,
-    )
+        # Overlay 6: Variable width example (always enabled) - discharge on drainage
+        plot_stream_overlay(
+            base_data=flow_result["drainage_area"],
+            stream_threshold_data=flow_result["drainage_area"],
+            stream_color_data=diag_discharge,
+            output_path=args.output_dir / "16_stream_overlay_variable_width.png",
+            base_cmap="viridis",
+            stream_cmap="plasma",
+            percentile=args.stream_percentile,
+            stream_alpha=1.0,
+            base_label="Drainage Area (cells)",
+            stream_label="Discharge Potential",
+            title="Variable Width Streams (width ∝ discharge)",
+            lake_mask=lake_mask_aligned,
+            variable_width=True,  # Always enabled for this example
+            max_width=args.max_stream_width,
+        )
+    else:
+        print("\nSkipping diagnostic visualizations (use --diagnostics to enable)")
 
     # Step 6: Create 3D terrain visualization
     print("\nCreating 3D terrain...")
@@ -1054,25 +1072,32 @@ def main():
 
     # Camera - use orthographic for top-down views, perspective otherwise
     is_above = args.camera in ("above", "above-tilted")
+
+    # Determine camera elevation (height above terrain)
+    if args.camera_height is not None:
+        camera_elevation = args.camera_height
+    else:
+        camera_elevation = 3.0 if is_above else 1.0  # High elevation for overhead view
+
     camera = position_camera_relative(
         mesh,
         direction=args.camera,
         camera_type="ORTHO" if is_above else "PERSP",
         focal_length=50,
         distance=1.0 if not is_above else 2.0,
-        elevation=1.0 if not is_above else 3.0,  # High elevation for overhead view
+        elevation=camera_elevation,
         ortho_scale=1.1 if is_above else 1.2,
     )
-    print(f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'})")
+    print(f"  Camera: {args.camera} ({'orthographic' if is_above else 'perspective'}, elevation={camera_elevation:.1f})")
 
     # Sky lighting
     setup_hdri_lighting(
         sun_elevation=15.0,
         sun_rotation=225.0,
-        sun_intensity=0.04,  # Dimmed slightly for --fast mode
+        sun_intensity=0.05, 
         air_density=0.05,
         visible_to_camera=False,
-        sky_strength=1.75,
+        sky_strength=1,
     )
 
     # Background plane
@@ -1108,8 +1133,10 @@ def main():
 
     print("\n✓ Done!")
     print(f"\nOutput files:")
-    print(f"  Diagnostic plots: {args.output_dir}/01_*.png through 11_*.png")
-    print(f"  3D render: {args.output_dir / f'san_diego_flow_{args.color_by}.png'}")
+    if args.diagnostics:
+        print(f"  Diagnostic plots: {args.output_dir}/01_*.png through 16_*.png")
+    if not args.no_render:
+        print(f"  3D render: {args.output_dir / f'san_diego_flow_{args.color_by}.png'}")
     print(f"  Flow GeoTIFFs: {flow_output_dir}/")
 
     return 0
