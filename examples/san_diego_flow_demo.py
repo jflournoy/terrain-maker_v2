@@ -845,54 +845,15 @@ def main():
     # Add flow accumulation results as data layers
     print("Adding flow data layers...")
 
-    # If flow data was downsampled, resample to match DEM using geographically-aware reprojection
-    # This ensures geographic metadata (transform, CRS) is preserved correctly
-    if metadata["downsampling_applied"]:
-        print(f"  Resampling flow data from {metadata['downsampled_shape']} to {dem.shape}...")
-        from rasterio.warp import reproject, Resampling
+    # CRITICAL: Keep flow data at its computed (downsampled) resolution
+    # Do NOT upsample to full DEM resolution - that causes OOM on large DEMs
+    # The terrain object will handle alignment via target_layer
+    drainage_area = flow_result["drainage_area"]
+    upstream_rainfall = flow_result["upstream_rainfall"]
+    flow_transform = Affine(*flow_result["metadata"]["transform"])
+    flow_crs = metadata.get("crs", "EPSG:4326")
 
-        # Extract flow data at downsampled resolution
-        drainage_area_ds = flow_result["drainage_area"]
-        upstream_rainfall_ds = flow_result["upstream_rainfall"]
-        flow_transform_ds = Affine(*flow_result["metadata"]["transform"])
-
-        # Prepare output arrays at DEM resolution
-        drainage_area = np.zeros(dem.shape, dtype=np.float32)
-        upstream_rainfall = np.zeros(dem.shape, dtype=np.float32)
-
-        # Get CRS from metadata (don't hardcode - handle any projection)
-        flow_crs = metadata.get("crs", "EPSG:4326")
-
-        # Reproject using rasterio (geographically-aware, respects transforms)
-        # This handles different resolution, alignment, AND projection
-        reproject(
-            source=drainage_area_ds,
-            destination=drainage_area,
-            src_transform=flow_transform_ds,
-            src_crs=flow_crs,  # Use actual CRS from flow computation
-            dst_transform=transform,
-            dst_crs=dem_crs,  # Use actual DEM CRS
-            resampling=Resampling.bilinear,
-        )
-
-        reproject(
-            source=upstream_rainfall_ds,
-            destination=upstream_rainfall,
-            src_transform=flow_transform_ds,
-            src_crs=flow_crs,
-            dst_transform=transform,
-            dst_crs=dem_crs,
-            resampling=Resampling.bilinear,
-        )
-
-        # Use original DEM transform for resampled data
-        flow_transform = transform
-        print(f"  ✓ Reprojected with geographic awareness (src: {flow_transform_ds}, dst: {transform})")
-    else:
-        # No downsampling - use flow data as-is
-        drainage_area = flow_result["drainage_area"]
-        upstream_rainfall = flow_result["upstream_rainfall"]
-        flow_transform = Affine(*flow_result["metadata"]["transform"])
+    print(f"  Flow data at computed resolution: {drainage_area.shape}")
 
     # Compute discharge potential
     discharge_potential = compute_discharge_potential(drainage_area, upstream_rainfall)
@@ -962,11 +923,21 @@ def main():
     )
 
     # Create stream mask and stream discharge layer for 3D overlay
+    # CRITICAL: Use ALIGNED data from terrain object, not raw flow data
+    # The terrain object has aligned drainage_area to the transformed DEM grid
+    drainage_area_aligned = terrain.data_layers["drainage_area_log"]["data"]
+    discharge_log_aligned = terrain.data_layers["discharge_potential_log"]["data"]
+
+    # Convert from log scale back to linear for threshold calculation
+    drainage_area_linear = np.power(10, drainage_area_aligned) - 1
+    discharge_potential_linear = np.power(10, discharge_log_aligned) - 1
+
     # Extract streams as top percentile of drainage area
-    valid_drainage = drainage_area[drainage_area > 0]
+    valid_drainage = drainage_area_linear[drainage_area_linear > 0]
     if len(valid_drainage) > 0:
         stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
-        stream_mask = drainage_area >= stream_threshold
+        stream_mask = drainage_area_linear >= stream_threshold
+        print(f"  Using ALIGNED data at mesh resolution: {stream_mask.shape}")
 
         # Apply variable-width expansion if requested
         if args.variable_width:
@@ -986,7 +957,8 @@ def main():
                 print(f"    Array size: {stream_mask.shape} ({array_size_mb:.0f}MB for distance transform)")
 
                 # Use discharge potential as the width metric (higher discharge = wider stream)
-                width_metric = discharge_potential
+                # Use aligned data at mesh resolution, not raw full-resolution data
+                width_metric = discharge_potential_linear
 
                 # Normalize discharge to [0, max_stream_width] for stream pixels only
                 stream_values = width_metric[stream_mask]
@@ -1014,17 +986,20 @@ def main():
                 print(f"    Expanded from {original_stream_count:,} to {expanded_stream_count:,} stream pixels")
 
         # Stream discharge: discharge values only at stream pixels, 0 elsewhere
-        stream_discharge = np.where(stream_mask, discharge_log, 0).astype(np.float32)
-        terrain.add_data_layer(
-            "stream_discharge",
-            stream_discharge,
-            flow_transform,
-            crs=dem_crs,
-            target_layer="dem",
-        )
+        # Use aligned log data (already at mesh resolution from terrain object)
+        stream_discharge = np.where(stream_mask, discharge_log_aligned, 0).astype(np.float32)
+
+        # Add stream layer - it's already at the same resolution as the DEM layer
+        # No need for target_layer since it's already aligned
+        terrain.data_layers["stream_discharge"] = {
+            "data": stream_discharge,
+            "transformed_data": stream_discharge,
+            "transform": terrain.data_layers["dem"].get("transform"),
+            "crs": terrain.data_layers["dem"].get("crs"),
+        }
         print(f"  Stream cells (top {args.stream_top_percent:.1f}%): {np.sum(stream_mask):,}")
     else:
-        stream_mask = np.zeros_like(drainage_area, dtype=bool)
+        stream_mask = np.zeros_like(drainage_area_linear, dtype=bool)
         print("  Warning: No valid drainage data for stream extraction")
 
     # Add water masks for 3D rendering (ocean + lakes)
