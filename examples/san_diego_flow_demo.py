@@ -138,10 +138,11 @@ def main():
         help="Color stream overlay by: drainage area, upstream rainfall, or discharge potential (default: discharge)",
     )
     parser.add_argument(
-        "--stream-percentile",
+        "--stream-top-percent",
         type=float,
-        default=95,
-        help="Percentile threshold for stream extraction (default: 95 = top 5%%)",
+        default=5.0,
+        help="Extract top N%% of streams by drainage area (default: 5 = top 5%%). "
+             "Lower values = fewer streams (major rivers only). Higher values = more streams (includes tributaries).",
     )
     parser.add_argument(
         "--base-cmap",
@@ -297,6 +298,10 @@ def main():
         help="Min size (cells) to be considered an endorheic basin. Default: adaptive (1/1000 of total cells).",
     )
     args = parser.parse_args()
+
+    # Convert stream-top-percent to internal percentile representation
+    # User provides "top 5%" as 5.0, we convert to 95th percentile internally
+    args.stream_percentile = 100.0 - args.stream_top_percent
 
     # Base render dimensions (10x8 inches)
     base_width_in, base_height_in = 10.0, 8.0
@@ -930,7 +935,7 @@ def main():
             crs=dem_crs,
             target_layer="dem",
         )
-        print(f"  Stream cells (top {100-args.stream_percentile:.0f}%): {np.sum(stream_mask):,}")
+        print(f"  Stream cells (top {args.stream_top_percent:.1f}%): {np.sum(stream_mask):,}")
     else:
         stream_mask = np.zeros_like(drainage_area, dtype=bool)
         print("  Warning: No valid drainage data for stream extraction")
@@ -1009,7 +1014,7 @@ def main():
             stream_layer = "discharge_potential_log"
             stream_label = "discharge"
 
-        print(f"Coloring by {base_label} + stream overlay ({stream_label}, top {100-args.stream_percentile:.0f}%)...")
+        print(f"Coloring by {base_label} + stream overlay ({stream_label}, top {args.stream_top_percent:.1f}%)...")
 
         # Create stream-specific data layer (stream values only where streams exist)
         stream_data = terrain.data_layers[stream_layer]["data"]
