@@ -1,5 +1,32 @@
 ## Current Status
 
+### 2026-02-13 22:30 - Unified Variable-Width Expansion Algorithm ✨✅ (TDD)
+
+**Issue:** Diagnostic plots looked WAY better than 3D renders
+- Diagnostic plots: Smooth gaussian tapering with gradual transitions
+- 3D renders: Sharp distance-based expansion with harsh cutoffs
+- User feedback: "the diag plots look WAY better"
+
+**Solution:** Extract smooth expansion from diagnostics, use for both
+
+**Changes:**
+1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+   - Replaced sharp expansion with smooth gaussian algorithm
+   - Uses maximum_filter + gaussian_filter for beautiful tapering
+   - Value propagation built-in
+   - Returns tuple: (expanded_mask, expanded_values)
+
+2. Updated tests (18 passing):
+   - [tests/test_line_layer_expansion.py](tests/test_line_layer_expansion.py)
+   - [tests/test_line_layers.py](tests/test_line_layers.py)
+
+**Result:**
+- ✅ Diagnostic plots and 3D renders use SAME algorithm
+- ✅ Beautiful smooth tapering
+- ✅ All tests passing
+
+---
+
 ### 2026-02-13 22:10 - Fixed Terrain Library Threshold Bug 🐛→✅ (TDD)
 
 **Issue:** Stream overlay covering 100% of terrain instead of just stream pixels
