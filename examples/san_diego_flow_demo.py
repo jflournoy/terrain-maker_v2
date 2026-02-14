@@ -926,16 +926,46 @@ def main():
     # The terrain object has aligned drainage_area to the transformed DEM grid
     drainage_area_aligned = terrain.data_layers["drainage_area_log"]["data"]
     discharge_log_aligned = terrain.data_layers["discharge_potential_log"]["data"]
+    rainfall_aligned = terrain.data_layers["upstream_rainfall_log"]["data"]
 
     # Convert from log scale back to linear for threshold calculation
     drainage_area_linear = np.power(10, drainage_area_aligned) - 1
     discharge_potential_linear = np.power(10, discharge_log_aligned) - 1
+    upstream_rainfall_linear = np.power(10, rainfall_aligned) - 1
 
-    # Extract streams as top percentile of drainage area
-    valid_drainage = drainage_area_linear[drainage_area_linear > 0]
-    if len(valid_drainage) > 0:
-        stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
-        stream_mask = drainage_area_linear >= stream_threshold
+    # For variable-width mode, use the same metric for stream selection and width
+    # This ensures high-value streams (by the chosen metric) are both included AND wide
+    if args.variable_width:
+        # Determine which metric to use based on --stream-color-by
+        if args.stream_color_by == "drainage":
+            stream_metric = drainage_area_linear
+            metric_name = "DRAINAGE"
+        elif args.stream_color_by == "rainfall":
+            stream_metric = upstream_rainfall_linear
+            metric_name = "RAINFALL"
+        else:  # discharge (default)
+            stream_metric = discharge_potential_linear
+            metric_name = "DISCHARGE"
+
+        # Extract top percentile of streams by the chosen metric
+        valid_metric = stream_metric[stream_metric > 0]
+        if len(valid_metric) > 0:
+            stream_threshold = np.percentile(valid_metric, args.stream_percentile)
+            stream_mask = stream_metric >= stream_threshold
+            print(f"  Using {metric_name} for stream selection (top {args.stream_top_percent:.1f}%)")
+        else:
+            stream_mask = np.zeros_like(stream_metric, dtype=bool)
+    else:
+        # Non-variable-width mode: use drainage area for stream selection (traditional approach)
+        valid_drainage = drainage_area_linear[drainage_area_linear > 0]
+        if len(valid_drainage) > 0:
+            stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
+            stream_mask = drainage_area_linear >= stream_threshold
+            print(f"  Using DRAINAGE for stream selection (top {args.stream_top_percent:.1f}%)")
+        else:
+            stream_mask = np.zeros_like(drainage_area_linear, dtype=bool)
+
+    if np.any(stream_mask):
         print(f"  Using ALIGNED data at mesh resolution: {stream_mask.shape}")
 
         # Apply variable-width expansion if requested
@@ -955,15 +985,38 @@ def main():
                 print(f"  Applying variable width stream expansion (max {args.max_stream_width} pixels)...")
                 print(f"    Array size: {stream_mask.shape} ({array_size_mb:.0f}MB for distance transform)")
 
-                # Use discharge potential as the width metric (higher discharge = wider stream)
-                # Use aligned data at mesh resolution, not raw full-resolution data
-                width_metric = discharge_potential_linear
+                # Use the same metric for width as for stream selection
+                # This ensures high-value streams are both included AND wide
+                width_metric = stream_metric
 
-                # Normalize discharge to [0, max_stream_width] for stream pixels only
+                # Normalize metric to [0, max_stream_width] for stream pixels only
                 stream_values = width_metric[stream_mask]
                 if stream_values.size > 0 and stream_values.max() > stream_values.min():
                     min_val, max_val = stream_values.min(), stream_values.max()
                     width_normalized = ((width_metric - min_val) / (max_val - min_val)) * args.max_stream_width
+
+                    # DEBUG: Check normalization
+                    print(f"    DEBUG - Width normalization:")
+                    print(f"      {metric_name} range: {min_val:.2f} to {max_val:.2f}")
+                    print(f"      Width range: 0 to {args.max_stream_width} pixels")
+                    print(f"      Stream pixels: {np.sum(stream_mask):,}")
+
+                    # Sample stream pixels from both LOW and HIGH values
+                    stream_values_array = width_metric[stream_mask]
+                    sorted_indices = np.argsort(stream_values_array)
+                    stream_coords = np.argwhere(stream_mask)
+
+                    print(f"      LOW {metric_name.lower()} samples (bottom 5):")
+                    for i in range(min(5, len(sorted_indices))):
+                        idx = sorted_indices[i]
+                        y, x = stream_coords[idx]
+                        print(f"        Sample {i}: {metric_name.lower()}={width_metric[y, x]:.2f} → width={width_normalized[y, x]:.2f}px")
+
+                    print(f"      HIGH {metric_name.lower()} samples (top 5):")
+                    for i in range(min(5, len(sorted_indices))):
+                        idx = sorted_indices[-(i+1)]
+                        y, x = stream_coords[idx]
+                        print(f"        Sample {i}: {metric_name.lower()}={width_metric[y, x]:.2f} → width={width_normalized[y, x]:.2f}px")
                 else:
                     width_normalized = np.ones_like(width_metric) * args.max_stream_width
 
@@ -984,9 +1037,22 @@ def main():
                 expanded_stream_count = np.sum(stream_mask)
                 print(f"    Expanded from {original_stream_count:,} to {expanded_stream_count:,} stream pixels")
 
-        # Stream discharge: discharge values only at stream pixels, 0 elsewhere
+        # Stream values: chosen metric values only at stream pixels, 0 elsewhere
         # Use aligned log data (already at mesh resolution from terrain object)
-        stream_discharge = np.where(stream_mask, discharge_log_aligned, 0).astype(np.float32)
+        # For variable-width mode, use the same metric that was used for selection/width
+        if args.variable_width:
+            # Use the log version of the chosen metric
+            if args.stream_color_by == "drainage":
+                stream_values_log = drainage_area_aligned
+            elif args.stream_color_by == "rainfall":
+                stream_values_log = rainfall_aligned
+            else:  # discharge (default)
+                stream_values_log = discharge_log_aligned
+        else:
+            # Non-variable-width: always use discharge (legacy behavior)
+            stream_values_log = discharge_log_aligned
+
+        stream_discharge = np.where(stream_mask, stream_values_log, 0).astype(np.float32)
 
         # Add stream layer - it's already at the same resolution as the DEM layer
         # No need for target_layer since it's already aligned
@@ -1064,30 +1130,26 @@ def main():
 
     # Apply color mapping - with or without stream overlay
     if args.stream_overlay:
-        # Determine stream color layer based on --stream-color-by
+        # Determine stream label for display
         if args.stream_color_by == "drainage":
-            stream_layer = "drainage_area_log"
             stream_label = "drainage"
         elif args.stream_color_by == "rainfall":
-            stream_layer = "upstream_rainfall_log"
             stream_label = "rainfall"
         else:  # discharge
-            stream_layer = "discharge_potential_log"
             stream_label = "discharge"
 
         print(f"Coloring by {base_label} + stream overlay ({stream_label}, top {args.stream_top_percent:.1f}%)...")
 
-        # Create stream-specific data layer (stream values only where streams exist)
-        stream_data = terrain.data_layers[stream_layer]["data"]
-        stream_mask_data = terrain.data_layers["stream_discharge"]["data"] > 0
-        stream_values = np.where(stream_mask_data, stream_data, 0).astype(np.float32)
+        # Use the stream_discharge layer directly - it already contains the correct values
+        # at the expanded stream pixels (from variable-width expansion)
+        stream_values = terrain.data_layers["stream_discharge"]["data"]
 
         # Add the stream-colored layer
         terrain.data_layers["stream_colored"] = {
             "data": stream_values,
             "transformed_data": stream_values,
-            "transform": terrain.data_layers[stream_layer].get("transform"),
-            "crs": terrain.data_layers[stream_layer].get("crs"),
+            "transform": terrain.data_layers["stream_discharge"].get("transform"),
+            "crs": terrain.data_layers["stream_discharge"].get("crs"),
         }
 
         def stream_colormap(data):
@@ -1164,10 +1226,10 @@ def main():
     setup_hdri_lighting(
         sun_elevation=15.0,
         sun_rotation=225.0,
-        sun_intensity=0.05, 
-        air_density=0.05,
+        sun_intensity=0.025, 
+        air_density=0.025,
         visible_to_camera=False,
-        sky_strength=1,
+        sky_strength=.75,
     )
 
     # Background plane
