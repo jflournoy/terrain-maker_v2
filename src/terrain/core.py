@@ -2902,7 +2902,14 @@ class Terrain:
                 # Use threshold-based mask from source layer values
                 overlay_mask_data = overlay_arrays[0]
                 threshold = overlay.get("threshold", 0.5)
-                overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
+
+                # Special case: threshold=0.0 should exclude zeros (use > not >=)
+                # This handles sparse layers like stream networks where non-feature pixels are 0
+                if threshold == 0.0:
+                    overlay_mask = (overlay_mask_data > 0.0) & ~np.isnan(overlay_mask_data)
+                else:
+                    overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
+
                 self.logger.info(
                     f"Overlay {overlay_idx}: using threshold={threshold}, "
                     f"{np.sum(overlay_mask)} grid pixels"
