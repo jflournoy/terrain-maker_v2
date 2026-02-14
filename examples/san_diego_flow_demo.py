@@ -174,6 +174,30 @@ def main():
              "Only applies when --color-by elevation.",
     )
     parser.add_argument(
+        "--base-gamma",
+        type=float,
+        default=None,
+        help="Gamma correction for base layer colors (drainage/rainfall/discharge). "
+             "< 1.0 brightens (emphasize low values), = 1.0 linear, > 1.0 darkens (emphasize high values). "
+             "If not specified, uses log scale for drainage/rainfall/discharge, linear for elevation.",
+    )
+    parser.add_argument(
+        "--stream-gamma",
+        type=float,
+        default=None,
+        help="Gamma correction for stream overlay colors. "
+             "< 1.0 brightens (emphasize small streams), = 1.0 linear, > 1.0 darkens (emphasize big rivers). "
+             "If not specified, uses log scale.",
+    )
+    parser.add_argument(
+        "--width-gamma",
+        type=float,
+        default=1.0,
+        help="Gamma correction for variable-width stream tapering. "
+             "< 1.0 makes more streams wider, = 1.0 linear (default), > 1.0 makes fewer streams wider. "
+             "Only applies with --variable-width.",
+    )
+    parser.add_argument(
         "--camera",
         type=str,
         default="south-southwest",
@@ -861,10 +885,29 @@ def main():
     # Compute discharge potential
     discharge_potential = compute_discharge_potential(drainage_area, upstream_rainfall)
 
-    # Use log scale for better visualization
-    drainage_log = np.log10(drainage_area + 1)
-    rainfall_log = np.log10(upstream_rainfall + 1)
-    discharge_log = np.log10(discharge_potential + 1)
+    # Apply scale transform (log or gamma) for better visualization
+    # Use gamma if specified, otherwise use log scale
+    use_gamma_base = args.base_gamma is not None
+
+    if use_gamma_base:
+        gamma = args.base_gamma
+        print(f"  Applying gamma={gamma:.2f} to base flow metrics (instead of log)")
+
+        # Normalize to [0,1] then apply gamma
+        def apply_gamma(data, gamma_val):
+            data_norm = data / (np.max(data) + 1e-10)  # Normalize
+            return np.power(data_norm, gamma_val) * np.max(data)  # Gamma + rescale
+
+        drainage_log = apply_gamma(drainage_area, gamma)
+        rainfall_log = apply_gamma(upstream_rainfall, gamma)
+        discharge_log = apply_gamma(discharge_potential, gamma)
+        scale_label = f"gamma={gamma:.2f}"
+    else:
+        # Default: log scale
+        drainage_log = np.log10(drainage_area + 1)
+        rainfall_log = np.log10(upstream_rainfall + 1)
+        discharge_log = np.log10(discharge_potential + 1)
+        scale_label = "log"
 
     # Debug: Print drainage value range
     print(f"  Drainage area range: {drainage_area.min():.1f} - {drainage_area.max():.1f}")
@@ -966,12 +1009,15 @@ def main():
         print(f"  Stream selection: DRAINAGE, Stream coloring: {args.stream_color_by.upper()}")
 
     # Create stream network layer (preprocessing handles variable-width expansion)
+    # Stream colors will use the transformed data (log or gamma based on args.base_gamma)
+    # Stream-specific gamma is applied in the colormap function below
     stream_network = create_line_layer(
         metric_data=coloring_metric_log,
         selection_metric_data=selection_metric_linear,
         percentile=args.stream_percentile,
         variable_width=args.variable_width,
-        max_width=args.max_stream_width
+        max_width=args.max_stream_width,
+        width_gamma=args.width_gamma
     )
 
     num_stream_pixels = np.sum(stream_network > 0)
@@ -1042,15 +1088,15 @@ def main():
     elif args.color_by == "drainage":
         base_colormap = lambda drain: elevation_colormap(drain, cmap_name=base_cmap_name, min_elev=0.1)
         base_layer = "drainage_area_log"
-        base_label = "drainage area (log)"
+        base_label = f"drainage area ({scale_label})"
     elif args.color_by == "discharge":
         base_colormap = lambda discharge: elevation_colormap(discharge, cmap_name=base_cmap_name)
         base_layer = "discharge_potential_log"
-        base_label = "discharge potential (log)"
+        base_label = f"discharge potential ({scale_label})"
     else:  # rainfall
         base_colormap = lambda rain: elevation_colormap(rain, cmap_name=base_cmap_name)
         base_layer = "upstream_rainfall_log"
-        base_label = "upstream rainfall (log)"
+        base_label = f"upstream rainfall ({scale_label})"
 
     print(f"Using colormaps: base={args.base_cmap} ({base_cmap_name}), stream={args.stream_cmap} ({stream_cmap_name})")
 
@@ -1080,7 +1126,15 @@ def main():
         # Stream overlay uses threshold-based masking (threshold=0.0 excludes zeros)
         # The terrain library now correctly handles threshold=0.0 by using > instead of >=
         def stream_colormap(data):
-            return elevation_colormap(data, cmap_name=stream_cmap_name)
+            # Apply stream-specific gamma if requested
+            if args.stream_gamma is not None:
+                # Normalize, apply gamma, rescale
+                data_max = np.max(data) + 1e-10
+                data_norm = data / data_max
+                data_gamma = np.power(data_norm, args.stream_gamma) * data_max
+                return elevation_colormap(data_gamma, cmap_name=stream_cmap_name)
+            else:
+                return elevation_colormap(data, cmap_name=stream_cmap_name)
 
         print(f"  Base layer: {base_layer}, Stream overlay: stream_discharge")
         terrain.set_multi_color_mapping(
