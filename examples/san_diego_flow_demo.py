@@ -81,6 +81,10 @@ from src.terrain.visualization.flow_diagnostics import (
     create_flow_diagnostics,
     plot_stream_overlay,
 )
+from src.terrain.visualization.line_layers import (
+    get_metric_data,
+    create_line_layer,
+)
 
 
 def get_cmap_name(cmap_spec: str) -> str:
@@ -933,139 +937,61 @@ def main():
     discharge_potential_linear = np.power(10, discharge_log_aligned) - 1
     upstream_rainfall_linear = np.power(10, rainfall_aligned) - 1
 
-    # For variable-width mode, use the same metric for stream selection and width
-    # This ensures high-value streams (by the chosen metric) are both included AND wide
+    # Create stream network layer using library functions
+    # Determine which metrics to use for stream layer (BUG FIX: now respects --stream-color-by in all modes)
     if args.variable_width:
-        # Determine which metric to use based on --stream-color-by
-        if args.stream_color_by == "drainage":
-            stream_metric = drainage_area_linear
-            metric_name = "DRAINAGE"
-        elif args.stream_color_by == "rainfall":
-            stream_metric = upstream_rainfall_linear
-            metric_name = "RAINFALL"
-        else:  # discharge (default)
-            stream_metric = discharge_potential_linear
-            metric_name = "DISCHARGE"
-
-        # Extract top percentile of streams by the chosen metric
-        valid_metric = stream_metric[stream_metric > 0]
-        if len(valid_metric) > 0:
-            stream_threshold = np.percentile(valid_metric, args.stream_percentile)
-            stream_mask = stream_metric >= stream_threshold
-            print(f"  Using {metric_name} for stream selection (top {args.stream_top_percent:.1f}%)")
-        else:
-            stream_mask = np.zeros_like(stream_metric, dtype=bool)
+        # Variable-width: same metric for selection, width, and coloring
+        selection_metric_linear = get_metric_data(
+            args.stream_color_by,
+            drainage_area_linear,
+            upstream_rainfall_linear,
+            discharge_potential_linear
+        )
+        coloring_metric_log = get_metric_data(
+            args.stream_color_by,
+            drainage_area_aligned,  # Already aligned to mesh resolution
+            rainfall_aligned,
+            discharge_log_aligned
+        )
+        print(f"  Variable-width mode: using {args.stream_color_by.upper()} for selection, width, and coloring")
     else:
-        # Non-variable-width mode: use drainage area for stream selection (traditional approach)
-        valid_drainage = drainage_area_linear[drainage_area_linear > 0]
-        if len(valid_drainage) > 0:
-            stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
-            stream_mask = drainage_area_linear >= stream_threshold
-            print(f"  Using DRAINAGE for stream selection (top {args.stream_top_percent:.1f}%)")
-        else:
-            stream_mask = np.zeros_like(drainage_area_linear, dtype=bool)
+        # Non-variable-width: drainage for selection, user choice for coloring (BUG FIX!)
+        selection_metric_linear = drainage_area_linear
+        coloring_metric_log = get_metric_data(
+            args.stream_color_by,
+            drainage_area_aligned,
+            rainfall_aligned,
+            discharge_log_aligned
+        )
+        print(f"  Stream selection: DRAINAGE, Stream coloring: {args.stream_color_by.upper()}")
 
-    if np.any(stream_mask):
-        print(f"  Using ALIGNED data at mesh resolution: {stream_mask.shape}")
+    # Create stream network layer (preprocessing handles variable-width expansion)
+    stream_network = create_line_layer(
+        metric_data=coloring_metric_log,
+        selection_metric_data=selection_metric_linear,
+        percentile=args.stream_percentile,
+        variable_width=args.variable_width,
+        max_width=args.max_stream_width
+    )
 
-        # Apply variable-width expansion if requested
-        if args.variable_width:
-            # CRITICAL: Check array size to avoid OOM on large DEMs
-            # distance_transform_edt creates arrays: distances + 2×indices = 3× input size
-            array_size_mb = (stream_mask.size * 4 * 3) / (1024 * 1024)  # 3 float32 arrays
-            max_safe_size_mb = 1500  # ~1.5GB threshold (conservative for 8GB systems)
+    num_stream_pixels = np.sum(stream_network > 0)
+    if num_stream_pixels > 0:
+        print(f"  Stream layer created: {num_stream_pixels:,} stream pixels (top {args.stream_top_percent:.1f}%)")
 
-            if array_size_mb > max_safe_size_mb:
-                print(f"  WARNING: Array too large for variable-width expansion ({stream_mask.shape} = {array_size_mb:.0f}MB)")
-                print(f"    Skipping variable-width to avoid OOM. Use --vertices-per-pixel to reduce mesh resolution.")
-                print(f"    Variable-width works best with --vertices-per-pixel ≤5 (current mesh will be downsampled from {stream_mask.shape})")
-            else:
-                from scipy.ndimage import distance_transform_edt
-
-                print(f"  Applying variable width stream expansion (max {args.max_stream_width} pixels)...")
-                print(f"    Array size: {stream_mask.shape} ({array_size_mb:.0f}MB for distance transform)")
-
-                # Use the same metric for width as for stream selection
-                # This ensures high-value streams are both included AND wide
-                width_metric = stream_metric
-
-                # Normalize metric to [0, max_stream_width] for stream pixels only
-                stream_values = width_metric[stream_mask]
-                if stream_values.size > 0 and stream_values.max() > stream_values.min():
-                    min_val, max_val = stream_values.min(), stream_values.max()
-                    width_normalized = ((width_metric - min_val) / (max_val - min_val)) * args.max_stream_width
-
-                    # DEBUG: Check normalization
-                    print(f"    DEBUG - Width normalization:")
-                    print(f"      {metric_name} range: {min_val:.2f} to {max_val:.2f}")
-                    print(f"      Width range: 0 to {args.max_stream_width} pixels")
-                    print(f"      Stream pixels: {np.sum(stream_mask):,}")
-
-                    # Sample stream pixels from both LOW and HIGH values
-                    stream_values_array = width_metric[stream_mask]
-                    sorted_indices = np.argsort(stream_values_array)
-                    stream_coords = np.argwhere(stream_mask)
-
-                    print(f"      LOW {metric_name.lower()} samples (bottom 5):")
-                    for i in range(min(5, len(sorted_indices))):
-                        idx = sorted_indices[i]
-                        y, x = stream_coords[idx]
-                        print(f"        Sample {i}: {metric_name.lower()}={width_metric[y, x]:.2f} → width={width_normalized[y, x]:.2f}px")
-
-                    print(f"      HIGH {metric_name.lower()} samples (top 5):")
-                    for i in range(min(5, len(sorted_indices))):
-                        idx = sorted_indices[-(i+1)]
-                        y, x = stream_coords[idx]
-                        print(f"        Sample {i}: {metric_name.lower()}={width_metric[y, x]:.2f} → width={width_normalized[y, x]:.2f}px")
-                else:
-                    width_normalized = np.ones_like(width_metric) * args.max_stream_width
-
-                # Compute distance to nearest stream pixel for all pixels
-                # indices gives us the (y, x) coordinates of the nearest stream pixel
-                distances, indices = distance_transform_edt(~stream_mask, return_indices=True)
-
-                # For each pixel, get the width threshold from its nearest stream pixel
-                nearest_y, nearest_x = indices[0], indices[1]
-                nearest_width = width_normalized[nearest_y, nearest_x]
-
-                # Expand stream mask to include pixels within their nearest stream's width radius
-                expanded_stream_mask = distances <= nearest_width
-
-                # Update stream mask with expanded version
-                original_stream_count = np.sum(stream_mask)
-                stream_mask = expanded_stream_mask
-                expanded_stream_count = np.sum(stream_mask)
-                print(f"    Expanded from {original_stream_count:,} to {expanded_stream_count:,} stream pixels")
-
-        # Stream values: chosen metric values only at stream pixels, 0 elsewhere
-        # Use aligned log data (already at mesh resolution from terrain object)
-        # For variable-width mode, use the same metric that was used for selection/width
-        if args.variable_width:
-            # Use the log version of the chosen metric
-            if args.stream_color_by == "drainage":
-                stream_values_log = drainage_area_aligned
-            elif args.stream_color_by == "rainfall":
-                stream_values_log = rainfall_aligned
-            else:  # discharge (default)
-                stream_values_log = discharge_log_aligned
-        else:
-            # Non-variable-width: always use discharge (legacy behavior)
-            stream_values_log = discharge_log_aligned
-
-        stream_discharge = np.where(stream_mask, stream_values_log, 0).astype(np.float32)
-
-        # Add stream layer - it's already at the same resolution as the DEM layer
-        # No need for target_layer since it's already aligned
+        # Add stream layer to terrain object
+        # CRITICAL: Copy structure from aligned drainage layer to avoid resampling
+        # stream_network is already at mesh resolution (created from aligned data)
+        drainage_layer = terrain.data_layers["drainage_area_log"]
         terrain.data_layers["stream_discharge"] = {
-            "data": stream_discharge,
-            "transformed_data": stream_discharge,
-            "transform": terrain.data_layers["dem"].get("transform"),
-            "crs": terrain.data_layers["dem"].get("crs"),
+            "data": stream_network.astype(np.float32),
+            "transformed_data": stream_network.astype(np.float32),
+            "transform": drainage_layer.get("transform"),
+            "crs": drainage_layer.get("crs"),
+            "original_transform": drainage_layer.get("original_transform"),
+            "original_crs": drainage_layer.get("original_crs"),
         }
-        print(f"  Stream cells (top {args.stream_top_percent:.1f}%): {np.sum(stream_mask):,}")
     else:
-        stream_mask = np.zeros_like(drainage_area_linear, dtype=bool)
-        print("  Warning: No valid drainage data for stream extraction")
+        print("  Warning: No valid stream data for stream extraction")
 
     # Add water masks for 3D rendering (ocean + lakes)
     print("Adding water masks...")
@@ -1142,27 +1068,29 @@ def main():
 
         # Use the stream_discharge layer directly - it already contains the correct values
         # at the expanded stream pixels (from variable-width expansion)
-        stream_values = terrain.data_layers["stream_discharge"]["data"]
+        stream_discharge_data = terrain.data_layers["stream_discharge"]["data"]
 
-        # Add the stream-colored layer
-        terrain.data_layers["stream_colored"] = {
-            "data": stream_values,
-            "transformed_data": stream_values,
-            "transform": terrain.data_layers["stream_discharge"].get("transform"),
-            "crs": terrain.data_layers["stream_discharge"].get("crs"),
-        }
+        # DEBUG: Check what we got from terrain object
+        print(f"  DEBUG: stream_discharge_data shape: {stream_discharge_data.shape}")
+        # Verify stream layer data
+        stream_count = np.sum(stream_discharge_data > 0)
+        print(f"  Stream layer: {stream_count:,} stream pixels out of {stream_discharge_data.size:,} total")
+        print(f"  Stream value range: [{np.min(stream_discharge_data):.6f}, {np.max(stream_discharge_data):.6f}]")
 
+        # Stream overlay uses threshold-based masking (threshold=0.0 excludes zeros)
+        # The terrain library now correctly handles threshold=0.0 by using > instead of >=
         def stream_colormap(data):
             return elevation_colormap(data, cmap_name=stream_cmap_name)
 
+        print(f"  Base layer: {base_layer}, Stream overlay: stream_discharge")
         terrain.set_multi_color_mapping(
             base_colormap=base_colormap,
             base_source_layers=[base_layer],
             overlays=[
                 {
                     "colormap": stream_colormap,
-                    "source_layers": ["stream_colored"],
-                    "threshold": 0.01,
+                    "source_layers": ["stream_discharge"],
+                    "threshold": 0.0,  # Exclude zeros (non-stream pixels)
                     "priority": 10,
                 },
             ],
@@ -1174,6 +1102,55 @@ def main():
     # Create mesh
     terrain.compute_colors()
 
+    # DIAGNOSTIC: Visualize color layers before mesh creation
+    if args.diagnostics and args.stream_overlay:
+        import matplotlib.pyplot as plt
+
+        _, axes = plt.subplots(2, 3, figsize=(18, 12))
+
+        # 1. Base layer data
+        base_data = terrain.data_layers[base_layer]["data"]
+        axes[0, 0].imshow(base_data, cmap=args.base_cmap)
+        axes[0, 0].set_title(f"Base Layer: {base_label}")
+        axes[0, 0].axis("off")
+
+        # 2. Stream layer data
+        stream_data = terrain.data_layers["stream_discharge"]["data"]
+        axes[0, 1].imshow(stream_data, cmap=args.stream_cmap)
+        axes[0, 1].set_title(f"Stream Layer: {stream_label}")
+        axes[0, 1].axis("off")
+
+        # 3. Stream mask (binary)
+        stream_mask_viz = stream_data > 0
+        axes[0, 2].imshow(stream_mask_viz, cmap="gray")
+        axes[0, 2].set_title(f"Stream Mask ({np.sum(stream_mask_viz):,} pixels)")
+        axes[0, 2].axis("off")
+
+        # 4. Water mask
+        axes[1, 0].imshow(water_mask_combined, cmap="Blues")
+        axes[1, 0].set_title(f"Water Mask ({np.sum(water_mask_combined):,} pixels)")
+        axes[1, 0].axis("off")
+
+        # 5. Final computed colors (RGB)
+        # terrain.colors is already in grid shape (H, W, 4), just take RGB channels
+        colors_rgb = terrain.colors[:, :, :3]
+        axes[1, 1].imshow(colors_rgb)
+        axes[1, 1].set_title("Final Computed Colors (before water)")
+        axes[1, 1].axis("off")
+
+        # 6. Stream + Water overlay
+        overlay_viz = np.zeros_like(colors_rgb)
+        overlay_viz[stream_mask_viz] = [1, 0, 0]  # Red for streams
+        overlay_viz[water_mask_combined] = [0, 0, 1]  # Blue for water
+        axes[1, 2].imshow(overlay_viz)
+        axes[1, 2].set_title("Stream (red) + Water (blue) Masks")
+        axes[1, 2].axis("off")
+
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_color_layers.png", dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"✓ Saved diagnostic color layers: {args.output_dir / 'diagnostic_color_layers.png'}")
+
     mesh = terrain.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -1183,6 +1160,43 @@ def main():
         water_mask=water_mask_combined,  # Apply water coloring (ocean + lakes)
     )
     print(f"✓ Created mesh: {len(mesh.data.vertices):,} vertices")
+
+    # DIAGNOSTIC: Show actual mesh vertex colors AFTER water mask applied
+    if args.diagnostics and args.stream_overlay:
+        import matplotlib.pyplot as plt
+
+        # Extract vertex colors from mesh
+        color_layer = mesh.data.vertex_colors.active
+        if color_layer is not None:
+            num_surface_vertices = len(terrain.y_valid)
+            vertex_colors_flat = np.zeros((len(color_layer.data) * 4,), dtype=np.float32)
+            color_layer.data.foreach_get("color", vertex_colors_flat)
+            vertex_colors = vertex_colors_flat.reshape(-1, 4)[:num_surface_vertices, :3]
+
+            # Map vertex colors back to grid using y_valid and x_valid
+            grid_shape = terrain.data_layers["dem"]["transformed_data"].shape
+            colors_img = np.zeros((grid_shape[0], grid_shape[1], 3), dtype=np.float32)
+            colors_img[terrain.y_valid, terrain.x_valid] = vertex_colors
+
+            # Create comparison plot
+            _, axes = plt.subplots(1, 2, figsize=(16, 8))
+
+            # Before water (from terrain.colors)
+            # terrain.colors is already in grid shape (H, W, 4), just take RGB
+            colors_before = terrain.colors[:, :, :3]
+            axes[0].imshow(colors_before)
+            axes[0].set_title("Colors BEFORE water mask (from terrain.compute_colors)")
+            axes[0].axis("off")
+
+            # After water (from mesh vertices)
+            axes[1].imshow(colors_img)
+            axes[1].set_title("Colors AFTER water mask (from mesh vertices)")
+            axes[1].axis("off")
+
+            plt.tight_layout()
+            plt.savefig(args.output_dir / "diagnostic_mesh_colors.png", dpi=150, bbox_inches="tight")
+            plt.close()
+            print(f"✓ Saved diagnostic mesh colors: {args.output_dir / 'diagnostic_mesh_colors.png'}")
 
     # Apply material
     apply_colormap_material(mesh.data.materials[0], terrain_material="eggshell")
@@ -1227,9 +1241,9 @@ def main():
         sun_elevation=15.0,
         sun_rotation=225.0,
         sun_intensity=0.025, 
-        air_density=0.025,
+        air_density=0.001,
         visible_to_camera=False,
-        sky_strength=.75,
+        sky_strength=1.0,
     )
 
     # Background plane
