@@ -1296,3 +1296,226 @@ def create_flow_diagnostics(
 
     print(f"  Generated {14 if lake_mask is not None else 12} diagnostic images")
     return output_dir
+
+
+def vectorize_stream_network(stream_mask: np.ndarray, simplify_tolerance: float = 2.0) -> list:
+    """
+    Convert stream raster to vector polylines using topology-aware path extraction.
+
+    Uses skan library for proper skeleton-to-vector conversion that preserves
+    stream network topology and handles branch points correctly.
+
+    Args:
+        stream_mask: Boolean array of stream pixels
+        simplify_tolerance: Douglas-Peucker tolerance for simplification (pixels).
+                          Set to 0 to disable simplification.
+
+    Returns:
+        List of polylines, each as (N, 2) array of [y, x] coordinates.
+        Each polyline represents a stream segment between junctions/endpoints.
+
+    Example:
+        >>> stream_mask = stream_raster > 0
+        >>> polylines = vectorize_stream_network(stream_mask, simplify_tolerance=2.0)
+        >>> print(f"Extracted {len(polylines)} stream segments")
+    """
+    try:
+        from skan import Skeleton
+        from skimage.morphology import skeletonize
+    except ImportError:
+        print("WARNING: skan or scikit-image not available for stream vectorization")
+        print("  Install with: pip install skan scikit-image")
+        return []
+
+    if not np.any(stream_mask):
+        return []
+
+    # Skeletonize to 1-pixel centerlines
+    skeleton = skeletonize(stream_mask)
+
+    # Use skan to extract paths (handles topology correctly)
+    skel_obj = Skeleton(skeleton)
+
+    # Get path coordinates using skan's coordinate extraction
+    # skel_obj.coordinates is a (N, ndim) array of all skeleton pixel coords
+    # skel_obj.paths gives us the path structure
+    polylines = []
+
+    for path_idx in range(skel_obj.n_paths):
+        # Get indices of pixels in this path
+        path_indices = skel_obj.path(path_idx)
+
+        if len(path_indices) < 3:  # Skip very short segments
+            continue
+
+        # Extract (y, x) coordinates for this path
+        coords = skel_obj.coordinates[path_indices]  # Shape: (N, 2) where cols are [y, x]
+
+        # Simplify using Douglas-Peucker if requested
+        if simplify_tolerance > 0:
+            from skimage.measure import approximate_polygon
+            coords_simplified = approximate_polygon(coords.astype(float), tolerance=simplify_tolerance)
+            if len(coords_simplified) >= 2:  # Need at least 2 points for a line
+                polylines.append(coords_simplified)
+        else:
+            polylines.append(coords.astype(float))
+
+    return polylines
+
+
+def polyline_to_variable_width_polygon(polyline: np.ndarray, widths: np.ndarray) -> np.ndarray:
+    """
+    Convert a polyline to a variable-width polygon.
+
+    Creates a filled polygon outline by offsetting perpendicular to the polyline
+    at each point based on the width at that point.
+
+    Args:
+        polyline: (N, 2) array of [y, x] coordinates
+        widths: (N,) array of half-widths at each point
+
+    Returns:
+        (M, 2) array of polygon vertices [y, x]
+    """
+    if len(polyline) < 2:
+        return np.array([])
+
+    # Calculate tangent vectors along the polyline
+    tangents = np.zeros_like(polyline)
+    tangents[:-1] = polyline[1:] - polyline[:-1]
+    tangents[-1] = tangents[-2]  # Use previous tangent for last point
+
+    # Normalize tangents
+    lengths = np.sqrt(np.sum(tangents**2, axis=1))
+    lengths[lengths == 0] = 1.0  # Avoid division by zero
+    tangents = tangents / lengths[:, np.newaxis]
+
+    # Calculate perpendicular vectors (rotate tangent 90°)
+    # For 2D: perp = [-dy, dx]
+    perpendiculars = np.column_stack([-tangents[:, 1], tangents[:, 0]])
+
+    # Create left and right edges
+    left_edge = polyline + perpendiculars * widths[:, np.newaxis]
+    right_edge = polyline - perpendiculars * widths[:, np.newaxis]
+
+    # Combine to form polygon: left edge forward + right edge backward
+    polygon = np.vstack([left_edge, right_edge[::-1]])
+
+    return polygon
+
+
+def plot_vectorized_streams(
+    stream_raster: np.ndarray,
+    base_data: np.ndarray,
+    output_path: Path,
+    base_cmap: str = "terrain",
+    base_label: str = "Elevation",
+    title: str = "Vectorized Stream Network",
+    simplify_tolerance: float = 2.0,
+    base_log_scale: bool = False,
+    variable_width: bool = True,
+    max_width: float = 3.0,
+) -> Path:
+    """
+    Plot vectorized stream network overlaid on base map (TEMPORARY/EXPERIMENTAL).
+
+    Creates diagnostic showing:
+    1. Left: Original stream raster
+    2. Right: Vectorized polylines overlaid on base map
+
+    Args:
+        stream_raster: Stream metric values (0 = no stream)
+        base_data: Base map data (e.g., elevation, drainage)
+        output_path: Where to save plot
+        base_cmap: Matplotlib colormap for base map
+        base_label: Label for base map colorbar
+        title: Plot title
+        simplify_tolerance: Douglas-Peucker tolerance (pixels)
+        base_log_scale: Apply log scale to base data
+
+    Returns:
+        Path to saved plot
+    """
+    output_path = Path(output_path)
+
+    # Create stream mask
+    stream_mask = stream_raster > 0
+    num_stream_pixels = np.sum(stream_mask)
+
+    if num_stream_pixels == 0:
+        print(f"  Warning: No stream pixels, skipping {output_path.name}")
+        return output_path
+
+    # Extract polylines using topology-aware vectorization
+    print(f"  Vectorizing {num_stream_pixels:,} stream pixels...")
+    polylines = vectorize_stream_network(stream_mask, simplify_tolerance=simplify_tolerance)
+
+    if len(polylines) == 0:
+        print(f"  Warning: No polylines extracted, skipping {output_path.name}")
+        return output_path
+
+    total_points = sum(len(p) for p in polylines)
+    print(f"  Extracted {len(polylines):,} stream segments ({total_points:,} total points)")
+
+    # Render polylines with variable width to raster (1 data pixel = 1 image pixel)
+    from skimage.draw import polygon as draw_polygon
+    polyline_raster = np.zeros_like(stream_mask, dtype=np.uint8)
+
+    print(f"  Creating variable-width polygons (max width: {max_width:.1f}px)...")
+    skipped = 0
+    drawn = 0
+
+    for idx, polyline in enumerate(polylines):
+        # Ensure polyline is 2D (N, 2)
+        if polyline.ndim != 2 or polyline.shape[1] != 2:
+            skipped += 1
+            continue
+
+        if len(polyline) < 2:
+            skipped += 1
+            continue
+
+        # Get width values along this polyline from stream_raster
+        # Sample stream metric values at polyline points
+        coords_int = np.round(polyline).astype(int)
+        coords_int[:, 0] = np.clip(coords_int[:, 0], 0, stream_raster.shape[0] - 1)
+        coords_int[:, 1] = np.clip(coords_int[:, 1], 0, stream_raster.shape[1] - 1)
+
+        metric_values = stream_raster[coords_int[:, 0], coords_int[:, 1]]
+
+        if not variable_width or np.all(metric_values == 0):
+            # No variable width or no metric data - use constant width
+            widths = np.ones(len(polyline)) * 0.5  # 1px width (0.5 radius)
+        else:
+            # Normalize metric values to [0, max_width/2] for half-widths
+            min_val, max_val = metric_values.min(), metric_values.max()
+            if max_val > min_val:
+                widths = (metric_values - min_val) / (max_val - min_val) * (max_width / 2)
+                widths = np.clip(widths, 0.5, max_width / 2)  # At least 0.5px radius
+            else:
+                widths = np.ones(len(polyline)) * 0.5
+
+        # Convert polyline to variable-width polygon
+        polygon_coords = polyline_to_variable_width_polygon(polyline, widths)
+
+        if len(polygon_coords) == 0:
+            skipped += 1
+            continue
+
+        # Rasterize polygon
+        polygon_int = np.round(polygon_coords).astype(int)
+        polygon_int[:, 0] = np.clip(polygon_int[:, 0], 0, stream_mask.shape[0] - 1)
+        polygon_int[:, 1] = np.clip(polygon_int[:, 1], 0, stream_mask.shape[1] - 1)
+
+        rr, cc = draw_polygon(polygon_int[:, 0], polygon_int[:, 1], shape=stream_mask.shape)
+        polyline_raster[rr, cc] = 255
+
+        drawn += 1
+
+    # Save as simple PNG: 1 data pixel = 1 image pixel
+    from PIL import Image
+    img = Image.fromarray(polyline_raster, mode='L')
+    img.save(output_path)
+
+    print(f"  ✓ Rasterized {drawn:,}/{len(polylines):,} polylines ({skipped:,} skipped) → {np.sum(polyline_raster > 0):,} pixels")
+    return output_path
