@@ -84,10 +84,22 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
 
     width_map[line_mask] = min_width + normalized_vals * (max_width - min_width)
 
-    # Smooth the width map (same as slow version)
+    # Smooth the width map (memory-aware sigma scaling)
     expanded_for_smooth = maximum_filter(width_map, size=3)
     smooth_mask = expanded_for_smooth > 0
-    smoothed_width = gaussian_filter(width_map, sigma=max_width)
+
+    # For very large arrays, reduce sigma to prevent memory thrashing
+    # Gaussian filter memory usage grows with sigma^2
+    pixels_in_millions = line_mask.size / 1_000_000
+    if pixels_in_millions > 10:
+        # Scale sigma down for large arrays (>10M pixels)
+        sigma_scale = min(1.0, 10.0 / pixels_in_millions)
+        effective_sigma = max(3, int(max_width * sigma_scale))
+        print(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
+    else:
+        effective_sigma = max_width
+
+    smoothed_width = gaussian_filter(width_map, sigma=effective_sigma)
     smoothed_width = np.where(smooth_mask, smoothed_width, 0)
 
     # Re-normalize
@@ -191,8 +203,17 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
     expanded_for_smooth = maximum_filter(width_map, size=3)
     smooth_mask = expanded_for_smooth > 0
 
+    # For very large arrays, reduce sigma to prevent memory thrashing
+    pixels_in_millions = line_mask.size / 1_000_000
+    if pixels_in_millions > 10:
+        sigma_scale = min(1.0, 10.0 / pixels_in_millions)
+        effective_sigma = max(3, int(max_width * sigma_scale))
+        print(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
+    else:
+        effective_sigma = max_width
+
     # Gaussian smooth the width values (only affects line region)
-    smoothed_width = gaussian_filter(width_map, sigma=max_width)
+    smoothed_width = gaussian_filter(width_map, sigma=effective_sigma)
 
     # Keep only within expanded line region and normalize
     smoothed_width = np.where(smooth_mask, smoothed_width, 0)
