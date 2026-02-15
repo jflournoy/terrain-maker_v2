@@ -98,25 +98,30 @@ def expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_wi
         Tuple of (expanded_mask, expanded_values)
     """
     import time
-    from scipy.ndimage import gaussian_filter
+    from scipy.ndimage import gaussian_filter, maximum_filter
 
     t_start = time.time()
 
     if not NUMBA_AVAILABLE:
         print("  WARNING: numba not available, sparse expansion will be slow!")
 
-    # Get stream pixel coordinates and values
-    coords = np.argwhere(line_mask)  # (M, 2) array of [y, x]
+    # CRITICAL: Expand stream mask by 3 pixels first (matches fast algorithm)
+    # This fills gaps in sparse stream networks before drawing circles
+    expanded_mask = maximum_filter(line_mask.astype(np.uint8), size=3).astype(bool)
+
+    # Get stream pixel coordinates and values from EXPANDED mask
+    coords = np.argwhere(expanded_mask)  # (M, 2) array of [y, x]
     if len(coords) == 0:
         return line_mask, metric_data.copy()
 
+    # Use metric values from expanded pixels
     values = metric_data[coords[:, 0], coords[:, 1]]
 
     if len(values) == 0 or values.max() == values.min():
         return line_mask, metric_data.copy()
 
     print(f"  Sparse expansion: {len(coords):,} stream pixels "
-          f"({100 * len(coords) / line_mask.size:.2f}% of grid)")
+          f"({100 * len(coords) / line_mask.size:.2f}% of grid, after 3px expansion)")
 
     # Smooth metric values to prevent color patches
     smoothed_metric_grid = gaussian_filter(metric_data, sigma=2.0)
@@ -268,7 +273,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     return expanded_mask, expanded_values
 
 
-def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, width_gamma=1.0, fast=True, sparse=False):
+def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, width_gamma=1.0, fast=True, sparse=False, method=None):
     """Expand line mask with variable width using smooth tapering.
 
     Higher metric values → wider lines. Uses gaussian smoothing and
@@ -284,8 +289,13 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
                     < 1.0 makes more streams wider, > 1.0 makes fewer streams wider
         fast: If True, use O(N log N) distance-transform algorithm (default).
               If False, use O(max_width × N) iterative dilation (slower, max-value semantics).
+              Deprecated: use method parameter instead.
         sparse: If True, use sparse + numba JIT (10-100x faster for sparse networks).
-                Overrides fast parameter.
+                Deprecated: use method parameter instead.
+        method: Algorithm choice: "sparse", "fast", "slow". Overrides fast/sparse parameters.
+                - "sparse": Numba JIT circles (10-100x faster, requires numba)
+                - "fast": Distance transform (13-311x faster than slow)
+                - "slow": Iterative dilation (best quality, max-value semantics)
 
     Returns:
         Tuple of (expanded_mask, expanded_values):
@@ -297,12 +307,23 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
         >>> mask, values = expand_lines_variable_width(stream_mask, discharge, max_width=3)
 
         # Expand with sparse + numba (fastest for sparse networks)
-        >>> mask, values = expand_lines_variable_width(stream_mask, discharge, max_width=3, sparse=True)
+        >>> mask, values = expand_lines_variable_width(stream_mask, discharge, max_width=3, method="sparse")
 
-        # Expand road network by lane count (slow, max-value semantics)
-        >>> mask, values = expand_lines_variable_width(road_mask, lane_count, max_width=5, fast=False)
+        # Expand with slow algorithm (best quality, max-value semantics)
+        >>> mask, values = expand_lines_variable_width(road_mask, lane_count, max_width=5, method="slow")
     """
-    if sparse:
+    # Handle method parameter
+    if method is not None:
+        if method == "sparse":
+            return expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_width, width_gamma)
+        elif method == "fast":
+            return expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_width, width_gamma)
+        elif method == "slow":
+            pass  # Fall through to slow algorithm below
+        else:
+            raise ValueError(f"Invalid method: {method}. Choose 'sparse', 'fast', or 'slow'.")
+    # Legacy parameter handling
+    elif sparse:
         return expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_width, width_gamma)
     elif fast:
         return expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_width, width_gamma)
@@ -409,7 +430,7 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
 
 
 def create_line_layer(
-    metric_data, selection_metric_data, percentile, variable_width=False, max_width=3, width_gamma=1.0, sparse=False
+    metric_data, selection_metric_data, percentile, variable_width=False, max_width=3, width_gamma=1.0, sparse=False, method=None
 ):
     """Create linear feature overlay layer.
 
@@ -426,7 +447,8 @@ def create_line_layer(
         variable_width: If True, expand lines based on metric values
         max_width: Maximum expansion width in pixels (only used if variable_width=True)
         width_gamma: Gamma correction for width scale (default: 1.0 = linear)
-        sparse: If True, use sparse + numba algorithm (10-100x faster, requires numba)
+        sparse: If True, use sparse + numba algorithm (deprecated, use method instead)
+        method: Algorithm choice: "sparse", "fast", or "slow" (default: "fast")
 
     Returns:
         Line layer raster: line pixels have metric_data values, others are 0
@@ -468,7 +490,7 @@ def create_line_layer(
         # Expand the mask with smooth tapering and value propagation
         # The new algorithm returns both expanded mask and propagated values
         line_mask, expanded_values = expand_lines_variable_width(
-            line_mask, metric_data, max_width, width_gamma=width_gamma, sparse=sparse
+            line_mask, metric_data, max_width, width_gamma=width_gamma, sparse=sparse, method=method
         )
 
         # Use expanded values (already have metric values propagated)
