@@ -278,6 +278,82 @@ def create_lake_flow_routing(
     return flow_dir
 
 
+def compute_outlet_downstream_directions(
+    flow_dir: np.ndarray,
+    lake_mask: np.ndarray,
+    outlet_mask: np.ndarray,
+    dem: np.ndarray,
+    basin_mask: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    Compute flow direction FROM lake outlets TO downstream terrain.
+
+    For through-draining lakes, the outlet gets a flow direction pointing
+    to the lowest adjacent non-lake cell. This turns lakes into links
+    in river chains rather than terminal sinks.
+
+    Endorheic outlets (inside basins) remain terminal (flow_dir=0).
+
+    Parameters
+    ----------
+    flow_dir : np.ndarray (uint8)
+        D8 flow direction grid (outlet cells typically have 0)
+    lake_mask : np.ndarray
+        Labeled lake mask (0 = no lake, N = lake ID)
+    outlet_mask : np.ndarray (bool)
+        Boolean mask of outlet cells
+    dem : np.ndarray
+        Digital elevation model
+    basin_mask : np.ndarray (bool), optional
+        Boolean mask of endorheic basin cells. Outlets inside basins
+        remain terminal.
+
+    Returns
+    -------
+    flow_dir : np.ndarray (uint8)
+        Copy of input with outlet cells updated to point downstream
+    """
+    from src.terrain.flow_accumulation import D8_DIRECTIONS
+
+    rows, cols = flow_dir.shape
+    result = flow_dir.copy()
+
+    if basin_mask is None:
+        basin_mask = np.zeros((rows, cols), dtype=bool)
+
+    outlet_rows, outlet_cols = np.where(outlet_mask)
+
+    for r, c in zip(outlet_rows, outlet_cols):
+        # Endorheic outlets stay terminal
+        if basin_mask[r, c]:
+            continue
+
+        # Find lowest adjacent non-lake cell
+        best_dir = 0
+        min_elev = dem[r, c]
+        this_lake_id = lake_mask[r, c]
+
+        for (dr, dc), direction_code in D8_DIRECTIONS.items():
+            nr, nc = r + dr, c + dc
+
+            # Bounds check
+            if not (0 <= nr < rows and 0 <= nc < cols):
+                continue
+
+            # Skip cells in the same lake
+            if lake_mask[nr, nc] == this_lake_id and this_lake_id > 0:
+                continue
+
+            # Track lowest elevation neighbor outside this lake
+            if dem[nr, nc] < min_elev:
+                min_elev = dem[nr, nc]
+                best_dir = direction_code
+
+        result[r, c] = best_dir
+
+    return result
+
+
 def download_water_bodies(
     bbox: Tuple[float, float, float, float],
     output_dir: str,

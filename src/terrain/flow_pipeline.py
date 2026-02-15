@@ -27,6 +27,7 @@ from src.terrain.flow_accumulation import (
 from src.terrain.water_bodies import (
     identify_lake_inlets,
     create_lake_flow_routing,
+    compute_outlet_downstream_directions,
 )
 from src.terrain.transforms import upscale_scores
 
@@ -348,11 +349,22 @@ def compute_flow_with_basins(
             )
             flow_dir = np.where(lakes_outside_basin, lake_flow, flow_dir_base)
 
+            # Connect lake outlets to downstream terrain so drainage
+            # propagates through lakes instead of resetting at outlets
+            if np.any(lake_outlets_outside):
+                flow_dir = compute_outlet_downstream_directions(
+                    flow_dir,
+                    lakes_outside_basin,
+                    lake_outlets_outside,
+                    dem_conditioned,
+                    basin_mask=basin_mask,
+                )
+
             if verbose:
                 num_outlets_outside = np.sum(lake_outlets_outside)
                 print(
                     f"   Applied routing to {np.sum(lakes_outside_basin):,} cells "
-                    f"with {num_outlets_outside} outlets"
+                    f"with {num_outlets_outside} outlets (connected downstream)"
                 )
 
     # Step 7: Compute drainage area
