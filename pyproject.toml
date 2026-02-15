@@ -15,11 +15,11 @@ dependencies = [
     "numpy<2.0",
     "scipy",
     "scikit-image",
-    "scikit-learn",  # Required for proximity mask clustering (DBSCAN)
-    "opencv-python-headless",  # 500x faster bilateral filter than skimage
-    "torch",  # GPU-accelerated area averaging for downsampling
-    "numba",  # JIT compilation for performance-critical loops
-    "pysheds>=0.4",  # Hydrological analysis (flow direction, accumulation)
+    "scikit-learn", # Required for proximity mask clustering (DBSCAN)
+    "opencv-python-headless", # 500x faster bilateral filter than skimage
+    "torch", # GPU-accelerated area averaging for downsampling
+    "numba", # JIT compilation for performance-critical loops
+    "pysheds>=0.4", # Hydrological analysis (flow direction, accumulation)
     "rasterio",
     "geopandas",
     "shapely",
@@ -30,9 +30,10 @@ dependencies = [
     "tqdm",
     "pyproj",
     "zarr",
-    "bpy>=4.0",  # Blender Python module for rendering
-    "NASADEM",  # DEM downloads from NASA Earthdata
-    "earthaccess",  # NASA Earthdata authentication
+    "bpy>=4.0", # Blender Python module for rendering
+    "NASADEM", # DEM downloads from NASA Earthdata
+    "earthaccess", # NASA Earthdata authentication
+    "skan>=0.13.1",
 ]
 
 [project.optional-dependencies]
