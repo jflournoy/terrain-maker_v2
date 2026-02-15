@@ -1,5 +1,62 @@
 ## Current Status
 
+### 2026-02-13 23:15 - Optimized Variable-Width Expansion Performance 🚀✅
+
+**Request:** "can we use numba jit or parallel?"
+
+**Analysis:**
+- ❌ Numba JIT: Can't accelerate scipy.ndimage functions (grey_dilation is C code)
+- ❌ Parallelization: Sequential dependencies + Python overhead = no benefit
+- ✅ **Better algorithm**: Replace O(max_width × N) with O(N log N)
+
+**Current (slow) algorithm:**
+```python
+for radius in range(max_width, min_width - 1, -1):  # 40 iterations for max_width=40
+    grey_dilation(...)  # Expensive operation per radius
+```
+
+**New (fast) algorithm:**
+```python
+# Single distance transform (O(N log N))
+distances, indices = distance_transform_edt(~line_mask, return_indices=True)
+# Simple array operations (O(N))
+expanded_mask = distances <= smoothed_width[nearest_line_pixel]
+expanded_values = metric_data[nearest_line_pixel]
+```
+
+**Changes:**
+1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+   - Added `expand_lines_variable_width_fast()` - O(N log N) distance-transform approach
+   - Updated `expand_lines_variable_width()` - Added `fast=True` parameter (default)
+   - Kept slow algorithm for comparison (`fast=False`)
+
+2. [test_expansion_performance.py](test_expansion_performance.py) - Benchmark script
+   - Compares fast vs slow algorithms
+   - Tests different grid sizes and max_width values
+   - Reports speedup and visual difference metrics
+
+**Benchmark Results (ACTUAL):**
+```
+Grid Size    Max Width    Fast (s)     Slow (s)     Speedup
+------------------------------------------------------------
+500×500      10px         0.017        0.220        13.1x
+1000×1000    20px         0.099        6.896        70.0x
+2000×2000    40px         0.707        219.801      311.0x
+```
+
+**Visual Difference:** Minimal (0.05-0.10% of pixels differ, mean value diff = 29-73)
+
+**Trade-off:** In overlapping regions where multiple streams expand into same pixels:
+- Slow: Max value from all nearby streams (grey_dilation semantics)
+- Fast: Value from nearest stream (distance-transform semantics)
+- Visual difference: Negligible in practice (stream overlaps are rare)
+
+**Impact:** San Diego demo (2000×2000, max_width=40): **3.7 minutes → 0.7 seconds** for stream expansion
+
+**Recommendation:** Use `fast=True` (now default) for production - proven 13-311x speedup
+
+---
+
 ### 2026-02-13 22:30 - Unified Variable-Width Expansion Algorithm ✨✅ (TDD)
 
 **Issue:** Diagnostic plots looked WAY better than 3D renders
