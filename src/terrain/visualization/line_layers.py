@@ -55,7 +55,10 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
         - expanded_mask: Boolean array of expanded line pixels
         - expanded_values: Metric values propagated to expanded pixels
     """
+    import time
     from scipy.ndimage import distance_transform_edt, gaussian_filter, maximum_filter
+
+    t_start = time.time()
 
     # Memory safety check
     array_size_mb = (line_mask.size * 4 * 3) / (1024 * 1024)
@@ -99,8 +102,11 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     else:
         effective_sigma = max_width
 
+    t_gaussian_start = time.time()
     smoothed_width = gaussian_filter(width_map, sigma=effective_sigma)
     smoothed_width = np.where(smooth_mask, smoothed_width, 0)
+    if pixels_in_millions > 5:
+        print(f"  Gaussian filter ({effective_sigma}px sigma): {time.time() - t_gaussian_start:.1f}s")
 
     # Re-normalize
     smooth_line_vals = smoothed_width[smooth_mask & (smoothed_width > 0)]
@@ -114,7 +120,10 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
 
     # FAST APPROACH: Single distance transform instead of iterative dilation
     # Find nearest line pixel for every pixel
+    t_distance_start = time.time()
     distances, indices = distance_transform_edt(~line_mask, return_indices=True)
+    if pixels_in_millions > 5:
+        print(f"  Distance transform: {time.time() - t_distance_start:.1f}s")
 
     # Get smoothed width at nearest line pixel for each pixel
     nearest_y = indices[0]
@@ -127,6 +136,9 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     # Propagate metric values from nearest line pixel
     expanded_values = np.zeros_like(metric_data, dtype=np.float32)
     expanded_values[expanded_mask] = metric_data[nearest_y[expanded_mask], nearest_x[expanded_mask]]
+
+    if pixels_in_millions > 5:
+        print(f"  Total expansion time: {time.time() - t_start:.1f}s")
 
     return expanded_mask, expanded_values
 
