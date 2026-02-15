@@ -80,6 +80,7 @@ from src.terrain.color_mapping import elevation_colormap
 from src.terrain.visualization.flow_diagnostics import (
     create_flow_diagnostics,
     plot_stream_overlay,
+    plot_vectorized_streams,
 )
 from src.terrain.visualization.line_layers import (
     get_metric_data,
@@ -233,7 +234,19 @@ def main():
     parser.add_argument(
         "--sparse",
         action="store_true",
-        help="Use sparse + numba algorithm for variable-width streams (10-100x faster, requires numba)",
+        help="Use sparse + numba algorithm for variable-width streams (10-100x faster, requires numba). "
+             "Deprecated: use --expansion-method sparse instead.",
+    )
+    parser.add_argument(
+        "--expansion-method",
+        type=str,
+        choices=["fast", "sparse", "slow"],
+        default=None,
+        help="Algorithm for variable-width stream expansion: "
+             "fast (distance transform, 13-311x speedup), "
+             "sparse (numba JIT, 10-100x speedup, requires numba), "
+             "slow (iterative dilation, best quality, max-value semantics). "
+             "Default: fast.",
     )
     parser.add_argument(
         "--no-water-bodies",
@@ -886,6 +899,33 @@ def main():
             max_width=args.max_stream_width,
         )
         print("  ✓ Stream overlay diagnostic plots complete (12-16)")
+
+        # EXPERIMENTAL: Vectorize stream network
+        print("\nGenerating experimental stream vectorization plot...")
+
+        # Filter to top N% of streams (same as 3D rendering)
+        valid_drainage = flow_result["drainage_area"][flow_result["drainage_area"] > 0]
+        stream_threshold = np.percentile(valid_drainage, args.stream_percentile)
+        stream_mask = flow_result["drainage_area"] >= stream_threshold
+
+        # Create stream raster: discharge values at stream pixels, 0 elsewhere
+        filtered_stream_raster = np.where(stream_mask, diag_discharge, 0.0)
+
+        print(f"  Vectorizing top {100 - args.stream_percentile:.1f}% of streams ({np.sum(stream_mask):,} pixels)")
+
+        plot_vectorized_streams(
+            stream_raster=filtered_stream_raster,
+            base_data=flow_result["drainage_area"],
+            output_path=args.output_dir / "17_stream_vectorization.png",
+            base_cmap="viridis",
+            base_label="Drainage Area (cells)",
+            title=f"Stream Network Vectorization (top {100 - args.stream_percentile:.1f}%)",
+            simplify_tolerance=0,  # No simplification - preserve all skeleton pixels
+            base_log_scale=True,
+            variable_width=args.variable_width,  # Use same setting as 3D render
+            max_width=args.max_stream_width,  # Use same max width as 3D render
+        )
+        print("  ✓ Vectorization plot complete (17)")
     else:
         print("\nSkipping diagnostic visualizations (use --diagnostics to enable)")
 
@@ -1011,10 +1051,19 @@ def main():
     discharge_log_aligned = terrain.data_layers["discharge_potential_log"]["data"]
     rainfall_aligned = terrain.data_layers["upstream_rainfall_log"]["data"]
 
-    # Convert from log scale back to linear for threshold calculation
-    drainage_area_linear = np.power(10, drainage_area_aligned) - 1
-    discharge_potential_linear = np.power(10, discharge_log_aligned) - 1
-    upstream_rainfall_linear = np.power(10, rainfall_aligned) - 1
+    # Convert from log/gamma scale back to linear for threshold calculation
+    # NOTE: With --base-gamma, data is gamma-transformed (already linear-ish)
+    #       Without it, data is log-transformed and needs conversion
+    if args.base_gamma is not None:
+        # Gamma-transformed: already in reasonable range, use directly
+        drainage_area_linear = drainage_area_aligned
+        discharge_potential_linear = discharge_log_aligned
+        upstream_rainfall_linear = rainfall_aligned
+    else:
+        # Log-transformed: convert back to linear
+        drainage_area_linear = np.power(10, drainage_area_aligned) - 1
+        discharge_potential_linear = np.power(10, discharge_log_aligned) - 1
+        upstream_rainfall_linear = np.power(10, rainfall_aligned) - 1
 
     # Create stream network layer using library functions
     # Determine which metrics to use for stream layer (BUG FIX: now respects --stream-color-by in all modes)
@@ -1047,9 +1096,19 @@ def main():
     # Create stream network layer (preprocessing handles variable-width expansion)
     # Stream colors will use the transformed data (log or gamma based on args.base_gamma)
     # Stream-specific gamma is applied in the colormap function below
+
+    # Determine expansion method (handle legacy --sparse flag)
+    expansion_method = args.expansion_method
+    if expansion_method is None:
+        expansion_method = "sparse" if args.sparse else "fast"
+
     if args.variable_width:
-        algo_mode = "SPARSE (numba)" if args.sparse else "FAST (distance transform)"
-        print(f"  Creating variable-width stream layer using {algo_mode}...")
+        algo_labels = {
+            "fast": "FAST (distance transform, 13-311x speedup)",
+            "sparse": "SPARSE (numba JIT, 10-100x speedup)",
+            "slow": "SLOW (iterative dilation, best quality)"
+        }
+        print(f"  Creating variable-width stream layer using {algo_labels[expansion_method]}...")
     else:
         print(f"  Creating uniform-width stream layer...")
 
@@ -1060,7 +1119,7 @@ def main():
         variable_width=args.variable_width,
         max_width=args.max_stream_width,
         width_gamma=args.width_gamma,
-        sparse=args.sparse
+        method=expansion_method
     )
 
     num_stream_pixels = np.sum(stream_network > 0)
@@ -1145,6 +1204,13 @@ def main():
 
     # Apply color mapping - with or without stream overlay
     if args.stream_overlay:
+        # Check if stream layer was successfully created
+        if "stream_discharge" not in terrain.data_layers:
+            print("WARNING: Stream overlay requested but no stream layer created (no valid stream pixels)")
+            print("         Falling back to base coloring only")
+            args.stream_overlay = False  # Disable overlay for this run
+
+    if args.stream_overlay:
         # Determine stream label for display
         if args.stream_color_by == "drainage":
             stream_label = "drainage"
@@ -1168,16 +1234,40 @@ def main():
 
         # Stream overlay uses threshold-based masking (threshold=0.0 excludes zeros)
         # The terrain library now correctly handles threshold=0.0 by using > instead of >=
+
+        # Calculate min/max from stream pixels only (exclude zeros for proper color normalization)
+        stream_values = stream_discharge_data[stream_discharge_data > 0]
+        if len(stream_values) > 0:
+            stream_min = np.min(stream_values)
+            stream_max = np.max(stream_values)
+        else:
+            stream_min, stream_max = 0.0, 1.0
+
+        print(f"  Stream colormap range: [{stream_min:.6f}, {stream_max:.6f}] (excluding background zeros)")
+
         def stream_colormap(data):
             # Apply stream-specific gamma if requested
             if args.stream_gamma is not None:
-                # Normalize, apply gamma, rescale
-                data_max = np.max(data) + 1e-10
-                data_norm = data / data_max
-                data_gamma = np.power(data_norm, args.stream_gamma) * data_max
-                return elevation_colormap(data_gamma, cmap_name=stream_cmap_name)
+                print(f"  DEBUG: Applying stream gamma={args.stream_gamma}")
+                # CRITICAL: Normalize using stream range (excluding zeros) for proper gamma
+                # Normalize to [0, 1] based on stream value range
+                data_norm = (data - stream_min) / (stream_max - stream_min + 1e-10)
+                data_norm = np.clip(data_norm, 0, 1)
+                # Apply gamma
+                data_gamma = np.power(data_norm, args.stream_gamma)
+                # Rescale back to stream range
+                data_gamma_rescaled = data_gamma * (stream_max - stream_min) + stream_min
+
+                # Debug: show what gamma did
+                gamma_stream_vals = data_gamma_rescaled[data > 0]
+                if len(gamma_stream_vals) > 0:
+                    print(f"  After gamma: stream values range [{np.min(gamma_stream_vals):.2f}, {np.max(gamma_stream_vals):.2f}]")
+
+                return elevation_colormap(data_gamma_rescaled, cmap_name=stream_cmap_name,
+                                         min_elev=stream_min, max_elev=stream_max)
             else:
-                return elevation_colormap(data, cmap_name=stream_cmap_name)
+                return elevation_colormap(data, cmap_name=stream_cmap_name,
+                                         min_elev=stream_min, max_elev=stream_max)
 
         print(f"  Base layer: {base_layer}, Stream overlay: stream_discharge")
         terrain.set_multi_color_mapping(
@@ -1365,10 +1455,10 @@ def main():
     setup_hdri_lighting(
         sun_elevation=15.0,
         sun_rotation=225.0,
-        sun_intensity=0.025, 
-        air_density=0.001,
+        sun_intensity=0.1, 
+        air_density=0.1,
         visible_to_camera=False,
-        sky_strength=1.0,
+        sky_strength=1,
     )
 
     # Background plane
