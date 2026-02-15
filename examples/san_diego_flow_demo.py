@@ -231,6 +231,11 @@ def main():
         help="Maximum stream width in pixels when --variable-width is enabled (default: 3)",
     )
     parser.add_argument(
+        "--sparse",
+        action="store_true",
+        help="Use sparse + numba algorithm for variable-width streams (10-100x faster, requires numba)",
+    )
+    parser.add_argument(
         "--no-water-bodies",
         action="store_true",
         help="Disable water body integration (lakes/reservoirs)",
@@ -619,6 +624,33 @@ def main():
         target_vertices=args.target_vertices,
     )
 
+    # Flow computation complete - log key results
+    print("\n✓ Flow accumulation complete!")
+    metadata = flow_result["metadata"]
+
+    # Log resolution info
+    if metadata["downsampling_applied"]:
+        orig_h, orig_w = metadata['original_shape']
+        flow_h, flow_w = metadata['downsampled_shape']
+        print(f"  DEM resolution: {orig_h}×{orig_w} → {flow_h}×{flow_w} (downsampled for flow computation)")
+    else:
+        flow_h, flow_w = flow_result["conditioned_dem"].shape
+        print(f"  DEM resolution: {flow_h}×{flow_w} (no downsampling)")
+
+    # Log key outputs
+    print(f"  Outputs:")
+    print(f"    - Conditioned DEM: {flow_result['conditioned_dem'].shape}")
+    print(f"    - Flow direction: {flow_result['flow_direction'].shape}")
+    print(f"    - Drainage area: {flow_result['drainage_area'].shape}")
+    print(f"    - Upstream rainfall: {flow_result['upstream_rainfall'].shape}")
+    if flow_result.get('breached_dem') is not None:
+        print(f"    - Breached DEM: {flow_result['breached_dem'].shape}")
+
+    # Log precipitation info if available
+    if "precipitation" in flow_result:
+        precip = flow_result["precipitation"]
+        print(f"  Precipitation: {precip.shape}, range [{precip.min():.1f}, {precip.max():.1f}] mm/year")
+
     # DEBUG: Check breached_dem status
     print("\nDEBUG: Checking breached_dem...")
     print(f"  breached_dem is None: {flow_result.get('breached_dem') is None}")
@@ -694,7 +726,9 @@ def main():
         terrain_align.add_data_layer("lake_outlets", lake_outlets.astype(np.float32), transform, crs="EPSG:4326", target_layer="dem")
 
     # Apply transforms to align all data
+    print("  Aligning data layers to flow resolution...")
     terrain_align.apply_transforms()
+    print(f"  ✓ All data layers aligned to {flow_dem.shape[0]}×{flow_dem.shape[1]} grid")
 
     # Extract aligned data for diagnostics (all at flow resolution)
     if args.diagnostics:
@@ -730,6 +764,7 @@ def main():
             num_basins=num_basins,
             is_real_precip=True,  # Using real WorldClim data
         )
+        print("  ✓ Flow diagnostic plots complete (01-11)")
 
         # Generate stream overlay visualizations
         # These show streams colored by metric values, overlaid on base maps
@@ -850,6 +885,7 @@ def main():
             variable_width=True,  # Always enabled for this example
             max_width=args.max_stream_width,
         )
+        print("  ✓ Stream overlay diagnostic plots complete (12-16)")
     else:
         print("\nSkipping diagnostic visualizations (use --diagnostics to enable)")
 
@@ -1011,13 +1047,20 @@ def main():
     # Create stream network layer (preprocessing handles variable-width expansion)
     # Stream colors will use the transformed data (log or gamma based on args.base_gamma)
     # Stream-specific gamma is applied in the colormap function below
+    if args.variable_width:
+        algo_mode = "SPARSE (numba)" if args.sparse else "FAST (distance transform)"
+        print(f"  Creating variable-width stream layer using {algo_mode}...")
+    else:
+        print(f"  Creating uniform-width stream layer...")
+
     stream_network = create_line_layer(
         metric_data=coloring_metric_log,
         selection_metric_data=selection_metric_linear,
         percentile=args.stream_percentile,
         variable_width=args.variable_width,
         max_width=args.max_stream_width,
-        width_gamma=args.width_gamma
+        width_gamma=args.width_gamma,
+        sparse=args.sparse
     )
 
     num_stream_pixels = np.sum(stream_network > 0)
@@ -1160,50 +1203,78 @@ def main():
     if args.diagnostics and args.stream_overlay:
         import matplotlib.pyplot as plt
 
-        _, axes = plt.subplots(2, 3, figsize=(18, 12))
+        print("Generating diagnostic plots...")
+
+        # Get data for plots
+        base_data = terrain.data_layers[base_layer]["data"]
+        stream_data = terrain.data_layers["stream_discharge"]["data"]
+        stream_mask_viz = stream_data > 0
+        colors_rgb = terrain.colors[:, :, :3]
 
         # 1. Base layer data
-        base_data = terrain.data_layers[base_layer]["data"]
-        axes[0, 0].imshow(base_data, cmap=args.base_cmap)
-        axes[0, 0].set_title(f"Base Layer: {base_label}")
-        axes[0, 0].axis("off")
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.imshow(base_data, cmap=args.base_cmap)
+        ax.set_title(f"Base Layer: {base_label}", fontsize=14)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_01_base_layer.png", dpi=150, bbox_inches="tight")
+        plt.close()
 
         # 2. Stream layer data
-        stream_data = terrain.data_layers["stream_discharge"]["data"]
-        axes[0, 1].imshow(stream_data, cmap=args.stream_cmap)
-        axes[0, 1].set_title(f"Stream Layer: {stream_label}")
-        axes[0, 1].axis("off")
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.imshow(stream_data, cmap=args.stream_cmap)
+        ax.set_title(f"Stream Layer: {stream_label}", fontsize=14)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_02_stream_layer.png", dpi=150, bbox_inches="tight")
+        plt.close()
 
         # 3. Stream mask (binary)
-        stream_mask_viz = stream_data > 0
-        axes[0, 2].imshow(stream_mask_viz, cmap="gray")
-        axes[0, 2].set_title(f"Stream Mask ({np.sum(stream_mask_viz):,} pixels)")
-        axes[0, 2].axis("off")
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.imshow(stream_mask_viz, cmap="gray")
+        ax.set_title(f"Stream Mask ({np.sum(stream_mask_viz):,} pixels)", fontsize=14)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_03_stream_mask.png", dpi=150, bbox_inches="tight")
+        plt.close()
 
         # 4. Water mask
-        axes[1, 0].imshow(water_mask_combined, cmap="Blues")
-        axes[1, 0].set_title(f"Water Mask ({np.sum(water_mask_combined):,} pixels)")
-        axes[1, 0].axis("off")
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.imshow(water_mask_combined, cmap="Blues")
+        ax.set_title(f"Water Mask ({np.sum(water_mask_combined):,} pixels)", fontsize=14)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_04_water_mask.png", dpi=150, bbox_inches="tight")
+        plt.close()
 
         # 5. Final computed colors (RGB)
-        # terrain.colors is already in grid shape (H, W, 4), just take RGB channels
-        colors_rgb = terrain.colors[:, :, :3]
-        axes[1, 1].imshow(colors_rgb)
-        axes[1, 1].set_title("Final Computed Colors (before water)")
-        axes[1, 1].axis("off")
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.imshow(colors_rgb)
+        ax.set_title("Final Computed Colors (before water)", fontsize=14)
+        ax.axis("off")
+        plt.tight_layout()
+        plt.savefig(args.output_dir / "diagnostic_05_final_colors.png", dpi=150, bbox_inches="tight")
+        plt.close()
 
         # 6. Stream + Water overlay
+        fig, ax = plt.subplots(figsize=(10, 8))
         overlay_viz = np.zeros_like(colors_rgb)
         overlay_viz[stream_mask_viz] = [1, 0, 0]  # Red for streams
         overlay_viz[water_mask_combined] = [0, 0, 1]  # Blue for water
-        axes[1, 2].imshow(overlay_viz)
-        axes[1, 2].set_title("Stream (red) + Water (blue) Masks")
-        axes[1, 2].axis("off")
-
+        ax.imshow(overlay_viz)
+        ax.set_title("Stream (red) + Water (blue) Masks", fontsize=14)
+        ax.axis("off")
         plt.tight_layout()
-        plt.savefig(args.output_dir / "diagnostic_color_layers.png", dpi=150, bbox_inches="tight")
+        plt.savefig(args.output_dir / "diagnostic_06_overlay_masks.png", dpi=150, bbox_inches="tight")
         plt.close()
-        print(f"✓ Saved diagnostic color layers: {args.output_dir / 'diagnostic_color_layers.png'}")
+
+        print(f"✓ Saved 6 diagnostic plots:")
+        print(f"  - diagnostic_01_base_layer.png")
+        print(f"  - diagnostic_02_stream_layer.png")
+        print(f"  - diagnostic_03_stream_mask.png")
+        print(f"  - diagnostic_04_water_mask.png")
+        print(f"  - diagnostic_05_final_colors.png")
+        print(f"  - diagnostic_06_overlay_masks.png")
 
     mesh = terrain.create_mesh(
         scale_factor=100,
