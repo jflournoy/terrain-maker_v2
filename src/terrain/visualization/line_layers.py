@@ -409,7 +409,7 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
 
 
 def create_line_layer(
-    metric_data, selection_metric_data, percentile, variable_width=False, max_width=3, width_gamma=1.0
+    metric_data, selection_metric_data, percentile, variable_width=False, max_width=3, width_gamma=1.0, sparse=False
 ):
     """Create linear feature overlay layer.
 
@@ -426,6 +426,7 @@ def create_line_layer(
         variable_width: If True, expand lines based on metric values
         max_width: Maximum expansion width in pixels (only used if variable_width=True)
         width_gamma: Gamma correction for width scale (default: 1.0 = linear)
+        sparse: If True, use sparse + numba algorithm (10-100x faster, requires numba)
 
     Returns:
         Line layer raster: line pixels have metric_data values, others are 0
@@ -467,7 +468,7 @@ def create_line_layer(
         # Expand the mask with smooth tapering and value propagation
         # The new algorithm returns both expanded mask and propagated values
         line_mask, expanded_values = expand_lines_variable_width(
-            line_mask, metric_data, max_width, width_gamma=width_gamma
+            line_mask, metric_data, max_width, width_gamma=width_gamma, sparse=sparse
         )
 
         # Use expanded values (already have metric values propagated)
