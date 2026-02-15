@@ -1,5 +1,115 @@
 ## Current Status
 
+### 2026-02-14 21:45 - Improved Logging Throughout Demo Script 📝✅
+
+**Problem:** User reported "not seeing much in the way of logging right after precip upscale"
+
+**Root Cause:** Sparse logging during long-running operations
+- Flow accumulation call (line 599-625) had no completion logging
+- Precipitation upscaling happens inside flow_accumulation (user can't see progress)
+- Data alignment had minimal logging
+- Diagnostic plots had no completion messages
+- Stream layer creation had no start message
+
+**Solution:** Add informative logging at key stages
+
+**Changes to [examples/san_diego_flow_demo.py](examples/san_diego_flow_demo.py):**
+
+**After flow_accumulation completes (line 628):**
+```python
+print("\n✓ Flow accumulation complete!")
+# Log resolution info
+# Log key outputs: conditioned DEM, flow direction, drainage area, upstream rainfall
+# Log precipitation info if available
+```
+
+**During data alignment (line 730):**
+```python
+print("  Aligning data layers to flow resolution...")
+terrain_align.apply_transforms()
+print(f"  ✓ All data layers aligned to {flow_dem.shape[0]}×{flow_dem.shape[1]} grid")
+```
+
+**After flow diagnostics (line 767):**
+```python
+print("  ✓ Flow diagnostic plots complete (01-11)")
+```
+
+**After stream overlay diagnostics (line 889):**
+```python
+print("  ✓ Stream overlay diagnostic plots complete (12-16)")
+```
+
+**Before stream layer creation (line 1050):**
+```python
+if args.variable_width:
+    algo_mode = "SPARSE (numba)" if args.sparse else "FAST (distance transform)"
+    print(f"  Creating variable-width stream layer using {algo_mode}...")
+else:
+    print(f"  Creating uniform-width stream layer...")
+```
+
+**Impact:** User now sees clear progress indicators:
+- ✓ Flow accumulation complete! [with detailed output summary]
+- ✓ All data layers aligned to NxM grid
+- ✓ Flow diagnostic plots complete (01-11)
+- ✓ Stream overlay diagnostic plots complete (12-16)
+- Creating variable-width stream layer using SPARSE (numba)...
+
+---
+
+### 2026-02-14 21:30 - Exposed Sparse Algorithm + Split Diagnostic Plots 🔌📊✅
+
+**Problem 1:** Sparse algorithm implemented but not accessible from san_diego_flow_demo.py
+
+**Root Cause:** `create_line_layer()` didn't expose `sparse` parameter
+- Sparse algorithm existed in `expand_lines_variable_width(sparse=True)`
+- But demo used `create_line_layer()` which didn't pass it through
+- Result: Always used `fast=True` (distance transform), never the ultra-fast sparse method
+
+**Solution:** Add sparse parameter to public API
+
+**Problem 2:** Diagnostic plots in single 2×3 grid hard to view individually
+
+**Solution:** Split into 6 separate plot files with numbered prefixes
+
+**Changes:**
+1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+   - Added `sparse=False` parameter to `create_line_layer()` signature
+   - Added documentation for sparse parameter
+   - Pass `sparse` through to `expand_lines_variable_width()`
+
+2. [examples/san_diego_flow_demo.py](examples/san_diego_flow_demo.py):
+   - Added `--sparse` command-line argument
+   - Pass `args.sparse` to `create_line_layer()`
+   - Split diagnostic plots into 6 separate files:
+     - `diagnostic_01_base_layer.png`
+     - `diagnostic_02_stream_layer.png`
+     - `diagnostic_03_stream_mask.png`
+     - `diagnostic_04_water_mask.png`
+     - `diagnostic_05_final_colors.png`
+     - `diagnostic_06_overlay_masks.png`
+
+**Usage:**
+```bash
+# Use sparse algorithm (requires numba)
+python examples/san_diego_flow_demo.py --variable-width --sparse --diagnostics --stream-overlay
+
+# Without sparse (uses fast distance-transform by default)
+python examples/san_diego_flow_demo.py --variable-width --diagnostics --stream-overlay
+```
+
+**Next Step:** User needs to:
+1. Install numba: `uv pip install numba`
+2. Test performance: Run demo with `--sparse` flag
+3. Run benchmark: `uv run python test_expansion_performance.py`
+
+**Expected Performance:** 5-20x speedup over fast algorithm, 50-300x over slow
+
+---
+
+## Current Status
+
 ### 2026-02-14 21:00 - Fixed Gaussian Filter Memory Thrashing 🐛→✅
 
 **Problem:** User's San Diego demo hanging for MINUTES during stream layer creation
