@@ -76,6 +76,10 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     if line_values.size == 0 or line_values.max() == line_values.min():
         return line_mask, metric_data.copy()
 
+    # Smooth metric values along stream network to prevent color patches
+    # This ensures adjacent stream pixels have similar values for consistent coloring
+    smoothed_metric = gaussian_filter(metric_data, sigma=2.0)
+
     val_min, val_max = line_values.min(), line_values.max()
 
     # Compute per-pixel target width
@@ -134,8 +138,9 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     expanded_mask = distances <= nearest_width
 
     # Propagate metric values from nearest line pixel
+    # Use smoothed metric for consistent colors, avoiding patches
     expanded_values = np.zeros_like(metric_data, dtype=np.float32)
-    expanded_values[expanded_mask] = metric_data[nearest_y[expanded_mask], nearest_x[expanded_mask]]
+    expanded_values[expanded_mask] = smoothed_metric[nearest_y[expanded_mask], nearest_x[expanded_mask]]
 
     if pixels_in_millions > 5:
         print(f"  Total expansion time: {time.time() - t_start:.1f}s")
@@ -195,6 +200,9 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
         # No variation in values - can't expand with variable width
         return line_mask, metric_data.copy()
 
+    # Smooth metric values along stream network to prevent color patches
+    smoothed_metric = gaussian_filter(metric_data, sigma=2.0)
+
     val_min, val_max = line_values.min(), line_values.max()
 
     # Compute per-pixel target width based on metric value
@@ -241,8 +249,9 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
             )
 
     # Create expanded line by applying variable dilation based on smoothed width
+    # Use smoothed metric for consistent colors, avoiding patches
     expanded_values = np.zeros_like(metric_data, dtype=np.float32)
-    expanded_values[line_mask] = metric_data[line_mask]
+    expanded_values[line_mask] = smoothed_metric[line_mask]
 
     # Process by radius (from largest to smallest so big rivers dominate)
     for radius in range(max_width, min_width - 1, -1):
@@ -252,7 +261,7 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
         if np.any(radius_mask):
             # Create a temporary grid with just these pixels' values
             radius_values = np.zeros_like(metric_data, dtype=np.float32)
-            radius_values[radius_mask] = metric_data[radius_mask]
+            radius_values[radius_mask] = smoothed_metric[radius_mask]
 
             # Expand using circular footprint (not square!)
             # Create circular structuring element (disk) for natural expansion
