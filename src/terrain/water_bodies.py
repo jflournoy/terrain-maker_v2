@@ -278,6 +278,62 @@ def create_lake_flow_routing(
     return flow_dir
 
 
+def _trace_flows_to_lake(
+    flow_dir: np.ndarray,
+    lake_mask: np.ndarray,
+    start_r: int,
+    start_c: int,
+    lake_id: int,
+    max_steps: int = 100,
+) -> bool:
+    """Trace flow path from a cell and check if it re-enters the given lake.
+
+    Parameters
+    ----------
+    flow_dir : np.ndarray
+        D8 flow direction grid
+    lake_mask : np.ndarray
+        Labeled lake mask
+    start_r, start_c : int
+        Starting cell (should be outside the lake)
+    lake_id : int
+        Lake ID to check for re-entry
+    max_steps : int
+        Maximum steps to trace before giving up
+
+    Returns
+    -------
+    bool
+        True if the flow path re-enters the lake (would create a cycle)
+    """
+    from src.terrain.flow_accumulation import D8_OFFSETS
+
+    rows, cols = flow_dir.shape
+    r, c = start_r, start_c
+
+    for _ in range(max_steps):
+        d = flow_dir[r, c]
+        if d == 0:
+            return False  # Reached terminal — no cycle
+        if d not in D8_OFFSETS:
+            return False  # Invalid direction — no cycle
+
+        dr, dc = D8_OFFSETS[d]
+        r, c = r + dr, c + dc
+
+        if not (0 <= r < rows and 0 <= c < cols):
+            return False  # Left the grid — no cycle
+
+        # Check if we re-entered the lake
+        if lake_id > 0 and lake_mask[r, c] == lake_id:
+            return True
+        # For boolean masks, any lake cell counts
+        if lake_id == 0 and lake_mask[r, c] > 0:
+            return True
+
+    return False  # Didn't re-enter within max_steps
+
+
 def compute_outlet_downstream_directions(
     flow_dir: np.ndarray,
     lake_mask: np.ndarray,
@@ -289,8 +345,9 @@ def compute_outlet_downstream_directions(
     Compute flow direction FROM lake outlets TO downstream terrain.
 
     For through-draining lakes, the outlet gets a flow direction pointing
-    to the lowest adjacent non-lake cell. This turns lakes into links
-    in river chains rather than terminal sinks.
+    to the lowest adjacent non-lake cell whose flow path does NOT
+    re-enter the lake (which would create a cycle). This turns lakes
+    into links in river chains rather than terminal sinks.
 
     Endorheic outlets (inside basins) remain terminal (flow_dir=0).
 
@@ -328,10 +385,15 @@ def compute_outlet_downstream_directions(
         if basin_mask[r, c]:
             continue
 
-        # Find lowest adjacent non-lake cell
-        best_dir = 0
-        min_elev = dem[r, c]
+        # Skip outlets that already have a flow direction (e.g., basin
+        # outlets that kept their terrain flow, or outlets already
+        # connected by a previous routing step)
+        if flow_dir[r, c] != 0:
+            continue
+
+        # Collect candidate neighbors: lower, non-lake, sorted by elevation
         this_lake_id = lake_mask[r, c]
+        candidates = []
 
         for (dr, dc), direction_code in D8_DIRECTIONS.items():
             nr, nc = r + dr, c + dc
@@ -344,10 +406,21 @@ def compute_outlet_downstream_directions(
             if lake_mask[nr, nc] == this_lake_id and this_lake_id > 0:
                 continue
 
-            # Track lowest elevation neighbor outside this lake
-            if dem[nr, nc] < min_elev:
-                min_elev = dem[nr, nc]
+            # Only consider cells lower than the outlet
+            if dem[nr, nc] < dem[r, c]:
+                candidates.append((dem[nr, nc], direction_code, nr, nc))
+
+        # Sort by elevation (lowest first) — prefer steepest descent
+        candidates.sort(key=lambda x: x[0])
+
+        # Pick the lowest candidate whose flow path doesn't re-enter the lake
+        best_dir = 0
+        for _elev, direction_code, nr, nc in candidates:
+            if not _trace_flows_to_lake(
+                flow_dir, lake_mask, nr, nc, this_lake_id
+            ):
                 best_dir = direction_code
+                break
 
         result[r, c] = best_dir
 

@@ -547,6 +547,235 @@ class TestOutletDownstreamDirections:
         # Result should be a different array
         assert result is not flow_dir, "Should return a new array"
 
+    def test_outlet_avoids_cycle_back_into_lake(self):
+        """Outlet must not point to a neighbor whose flow path re-enters the lake.
+
+        A lake in a depression has surrounding terrain flowing INTO it.
+        If the outlet points to one of those cells, a cycle forms:
+        outlet → neighbor → ... → lake interior → outlet.
+
+        The function must detect this and skip such neighbors.
+        """
+        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from src.terrain.flow_accumulation import (
+            compute_flow_direction,
+            compute_drainage_area,
+            D8_DIRECTIONS,
+        )
+        from src.terrain.water_bodies import create_lake_flow_routing
+
+        # Terrain slopes left→right overall, with a lake in the middle.
+        # The key: the lowest non-lake neighbor of the outlet flows BACK
+        # into the lake, while a slightly higher neighbor flows downstream.
+        dem = np.zeros((15, 15))
+        for c in range(15):
+            dem[:, c] = 100.0 - c * 5.0  # Slopes left(high) to right(low)
+
+        # Lake in center
+        lake_mask = np.zeros((15, 15), dtype=np.uint8)
+        lake_mask[5:10, 5:10] = 1
+        dem[lake_mask > 0] = 50.0  # Flat lake
+
+        # Outlet at right edge of lake (row 7, col 9)
+        outlet_mask = np.zeros((15, 15), dtype=bool)
+        outlet_mask[7, 9] = True
+
+        # Create the trap: cell (8, 10) is just below the outlet and is the
+        # lowest non-lake neighbor. BUT make its terrain slope back toward
+        # the lake — so its flow direction points into the lake.
+        dem[8, 10] = 48.0   # Lower than lake (50), attracting the outlet
+        dem[8, 9] = 50.0    # Lake cell (part of lake)
+        dem[7, 10] = 45.0   # This one flows away (downstream)
+        dem[6, 10] = 55.0   # Higher, flows toward lake
+
+        # Make cells at col 10 above/below the escape route flow into lake
+        dem[9, 10] = 49.0   # Flows toward lake (row 9, col 9 is lake)
+        dem[10, 10] = 48.5  # Also flows toward lake
+
+        basin_mask = np.zeros((15, 15), dtype=bool)
+
+        # Compute terrain flow
+        flow_dir = compute_flow_direction(dem)
+
+        # Verify the trap: cell (8, 10) should flow into the lake
+        # (toward (8, 9) which is a lake cell, or (9, 9) lake cell)
+        trap_dir = flow_dir[8, 10]
+        if trap_dir != 0 and trap_dir in self.D8_OFFSETS:
+            dr, dc = self.D8_OFFSETS[trap_dir]
+            trap_target = (8 + dr, 10 + dc)
+            # The trap cell flows toward the lake area
+            flows_to_lake = lake_mask[trap_target[0], trap_target[1]] > 0
+            # If it doesn't flow to lake, adjust DEM to force it
+            if not flows_to_lake:
+                # Make sure (8,10) flows into lake by adjusting terrain
+                dem[8, 10] = 49.5
+                dem[9, 10] = 49.0
+                flow_dir = compute_flow_direction(dem)
+
+        # Apply lake routing (BFS toward outlet)
+        lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
+        flow_dir[lake_mask > 0] = lake_flow[lake_mask > 0]
+
+        # Apply outlet downstream routing
+        result = compute_outlet_downstream_directions(
+            flow_dir, lake_mask, outlet_mask, dem, basin_mask=basin_mask
+        )
+
+        # The result MUST NOT create cycles — verify with compute_drainage_area
+        # which raises RuntimeError if cycles exist
+        drainage = compute_drainage_area(result)
+
+        # If outlet is connected, verify the downstream cell doesn't
+        # flow back into the lake
+        outlet_dir = result[7, 9]
+        if outlet_dir != 0:
+            D8_OFFSETS_local = {v: k for k, v in D8_DIRECTIONS.items()}
+            dr, dc = D8_OFFSETS_local[outlet_dir]
+            nr, nc = 7 + dr, 9 + dc
+            assert lake_mask[nr, nc] == 0, (
+                f"Outlet downstream cell ({nr},{nc}) must not be in the lake"
+            )
+
+    def test_no_cycles_with_surrounded_lake(self):
+        """Lake fully surrounded by inward-flowing terrain must not create cycles.
+
+        When ALL neighbors of the outlet flow back into the lake,
+        the outlet should stay terminal rather than create a cycle.
+        """
+        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from src.terrain.flow_accumulation import (
+            compute_flow_direction,
+            compute_drainage_area,
+        )
+        from src.terrain.water_bodies import create_lake_flow_routing
+
+        # Pure bowl: all terrain slopes toward center
+        dem = np.zeros((15, 15))
+        for r in range(15):
+            for c in range(15):
+                dem[r, c] = ((r - 7) ** 2 + (c - 7) ** 2) * 2.0
+
+        # Lake at bottom of bowl
+        lake_mask = np.zeros((15, 15), dtype=np.uint8)
+        lake_mask[5:10, 5:10] = 1
+        dem[lake_mask > 0] = 0.0
+
+        outlet_mask = np.zeros((15, 15), dtype=bool)
+        outlet_mask[9, 7] = True
+
+        basin_mask = np.zeros((15, 15), dtype=bool)
+
+        flow_dir = compute_flow_direction(dem)
+        lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
+        flow_dir[lake_mask > 0] = lake_flow[lake_mask > 0]
+
+        result = compute_outlet_downstream_directions(
+            flow_dir, lake_mask, outlet_mask, dem, basin_mask=basin_mask
+        )
+
+        # Must not create cycles
+        drainage = compute_drainage_area(result)
+
+    def test_rejects_neighbor_that_flows_back_into_lake(self):
+        """Outlet must skip a lower neighbor if its flow path re-enters the lake.
+
+        This reproduces the real-world cycle bug: conditioned DEM has a
+        neighbor lower than the lake surface, but that neighbor's flow
+        direction points back into the lake.
+
+        Setup (manually constructed flow directions):
+        - 10x10 grid, lake at (3:6, 3:6), outlet at (5,4)
+        - Cell (6,4) is lower than lake → attractive downstream candidate
+        - But flow_dir[6,4] = 4 (North) → points to (5,4) = the outlet!
+        - This would create: outlet→(6,4)→outlet = 2-step cycle
+        - Cell (6,5) is also lower, and flows away → safe candidate
+        """
+        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from src.terrain.flow_accumulation import compute_drainage_area
+
+        # Build flow_dir manually so we control exactly where cells flow
+        flow_dir = np.zeros((10, 10), dtype=np.uint8)
+
+        # Lake interior: all cells route toward outlet at (5,4) via BFS
+        # (simplified - just make them all point south toward outlet)
+        flow_dir[3, 3:6] = 64   # South
+        flow_dir[4, 3:6] = 64   # South
+        flow_dir[5, 3] = 1      # East → toward outlet
+        flow_dir[5, 5] = 16     # West → toward outlet
+        flow_dir[5, 4] = 0      # Outlet = terminal
+
+        # Terrain around lake:
+        # Cell (6,4) flows NORTH → back into lake outlet!
+        flow_dir[6, 4] = 4      # North → (5,4) = outlet! CYCLE TRAP
+
+        # Cell (6,5) flows SOUTH → away from lake (safe)
+        flow_dir[6, 5] = 64     # South
+        flow_dir[7, 5] = 64     # South → flows away
+        flow_dir[8, 5] = 64     # South → flows away
+        flow_dir[9, 5] = 0      # Terminal (edge)
+
+        # Cell (6,3) flows NORTH → back into lake
+        flow_dir[6, 3] = 4      # North → (5,3) = lake cell
+
+        # Other terrain cells flow south (away)
+        flow_dir[6, 6] = 64     # South
+        flow_dir[7, 4] = 64     # South
+        flow_dir[7, 6] = 64     # South
+
+        # DEM: lake at 50, trap cell (6,4) at 48, safe cell (6,5) at 49
+        dem = np.ones((10, 10)) * 100.0
+        dem[3:6, 3:6] = 50.0  # Lake
+        dem[6, 4] = 48.0      # Lower than lake — attractive but dangerous
+        dem[6, 3] = 49.0      # Also lower
+        dem[6, 5] = 49.0      # Also lower, and flows away (safe)
+
+        lake_mask = np.zeros((10, 10), dtype=np.uint8)
+        lake_mask[3:6, 3:6] = 1
+
+        outlet_mask = np.zeros((10, 10), dtype=bool)
+        outlet_mask[5, 4] = True
+
+        basin_mask = np.zeros((10, 10), dtype=bool)
+
+        result = compute_outlet_downstream_directions(
+            flow_dir, lake_mask, outlet_mask, dem, basin_mask=basin_mask
+        )
+
+        # MUST NOT create cycles — compute_drainage_area will raise on cycles
+        drainage = compute_drainage_area(result)
+
+        # The outlet should either:
+        # a) Point to (6,5) which flows away safely, OR
+        # b) Stay terminal if no safe neighbor exists
+        outlet_dir = result[5, 4]
+        if outlet_dir != 0:
+            # Trace flow from the downstream cell — should NOT re-enter lake
+            D8_OFFSETS_local = {
+                1: (0, 1), 2: (-1, 1), 4: (-1, 0), 8: (-1, -1),
+                16: (0, -1), 32: (1, -1), 64: (1, 0), 128: (1, 1),
+            }
+            curr_r, curr_c = 5, 4
+            dr, dc = D8_OFFSETS_local[outlet_dir]
+            curr_r, curr_c = curr_r + dr, curr_c + dc
+            # First downstream cell must not be in lake
+            assert lake_mask[curr_r, curr_c] == 0
+
+            # Trace further — should never re-enter lake
+            for _ in range(20):
+                d = result[curr_r, curr_c]
+                if d == 0:
+                    break
+                if d not in D8_OFFSETS_local:
+                    break
+                dr, dc = D8_OFFSETS_local[d]
+                curr_r += dr
+                curr_c += dc
+                if not (0 <= curr_r < 10 and 0 <= curr_c < 10):
+                    break
+                assert lake_mask[curr_r, curr_c] == 0, (
+                    f"Flow path from outlet re-entered lake at ({curr_r},{curr_c})"
+                )
+
 
 class TestDrainageContinuityThroughLakes:
     """Integration tests: drainage area should propagate through lakes.
