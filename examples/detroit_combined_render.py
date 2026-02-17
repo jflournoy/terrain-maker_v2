@@ -147,6 +147,7 @@ from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files, lo
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
 from src.terrain.water import identify_water_by_slope
+from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
 from src.terrain.cache import PipelineCache
 from src.terrain.diagnostics import (
     generate_full_wavelet_diagnostics,
@@ -155,6 +156,7 @@ from src.terrain.diagnostics import (
     generate_upscale_diagnostics,
     generate_rgb_histogram,
     generate_luminance_histogram,
+    generate_score_histogram,
     generate_road_elevation_diagnostics,
     plot_road_vertex_z_diagnostics,
 )
@@ -618,6 +620,16 @@ Examples:
     )
 
     parser.add_argument(
+        "--base-scores",
+        type=str,
+        choices=["sledding", "skiing"],
+        default="sledding",
+        help="Which score type to use as the base colormap layer. "
+             "'sledding' (default) uses sledding suitability scores. "
+             "'skiing' uses XC skiing scores as the base instead.",
+    )
+
+    parser.add_argument(
         "--mock-data",
         action="store_true",
         help="Use mock data for all inputs (skips loading real DEM)",
@@ -1029,6 +1041,13 @@ Examples:
              "The purple band marks a score threshold (e.g., 0.5 for mid-range, 0.7 for high scores). "
              "Use with --colormap-viz-only to preview different positions.",
     )
+    parser.add_argument(
+        "--no-purple",
+        action="store_true",
+        default=False,
+        help="Remove the purple ribbon from the boreal_mako colormap entirely. "
+             "Produces a smooth green → blue → cyan → white gradient.",
+    )
 
     parser.add_argument(
         "--gamma",
@@ -1040,6 +1059,16 @@ Examples:
              "Affects where scores map to the colormap gradient.",
     )
 
+    parser.add_argument(
+        "--normalize-scores",
+        action="store_true",
+        default=False,
+        help="Normalize scores to use the full 0-1 colormap range based on the actual "
+             "min/max values present in the data. Without this, scores map directly to the "
+             "colormap (e.g., if max score is 0.4, only the bottom 40%% of the gradient is used). "
+             "With this flag, the lowest score maps to 0 and the highest to 1, using the full "
+             "color gradient.",
+    )
     parser.add_argument(
         "--colormap-viz-only",
         action="store_true",
@@ -1424,6 +1453,13 @@ Examples:
              "Higher elevations appear darker, lower elevations stay bright.",
     )
 
+    parser.add_argument(
+        "--no-parks",
+        action="store_true",
+        default=False,
+        help="Disable park proximity overlay zones (use base colormap everywhere).",
+    )
+
     # Park ring outline arguments
     parser.add_argument(
         "--park-rings",
@@ -1508,22 +1544,27 @@ Examples:
     if args.vertex_multiplier is None:
         args.vertex_multiplier = default_vertex_mult
 
-    # Rebuild boreal_mako colormap with specified purple position
+    # Rebuild boreal_mako colormap with specified purple position (or without purple)
     # Always rebuild to ensure consistency between visualization and rendering
     from src.terrain.color_mapping import _build_boreal_mako_cmap
     import matplotlib
-    custom_boreal_mako = _build_boreal_mako_cmap(purple_position=args.purple_position)
+    purple_pos = None if args.no_purple else args.purple_position
+    custom_boreal_mako = _build_boreal_mako_cmap(purple_position=purple_pos)
     matplotlib.colormaps.register(custom_boreal_mako, force=True)
-    if args.purple_position != 0.6:
+    if args.no_purple:
+        logger.info("Using boreal_mako colormap without purple ribbon (--no-purple)")
+    elif args.purple_position != 0.6:
         logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}")
     else:
         logger.info(f"Using boreal_mako colormap with default purple position (0.6)")
 
     logger.info("\n" + "=" * 70)
-    logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")
+    base_label_startup = "XC Skiing" if args.base_scores == "skiing" else "Sledding"
+    logger.info(f"Detroit Combined Terrain Rendering ({base_label_startup} + XC Parks)")
     logger.info("=" * 70)
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Scores directory: {args.scores_dir}")
+    logger.info(f"Base scores: {args.base_scores}")
     logger.info(f"Quality mode: {quality_mode}")
     if args.print_quality:
         logger.info(f"  Resolution: {render_width}×{render_height} ({args.print_width}×{args.print_height} inches @ {args.print_dpi} DPI)")
@@ -1581,7 +1622,9 @@ Examples:
 
     color_params = {
         "colormap": "boreal_mako",
-        "purple_position": args.purple_position,
+        "purple_position": None if args.no_purple else args.purple_position,
+        "no_purple": args.no_purple,
+        "normalize_scores": args.normalize_scores,
         "gamma": args.gamma,
         "smooth_scores": args.smooth_scores,
         "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
@@ -1698,6 +1741,12 @@ Examples:
             # Legacy fallback: use sledding transform (assumes same extent)
             xc_transform = score_transform
             logger.info("No transform in XC score file, using sledding transform")
+
+    # Swap base scores if using skiing as base
+    if args.base_scores == "skiing":
+        logger.info("Using XC skiing scores as base layer (swapping with sledding)")
+        sledding_scores, xc_scores = xc_scores, sledding_scores
+        score_transform, xc_transform = xc_transform, score_transform
 
     # Despeckle scores BEFORE upscaling (removes isolated outliers at native resolution)
     if args.despeckle_scores and not args.mock_data:
@@ -1843,10 +1892,54 @@ Examples:
 
     # Load parks for XC skiing markers
     parks = None
-    if not args.mock_data:
+    if args.no_parks:
+        logger.info("Park overlay disabled (--no-parks)")
+    elif not args.mock_data:
         parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
         if parks:
             logger.info(f"Loaded {len(parks)} parks for markers")
+
+    # Compute WGS84 bbox from DEM (used by roads and HydroLAKES)
+    dem_height, dem_width = dem.shape
+    west = transform.c
+    north = transform.f
+    east = west + dem_width * transform.a
+    south = north + dem_height * transform.e
+    if south > north:
+        south, north = north, south
+    if west > east:
+        west, east = east, west
+    dem_bbox = (south, west, north, east)
+    logger.info(f"DEM bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+
+    # Load HydroLAKES water bodies (before terrain creation so mask is ready)
+    lakes_geojson = None
+    lake_mask_raw = None
+    lake_transform = None
+    if not args.mock_data:
+        try:
+            water_bodies_dir = args.output_dir / "water_bodies"
+            water_bodies_dir.mkdir(parents=True, exist_ok=True)
+            geojson_path = download_water_bodies(
+                bbox=dem_bbox,
+                output_dir=str(water_bodies_dir),
+                data_source="hydrolakes",
+                min_area_km2=0.1,
+            )
+            with open(geojson_path) as f:
+                lakes_geojson = json.load(f)
+            n_lakes = len(lakes_geojson.get("features", []))
+            logger.info(f"Loaded {n_lakes} lakes from HydroLAKES")
+
+            resolution = abs(transform.a)  # DEM pixel size in degrees
+            lake_mask_raw, lake_transform = rasterize_lakes_to_mask(
+                lakes_geojson, dem_bbox, resolution
+            )
+            logger.info(f"Rasterized lake mask: shape={lake_mask_raw.shape}, "
+                        f"{np.sum(lake_mask_raw > 0):,} lake pixels")
+        except Exception as e:
+            logger.warning(f"HydroLAKES loading failed: {e}")
+            logger.warning("Will fall back to slope-based water detection")
 
     # Load road data
     road_data = None
@@ -1854,23 +1947,9 @@ Examples:
     if args.roads:
         logger.info("Loading road data from OpenStreetMap...")
         try:
-            # Compute bbox from DEM transform to match actual rendered area
-            dem_height, dem_width = dem.shape
-
-            # Get corners from transform
-            west = transform.c
-            north = transform.f
-            east = west + dem_width * transform.a
-            south = north + dem_height * transform.e
-
-            # Ensure correct ordering
-            if south > north:
-                south, north = north, south
-            if west > east:
-                west, east = east, west
-
-            road_bbox = (south, west, north, east)
-            logger.info(f"  DEM bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+            road_bbox = dem_bbox
+            logger.info(f"  Road bbox: lat [{dem_bbox[0]:.2f}, {dem_bbox[2]:.2f}], "
+                        f"lon [{dem_bbox[1]:.2f}, {dem_bbox[3]:.2f}]")
 
             # Use get_roads_tiled() - handles tiling and retries automatically
             road_data = get_roads_tiled(road_bbox, args.road_types)
@@ -1884,7 +1963,8 @@ Examples:
             logger.warning(f"Failed to load road data: {e}")
             road_data = None
 
-    logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}")
+    base_score_label = "XC skiing" if args.base_scores == "skiing" else "sledding"
+    logger.info(f"Loaded: DEM {dem.shape}, base ({base_score_label}) scores {sledding_scores.shape}, overlay scores {xc_scores.shape}")
 
     # Create Blender scene
     logger.info("\n" + "=" * 70)
@@ -1909,14 +1989,16 @@ Examples:
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution, {args.vertex_multiplier}x multiplier)")
 
     # Create single terrain mesh with dual colormaps
-    # Base: Boreal-Mako colormap for sledding suitability scores (with gamma=0.5)
+    # Base: Boreal-Mako colormap for base scores (with gamma)
     # Overlay: Rocket colormap for XC skiing scores near parks
     logger.info("\n[2/4] Creating Combined Terrain Mesh (Dual Colormap)...")
-    logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap - forest green → blue → mint)")
-    logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+    norm_label = ", normalized to 0-1" if args.normalize_scores else ""
+    purple_label = ", no purple band" if args.no_purple else ""
+    logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap - forest green → blue → mint{purple_label}{norm_label})")
+    logger.info("  Overlay: scores near parks (rocket colormap)")
 
     # For combined rendering, we need a custom terrain creation process
-    # to add both sledding and XC skiing scores as separate layers
+    # to add both score types as separate layers
     logger.debug("Creating terrain with DEM...")
     terrain_combined = Terrain(dem, transform, dem_crs=dem_crs)
 
@@ -1989,18 +2071,31 @@ Examples:
                 f"std={np.nanstd(dem_after_geom):.4f}")
 
     # =========================================================================
-    # WATER DETECTION: Detect water on pre-smoothed DEM (before any smoothing)
-    # This ensures accurate slope-based detection without smoothing artifacts
+    # WATER DETECTION: Use HydroLAKES if available, otherwise slope-based fallback
     # =========================================================================
-    logger.debug("Detecting water bodies on pre-smoothed DEM...")
-    dem_for_water = terrain_combined.data_layers["dem"]["transformed_data"]
-    water_mask = identify_water_by_slope(
-        dem_for_water,
-        slope_threshold=0.01,  # Very flat areas only (water is slope ≈ 0)
-        fill_holes=True,
-    )
-    water_pixel_count = np.sum(water_mask) if water_mask is not None else 0
-    logger.info(f"Water detection: {water_pixel_count:,} pixels detected as water")
+    if lake_mask_raw is not None and lake_transform is not None:
+        logger.info("Creating water mask from HydroLAKES data...")
+        terrain_combined.add_data_layer(
+            "lake_mask",
+            (lake_mask_raw > 0).astype(np.float32),
+            lake_transform,
+            "EPSG:4326",
+            target_layer="dem",
+        )
+        water_mask = terrain_combined.data_layers["lake_mask"]["data"] > 0.5
+        water_pixel_count = int(np.sum(water_mask))
+        logger.info(f"Water mask (HydroLAKES): {water_pixel_count:,} pixels")
+    else:
+        # Fallback: slope-based detection on pre-smoothed DEM
+        logger.info("Using slope-based water detection (HydroLAKES not available)...")
+        dem_for_water = terrain_combined.data_layers["dem"]["transformed_data"]
+        water_mask = identify_water_by_slope(
+            dem_for_water,
+            slope_threshold=0.01,
+            fill_holes=True,
+        )
+        water_pixel_count = int(np.sum(water_mask)) if water_mask is not None else 0
+        logger.info(f"Water mask (slope-based): {water_pixel_count:,} pixels")
 
     # =========================================================================
     # PHASE 2: Apply smoothing transforms (after water detection)
@@ -2274,6 +2369,43 @@ Examples:
 
     # Note: despeckle_scores is now applied earlier (before upscaling) for better results
 
+    # Mask scores in lake areas — these pixels get colored blue, not by score colormap.
+    # Setting to NaN ensures they don't affect normalization, gamma, or colormap at all.
+    if water_mask is not None and np.any(water_mask):
+        for layer_name in ("sledding", "xc_skiing"):
+            if layer_name in terrain_combined.data_layers:
+                layer_data = terrain_combined.data_layers[layer_name]["data"]
+                if layer_data.shape == water_mask.shape:
+                    n_masked = int(np.sum(water_mask & ~np.isnan(layer_data) & (layer_data != 0)))
+                    layer_data[water_mask] = np.nan
+                    if n_masked > 0:
+                        logger.info(f"Masked {n_masked:,} lake pixels in '{layer_name}' scores")
+
+    # Compute normalization stats from the rendered region only.
+    # Scores were computed over the full SNODAS extent, then aligned to the DEM grid
+    # via add_data_layer. We normalize using only pixels where the DEM has valid data
+    # (i.e., the region that will actually appear in the rendered mesh), so that the
+    # colormap range isn't compressed by high/low scores outside the visible area.
+    # Water pixels (lakes) are excluded — they get colored blue, not by the score colormap.
+    _dem_for_norm = terrain_combined.data_layers["dem"]["transformed_data"]
+    _sled_for_norm = terrain_combined.data_layers["sledding"]["data"]
+    _water_mask_for_norm = water_mask if water_mask is not None else np.zeros(_dem_for_norm.shape, dtype=bool)
+    _valid_rendered = ~np.isnan(_dem_for_norm) & ~np.isnan(_sled_for_norm) & ~_water_mask_for_norm
+    _full_max = float(np.nanmax(_sled_for_norm))
+    rendered_score_max = float(np.nanmax(_sled_for_norm[_valid_rendered])) if np.any(_valid_rendered) else _full_max
+    _nonzero_valid = _valid_rendered & (_sled_for_norm > 0)
+    rendered_score_min_nonzero = float(np.nanmin(_sled_for_norm[_nonzero_valid])) if np.any(_nonzero_valid) else 0.0
+    if abs(rendered_score_max - _full_max) > 1e-6:
+        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} "
+                     f"(full grid max={_full_max:.4f}, delta={_full_max - rendered_score_max:.4f})")
+    else:
+        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} (matches full grid)")
+    logger.info(f"  Rendered region nonzero min={rendered_score_min_nonzero:.4f}")
+    _water_excluded = int(np.sum(_water_mask_for_norm & ~np.isnan(_dem_for_norm)))
+    if _water_excluded > 0:
+        logger.info(f"  Excluded {_water_excluded:,} water pixels from normalization")
+    del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
+
     # === Colormap Visualization Mode ===
     # If --colormap-viz-only is set, create matplotlib visualizations and exit
     if args.colormap_viz_only:
@@ -2304,10 +2436,17 @@ Examples:
         fig.suptitle(f'Detroit Sledding Scores with Boreal-Mako Colormap\n(normalized, then gamma={args.gamma})',
                      fontsize=14, fontweight='bold')
 
-        # Normalize scores to 0-1.0 range (max score becomes 1.0)
-        max_score = np.nanmax(sledding_scores)
-        logger.info(f"Max score before normalization: {max_score:.3f}")
-        normalized_scores = sledding_scores / max_score
+        # Normalize scores to 0-1.0 range using rendered-region max
+        logger.info(f"Max score (rendered region): {rendered_score_max:.3f}")
+        normalized_scores = sledding_scores / rendered_score_max
+
+        if args.normalize_scores:
+            # Stretch to full 0-1 range based on rendered-region min/max
+            norm_min = rendered_score_min_nonzero / rendered_score_max
+            if 1.0 > norm_min:
+                normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
+                normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
+            logger.info(f"Scores normalized to full 0-1 range (rendered-region nonzero min={rendered_score_min_nonzero:.3f})")
 
         # Apply gamma correction to normalized scores
         gamma_corrected_scores = np.power(normalized_scores, args.gamma)
@@ -2333,29 +2472,20 @@ Examples:
         logger.info(f"✓ Saved: {output_path}")
         plt.close()
 
-        # Create histogram plot
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        fig.suptitle(f'Detroit Score Distribution (normalized, then gamma={args.gamma})',
-                     fontsize=14, fontweight='bold')
-
-        valid_gamma = gamma_corrected_scores[~np.isnan(gamma_corrected_scores)]
-
-        # Histogram (showing gamma-corrected values)
-        counts, bins, patches = ax.hist(valid_gamma.flatten(), bins=100,
-                                       color='steelblue', alpha=0.7,
-                                       edgecolor='black', linewidth=0.3)
-
-        ax.set_xlabel('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11)
-        ax.set_ylabel('Pixel Count', fontsize=11)
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.set_xlim(0, 1.0)
-
-        plt.tight_layout()
-
-        output_path = viz_dir / "scores_histograms.png"
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {output_path}")
-        plt.close()
+        # Create colormap-colored histogram (raw vs transformed)
+        norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
+        generate_score_histogram(
+            raw_scores=sledding_scores,
+            transformed_scores=gamma_corrected_scores,
+            output_path=viz_dir / "scores_histograms.png",
+            cmap_name="boreal_mako",
+            transform_label=norm_label,
+            rendered_max=rendered_score_max,
+            rendered_min_nonzero=rendered_score_min_nonzero,
+            gamma=args.gamma,
+            normalize_scores=args.normalize_scores,
+        )
+        logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
 
         logger.info("")
         logger.info("="*70)
@@ -2473,8 +2603,17 @@ Examples:
 
     # Define base colormap functions (will be wrapped with saturation modulation if enabled)
     def sledding_colormap(score):
+        # Normalize using rendered-region max (pre-computed above) so the colormap
+        # range reflects only the area that will actually be visible in the mesh.
+        normalized = score / rendered_score_max
+        if args.normalize_scores:
+            # Stretch actual score range to full 0-1 colormap range
+            norm_min = rendered_score_min_nonzero / rendered_score_max
+            if 1.0 > norm_min:
+                normalized = (normalized - norm_min) / (1.0 - norm_min)
+                normalized = np.clip(normalized, 0.0, 1.0)
         return elevation_colormap(
-            np.power(score / np.nanmax(score), args.gamma),
+            np.power(normalized, args.gamma),
             cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
         )
 
@@ -2485,10 +2624,10 @@ Examples:
     base_colormap = make_sat_colormap(sledding_colormap)
 
     if args.roads and road_data and road_bbox and parks:
-        # With parks: base sledding + XC skiing overlay (no road color overlay)
+        # With parks: base scores + overlay (no road color overlay)
         logger.info("Setting multi-overlay color mapping:")
-        logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
-        logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
+        logger.info("  Overlay: scores near parks (rocket colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
 
         overlays = [
@@ -2506,9 +2645,9 @@ Examples:
             overlays=overlays,
         )
     elif args.roads and road_data and road_bbox:
-        # Roads but no parks: just base sledding (no overlays, roads get glassy material)
+        # Roads but no parks: just base scores (no overlays, roads get glassy material)
         logger.info("Setting color mapping:")
-        logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
             base_colormap,
@@ -2518,8 +2657,8 @@ Examples:
         # No roads - use original blended or standard color mapping
         if parks:
             logger.info("Setting blended color mapping:")
-            logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
-            logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+            logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
+            logger.info("  Overlay: scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
                 base_colormap=base_colormap,
                 base_source_layers=["sledding"],
@@ -2528,7 +2667,7 @@ Examples:
                 overlay_mask=park_mask_grid,  # Grid-space mask (converted to vertex-space internally)
             )
         else:
-            logger.info(f"No parks available - using sledding scores with gamma={args.gamma} (boreal_mako colormap)")
+            logger.info(f"No parks available - using {base_score_label} scores with gamma={args.gamma} (boreal_mako colormap)")
             terrain_combined.set_color_mapping(
                 base_colormap,
                 source_layers=["sledding"],
@@ -2604,7 +2743,10 @@ Examples:
             purple_avg = colors_rgb[is_purple].mean(axis=0)
             logger.info(f"    Average purple color: R={purple_avg[0]:.3f} G={purple_avg[1]:.3f} B={purple_avg[2]:.3f}")
         else:
-            logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
+            if args.no_purple:
+                logger.info("  ✓ No purple vertices (--no-purple enabled)")
+            else:
+                logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
     else:
         logger.debug("Colors already applied to mesh (diagnostic check skipped)")
 
@@ -2920,6 +3062,30 @@ Examples:
             lum_histogram_path = output_path.parent / lum_histogram_filename
             generate_luminance_histogram(output_path, lum_histogram_path)
 
+            # Generate score distribution histogram (raw vs transformed with colormap colors)
+            score_hist_path = output_path.parent / (output_path.stem + "_score_distribution.png")
+            raw_scores_for_hist = terrain_combined.data_layers["sledding"]["data"]
+            # Compute transformed scores (same pipeline as sledding_colormap)
+            trans_scores_for_hist = raw_scores_for_hist / rendered_score_max
+            if args.normalize_scores:
+                norm_min = rendered_score_min_nonzero / rendered_score_max
+                if 1.0 > norm_min:
+                    trans_scores_for_hist = (trans_scores_for_hist - norm_min) / (1.0 - norm_min)
+                    trans_scores_for_hist = np.clip(trans_scores_for_hist, 0.0, 1.0)
+            trans_scores_for_hist = np.power(trans_scores_for_hist, args.gamma)
+            norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
+            generate_score_histogram(
+                raw_scores=raw_scores_for_hist,
+                transformed_scores=trans_scores_for_hist,
+                output_path=score_hist_path,
+                cmap_name="boreal_mako",
+                transform_label=norm_label,
+                rendered_max=rendered_score_max,
+                rendered_min_nonzero=rendered_score_min_nonzero,
+                gamma=args.gamma,
+                normalize_scores=args.normalize_scores,
+            )
+
         # Print actual Blender settings used for this render
         print_render_settings_report(logger)
 
@@ -2929,8 +3095,10 @@ Examples:
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
     logger.info(f"  ✓ Created combined terrain mesh ({len(mesh_combined.data.vertices)} vertices)")
-    logger.info(f"    - Base colormap: boreal_mako (forest green → blue → mint) for sledding scores (gamma={args.gamma})")
-    logger.info(f"    - Overlay colormap: rocket for XC skiing scores near parks")
+    purple_desc = ", no purple" if args.no_purple else f", purple@{args.purple_position}"
+    norm_desc = ", normalized" if args.normalize_scores else ""
+    logger.info(f"    - Base colormap: boreal_mako (forest green → blue → mint{purple_desc}{norm_desc}) for {base_score_label} scores (gamma={args.gamma})")
+    logger.info(f"    - Overlay colormap: rocket for overlay scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
