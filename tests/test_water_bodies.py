@@ -777,6 +777,70 @@ class TestOutletDownstreamDirections:
                 )
 
 
+    def test_spillway_fallback_connects_when_no_lower_neighbor(self):
+        """When outlet has no strictly lower neighbor, spillway direction
+        should be used as fallback to connect the lake downstream.
+
+        This simulates the real-world scenario: DEM lake surface is at or
+        above the rim elevation (HydroLAKES pour point in depression),
+        but find_lake_spillways() found a valid exit at the lowest rim point.
+        """
+        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from src.terrain.flow_accumulation import compute_drainage_area
+
+        # Build a scenario: lake surface = 50.0, all non-lake neighbors >= 50.0
+        # So the normal lower-neighbor search finds nothing.
+        dem = np.ones((10, 10)) * 80.0
+        dem[3:6, 3:6] = 50.0  # Lake
+
+        # Non-lake neighbors: all at 50.0 or higher (no strictly lower)
+        dem[6, 4] = 50.0   # Equal — not strictly lower
+        dem[6, 5] = 52.0   # Higher
+        dem[2, 4] = 55.0   # Higher
+
+        lake_mask = np.zeros((10, 10), dtype=np.uint8)
+        lake_mask[3:6, 3:6] = 1
+
+        # Outlet at (5, 4) — spillway cell
+        outlet_mask = np.zeros((10, 10), dtype=bool)
+        outlet_mask[5, 4] = True
+
+        # Flow directions: lake interior routes toward outlet
+        flow_dir = np.zeros((10, 10), dtype=np.uint8)
+        flow_dir[3, 3:6] = 64   # South
+        flow_dir[4, 3:6] = 64   # South
+        flow_dir[5, 3] = 1      # East
+        flow_dir[5, 5] = 16     # West
+        flow_dir[5, 4] = 0      # Outlet = terminal
+
+        # Terrain flow: (6,4) flows south, away from lake
+        flow_dir[6, 4] = 64
+        flow_dir[7, 4] = 64
+        flow_dir[8, 4] = 64
+        flow_dir[9, 4] = 0
+
+        basin_mask = np.zeros((10, 10), dtype=bool)
+
+        # Without spillway: outlet stays terminal (no lower neighbor)
+        result_no_spill = compute_outlet_downstream_directions(
+            flow_dir, lake_mask, outlet_mask, dem, basin_mask=basin_mask
+        )
+        assert result_no_spill[5, 4] == 0, "Without spillway, should stay terminal"
+
+        # With spillway: (5, 4) should connect via direction 64 (South → 6,4)
+        spillways = {1: (5, 4, 64)}  # lake_id -> (row, col, direction)
+        result_with_spill = compute_outlet_downstream_directions(
+            flow_dir, lake_mask, outlet_mask, dem,
+            basin_mask=basin_mask, spillways=spillways,
+        )
+        assert result_with_spill[5, 4] == 64, (
+            f"With spillway, outlet should point South (64), got {result_with_spill[5, 4]}"
+        )
+
+        # Must not create cycles
+        compute_drainage_area(result_with_spill)
+
+
 class TestDrainageContinuityThroughLakes:
     """Integration tests: drainage area should propagate through lakes.
 
@@ -908,6 +972,212 @@ class TestDrainageContinuityThroughLakes:
             f"Downstream cell ({downstream_r},{downstream_c}) rainfall "
             f"({downstream_rainfall}) should exceed outlet rainfall "
             f"({outlet_rainfall})"
+        )
+
+
+class TestFindLakeSpillways:
+    """Tests for DEM-based spillway detection.
+
+    🔴 TDD RED: find_lake_spillways() scans all lake boundary cells to find
+    where the lake would naturally overflow based on DEM topology.
+    The spillway is the boundary cell whose adjacent non-lake neighbor
+    has the lowest elevation — this is where water exits the lake.
+    """
+
+    D8_OFFSETS = {
+        1: (0, 1), 2: (-1, 1), 4: (-1, 0), 8: (-1, -1),
+        16: (0, -1), 32: (1, -1), 64: (1, 0), 128: (1, 1),
+    }
+
+    def test_finds_spillway_at_lowest_rim_point(self):
+        """Spillway should be where the rim (non-lake neighbor) is lowest.
+
+        Valley runs N-S through terrain. Lake sits across the valley.
+        The spillway should be at the downstream (south) edge of the lake
+        where the valley exits — that's where the rim is lowest.
+        """
+        from src.terrain.water_bodies import find_lake_spillways
+
+        # Terrain: valley running N-S in the center
+        dem = np.zeros((20, 20))
+        for r in range(20):
+            for c in range(20):
+                # Valley along col 10, slopes down toward south
+                valley_depth = max(0, 5 - abs(c - 10)) * 2.0
+                dem[r, c] = 100.0 - r * 3.0 - valley_depth
+
+        # Lake across the valley (rows 8-11, cols 8-12)
+        lake_mask = np.zeros((20, 20), dtype=np.uint8)
+        lake_mask[8:12, 8:13] = 1
+        dem[lake_mask > 0] = 70.0  # Flat lake surface
+
+        spillways = find_lake_spillways(lake_mask, dem)
+
+        assert 1 in spillways, "Lake 1 should have a spillway"
+        spill_r, spill_c, direction = spillways[1]
+
+        # Spillway should be on the south boundary of the lake (row 11)
+        # because terrain is lowest there
+        assert spill_r == 11, (
+            f"Spillway should be at south boundary (row 11), got row {spill_r}"
+        )
+
+        # Spillway cell should be in the lake
+        assert lake_mask[spill_r, spill_c] > 0, "Spillway must be a lake cell"
+
+        # Direction should point to a non-lake cell
+        dr, dc = self.D8_OFFSETS[direction]
+        nr, nc = spill_r + dr, spill_c + dc
+        assert lake_mask[nr, nc] == 0, "Spillway direction must exit the lake"
+
+    def test_spillway_cell_is_lake_boundary(self):
+        """The spillway cell must be a lake cell adjacent to non-lake terrain."""
+        from src.terrain.water_bodies import find_lake_spillways
+
+        dem = np.zeros((15, 15))
+        for r in range(15):
+            dem[r, :] = 100.0 - r * 5.0
+
+        lake_mask = np.zeros((15, 15), dtype=np.uint8)
+        lake_mask[5:10, 5:10] = 1
+        dem[lake_mask > 0] = 60.0
+
+        spillways = find_lake_spillways(lake_mask, dem)
+        assert 1 in spillways
+
+        spill_r, spill_c, direction = spillways[1]
+
+        # Must be in the lake
+        assert lake_mask[spill_r, spill_c] == 1, "Spillway must be a lake cell"
+
+        # Must have at least one non-lake neighbor (i.e., be a boundary cell)
+        has_non_lake_neighbor = False
+        for dr in [-1, 0, 1]:
+            for dc in [-1, 0, 1]:
+                if dr == 0 and dc == 0:
+                    continue
+                nr, nc = spill_r + dr, spill_c + dc
+                if 0 <= nr < 15 and 0 <= nc < 15:
+                    if lake_mask[nr, nc] == 0:
+                        has_non_lake_neighbor = True
+        assert has_non_lake_neighbor, "Spillway must be on lake boundary"
+
+    def test_spillway_points_to_lowest_non_lake_neighbor(self):
+        """Among multiple exit points, spillway should be at the lowest one."""
+        from src.terrain.water_bodies import find_lake_spillways
+
+        # Flat terrain with one low spot on the east side of the lake
+        dem = np.ones((15, 15)) * 80.0
+
+        lake_mask = np.zeros((15, 15), dtype=np.uint8)
+        lake_mask[5:10, 5:10] = 1
+        dem[lake_mask > 0] = 70.0
+
+        # Create a low spot on the east rim at (7, 10) — this should be
+        # the spillway target (non-lake neighbor with lowest elevation)
+        dem[7, 10] = 65.0  # Lowest non-lake neighbor of any boundary cell
+
+        spillways = find_lake_spillways(lake_mask, dem)
+        assert 1 in spillways
+
+        spill_r, spill_c, direction = spillways[1]
+        dr, dc = self.D8_OFFSETS[direction]
+        nr, nc = spill_r + dr, spill_c + dc
+
+        # The spillway should exit toward (7, 10) — the lowest rim point
+        assert (nr, nc) == (7, 10), (
+            f"Spillway should exit toward lowest rim point (7,10), "
+            f"got ({nr},{nc})"
+        )
+
+    def test_multiple_lakes_each_get_spillway(self):
+        """Each lake in the mask should get its own independent spillway."""
+        from src.terrain.water_bodies import find_lake_spillways
+
+        dem = np.zeros((20, 20))
+        for r in range(20):
+            dem[r, :] = 100.0 - r * 5.0
+
+        # Two lakes
+        lake_mask = np.zeros((20, 20), dtype=np.uint8)
+        lake_mask[3:6, 3:6] = 1   # Lake 1 (upper)
+        lake_mask[12:15, 12:15] = 2  # Lake 2 (lower)
+        dem[lake_mask == 1] = 85.0
+        dem[lake_mask == 2] = 35.0
+
+        spillways = find_lake_spillways(lake_mask, dem)
+
+        assert 1 in spillways, "Lake 1 should have a spillway"
+        assert 2 in spillways, "Lake 2 should have a spillway"
+
+        # Each spillway should be in its own lake
+        r1, c1, _ = spillways[1]
+        r2, c2, _ = spillways[2]
+        assert lake_mask[r1, c1] == 1
+        assert lake_mask[r2, c2] == 2
+
+    def test_single_cell_lake_has_spillway(self):
+        """A single-cell lake should have a spillway to its lowest neighbor."""
+        from src.terrain.water_bodies import find_lake_spillways
+
+        dem = np.ones((10, 10)) * 80.0
+        dem[5, 5] = 70.0   # Lake cell
+        dem[6, 5] = 60.0   # Lowest neighbor (south)
+        dem[4, 5] = 75.0   # Higher neighbor (north)
+
+        lake_mask = np.zeros((10, 10), dtype=np.uint8)
+        lake_mask[5, 5] = 1
+
+        spillways = find_lake_spillways(lake_mask, dem)
+        assert 1 in spillways
+
+        spill_r, spill_c, direction = spillways[1]
+        assert (spill_r, spill_c) == (5, 5), "Single-cell lake IS the spillway"
+
+        # Should point to lowest neighbor (6, 5)
+        dr, dc = self.D8_OFFSETS[direction]
+        nr, nc = spill_r + dr, spill_c + dc
+        assert (nr, nc) == (6, 5), (
+            f"Should point to lowest neighbor (6,5), got ({nr},{nc})"
+        )
+
+    def test_bowl_lake_finds_rim_low_point(self):
+        """Lake in a bowl should find spillway at the lowest rim point.
+
+        This reproduces the real-world scenario: a reservoir in a valley
+        with the dam at the downstream end. The lowest rim point is at
+        the dam location where water would overflow.
+        """
+        from src.terrain.water_bodies import find_lake_spillways
+
+        # Bowl terrain
+        dem = np.zeros((20, 20))
+        for r in range(20):
+            for c in range(20):
+                dem[r, c] = ((r - 10) ** 2 + (c - 10) ** 2) * 1.0
+
+        # Lake at the bottom of the bowl
+        lake_mask = np.zeros((20, 20), dtype=np.uint8)
+        lake_mask[8:13, 8:13] = 1
+        dem[lake_mask > 0] = 5.0  # Flat lake surface
+
+        # Create a notch in the bowl rim — this is where the dam would be,
+        # and where the spillway should be detected
+        # The notch is at (13, 10) — south side
+        dem[13, 10] = 6.0   # Just above lake surface (lowest rim point)
+        dem[14, 10] = 8.0   # Downstream of notch
+
+        spillways = find_lake_spillways(lake_mask, dem)
+        assert 1 in spillways
+
+        spill_r, spill_c, direction = spillways[1]
+        dr, dc = self.D8_OFFSETS[direction]
+        nr, nc = spill_r + dr, spill_c + dc
+
+        # The spillway should exit through the notch at (13, 10)
+        assert (nr, nc) == (13, 10), (
+            f"Spillway should exit through rim notch at (13,10), "
+            f"got ({nr},{nc})"
         )
 
 
