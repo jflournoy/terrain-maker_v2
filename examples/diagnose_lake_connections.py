@@ -523,6 +523,184 @@ def debug_outlet_rejections(data, lake_mask, outlet_mask):
                       f"→ SAFE ✓")
 
 
+def plot_outlet_neighbor_detail(data, lake_mask, outlet_mask, output_path, n_outlets=6):
+    """Tight-zoom plot of each top outlet showing every non-lake neighbor.
+
+    For each of the top-N outlets (by drainage), draws a small grid view
+    with the outlet highlighted and each neighbor color-coded:
+      green  = SAFE (lower, no cycle — this is the chosen downstream)
+      yellow = CYCLE (lower, but flow re-enters the lake)
+      orange = HIGHER (elevation >= outlet)
+      cyan   = IN-LAKE (same lake, skipped)
+    Each neighbor is annotated with elevation difference.
+    """
+    from src.terrain.water_bodies import _trace_flows_to_lake
+
+    flow_dir = data["flow_dir"]
+    dem = data["dem"]
+    drainage = data["drainage"]
+    rows, cols = flow_dir.shape
+
+    outlet_rows, outlet_cols = np.where(outlet_mask)
+    if len(outlet_rows) == 0:
+        print("No outlets to plot.")
+        return
+
+    # Sort outlets by drainage (largest first)
+    outlet_list = [
+        (drainage[r, c], r, c)
+        for r, c in zip(outlet_rows, outlet_cols)
+    ]
+    outlet_list.sort(reverse=True)
+    outlet_list = outlet_list[:n_outlets]
+
+    n = len(outlet_list)
+    ncols_fig = min(n, 3)
+    nrows_fig = (n + ncols_fig - 1) // ncols_fig
+    fig, axes = plt.subplots(
+        nrows_fig, ncols_fig, figsize=(7 * ncols_fig, 7 * nrows_fig),
+        squeeze=False,
+    )
+
+    # Small margin around outlet for the zoom
+    margin = 8
+
+    for idx, (d_val, r, c) in enumerate(outlet_list):
+        ax = axes[idx // ncols_fig][idx % ncols_fig]
+        lake_id = lake_mask[r, c]
+
+        r_min = max(0, r - margin)
+        r_max = min(rows, r + margin + 1)
+        c_min = max(0, c - margin)
+        c_max = min(cols, c + margin + 1)
+
+        # DEM crop as background
+        dem_crop = dem[r_min:r_max, c_min:c_max].copy().astype(float)
+        ax.imshow(
+            dem_crop, cmap="terrain", alpha=0.5,
+            extent=[c_min - 0.5, c_max - 0.5, r_max - 0.5, r_min - 0.5],
+        )
+
+        # Lake overlay
+        lake_crop = lake_mask[r_min:r_max, c_min:c_max]
+        lake_vis = np.ma.masked_where(lake_crop == 0, lake_crop)
+        ax.imshow(
+            lake_vis, cmap="cool", alpha=0.5,
+            extent=[c_min - 0.5, c_max - 0.5, r_max - 0.5, r_min - 0.5],
+        )
+
+        # Grid lines so individual cells are visible
+        for row_i in range(r_min, r_max + 1):
+            ax.axhline(row_i - 0.5, color="gray", lw=0.3, alpha=0.5)
+        for col_i in range(c_min, c_max + 1):
+            ax.axvline(col_i - 0.5, color="gray", lw=0.3, alpha=0.5)
+
+        # Mark outlet prominently
+        ax.plot(c, r, "s", color="white", markersize=16, markeredgecolor="black",
+                markeredgewidth=2, zorder=20)
+        ax.text(c, r, "OUT", fontsize=6, ha="center", va="center",
+                fontweight="bold", color="black", zorder=21)
+
+        # Annotate each of the 8 neighbors
+        status_colors = {
+            "SAFE": "lime",
+            "CYCLE": "gold",
+            "HIGHER": "orangered",
+            "IN-LAKE": "deepskyblue",
+            "EDGE": "gray",
+        }
+
+        chosen_nr, chosen_nc = None, None
+        for (dr, dc), direction_code in D8_DIRECTIONS.items():
+            nr, nc = r + dr, c + dc
+
+            # Bounds check
+            if not (0 <= nr < rows and 0 <= nc < cols):
+                ax.plot(nr, nc, "s", color="gray", markersize=10, alpha=0.3,
+                        markeredgecolor="black", markeredgewidth=0.5, zorder=10)
+                continue
+
+            in_lake = (lake_mask[nr, nc] == lake_id and lake_id > 0)
+
+            if in_lake:
+                status = "IN-LAKE"
+                label = "lake"
+            elif dem[nr, nc] >= dem[r, c]:
+                status = "HIGHER"
+                elev_diff = dem[nr, nc] - dem[r, c]
+                label = f"+{elev_diff:.1f}m"
+            else:
+                # Lower non-lake neighbor — check for cycle
+                elev_diff = dem[nr, nc] - dem[r, c]
+                cycle = _trace_flows_to_lake(
+                    flow_dir, lake_mask, nr, nc, lake_id, max_steps=100
+                )
+                if cycle:
+                    steps = _count_steps_to_lake(flow_dir, lake_mask, nr, nc, lake_id)
+                    status = "CYCLE"
+                    label = f"{elev_diff:+.1f}m\ncycle@{steps}"
+                else:
+                    status = "SAFE"
+                    label = f"{elev_diff:+.1f}m\nOK"
+                    if chosen_nr is None:
+                        chosen_nr, chosen_nc = nr, nc
+
+            color = status_colors[status]
+            ax.plot(nr, nc, "s", color=color, markersize=14, alpha=0.8,
+                    markeredgecolor="black", markeredgewidth=1, zorder=10)
+            ax.text(nr + 0.0, nc + 0.0, "", fontsize=1, zorder=11)  # placeholder
+            # Put label below the marker
+            ax.text(nc, nr + 0.45, label, fontsize=5.5, ha="center", va="top",
+                    color="black", fontweight="bold", zorder=12,
+                    bbox=dict(boxstyle="round,pad=0.15", fc=color, alpha=0.7,
+                              edgecolor="none"))
+
+        # Draw arrow from outlet to chosen neighbor
+        if chosen_nr is not None:
+            ax.annotate(
+                "", xy=(chosen_nc, chosen_nr),
+                xytext=(c, r),
+                arrowprops=dict(arrowstyle="-|>", color="lime", lw=3,
+                                mutation_scale=20),
+                zorder=15,
+            )
+
+        fdir_code = flow_dir[r, c]
+        fdir_str = f"dir={fdir_code}" if fdir_code != 0 else "TERMINAL"
+        ax.set_title(
+            f"Outlet ({r},{c})  lake={lake_id}\n"
+            f"elev={dem[r, c]:.1f}m  drain={d_val:.0f}  {fdir_str}",
+            fontsize=10,
+        )
+        ax.set_xlim(c_min - 0.5, c_max - 0.5)
+        ax.set_ylim(r_max - 0.5, r_min - 0.5)
+        ax.set_aspect("equal")
+
+    # Hide unused subplots
+    for idx in range(n, nrows_fig * ncols_fig):
+        axes[idx // ncols_fig][idx % ncols_fig].set_visible(False)
+
+    # Legend
+    legend_handles = [
+        mpatches.Patch(color="lime", label="SAFE (lower, no cycle)"),
+        mpatches.Patch(color="gold", label="CYCLE (lower, re-enters lake)"),
+        mpatches.Patch(color="orangered", label="HIGHER (elev ≥ outlet)"),
+        mpatches.Patch(color="deepskyblue", label="IN-LAKE (same lake)"),
+        mpatches.Patch(facecolor="white", edgecolor="black",
+                       linewidth=2, label="Outlet cell"),
+    ]
+    fig.legend(
+        handles=legend_handles, loc="lower center",
+        ncol=5, fontsize=9, frameon=True,
+        bbox_to_anchor=(0.5, -0.02),
+    )
+
+    plt.tight_layout(rect=[0, 0.04, 1, 1])
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"Saved: {output_path}")
+    plt.close()
+
+
 def _count_steps_to_lake(flow_dir, lake_mask, start_r, start_c, lake_id):
     """Count steps until flow path re-enters the lake."""
     rows, cols = flow_dir.shape
@@ -597,6 +775,14 @@ if __name__ == "__main__":
         lake_mask,
         outlet_mask,
         args.output_dir / "diagnostic_lake_before_after.png",
+    )
+
+    # Plot 3: Per-outlet neighbor detail
+    plot_outlet_neighbor_detail(
+        data,
+        lake_mask,
+        outlet_mask,
+        args.output_dir / "diagnostic_outlet_neighbors.png",
     )
 
     # Debug: why are outlets terminal? Trace candidates for top lakes
