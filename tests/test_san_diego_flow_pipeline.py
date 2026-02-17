@@ -509,10 +509,10 @@ class TestFlowPipelineModule:
     """Tests for new flow_pipeline.py module."""
 
     def test_compute_flow_with_basins_exists(self):
-        """flow_pipeline module should export compute_flow_with_basins."""
-        from src.terrain import flow_pipeline
-        assert hasattr(flow_pipeline, 'compute_flow_with_basins'), \
-            "flow_pipeline should export compute_flow_with_basins"
+        """flow_accumulation module should export compute_flow_with_basins."""
+        from src.terrain import flow_accumulation
+        assert hasattr(flow_accumulation, 'compute_flow_with_basins'), \
+            "flow_accumulation should export compute_flow_with_basins"
 
     def test_returns_all_required_keys(self, flow_artifacts):
         """compute_flow_with_basins should return all required keys."""
@@ -521,10 +521,10 @@ class TestFlowPipelineModule:
         demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
         demo_source = demo_script.read_text()
 
-        # Check that flow_pipeline is imported
-        assert 'from src.terrain.flow_pipeline import' in demo_source or \
-               'flow_pipeline' in demo_source, \
-            "Demo should use flow_pipeline module"
+        # Check that flow_accumulation is imported
+        assert 'from src.terrain.flow_accumulation import' in demo_source or \
+               'flow_accumulation' in demo_source, \
+            "Demo should use flow_accumulation module"
 
     def test_ocean_mask_detected(self, flow_artifacts):
         """Ocean mask should be detected and applied."""
@@ -563,13 +563,13 @@ class TestFlowPipelineModule:
     def test_conditioning_mask_combines_ocean_basins_lakes(self):
         """Conditioning mask should combine ocean + basins + lakes_in_basins."""
         # This is tested implicitly by checking that the demo code structure
-        # follows the pattern from flow_pipeline.py
+        # follows the basin-aware conditioning pattern
         demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
         demo_source = demo_script.read_text()
 
         # Check for conditioning mask creation pattern
         assert 'conditioning_mask' in demo_source or \
-               'flow_pipeline' in demo_source, \
+               'flow_accumulation' in demo_source, \
             "Demo should use conditioning mask pattern"
 
 

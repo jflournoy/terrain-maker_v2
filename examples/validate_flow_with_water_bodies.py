@@ -39,11 +39,9 @@ from src.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     detect_ocean_mask,
+    compute_flow_with_basins,
     D8_OFFSETS,
 )
-
-# Import flow pipeline (encapsulates validated basin preservation pattern)
-from src.terrain.flow_pipeline import compute_flow_with_basins
 
 # Import water body functions
 from src.terrain.water_bodies import (
