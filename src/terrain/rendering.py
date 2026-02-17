@@ -362,6 +362,17 @@ def render_scene_to_file(
         else:
             logger.info(f"Render: {width}×{height} {file_format} ({color_mode})")
 
+        # Save Blender file BEFORE rendering (so it's available even if render fails)
+        blend_path = None
+        if save_blend_file:
+            blend_path = output_path.parent / output_path.stem
+            blend_path = blend_path.with_suffix(".blend")
+            try:
+                bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
+                logger.info(f"Saved Blender file: {blend_path.name}")
+            except Exception as e:
+                logger.warning(f"Could not save Blender file: {e}")
+
         # Execute render with retry logic for GPU memory errors
         last_error = None
         for attempt in range(max_retries + 1):
@@ -375,17 +386,6 @@ def render_scene_to_file(
                 if output_path.exists():
                     file_size_mb = output_path.stat().st_size / (1024 * 1024)
                     logger.info(f"Rendered successfully: {file_size_mb:.1f} MB")
-
-                    # Save Blender file if requested
-                    if save_blend_file:
-                        blend_path = output_path.parent / output_path.stem
-                        blend_path = blend_path.with_suffix(".blend")
-                        try:
-                            bpy.ops.wm.save_as_mainfile(filepath=str(blend_path))
-                            logger.info(f"Saved Blender file: {blend_path.name}")
-                        except Exception as e:
-                            logger.warning(f"Could not save Blender file: {e}")
-
                     return output_path
                 else:
                     logger.error("Render file was not created")

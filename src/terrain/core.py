@@ -2857,53 +2857,59 @@ class Terrain:
             use_explicit_mask = False
 
             if explicit_mask is not None:
-                # Explicit mask provided - must be vertex-space boolean array
+                # Explicit mask provided - can be grid-space or vertex-space
                 explicit_mask = np.asarray(explicit_mask)
-                self.logger.info(
-                    f"Overlay {overlay_idx}: explicit mask shape={explicit_mask.shape}, "
-                    f"y_valid len={len(self.y_valid)}, grid shape={overlay_arrays[0].shape}, "
-                    f"mask sum={np.sum(explicit_mask)}"
-                )
-                if explicit_mask.shape == (len(self.y_valid),):
+                grid_shape = overlay_arrays[0].shape
+                has_mesh = hasattr(self, "y_valid") and self.y_valid is not None
+
+                if explicit_mask.shape == grid_shape:
+                    # Already grid-space - preferred form
+                    overlay_mask = explicit_mask.astype(bool)
+                    use_explicit_mask = True
+                    self.logger.info(
+                        f"Overlay {overlay_idx}: using grid-space mask directly, "
+                        f"{np.sum(overlay_mask)} grid pixels"
+                    )
+                elif has_mesh and explicit_mask.shape == (len(self.y_valid),):
                     # Convert vertex mask to grid mask (exact match)
-                    overlay_mask = np.zeros(overlay_arrays[0].shape, dtype=bool)
+                    overlay_mask = np.zeros(grid_shape, dtype=bool)
                     overlay_mask[self.y_valid, self.x_valid] = explicit_mask
                     use_explicit_mask = True
                     self.logger.info(
                         f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
                         f"{np.sum(overlay_mask)} grid pixels"
                     )
-                elif len(explicit_mask.shape) == 1 and len(explicit_mask) >= len(self.y_valid):
+                elif has_mesh and len(explicit_mask.shape) == 1 and len(explicit_mask) >= len(self.y_valid):
                     # Vertex-space mask but might include boundary vertices
-                    # Use only the first len(y_valid) entries (surface vertices)
                     self.logger.info(
                         f"Overlay {overlay_idx}: mask has {len(explicit_mask)} entries, "
                         f"using first {len(self.y_valid)} for surface vertices"
                     )
-                    overlay_mask = np.zeros(overlay_arrays[0].shape, dtype=bool)
+                    overlay_mask = np.zeros(grid_shape, dtype=bool)
                     overlay_mask[self.y_valid, self.x_valid] = explicit_mask[:len(self.y_valid)]
                     use_explicit_mask = True
                     self.logger.info(
                         f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
                         f"{np.sum(overlay_mask)} grid pixels"
                     )
-                elif explicit_mask.shape == overlay_arrays[0].shape:
-                    # Already grid-space
-                    overlay_mask = explicit_mask.astype(bool)
-                    use_explicit_mask = True
-                    self.logger.info(f"Overlay {overlay_idx}: using grid-space mask directly")
                 else:
                     self.logger.warning(
                         f"Overlay {overlay_idx}: mask shape {explicit_mask.shape} doesn't match "
-                        f"vertex count {len(self.y_valid)} or grid shape {overlay_arrays[0].shape}. "
-                        f"Falling back to threshold-based mask."
+                        f"grid shape {grid_shape}. Falling back to threshold-based mask."
                     )
 
             if not use_explicit_mask:
                 # Use threshold-based mask from source layer values
                 overlay_mask_data = overlay_arrays[0]
                 threshold = overlay.get("threshold", 0.5)
-                overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
+
+                # Special case: threshold=0.0 should exclude zeros (use > not >=)
+                # This handles sparse layers like stream networks where non-feature pixels are 0
+                if threshold == 0.0:
+                    overlay_mask = (overlay_mask_data > 0.0) & ~np.isnan(overlay_mask_data)
+                else:
+                    overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
+
                 self.logger.info(
                     f"Overlay {overlay_idx}: using threshold={threshold}, "
                     f"{np.sum(overlay_mask)} grid pixels"
@@ -2917,66 +2923,13 @@ class Terrain:
                 f"applied to {np.sum(overlay_mask)} grid pixels"
             )
 
-        # Map grid colors to vertex colors using y_valid, x_valid
-        vertex_colors = result_colors_grid[self.y_valid, self.x_valid]
-
-        # Apply water mask if provided
-        if water_mask is not None:
-            num_surface_vertices = len(self.y_valid)
-
-            self.logger.debug(
-                f"Applying water mask to {num_surface_vertices} surface vertices"
-            )
-            self.logger.debug(f"  DEM shape: {dem_data.shape}")
-            self.logger.debug(f"  Num surface vertices: {num_surface_vertices}")
-            self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
-            self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
-
-            # Create shoreline vignette for water bodies (cartographic style)
-            # Compute distance transform to measure distance from water edges (shores)
-            from scipy.ndimage import distance_transform_edt
-
-            water_distances = distance_transform_edt(water_mask)
-
-            # Define gradient colors for shoreline vignette
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Light blue (shore)
-            center_color = np.array([15, 50, 85], dtype=np.float32)  # Dark blue (interior)
-
-            # Map water mask from grid space to vertex space (vectorized)
-            water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            water_vertex_indices = np.where(water_at_vertices)[0]
-
-            # Get raw pixel distances for all water vertices
-            water_y = self.y_valid[water_vertex_indices]
-            water_x = self.x_valid[water_vertex_indices]
-            water_pixel_distances = water_distances[water_y, water_x]
-
-            # Cartographic shoreline vignette style (vintage map aesthetic)
-            # Gradient only in shoreline band; interior water is uniform dark
-            shoreline_width_pixels = 12
-
-            # t=1 means dark (interior), t=0 means light (at shore edge)
-            # Start with all water as interior (dark)
-            t = np.ones_like(water_pixel_distances)
-
-            # Apply gradient only within shoreline band
-            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
-            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
-
-            # Power curve for smoother transition
-            t = np.power(t, 0.5)[:, np.newaxis]
-            water_colors = edge_color * (1 - t) + center_color * t
-
-            # Apply gradient colors to water vertices
-            vertex_colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
-            water_vertex_count = len(water_vertex_indices)
-
-            self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
-
-        self.colors = vertex_colors
+        # Store grid-level colors (create_mesh will handle vertex mapping and water coloring)
+        # This matches the pattern used by standard mode compute_colors()
+        self.colors = result_colors_grid
 
         self.logger.info(f"Multi-overlay colors computed: {len(self.overlays)} overlays applied")
-        return vertex_colors
+        self.logger.info(f"Colors stored as grid-space array: {result_colors_grid.shape}")
+        return result_colors_grid
 
     def create_mesh(
         self,
