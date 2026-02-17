@@ -278,6 +278,249 @@ def create_lake_flow_routing(
     return flow_dir
 
 
+def _trace_flows_to_lake(
+    flow_dir: np.ndarray,
+    lake_mask: np.ndarray,
+    start_r: int,
+    start_c: int,
+    lake_id: int,
+    max_steps: int = 100,
+) -> bool:
+    """Trace flow path from a cell and check if it re-enters the given lake.
+
+    Parameters
+    ----------
+    flow_dir : np.ndarray
+        D8 flow direction grid
+    lake_mask : np.ndarray
+        Labeled lake mask
+    start_r, start_c : int
+        Starting cell (should be outside the lake)
+    lake_id : int
+        Lake ID to check for re-entry
+    max_steps : int
+        Maximum steps to trace before giving up
+
+    Returns
+    -------
+    bool
+        True if the flow path re-enters the lake (would create a cycle)
+    """
+    from src.terrain.flow_accumulation import D8_OFFSETS
+
+    rows, cols = flow_dir.shape
+    r, c = start_r, start_c
+
+    for _ in range(max_steps):
+        d = flow_dir[r, c]
+        if d == 0:
+            return False  # Reached terminal — no cycle
+        if d not in D8_OFFSETS:
+            return False  # Invalid direction — no cycle
+
+        dr, dc = D8_OFFSETS[d]
+        r, c = r + dr, c + dc
+
+        if not (0 <= r < rows and 0 <= c < cols):
+            return False  # Left the grid — no cycle
+
+        # Check if we re-entered the lake
+        if lake_id > 0 and lake_mask[r, c] == lake_id:
+            return True
+        # For boolean masks, any lake cell counts
+        if lake_id == 0 and lake_mask[r, c] > 0:
+            return True
+
+    return False  # Didn't re-enter within max_steps
+
+
+def find_lake_spillways(
+    lake_mask: np.ndarray,
+    dem: np.ndarray,
+) -> dict:
+    """Find natural spillway for each lake based on DEM topology.
+
+    Scans all boundary cells of each lake (lake cells with at least one
+    non-lake neighbor) and finds where the surrounding rim is lowest.
+    The spillway is the (boundary_cell, non-lake_neighbor) pair with
+    the lowest non-lake neighbor elevation — this is where the lake
+    would naturally overflow.
+
+    Works for both natural lakes and reservoirs: the dam location
+    typically corresponds to the lowest rim point because dams are
+    built across valleys.
+
+    Parameters
+    ----------
+    lake_mask : np.ndarray
+        Labeled lake mask (0 = no lake, N = lake ID)
+    dem : np.ndarray
+        Digital elevation model
+
+    Returns
+    -------
+    dict
+        Mapping lake_id -> (spillway_row, spillway_col, direction_code)
+        where direction_code is the D8 direction from the spillway cell
+        to its lowest non-lake neighbor.
+    """
+    from src.terrain.flow_accumulation import D8_DIRECTIONS
+
+    rows, cols = lake_mask.shape
+    lake_ids = np.unique(lake_mask[lake_mask > 0])
+    spillways = {}
+
+    for lake_id in lake_ids:
+        best_neighbor_elev = np.inf
+        best_spill = None  # (row, col, direction_code)
+
+        # Find all cells belonging to this lake
+        lake_rows, lake_cols = np.where(lake_mask == lake_id)
+
+        for r, c in zip(lake_rows, lake_cols):
+            # Check all 8 neighbors
+            for (dr, dc), direction_code in D8_DIRECTIONS.items():
+                nr, nc = r + dr, c + dc
+
+                # Bounds check
+                if not (0 <= nr < rows and 0 <= nc < cols):
+                    continue
+
+                # Skip cells in the same lake
+                if lake_mask[nr, nc] == lake_id:
+                    continue
+
+                # This is a non-lake neighbor — candidate rim point
+                if dem[nr, nc] < best_neighbor_elev:
+                    best_neighbor_elev = dem[nr, nc]
+                    best_spill = (r, c, direction_code)
+
+        if best_spill is not None:
+            spillways[lake_id] = best_spill
+
+    return spillways
+
+
+def compute_outlet_downstream_directions(
+    flow_dir: np.ndarray,
+    lake_mask: np.ndarray,
+    outlet_mask: np.ndarray,
+    dem: np.ndarray,
+    basin_mask: Optional[np.ndarray] = None,
+    spillways: Optional[dict] = None,
+) -> np.ndarray:
+    """
+    Compute flow direction FROM lake outlets TO downstream terrain.
+
+    For through-draining lakes, the outlet gets a flow direction pointing
+    to the lowest adjacent non-lake cell whose flow path does NOT
+    re-enter the lake (which would create a cycle). This turns lakes
+    into links in river chains rather than terminal sinks.
+
+    When a spillway dict is provided (from find_lake_spillways), the
+    precomputed spillway direction is used as a fallback if no strictly
+    lower non-lake neighbor is found. This handles the common case where
+    the DEM has the lake surface at or above the rim elevation.
+
+    Endorheic outlets (inside basins) remain terminal (flow_dir=0).
+
+    Parameters
+    ----------
+    flow_dir : np.ndarray (uint8)
+        D8 flow direction grid (outlet cells typically have 0)
+    lake_mask : np.ndarray
+        Labeled lake mask (0 = no lake, N = lake ID)
+    outlet_mask : np.ndarray (bool)
+        Boolean mask of outlet cells
+    dem : np.ndarray
+        Digital elevation model
+    basin_mask : np.ndarray (bool), optional
+        Boolean mask of endorheic basin cells. Outlets inside basins
+        remain terminal.
+    spillways : dict, optional
+        Dict from find_lake_spillways(): lake_id -> (row, col, direction).
+        Used as fallback when no strictly lower neighbor exists.
+
+    Returns
+    -------
+    flow_dir : np.ndarray (uint8)
+        Copy of input with outlet cells updated to point downstream
+    """
+    from src.terrain.flow_accumulation import D8_DIRECTIONS, D8_OFFSETS
+
+    rows, cols = flow_dir.shape
+    result = flow_dir.copy()
+
+    if basin_mask is None:
+        basin_mask = np.zeros((rows, cols), dtype=bool)
+
+    outlet_rows, outlet_cols = np.where(outlet_mask)
+
+    for r, c in zip(outlet_rows, outlet_cols):
+        # Endorheic outlets stay terminal
+        if basin_mask[r, c]:
+            continue
+
+        # Skip outlets that already have a flow direction (e.g., basin
+        # outlets that kept their terrain flow, or outlets already
+        # connected by a previous routing step)
+        if flow_dir[r, c] != 0:
+            continue
+
+        # Collect candidate neighbors: lower, non-lake, sorted by elevation
+        this_lake_id = lake_mask[r, c]
+        candidates = []
+
+        for (dr, dc), direction_code in D8_DIRECTIONS.items():
+            nr, nc = r + dr, c + dc
+
+            # Bounds check
+            if not (0 <= nr < rows and 0 <= nc < cols):
+                continue
+
+            # Skip cells in the same lake
+            if lake_mask[nr, nc] == this_lake_id and this_lake_id > 0:
+                continue
+
+            # Only consider cells lower than the outlet
+            if dem[nr, nc] < dem[r, c]:
+                candidates.append((dem[nr, nc], direction_code, nr, nc))
+
+        # Sort by elevation (lowest first) — prefer steepest descent
+        candidates.sort(key=lambda x: x[0])
+
+        # Pick the lowest candidate whose flow path doesn't re-enter the lake
+        best_dir = 0
+        for _elev, direction_code, nr, nc in candidates:
+            if not _trace_flows_to_lake(
+                flow_dir, lake_mask, nr, nc, this_lake_id
+            ):
+                best_dir = direction_code
+                break
+
+        # Fallback: use precomputed spillway direction if no strictly lower
+        # neighbor was found. The spillway is the lowest rim point — the
+        # DEM may have the lake surface at or above the rim elevation
+        # (common for reservoirs where DEM represents water surface).
+        if best_dir == 0 and spillways is not None and this_lake_id in spillways:
+            spill_r, spill_c, spill_dir = spillways[this_lake_id]
+            # Only use if this outlet IS the spillway cell
+            if r == spill_r and c == spill_c:
+                # Verify the spillway direction doesn't create a cycle
+                if spill_dir in D8_OFFSETS:
+                    sdr, sdc = D8_OFFSETS[spill_dir]
+                    snr, snc = r + sdr, c + sdc
+                    if (0 <= snr < rows and 0 <= snc < cols
+                            and not _trace_flows_to_lake(
+                                flow_dir, lake_mask, snr, snc, this_lake_id
+                            )):
+                        best_dir = spill_dir
+
+        result[r, c] = best_dir
+
+    return result
+
+
 def download_water_bodies(
     bbox: Tuple[float, float, float, float],
     output_dir: str,

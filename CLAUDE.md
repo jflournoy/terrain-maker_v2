@@ -48,6 +48,51 @@ Consider TDD especially for complex features or when requirements are unclear.
 
 **ALWAYS use `date` command for dates** - Never assume or guess dates. Always run `date "+%Y-%m-%d"` when you need the current date for documentation, commits, or any other purpose.
 
+**NEVER operate on full-resolution data for expensive operations** - Operations like distance transforms, morphological operations, or complex array manipulations WILL OOM on large DEMs. Always understand which data is at full resolution vs downsampled resolution.
+
+### Memory Management & Data Resolution
+
+**Critical Rule: Understand your data resolution at every step**
+
+The terrain processing pipeline uses multiple resolutions:
+1. **Original DEM**: Full resolution from source files (potentially 10K×10K+ pixels)
+2. **Flow computation**: Downsampled to target_vertices (typically 1-2K×1-2K pixels)
+3. **Mesh vertices**: Further downsampled for 3D rendering (controlled by vertices-per-pixel)
+
+**Memory-intensive operations to avoid on full-resolution data:**
+- `scipy.ndimage.distance_transform_edt()` - Creates arrays matching input size + index arrays
+- `scipy.ndimage.morphological_*()` - Can create large intermediate arrays
+- Convolution/filtering operations with large kernels
+- Any operation that creates temporary arrays the size of the input
+
+**Safe approaches:**
+1. **Operate at flow resolution** - Flow data is already downsampled, use that resolution
+2. **Downsample first** - If you need full DEM, downsample it before expensive operations
+3. **Check array sizes** - Before expensive ops, print array shapes and calculate memory requirements
+4. **Use streaming/chunked processing** - For operations that support it
+
+**Example of BAD approach** (caused OOM):
+```python
+# DON'T: This operates on full-resolution DEM (could be 10K×10K)
+distances, indices = distance_transform_edt(~stream_mask, return_indices=True)
+# Creates: distances (10K×10K floats) + indices (2× 10K×10K ints) = ~2GB+
+```
+
+**Example of GOOD approach**:
+```python
+# DO: Check resolution first, or operate on downsampled data
+print(f"Array size: {stream_mask.shape} = {stream_mask.size:,} pixels")
+if stream_mask.size > 5_000_000:  # >5M pixels
+    print("WARNING: Array too large for distance transform, skipping variable-width")
+    # OR: downsample the data first
+```
+
+**When implementing new features:**
+1. Always check what resolution your input data is at
+2. For expensive operations, work with flow resolution or mesh resolution data
+3. If you must use full resolution, add memory checks and warnings
+4. Document which resolution the feature operates on
+
 ## AI Integrity Principles
 
 **CRITICAL: Always provide honest, objective recommendations based on technical merit, not user bias.**
@@ -67,26 +112,30 @@ Examples of honest responses:
 - "While that's possible, a better approach would be..."
 - "That's technically feasible but violates \[principle] because..."
 
-## Render Approval
+## Example and Render Scripts
 
-**REQUIRED: Always check with the user before running any renders**
+**CRITICAL: NEVER run example or render scripts**
 
-Rendering scripts (e.g., `detroit_combined_render.py`, `detroit_elevation_real.py`) can take significant time and computational resources.
+Example scripts in `examples/` directory (e.g., `detroit_combined_render.py`, `detroit_elevation_real.py`, `san_diego_flow_demo.py`) are computationally expensive and time-consuming. They:
+- Process large datasets (DEMs, flow accumulation, precipitation)
+- Run Blender rendering (minutes to hours)
+- Generate diagnostic plots
+- Consume significant CPU/GPU/memory resources
 
-- **Before running**: Summarize what the render will do and ask for approval
-- **During development**: Use `--mock-data` flag to test with fast synthetic data
-- **For final renders**: Wait for explicit user approval with parameters
+**Rules:**
+- **NEVER** execute example scripts via Bash tool
+- **NEVER** run rendering operations
+- User will run these scripts manually when ready
+- You may READ example scripts to understand code
+- You may EDIT example scripts to fix bugs or add features
+- You may suggest commands for the user to run
 
-Example:
-```
-I'm about to run a render with:
-- Resolution: 1008×720 @ 72 DPI (print quality)
-- Samples: 4,096 (high quality)
-- Expected time: ~3-5 minutes on GPU
-- Output: docs/images/combined_render/sledding_with_xc_parks_3d_print.png
-
-Should I proceed? [yes/no]
-```
+**What you CAN do:**
+- Read and analyze example scripts
+- Edit code to fix issues
+- Suggest parameter changes
+- Create test scripts that DON'T invoke expensive operations
+- Use `--no-render` flag for testing data pipeline only (if user approves)
 
 ## Development Workflow
 

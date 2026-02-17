@@ -614,6 +614,7 @@ def flow_accumulation(
             if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
                 from src.terrain.transforms import upscale_scores
                 scale_int = int(round(scale_y))
+                print(f"    Running {upscale_method} {scale_int}x upscaling...", flush=True)
                 precip_upscaled = upscale_scores(
                     precip_data,
                     scale=scale_int,
@@ -621,7 +622,7 @@ def flow_accumulation(
                     nodata_value=0.0
                 )
                 precip_data = precip_upscaled
-                print(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
+                print(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}", flush=True)
             else:
                 # Non-uniform scaling - Detroit-style approach for GPU acceleration
                 # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
@@ -638,15 +639,18 @@ def flow_accumulation(
                     from src.terrain.transforms import upscale_scores
 
                     # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    print(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...", flush=True)
                     precip_esrgan = upscale_scores(
                         precip_data,
                         scale=power_of_2_scale,
                         method=upscale_method,
                         nodata_value=0.0
                     )
+                    print(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}", flush=True)
 
                     # Step 2: Downsample to exact target shape with rasterio reproject
                     from rasterio.warp import reproject, Resampling
+                    print(f"    Downsampling to exact target shape...", flush=True)
                     precip_final = np.empty(dem_shape, dtype=np.float32)
 
                     # Create transforms for intermediate and target shapes
@@ -663,15 +667,17 @@ def flow_accumulation(
                             dst_crs=dem_crs,
                             resampling=Resampling.bilinear,
                         )
+                        print(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}", flush=True)
                     else:
                         # No transform available - use scipy zoom for final adjustment
                         from scipy.ndimage import zoom
                         scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
                         scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
                         precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
+                        print(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}", flush=True)
 
                     precip_data = precip_final
-                    print(f"  ✓ ESRGAN {power_of_2_scale}x → {precip_esrgan.shape} → downsampled to {precip_final.shape}", flush=True)
+                    print(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}", flush=True)
                 else:
                     # Fall back to basic bicubic for small scales or non-ESRGAN methods
                     from rasterio.warp import reproject, Resampling
@@ -846,6 +852,7 @@ def flow_accumulation(
 
         # Step 2: Condition DEM using spec-compliant pipeline
         # Use combined conditioning mask (ocean + basins) to preserve topography
+        print("Conditioning DEM (outlets + breach + fill)...", flush=True)
         nodata_mask_for_spec = conditioning_mask if detect_basins else ocean_mask
         conditioned_dem, outlets, breached_dem = condition_dem_spec(
             dem_data,
@@ -860,11 +867,12 @@ def flow_accumulation(
         )
 
         # Step 3: Compute flow directions
-        print("Computing flow directions...")
+        print("Computing flow directions...", flush=True)
         # CRITICAL: Combine ocean/nodata with all identified outlets (edge, coastal, masked basin)
         # so that ALL outlet types are properly used as flow direction terminals
         outlet_mask = ocean_mask | outlets
         flow_direction = compute_flow_direction(conditioned_dem, mask=outlet_mask)
+        print("  ✓ Flow directions computed", flush=True)
 
     elif backend == "pysheds":
         if not PYSHEDS_AVAILABLE:
@@ -3546,11 +3554,16 @@ def condition_dem_spec(
     num_outlets = np.sum(outlets)
     print(f"    Found {num_outlets:,} outlet cells")
 
-    print("  Stage 2a: Constrained breaching...")
-    breached = breach_depressions_constrained(
-        dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
-        parallel_method=parallel_method
-    )
+    # Skip breaching if disabled (max_breach_depth <= 0 or max_breach_length <= 0)
+    if max_breach_depth <= 0 or max_breach_length <= 0:
+        print("  Stage 2a: Breaching SKIPPED (disabled via parameters)")
+        breached = dem.copy()
+    else:
+        print(f"  Stage 2a: Constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
+        breached = breach_depressions_constrained(
+            dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
+            parallel_method=parallel_method
+        )
 
     print("  Stage 2b: Priority-flood fill residuals...")
     filled = priority_flood_fill_epsilon(
@@ -3701,7 +3714,8 @@ def detect_endorheic_basins(
 
     # Create mask for large basins (vectorized operation)
     basin_mask = np.zeros_like(dem, dtype=bool)
-    large_basin_ids = [bid for bid, size in basin_sizes.items() if size >= min_size]
+    effective_min_size = min_size if min_size is not None else 10
+    large_basin_ids = [bid for bid, size in basin_sizes.items() if size >= effective_min_size]
     if large_basin_ids:
         basin_mask = np.isin(labeled, large_basin_ids)
 
