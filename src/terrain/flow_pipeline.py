@@ -28,6 +28,7 @@ from src.terrain.water_bodies import (
     identify_lake_inlets,
     create_lake_flow_routing,
     compute_outlet_downstream_directions,
+    find_lake_spillways,
 )
 from src.terrain.transforms import upscale_scores
 
@@ -339,32 +340,53 @@ def compute_flow_with_basins(
 
         # Apply explicit routing only to lakes outside basins
         if np.any(lakes_outside_basin):
-            # Create mask of outlets only for lakes outside basins
-            lake_outlets_outside = (
-                lake_outlets & ~basin_mask if basin_mask is not None else lake_outlets
+            # Create labeled mask (preserving lake IDs) for lakes outside basins
+            labeled_lakes_outside = lake_mask.copy()
+            if basin_mask is not None:
+                labeled_lakes_outside[basin_mask] = 0
+
+            # Find DEM-based spillways — more reliable than HydroLAKES pour
+            # points which may not align with DEM at flow resolution
+            spillways = find_lake_spillways(
+                labeled_lakes_outside, dem_conditioned
             )
 
+            # Create spillway-based outlet mask
+            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
+            for lake_id, (sr, sc, _sdir) in spillways.items():
+                spillway_outlets[sr, sc] = True
+
+            if verbose:
+                hydro_count = int(np.sum(
+                    lake_outlets & ~basin_mask
+                    if basin_mask is not None else lake_outlets
+                ))
+                print(
+                    f"   DEM spillway detection: {len(spillways)} spillways "
+                    f"(replacing {hydro_count} HydroLAKES pour points)"
+                )
+
+            # BFS routing: all lake cells route toward DEM spillway
             lake_flow = create_lake_flow_routing(
-                lakes_outside_basin, lake_outlets_outside, dem_conditioned
+                labeled_lakes_outside, spillway_outlets, dem_conditioned
             )
             flow_dir = np.where(lakes_outside_basin, lake_flow, flow_dir_base)
 
-            # Connect lake outlets to downstream terrain so drainage
-            # propagates through lakes instead of resetting at outlets
-            if np.any(lake_outlets_outside):
+            # Connect spillway outlets to downstream terrain
+            if np.any(spillway_outlets):
                 flow_dir = compute_outlet_downstream_directions(
                     flow_dir,
-                    lakes_outside_basin,
-                    lake_outlets_outside,
+                    labeled_lakes_outside,
+                    spillway_outlets,
                     dem_conditioned,
                     basin_mask=basin_mask,
+                    spillways=spillways,
                 )
 
             if verbose:
-                num_outlets_outside = np.sum(lake_outlets_outside)
                 print(
-                    f"   Applied routing to {np.sum(lakes_outside_basin):,} cells "
-                    f"with {num_outlets_outside} outlets (connected downstream)"
+                    f"   Applied routing to {np.sum(lakes_outside_basin):,} "
+                    f"cells with {len(spillways)} spillway outlets"
                 )
 
     # Step 7: Compute drainage area
