@@ -1071,6 +1071,15 @@ Examples:
              "color gradient.",
     )
     parser.add_argument(
+        "--score-floor",
+        type=float,
+        default=None,
+        help="Floor for near-zero scores. Scores between 0 and this value are snapped "
+             "up to this value before normalization. Eliminates the near-zero spike from "
+             "marginal terrain that compresses the colormap range. "
+             "If not set, automatic gap detection is attempted. Example: --score-floor 0.04",
+    )
+    parser.add_argument(
         "--colormap-viz-only",
         action="store_true",
         default=False,
@@ -2392,6 +2401,145 @@ Examples:
                     if n_masked > 0:
                         logger.info(f"Masked {n_masked:,} lake pixels in '{layer_name}' scores")
 
+    # Floor near-zero scores: the multiplicative scoring model produces a spike of
+    # scores barely above zero (e.g., 0.001-0.03) from marginal terrain. These compress
+    # the colormap range. Detect the gap and snap them up to the next meaningful value.
+    score_floor_info = {}  # Save for diagnostics
+    for _floor_layer in ("sledding", "xc_skiing"):
+        if _floor_layer not in terrain_combined.data_layers:
+            continue
+        _floor_data = terrain_combined.data_layers[_floor_layer]["data"]
+        _nonzero = _floor_data[(~np.isnan(_floor_data)) & (_floor_data > 0)]
+        if len(_nonzero) == 0:
+            continue
+
+        # Save pre-floor distribution for diagnostic plot
+        _pre_floor_nonzero = _nonzero.copy()
+
+        # Log percentile distribution to show the gap
+        pcts = [1, 2, 5, 10, 15, 20, 25, 50]
+        pct_vals = np.percentile(_nonzero, pcts)
+        logger.info(f"Score floor analysis for '{_floor_layer}':")
+        logger.info(f"  Nonzero scores: {len(_nonzero):,}")
+        for p, v in zip(pcts, pct_vals):
+            logger.info(f"  P{p:02d}={v:.6f}")
+
+        # Find gap: use histogram in log space to detect bimodal split
+        log_scores = np.log10(_nonzero)
+        log_bins = np.linspace(log_scores.min(), log_scores.max(), 100)
+        hist_counts, hist_edges = np.histogram(log_scores, bins=log_bins)
+
+        # Find the first valley after the initial peak (near-zero spike)
+        # Walk from low end: find peak, then find valley
+        peak_idx = np.argmax(hist_counts[:30])  # Initial peak in first 30% of bins
+        valley_idx = peak_idx
+        for i in range(peak_idx + 1, min(len(hist_counts), 50)):
+            if hist_counts[i] <= hist_counts[valley_idx]:
+                valley_idx = i
+            # Stop when counts start rising again (next mode)
+            if hist_counts[i] > hist_counts[valley_idx] * 2 and hist_counts[i] > 10:
+                break
+
+        # Determine floor: manual arg takes priority, then auto-detect
+        score_floor = None
+        if args.score_floor is not None:
+            score_floor = args.score_floor
+            logger.info(f"  Using manual score floor: {score_floor:.6f}")
+        elif valley_idx > peak_idx:
+            score_floor = 10 ** hist_edges[valley_idx + 1]
+            logger.info(f"  Auto-detected score floor: {score_floor:.6f}")
+        else:
+            logger.info(f"  No near-zero gap detected, skipping floor")
+
+        # Always save distribution info for diagnostics
+        score_floor_info[_floor_layer] = {
+            "pre_floor_nonzero": _pre_floor_nonzero,
+            "score_floor": score_floor,
+            "n_floored": 0,
+            "log_hist_counts": hist_counts,
+            "log_hist_edges": hist_edges,
+            "peak_idx": peak_idx,
+            "valley_idx": valley_idx,
+        }
+
+        if score_floor is not None:
+            n_below = int(np.sum(_nonzero < score_floor))
+            pct_below = 100 * n_below / len(_nonzero)
+            logger.info(f"  {n_below:,} pixels ({pct_below:.1f}%) below floor")
+
+            # Snap near-zero scores up to the floor value
+            floor_mask = (~np.isnan(_floor_data)) & (_floor_data > 0) & (_floor_data < score_floor)
+            _floor_data[floor_mask] = score_floor
+            n_floored = int(np.sum(floor_mask))
+            logger.info(f"  Floored {n_floored:,} near-zero pixels to {score_floor:.6f}")
+
+            score_floor_info[_floor_layer]["n_floored"] = n_floored
+
+    # === Score floor diagnostic: log-scale histogram showing near-zero gap ===
+    for _fl_name, _fl_info in score_floor_info.items():
+        fig_floor, axes_floor = plt.subplots(1, 2, figsize=(18, 6))
+        fig_floor.suptitle(f"Score Floor Diagnostic: {_fl_name}",
+                           fontsize=14, fontweight='bold')
+
+        pre_nonzero = _fl_info["pre_floor_nonzero"]
+        floor_val = _fl_info["score_floor"]
+        n_floored = _fl_info["n_floored"]
+
+        # Left panel: log-scale histogram with floor line
+        ax_hist = axes_floor[0]
+        log_pre = np.log10(pre_nonzero)
+        ax_hist.hist(log_pre, bins=150, color='steelblue', alpha=0.7, edgecolor='none')
+        if floor_val is not None:
+            ax_hist.axvline(np.log10(floor_val), color='red', linewidth=2, linestyle='--',
+                            label=f'Floor = {floor_val:.4f}')
+        # Mark peak and valley bins
+        peak_i = _fl_info["peak_idx"]
+        valley_i = _fl_info["valley_idx"]
+        hist_edges = _fl_info["log_hist_edges"]
+        ax_hist.axvline(hist_edges[peak_i], color='orange', linewidth=1, linestyle=':',
+                        label=f'Peak bin ({peak_i})')
+        ax_hist.axvline(hist_edges[valley_i], color='green', linewidth=1, linestyle=':',
+                        label=f'Valley bin ({valley_i})')
+        ax_hist.set_xlabel('log₁₀(score)', fontsize=11)
+        ax_hist.set_ylabel('Pixel count', fontsize=11)
+        floor_str = f"{floor_val:.6f}" if floor_val is not None else "NOT DETECTED"
+        ax_hist.set_title(f"Before floor (log scale)\n"
+                          f"n={len(pre_nonzero):,}  floored={n_floored:,}\n"
+                          f"floor={floor_str}", fontsize=10)
+        ax_hist.legend(fontsize=9)
+
+        # Right panel: linear-scale zoom on the low end
+        ax_zoom = axes_floor[1]
+        zoom_max = (floor_val * 5 if floor_val is not None
+                    else float(np.percentile(pre_nonzero, 10)))
+        zoom_max = max(zoom_max, 0.05)
+        low_scores = pre_nonzero[pre_nonzero < zoom_max]
+        if len(low_scores) > 0:
+            ax_zoom.hist(low_scores, bins=100, color='steelblue', alpha=0.7, edgecolor='none')
+            if floor_val is not None:
+                ax_zoom.axvline(floor_val, color='red', linewidth=2, linestyle='--',
+                                label=f'Floor = {floor_val:.4f}')
+                n_below = int(np.sum(low_scores < floor_val))
+                n_above = int(np.sum(low_scores >= floor_val))
+                ax_zoom.set_title(f"Linear zoom: scores < {zoom_max:.3f}\n"
+                                  f"below floor: {n_below:,}  above: {n_above:,}",
+                                  fontsize=10)
+            else:
+                ax_zoom.set_title(f"Linear zoom: scores < {zoom_max:.3f}\n"
+                                  f"(no floor detected — showing low end)",
+                                  fontsize=10)
+        else:
+            ax_zoom.set_title("No scores in zoom range", fontsize=10)
+        ax_zoom.set_xlabel('Score (linear)', fontsize=11)
+        ax_zoom.set_ylabel('Pixel count', fontsize=11)
+        ax_zoom.legend(fontsize=10)
+
+        plt.tight_layout()
+        floor_path = args.output_dir / f"score_floor_{_fl_name}.png"
+        plt.savefig(floor_path, dpi=150, bbox_inches='tight')
+        logger.info(f"✓ Saved: {floor_path}")
+        plt.close()
+
     # Compute normalization stats from the rendered region only.
     # Scores were computed over the full SNODAS extent, then aligned to the DEM grid
     # via add_data_layer. We normalize using only pixels where the DEM has valid data
@@ -2417,164 +2565,168 @@ Examples:
         logger.info(f"  Excluded {_water_excluded:,} water pixels from normalization")
     del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
 
-    # === Colormap Visualization Mode ===
-    # If --colormap-viz-only is set, create matplotlib visualizations and exit
+    # === Colormap Visualization Diagnostics ===
+    # Always run (also runs before early exit in --colormap-viz-only mode)
+    logger.info("Generating colormap visualization diagnostics...")
+
+    # Create output directory for visualizations
+    viz_dir = args.output_dir / "colormap_viz"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+
+    # "sledding" layer always holds the base scores (due to score swap at args.base_scores=="skiing")
+    base_scores = terrain_combined.data_layers["sledding"]["data"]
+
+    logger.info(f"Base scores ({base_score_label}) shape: {base_scores.shape}")
+    logger.info(f"Score range: [{np.nanmin(base_scores):.3f}, {np.nanmax(base_scores):.3f}]")
+    logger.info(f"Score mean: {np.nanmean(base_scores):.3f}")
+
+    # Score distribution
+    bins = [0, 0.2, 0.4, 0.40, 0.55, 0.6, 0.8, 1.0]
+    hist, _ = np.histogram(base_scores[~np.isnan(base_scores)], bins=bins)
+    logger.info("Score distribution:")
+    for i in range(len(bins)-1):
+        pct = 100 * hist[i] / np.sum(~np.isnan(base_scores))
+        marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
+        logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
+
+    # Create simple visualization: normalize → gamma → colormap
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    fig.suptitle(f'Detroit {base_score_label.capitalize()} Scores with Boreal-Mako Colormap\n'
+                 f'(normalized, then gamma={args.gamma})',
+                 fontsize=14, fontweight='bold')
+
+    # Normalize scores to 0-1.0 range using rendered-region max
+    logger.info(f"Max score (rendered region): {rendered_score_max:.3f}")
+    normalized_scores = base_scores / rendered_score_max
+
+    if args.normalize_scores:
+        # Stretch to full 0-1 range based on rendered-region min/max
+        norm_min = rendered_score_min_nonzero / rendered_score_max
+        if 1.0 > norm_min:
+            normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
+            normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
+        logger.info(f"Scores normalized to full 0-1 range (rendered-region nonzero min={rendered_score_min_nonzero:.3f})")
+
+    # Apply gamma correction to normalized scores
+    gamma_corrected_scores = np.power(normalized_scores, args.gamma)
+
+    # Apply colormap (get from registry to respect --purple-position)
+    import matplotlib
+    boreal_mako_from_registry = matplotlib.colormaps.get_cmap("boreal_mako")
+    im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_from_registry,
+                  vmin=0, vmax=1.0,
+                  origin='lower', aspect='auto')
+
+    ax.set_title(f'Normalized {base_score_label} scores with gamma={args.gamma} applied',
+                 fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    # Add colorbar
+    cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
+    cbar.set_label('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11, fontweight='bold')
+
+    plt.tight_layout()
+
+    output_path = viz_dir / "scores_map.png"
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    logger.info(f"✓ Saved: {output_path}")
+    plt.close()
+
+    # Create colormap-colored histogram (raw vs transformed)
+    norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
+    generate_score_histogram(
+        raw_scores=base_scores,
+        transformed_scores=gamma_corrected_scores,
+        output_path=viz_dir / "scores_histograms.png",
+        cmap_name="boreal_mako",
+        transform_label=norm_label,
+        rendered_max=rendered_score_max,
+        rendered_min_nonzero=rendered_score_min_nonzero,
+        gamma=args.gamma,
+        normalize_scores=args.normalize_scores,
+    )
+    logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
+
+    # === 4-panel diagnostic: raw scores → pre-reproject lake mask → reprojected mask → masked scores ===
+    fig_diag, axes_diag = plt.subplots(2, 2, figsize=(20, 16))
+    fig_diag.suptitle("Score Diagnostic: Raw Scores → HydroLAKES (WGS84) → HydroLAKES (reprojected) → Masked Scores",
+                      fontsize=13, fontweight='bold')
+
+    # Panel 1 (top-left): Raw scores (before lake masking)
+    raw_scores = scores_before_lake_mask.get("sledding", base_scores)
+    im1 = axes_diag[0, 0].imshow(raw_scores, cmap=boreal_mako_from_registry,
+                                  vmin=0, vmax=rendered_score_max,
+                                  origin='lower', aspect='auto')
+    n_valid_raw = int(np.sum(~np.isnan(raw_scores)))
+    n_nonzero_raw = int(np.sum((~np.isnan(raw_scores)) & (raw_scores > 0)))
+    axes_diag[0, 0].set_title(f"1. Raw {base_score_label} Scores (before lake mask)\n"
+                               f"valid={n_valid_raw:,}  nonzero={n_nonzero_raw:,}\n"
+                               f"range=[{np.nanmin(raw_scores):.3f}, {np.nanmax(raw_scores):.3f}]",
+                               fontsize=10)
+    axes_diag[0, 0].axis('off')
+    fig_diag.colorbar(im1, ax=axes_diag[0, 0], orientation='horizontal', fraction=0.046, pad=0.04)
+
+    # Panel 2 (top-right): Raw HydroLAKES mask in WGS84 (before reprojection)
+    if lake_mask_raw is not None:
+        lake_binary_raw = (lake_mask_raw > 0).astype(np.float32)
+        im2 = axes_diag[0, 1].imshow(lake_binary_raw, cmap='Blues',
+                                      vmin=0, vmax=1,
+                                      origin='lower', aspect='auto')
+        n_lake_raw = int(np.sum(lake_mask_raw > 0))
+        axes_diag[0, 1].set_title(f"2. HydroLAKES Mask (WGS84, pre-reproject)\n"
+                                   f"lake pixels={n_lake_raw:,}\n"
+                                   f"shape={lake_mask_raw.shape}  res={abs(lake_transform.a):.6f}°",
+                                   fontsize=10)
+    else:
+        axes_diag[0, 1].text(0.5, 0.5, "No raw lake mask", transform=axes_diag[0, 1].transAxes,
+                              ha='center', va='center', fontsize=14)
+        axes_diag[0, 1].set_title("2. HydroLAKES (WGS84) — not available", fontsize=10)
+    axes_diag[0, 1].axis('off')
+
+    # Panel 3 (bottom-left): Reprojected water mask (after add_data_layer alignment)
+    if water_mask is not None:
+        im3 = axes_diag[1, 0].imshow(water_mask.astype(np.float32), cmap='Blues',
+                                      vmin=0, vmax=1,
+                                      origin='lower', aspect='auto')
+        n_water = int(np.sum(water_mask))
+        axes_diag[1, 0].set_title(f"3. Water Mask (reprojected to DEM grid)\n"
+                                   f"water pixels={n_water:,}\n"
+                                   f"shape={water_mask.shape}",
+                                   fontsize=10)
+    else:
+        axes_diag[1, 0].text(0.5, 0.5, "No water mask", transform=axes_diag[1, 0].transAxes,
+                              ha='center', va='center', fontsize=14)
+        axes_diag[1, 0].set_title("3. Water Mask (reprojected) — not available", fontsize=10)
+    axes_diag[1, 0].axis('off')
+
+    # Panel 4 (bottom-right): Masked scores (current state, after lake NaN masking)
+    im4 = axes_diag[1, 1].imshow(base_scores, cmap=boreal_mako_from_registry,
+                                  vmin=0, vmax=rendered_score_max,
+                                  origin='lower', aspect='auto')
+    n_valid_masked = int(np.sum(~np.isnan(base_scores)))
+    n_nan_masked = n_valid_raw - n_valid_masked
+    axes_diag[1, 1].set_title(f"4. Masked {base_score_label} Scores (after lake mask)\n"
+                               f"valid={n_valid_masked:,}  NaN'd by mask={n_nan_masked:,}\n"
+                               f"range=[{np.nanmin(base_scores):.3f}, {np.nanmax(base_scores):.3f}]",
+                               fontsize=10)
+    axes_diag[1, 1].axis('off')
+    fig_diag.colorbar(im4, ax=axes_diag[1, 1], orientation='horizontal', fraction=0.046, pad=0.04)
+
+    plt.tight_layout()
+    diag_path = viz_dir / "score_diagnostic.png"
+    plt.savefig(diag_path, dpi=150, bbox_inches='tight')
+    logger.info(f"✓ Saved: {diag_path}")
+    plt.close()
+
+    logger.info("")
+    logger.info("="*70)
+    logger.info("Colormap visualizations created successfully!")
+    logger.info("="*70)
+    logger.info(f"Output directory: {viz_dir}")
+    logger.info("")
+
+    # Early exit if --colormap-viz-only is set
     if args.colormap_viz_only:
-        logger.info("Colormap visualization mode - creating matplotlib plots...")
-
-        # Create output directory for visualizations
-        viz_dir = args.output_dir / "colormap_viz"
-        viz_dir.mkdir(parents=True, exist_ok=True)
-
-        # Get the sledding scores (downsampled, already processed)
-        sledding_scores = terrain_combined.data_layers["sledding"]["data"]
-
-        logger.info(f"Sledding scores shape: {sledding_scores.shape}")
-        logger.info(f"Score range: [{np.nanmin(sledding_scores):.3f}, {np.nanmax(sledding_scores):.3f}]")
-        logger.info(f"Score mean: {np.nanmean(sledding_scores):.3f}")
-
-        # Score distribution
-        bins = [0, 0.2, 0.4, 0.40, 0.55, 0.6, 0.8, 1.0]
-        hist, _ = np.histogram(sledding_scores[~np.isnan(sledding_scores)], bins=bins)
-        logger.info("Score distribution:")
-        for i in range(len(bins)-1):
-            pct = 100 * hist[i] / np.sum(~np.isnan(sledding_scores))
-            marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
-            logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
-
-        # Create simple visualization: normalize → gamma → colormap
-        fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-        fig.suptitle(f'Detroit Sledding Scores with Boreal-Mako Colormap\n(normalized, then gamma={args.gamma})',
-                     fontsize=14, fontweight='bold')
-
-        # Normalize scores to 0-1.0 range using rendered-region max
-        logger.info(f"Max score (rendered region): {rendered_score_max:.3f}")
-        normalized_scores = sledding_scores / rendered_score_max
-
-        if args.normalize_scores:
-            # Stretch to full 0-1 range based on rendered-region min/max
-            norm_min = rendered_score_min_nonzero / rendered_score_max
-            if 1.0 > norm_min:
-                normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
-                normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
-            logger.info(f"Scores normalized to full 0-1 range (rendered-region nonzero min={rendered_score_min_nonzero:.3f})")
-
-        # Apply gamma correction to normalized scores
-        gamma_corrected_scores = np.power(normalized_scores, args.gamma)
-
-        # Apply colormap (get from registry to respect --purple-position)
-        import matplotlib
-        boreal_mako_from_registry = matplotlib.colormaps.get_cmap("boreal_mako")
-        im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_from_registry,
-                      vmin=0, vmax=1.0,
-                      origin='lower', aspect='auto')
-
-        ax.set_title(f'Normalized scores with gamma={args.gamma} applied', fontsize=12, fontweight='bold')
-        ax.axis('off')
-
-        # Add colorbar
-        cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
-        cbar.set_label('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11, fontweight='bold')
-
-        plt.tight_layout()
-
-        output_path = viz_dir / "scores_map.png"
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {output_path}")
-        plt.close()
-
-        # Create colormap-colored histogram (raw vs transformed)
-        norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
-        generate_score_histogram(
-            raw_scores=sledding_scores,
-            transformed_scores=gamma_corrected_scores,
-            output_path=viz_dir / "scores_histograms.png",
-            cmap_name="boreal_mako",
-            transform_label=norm_label,
-            rendered_max=rendered_score_max,
-            rendered_min_nonzero=rendered_score_min_nonzero,
-            gamma=args.gamma,
-            normalize_scores=args.normalize_scores,
-        )
-        logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
-
-        # === 4-panel diagnostic: raw scores → pre-reproject lake mask → reprojected mask → masked scores ===
-        fig_diag, axes_diag = plt.subplots(2, 2, figsize=(20, 16))
-        fig_diag.suptitle("Score Diagnostic: Raw Scores → HydroLAKES (WGS84) → HydroLAKES (reprojected) → Masked Scores",
-                          fontsize=13, fontweight='bold')
-
-        # Panel 1 (top-left): Raw scores (before lake masking)
-        raw_scores = scores_before_lake_mask.get("sledding", sledding_scores)
-        im1 = axes_diag[0, 0].imshow(raw_scores, cmap=boreal_mako_from_registry,
-                                      vmin=0, vmax=rendered_score_max,
-                                      origin='lower', aspect='auto')
-        n_valid_raw = int(np.sum(~np.isnan(raw_scores)))
-        n_nonzero_raw = int(np.sum((~np.isnan(raw_scores)) & (raw_scores > 0)))
-        axes_diag[0, 0].set_title(f"1. Raw Scores (before lake mask)\n"
-                                   f"valid={n_valid_raw:,}  nonzero={n_nonzero_raw:,}\n"
-                                   f"range=[{np.nanmin(raw_scores):.3f}, {np.nanmax(raw_scores):.3f}]",
-                                   fontsize=10)
-        axes_diag[0, 0].axis('off')
-        fig_diag.colorbar(im1, ax=axes_diag[0, 0], orientation='horizontal', fraction=0.046, pad=0.04)
-
-        # Panel 2 (top-right): Raw HydroLAKES mask in WGS84 (before reprojection)
-        if lake_mask_raw is not None:
-            lake_binary_raw = (lake_mask_raw > 0).astype(np.float32)
-            im2 = axes_diag[0, 1].imshow(lake_binary_raw, cmap='Blues',
-                                          vmin=0, vmax=1,
-                                          origin='lower', aspect='auto')
-            n_lake_raw = int(np.sum(lake_mask_raw > 0))
-            axes_diag[0, 1].set_title(f"2. HydroLAKES Mask (WGS84, pre-reproject)\n"
-                                       f"lake pixels={n_lake_raw:,}\n"
-                                       f"shape={lake_mask_raw.shape}  res={abs(lake_transform.a):.6f}°",
-                                       fontsize=10)
-        else:
-            axes_diag[0, 1].text(0.5, 0.5, "No raw lake mask", transform=axes_diag[0, 1].transAxes,
-                                  ha='center', va='center', fontsize=14)
-            axes_diag[0, 1].set_title("2. HydroLAKES (WGS84) — not available", fontsize=10)
-        axes_diag[0, 1].axis('off')
-
-        # Panel 3 (bottom-left): Reprojected water mask (after add_data_layer alignment)
-        if water_mask is not None:
-            im3 = axes_diag[1, 0].imshow(water_mask.astype(np.float32), cmap='Blues',
-                                          vmin=0, vmax=1,
-                                          origin='lower', aspect='auto')
-            n_water = int(np.sum(water_mask))
-            axes_diag[1, 0].set_title(f"3. Water Mask (reprojected to DEM grid)\n"
-                                       f"water pixels={n_water:,}\n"
-                                       f"shape={water_mask.shape}",
-                                       fontsize=10)
-        else:
-            axes_diag[1, 0].text(0.5, 0.5, "No water mask", transform=axes_diag[1, 0].transAxes,
-                                  ha='center', va='center', fontsize=14)
-            axes_diag[1, 0].set_title("3. Water Mask (reprojected) — not available", fontsize=10)
-        axes_diag[1, 0].axis('off')
-
-        # Panel 4 (bottom-right): Masked scores (current state, after lake NaN masking)
-        im4 = axes_diag[1, 1].imshow(sledding_scores, cmap=boreal_mako_from_registry,
-                                      vmin=0, vmax=rendered_score_max,
-                                      origin='lower', aspect='auto')
-        n_valid_masked = int(np.sum(~np.isnan(sledding_scores)))
-        n_nan_masked = n_valid_raw - n_valid_masked
-        axes_diag[1, 1].set_title(f"4. Masked Scores (after lake mask)\n"
-                                   f"valid={n_valid_masked:,}  NaN'd by mask={n_nan_masked:,}\n"
-                                   f"range=[{np.nanmin(sledding_scores):.3f}, {np.nanmax(sledding_scores):.3f}]",
-                                   fontsize=10)
-        axes_diag[1, 1].axis('off')
-        fig_diag.colorbar(im4, ax=axes_diag[1, 1], orientation='horizontal', fraction=0.046, pad=0.04)
-
-        plt.tight_layout()
-        diag_path = viz_dir / "score_diagnostic.png"
-        plt.savefig(diag_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {diag_path}")
-        plt.close()
-
-        logger.info("")
-        logger.info("="*70)
-        logger.info("Colormap visualizations created successfully!")
-        logger.info("="*70)
-        logger.info(f"Output directory: {viz_dir}")
-        logger.info("")
         logger.info("Exiting before mesh creation (--colormap-viz-only mode)")
         return 0
 
