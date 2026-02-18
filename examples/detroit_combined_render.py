@@ -2573,9 +2573,15 @@ Examples:
     viz_dir = args.output_dir / "colormap_viz"
     viz_dir.mkdir(parents=True, exist_ok=True)
 
-    # "sledding" layer always holds the base scores (due to score swap at args.base_scores=="skiing")
-    base_scores = terrain_combined.data_layers["sledding"]["data"]
+    # Use pre-lake-mask scores snapshot (reflects the --base-scores swap)
+    # The "sledding" layer key always holds base scores due to swap at args.base_scores=="skiing"
+    base_scores = scores_before_lake_mask.get("sledding", terrain_combined.data_layers["sledding"]["data"])
 
+    logger.info(f"Colormap-viz using base scores from --base-scores={args.base_scores} ({base_score_label})")
+    logger.info(f"  Available layers: {list(terrain_combined.data_layers.keys())}")
+    logger.info(f"  'sledding' layer min/max: [{np.nanmin(terrain_combined.data_layers['sledding']['data']):.3f}, {np.nanmax(terrain_combined.data_layers['sledding']['data']):.3f}]")
+    if "xc_skiing" in terrain_combined.data_layers:
+        logger.info(f"  'xc_skiing' layer min/max: [{np.nanmin(terrain_combined.data_layers['xc_skiing']['data']):.3f}, {np.nanmax(terrain_combined.data_layers['xc_skiing']['data']):.3f}]")
     logger.info(f"Base scores ({base_score_label}) shape: {base_scores.shape}")
     logger.info(f"Score range: [{np.nanmin(base_scores):.3f}, {np.nanmax(base_scores):.3f}]")
     logger.info(f"Score mean: {np.nanmean(base_scores):.3f}")
