@@ -13,7 +13,7 @@ Data Sources:
 """
 
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Any, List
+from typing import Dict, Tuple, Optional, Any
 import numpy as np
 from rasterio import Affine
 import json
@@ -27,6 +27,9 @@ def rasterize_lakes_to_mask(
 ) -> Tuple[np.ndarray, Affine]:
     """
     Rasterize lake polygons to a labeled mask with geographic transform.
+
+    Uses rasterio.features.rasterize for robust handling of complex polygons,
+    interior rings (islands), and MultiPolygon geometries.
 
     Parameters
     ----------
@@ -44,6 +47,9 @@ def rasterize_lakes_to_mask(
     transform : Affine
         Geographic transform (pixel to coordinate)
     """
+    from rasterio.features import rasterize as rio_rasterize
+    from shapely.geometry import shape
+
     south, west, north, east = bbox
 
     # Calculate grid dimensions
@@ -53,90 +59,35 @@ def rasterize_lakes_to_mask(
     # Create Affine transform (top-left origin, Y decreasing)
     transform = Affine(resolution, 0, west, 0, -resolution, north)
 
-    # Initialize mask
-    mask = np.zeros((n_rows, n_cols), dtype=np.uint16)
-
-    # Rasterize each lake polygon
+    # Build list of (geometry, label) pairs for rasterio
+    shapes = []
     features = lakes_geojson.get("features", [])
-
     for idx, feature in enumerate(features, start=1):
-        geometry = feature.get("geometry", {})
-        if geometry.get("type") != "Polygon":
+        geom_dict = feature.get("geometry")
+        if not geom_dict:
+            continue
+        try:
+            geom = shape(geom_dict)
+            if geom.is_empty:
+                continue
+            shapes.append((geom, idx))
+        except Exception:
             continue
 
-        coords = geometry.get("coordinates", [[]])
-        if not coords or not coords[0]:
-            continue
+    if not shapes:
+        mask = np.zeros((n_rows, n_cols), dtype=np.uint16)
+        return mask, transform
 
-        # Get polygon exterior ring
-        ring = coords[0]
-
-        # Rasterize polygon using scanline algorithm
-        _rasterize_polygon(mask, ring, idx, transform)
+    # Rasterize all polygons at once — handles holes, MultiPolygon, complex coastlines
+    mask = rio_rasterize(
+        shapes,
+        out_shape=(n_rows, n_cols),
+        transform=transform,
+        dtype=np.uint16,
+        fill=0,
+    )
 
     return mask, transform
-
-
-def _rasterize_polygon(
-    mask: np.ndarray,
-    ring: List[List[float]],
-    label: int,
-    transform: Affine,
-) -> None:
-    """
-    Rasterize a single polygon to the mask using scanline algorithm.
-
-    Parameters
-    ----------
-    mask : np.ndarray
-        Output mask (modified in-place)
-    ring : list
-        List of [lon, lat] coordinates forming polygon exterior
-    label : int
-        Label value to assign to polygon cells
-    transform : Affine
-        Geographic transform
-    """
-    rows, cols = mask.shape
-    inv_transform = ~transform
-
-    # Convert polygon vertices to pixel coordinates
-    pixel_coords = []
-    for lon, lat in ring:
-        col, row = inv_transform * (lon, lat)
-        pixel_coords.append((int(row), int(col)))
-
-    if len(pixel_coords) < 3:
-        return
-
-    # Get bounding box of polygon in pixel coords
-    min_row = max(0, min(p[0] for p in pixel_coords))
-    max_row = min(rows - 1, max(p[0] for p in pixel_coords))
-    min_col = max(0, min(p[1] for p in pixel_coords))
-    max_col = min(cols - 1, max(p[1] for p in pixel_coords))
-
-    # For each row, find intersections with polygon edges
-    for row in range(min_row, max_row + 1):
-        intersections = []
-
-        n = len(pixel_coords)
-        for i in range(n):
-            p1 = pixel_coords[i]
-            p2 = pixel_coords[(i + 1) % n]
-
-            # Check if edge crosses this row
-            if (p1[0] <= row < p2[0]) or (p2[0] <= row < p1[0]):
-                if p1[0] != p2[0]:
-                    # Calculate x intersection
-                    col = p1[1] + (row - p1[0]) * (p2[1] - p1[1]) / (p2[0] - p1[0])
-                    intersections.append(col)
-
-        # Sort intersections and fill between pairs
-        intersections.sort()
-        for i in range(0, len(intersections) - 1, 2):
-            start_col = max(min_col, int(intersections[i]))
-            end_col = min(max_col, int(intersections[i + 1]))
-            mask[row, start_col:end_col + 1] = label
 
 
 def identify_outlet_cells(
