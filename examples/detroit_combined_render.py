@@ -162,6 +162,7 @@ from src.terrain.diagnostics import (
 )
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
+from rasterio.warp import Resampling
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for headless rendering
 import matplotlib.pyplot as plt
@@ -1531,7 +1532,7 @@ Examples:
         render_height = int(args.print_height * args.print_dpi)
         render_samples = 4096  # High quality for print (with denoising)
         quality_mode = "PRINT"
-        default_vertex_mult = 2.5  # High detail for print
+        default_vertex_mult = 1.0  # 1 vertex per pixel for print
     else:   
         # FAST preview mode - optimized for quick iteration
         render_width = 640  # Low res for speed
@@ -1931,9 +1932,12 @@ Examples:
             n_lakes = len(lakes_geojson.get("features", []))
             logger.info(f"Loaded {n_lakes} lakes from HydroLAKES")
 
-            resolution = abs(transform.a)  # DEM pixel size in degrees
+            # Use moderate resolution for lake mask — it's binary, so we don't
+            # need DEM-level resolution. 0.001° ≈ 100m is plenty for lake boundaries
+            # and avoids creating a 500M+ pixel array at full DEM resolution.
+            lake_resolution = 0.001
             lake_mask_raw, lake_transform = rasterize_lakes_to_mask(
-                lakes_geojson, dem_bbox, resolution
+                lakes_geojson, dem_bbox, lake_resolution
             )
             logger.info(f"Rasterized lake mask: shape={lake_mask_raw.shape}, "
                         f"{np.sum(lake_mask_raw > 0):,} lake pixels")
@@ -2081,6 +2085,7 @@ Examples:
             lake_transform,
             "EPSG:4326",
             target_layer="dem",
+            resampling=Resampling.nearest,  # Nearest-neighbor for binary mask
         )
         water_mask = terrain_combined.data_layers["lake_mask"]["data"] > 0.5
         water_pixel_count = int(np.sum(water_mask))
@@ -2369,6 +2374,12 @@ Examples:
 
     # Note: despeckle_scores is now applied earlier (before upscaling) for better results
 
+    # Save pre-lake-mask scores for diagnostics (before NaN masking)
+    scores_before_lake_mask = {}
+    for _layer_name in ("sledding", "xc_skiing"):
+        if _layer_name in terrain_combined.data_layers:
+            scores_before_lake_mask[_layer_name] = terrain_combined.data_layers[_layer_name]["data"].copy()
+
     # Mask scores in lake areas — these pixels get colored blue, not by score colormap.
     # Setting to NaN ensures they don't affect normalization, gamma, or colormap at all.
     if water_mask is not None and np.any(water_mask):
@@ -2486,6 +2497,77 @@ Examples:
             normalize_scores=args.normalize_scores,
         )
         logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
+
+        # === 4-panel diagnostic: raw scores → pre-reproject lake mask → reprojected mask → masked scores ===
+        fig_diag, axes_diag = plt.subplots(2, 2, figsize=(20, 16))
+        fig_diag.suptitle("Score Diagnostic: Raw Scores → HydroLAKES (WGS84) → HydroLAKES (reprojected) → Masked Scores",
+                          fontsize=13, fontweight='bold')
+
+        # Panel 1 (top-left): Raw scores (before lake masking)
+        raw_scores = scores_before_lake_mask.get("sledding", sledding_scores)
+        im1 = axes_diag[0, 0].imshow(raw_scores, cmap=boreal_mako_from_registry,
+                                      vmin=0, vmax=rendered_score_max,
+                                      origin='lower', aspect='auto')
+        n_valid_raw = int(np.sum(~np.isnan(raw_scores)))
+        n_nonzero_raw = int(np.sum((~np.isnan(raw_scores)) & (raw_scores > 0)))
+        axes_diag[0, 0].set_title(f"1. Raw Scores (before lake mask)\n"
+                                   f"valid={n_valid_raw:,}  nonzero={n_nonzero_raw:,}\n"
+                                   f"range=[{np.nanmin(raw_scores):.3f}, {np.nanmax(raw_scores):.3f}]",
+                                   fontsize=10)
+        axes_diag[0, 0].axis('off')
+        fig_diag.colorbar(im1, ax=axes_diag[0, 0], orientation='horizontal', fraction=0.046, pad=0.04)
+
+        # Panel 2 (top-right): Raw HydroLAKES mask in WGS84 (before reprojection)
+        if lake_mask_raw is not None:
+            lake_binary_raw = (lake_mask_raw > 0).astype(np.float32)
+            im2 = axes_diag[0, 1].imshow(lake_binary_raw, cmap='Blues',
+                                          vmin=0, vmax=1,
+                                          origin='lower', aspect='auto')
+            n_lake_raw = int(np.sum(lake_mask_raw > 0))
+            axes_diag[0, 1].set_title(f"2. HydroLAKES Mask (WGS84, pre-reproject)\n"
+                                       f"lake pixels={n_lake_raw:,}\n"
+                                       f"shape={lake_mask_raw.shape}  res={abs(lake_transform.a):.6f}°",
+                                       fontsize=10)
+        else:
+            axes_diag[0, 1].text(0.5, 0.5, "No raw lake mask", transform=axes_diag[0, 1].transAxes,
+                                  ha='center', va='center', fontsize=14)
+            axes_diag[0, 1].set_title("2. HydroLAKES (WGS84) — not available", fontsize=10)
+        axes_diag[0, 1].axis('off')
+
+        # Panel 3 (bottom-left): Reprojected water mask (after add_data_layer alignment)
+        if water_mask is not None:
+            im3 = axes_diag[1, 0].imshow(water_mask.astype(np.float32), cmap='Blues',
+                                          vmin=0, vmax=1,
+                                          origin='lower', aspect='auto')
+            n_water = int(np.sum(water_mask))
+            axes_diag[1, 0].set_title(f"3. Water Mask (reprojected to DEM grid)\n"
+                                       f"water pixels={n_water:,}\n"
+                                       f"shape={water_mask.shape}",
+                                       fontsize=10)
+        else:
+            axes_diag[1, 0].text(0.5, 0.5, "No water mask", transform=axes_diag[1, 0].transAxes,
+                                  ha='center', va='center', fontsize=14)
+            axes_diag[1, 0].set_title("3. Water Mask (reprojected) — not available", fontsize=10)
+        axes_diag[1, 0].axis('off')
+
+        # Panel 4 (bottom-right): Masked scores (current state, after lake NaN masking)
+        im4 = axes_diag[1, 1].imshow(sledding_scores, cmap=boreal_mako_from_registry,
+                                      vmin=0, vmax=rendered_score_max,
+                                      origin='lower', aspect='auto')
+        n_valid_masked = int(np.sum(~np.isnan(sledding_scores)))
+        n_nan_masked = n_valid_raw - n_valid_masked
+        axes_diag[1, 1].set_title(f"4. Masked Scores (after lake mask)\n"
+                                   f"valid={n_valid_masked:,}  NaN'd by mask={n_nan_masked:,}\n"
+                                   f"range=[{np.nanmin(sledding_scores):.3f}, {np.nanmax(sledding_scores):.3f}]",
+                                   fontsize=10)
+        axes_diag[1, 1].axis('off')
+        fig_diag.colorbar(im4, ax=axes_diag[1, 1], orientation='horizontal', fraction=0.046, pad=0.04)
+
+        plt.tight_layout()
+        diag_path = viz_dir / "score_diagnostic.png"
+        plt.savefig(diag_path, dpi=150, bbox_inches='tight')
+        logger.info(f"✓ Saved: {diag_path}")
+        plt.close()
 
         logger.info("")
         logger.info("="*70)
