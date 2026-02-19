@@ -1,0 +1,576 @@
+jflournoy@uber-woot:~/code/terrain-maker_v2$ uv run examples/san_diego_flow_demo.py --data-source hydrolakes --min-basin-depth 5 --min-basin-size 250 --variable-width --max-stream-width 3 --width 14 --height 11 --dpi 72 --vertices-per-pixel 1 --camera above --base-cmap modern_terrain --color-by elevation --stream-overlay --stream-cmap cividis_r --stream-color-by discharge --height-scale 1 --ortho-scale .9 --gamma 0.7 2>&1
+Calculated target vertices: 798,336 (14.0"×11.0" @ 72 DPI = 1008×792px × 1.0 vpp)
+Downloading San Diego DEM tiles from NASA...
+[2026-02-13 15:30:59 INFO] Need 6 SRTM tiles for bbox: ['N32W118', 'N32W117', 'N32W116', 'N33W118', 'N33W117', 'N33W116']
+[2026-02-13 15:30:59 INFO] Tile N32W118 already exists, skipping download
+[2026-02-13 15:30:59 INFO] Tile N32W117 already exists, skipping download
+[2026-02-13 15:30:59 INFO] Tile N32W116 already exists, skipping download
+[2026-02-13 15:30:59 INFO] Tile N33W118 already exists, skipping download
+[2026-02-13 15:30:59 INFO] Tile N33W117 already exists, skipping download
+[2026-02-13 15:30:59 INFO] Tile N33W116 already exists, skipping download
+✓ Download complete
+
+Loading DEM from data/san_diego_dem...
+[2026-02-13 15:30:59 INFO] Searching for DEM files matching '*.hgt' in: data/san_diego_dem
+Opening DEM files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 6/6 [00:00<00:00, 1166.92it/s, opened=6]
+[2026-02-13 15:30:59 INFO] Successfully opened 6 DEM files
+[2026-02-13 15:30:59 INFO] Successfully merged DEMs:
+[2026-02-13 15:30:59 INFO]   Output shape: (7201, 10801)
+[2026-02-13 15:30:59 INFO]   Value range: -83.00 to 3280.00
+[2026-02-13 15:30:59 INFO]   Transform: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+✓ Loaded DEM: (7201, 10801) pixels
+  DEM bounds: lat [31.9999, 34.0001], lon [-118.0001, -114.9999]
+DEBUG: About to check precipitation...
+DEBUG: precip=None, exists=N/A
+
+Found existing precipitation data: examples/output/wc2.1_2.5m_bio_12.tif
+
+Preparing DEM for flow accumulation...
+DEBUG: Step 4 starting
+DEBUG: Importing rasterio...
+DEBUG: Merged DEM already exists, skipping write
+✓ Saved merged DEM: examples/output/flow_data/merged_dem.tif
+
+Loading water bodies (HydroLAKES)...
+  Loaded 77 water bodies from hydrolakes
+  Lake mask shape: (7201, 10801), 2,201,873 lake cells
+  Lake outlets: 77 cells
+
+Computing flow accumulation...
+  Target vertices: 798,336 (full quality)
+  flow_accumulation: validating inputs...
+  flow_accumulation: loading DEM...
+  flow_accumulation: DEM loaded (7201, 10801)
+  Downsampling DEM from (7201, 10801) (77,778,001 cells) to (1263, 1895) (2,393,385 cells) [5.70x factor]...
+  ✓ Downsampled lake_mask to (1263, 1895)
+  ✓ Downsampled lake_outlets to (1263, 1895)
+  ✓ Downsampled DEM to (1263, 1895)
+  flow_accumulation: loading precipitation...
+[2026-02-13 15:31:01 INFO] Loading wc2.1_2.5m_bio_12.tif cropped to DEM bounds...
+[2026-02-13 15:31:01 INFO]   ✓ Cropped (4320, 8640) → (48, 72) using windowed read
+  flow_accumulation: precipitation loaded (48, 72)
+  Imputing 656 missing values (19.0%) using nearest neighbor...
+  ✓ Imputation complete
+  Upscaling precipitation from (48, 72) to (1263, 1895) using auto...
+  Detroit-style upscaling: ESRGAN 32x + downsample to exact shape...
+[2026-02-13 15:31:01 INFO] Upscaling scores (48, 72) by 32x using method='auto'
+[2026-02-13 15:31:01 INFO] Method 'esrgan' not available: Real-ESRGAN import failed: No module named 'realesrgan'
+Install with: uv sync --extra upscale
+[2026-02-13 15:31:01 INFO]   Falling back to next method...
+[2026-02-13 15:31:01 INFO] Upscaled scores: (48, 72) -> (1536, 2304) using bilinear
+  ✓ ESRGAN 32x → (1536, 2304) → downsampled to (1263, 1895)
+  Geographic CRS detected (cell size: 0.00158297° ≈ 160.8m at lat 33.00°)
+  Auto-calculated epsilon: 1.61e-03 m/cell (= 1e-5 × 160.8m cell size)
+Detecting ocean (elevation <= 0.0m, border-connected)...
+  Ocean detected: 474,618 cells (19.8%)
+Detecting endorheic basins (min_size=250, min_depth=5.0m)...
+  Found 1165 endorheic basin(s) (8.01% of domain)
+  Basins will be masked during conditioning to preserve topography
+  Combined conditioning mask: 666,391 cells (27.8%)
+Using spec-compliant backend (flow-spec.md)...
+  Stage 1: Identifying outlets...
+    Found 4,554 outlet cells
+  Stage 2a: Breaching SKIPPED (disabled via parameters)
+  Stage 2b: Priority-flood fill residuals...
+    Priority-flood raised 90,605 cells to resolve depressions
+  DEM conditioning complete (spec-compliant pipeline)
+Computing flow directions...
+  Fixed 0 coastal cells to flow toward ocean/sinks
+Applying lake flow routing...
+  Routed 77 lakes with 3 outlets
+Computing drainage area...
+Computing upstream rainfall...
+
+DEBUG: Checking breached_dem...
+  breached_dem is None: False
+  breached_dem shape: (1263, 1895), dtype: float32
+  conditioned_dem shape: (1263, 1895), dtype: float32
+  min(breached): -73.48, max(breached): 3256.70
+  min(conditioned): -73.48, max(conditioned): 3256.70
+  min(conditioned - breached): 0.00, max: 86.48
+
+============================================================
+FLOW ACCUMULATION RESULTS
+============================================================
+  Original DEM: 7201×10801 (77,778,001 cells)
+  Flow computed at: 1263×1895 (2,393,385 cells)
+  Downsample factor: 5.70x
+  Total area: 61892.6 km²
+  Max drainage area: 3879.86 km²
+  Max upstream water: 750929109 m³/year
+============================================================
+
+
+Preparing aligned data layers...
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Initializing Terrain Cache
+[2026-02-13 15:31:07 INFO] Initializing Terrain Cache
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Cache directory contents: []
+[2026-02-13 15:31:07 INFO] Cache directory contents: []
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Initializing Terrain...
+[2026-02-13 15:31:07 INFO] Initializing Terrain...
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Adding data layer 'dem'
+[2026-02-13 15:31:07 INFO] Adding data layer 'dem'
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Added layer 'dem' with original CRS EPSG:4326
+[2026-02-13 15:31:07 INFO] Added layer 'dem' with original CRS EPSG:4326
+2026-02-13 15:31:07,743 - src.terrain.core - INFO - Terrain initialized with DEM data:
+[2026-02-13 15:31:07 INFO] Terrain initialized with DEM data:
+2026-02-13 15:31:07,743 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:07 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:07,743 - src.terrain.core - INFO -   Resolution: 176.22m x 176.22m
+[2026-02-13 15:31:07 INFO]   Resolution: 176.22m x 176.22m
+2026-02-13 15:31:07,744 - src.terrain.core - INFO -   Value range: -73.48 to 3256.70
+[2026-02-13 15:31:07 INFO]   Value range: -73.48 to 3256.70
+  Precipitation range: [0.0, 11246.0] mm/year
+2026-02-13 15:31:08,092 - src.terrain.core - INFO - Adding data layer 'dem_original'
+[2026-02-13 15:31:08 INFO] Adding data layer 'dem_original'
+2026-02-13 15:31:08,092 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:4326
+[2026-02-13 15:31:08 INFO] Reprojecting from EPSG:4326 to EPSG:4326
+2026-02-13 15:31:08,092 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:08 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:08,286 - src.terrain.core - INFO - Successfully added layer 'dem_original' (reprojected):
+[2026-02-13 15:31:08 INFO] Successfully added layer 'dem_original' (reprojected):
+2026-02-13 15:31:08,286 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:08 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:08,286 - src.terrain.core - INFO -   Value range: -73.00 to 3257.00
+[2026-02-13 15:31:08 INFO]   Value range: -73.00 to 3257.00
+2026-02-13 15:31:08,326 - src.terrain.core - INFO - Adding data layer 'ocean_mask'
+[2026-02-13 15:31:08 INFO] Adding data layer 'ocean_mask'
+2026-02-13 15:31:08,326 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:4326
+[2026-02-13 15:31:08 INFO] Reprojecting from EPSG:4326 to EPSG:4326
+2026-02-13 15:31:08,326 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:08 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:08,540 - src.terrain.core - INFO - Successfully added layer 'ocean_mask' (reprojected):
+[2026-02-13 15:31:08 INFO] Successfully added layer 'ocean_mask' (reprojected):
+2026-02-13 15:31:08,540 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:08 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:08,541 - src.terrain.core - INFO -   Value range: 0.00 to 1.00
+[2026-02-13 15:31:08 INFO]   Value range: 0.00 to 1.00
+2026-02-13 15:31:08,541 - src.terrain.core - INFO - Adding data layer 'precip'
+[2026-02-13 15:31:08 INFO] Adding data layer 'precip'
+2026-02-13 15:31:08,541 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:4326
+[2026-02-13 15:31:08 INFO] Reprojecting from EPSG:4326 to EPSG:4326
+2026-02-13 15:31:08,541 - src.terrain.core - INFO - Transforms: | 0.04, 0.00,-180.00|
+| 0.00,-0.04, 90.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:08 INFO] Transforms: | 0.04, 0.00,-180.00|
+| 0.00,-0.04, 90.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:08,584 - src.terrain.core - INFO - Successfully added layer 'precip' (reprojected):
+[2026-02-13 15:31:08 INFO] Successfully added layer 'precip' (reprojected):
+2026-02-13 15:31:08,584 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:08 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:08,585 - src.terrain.core - INFO -   Value range: 0.00 to 848.63
+[2026-02-13 15:31:08 INFO]   Value range: 0.00 to 848.63
+2026-02-13 15:31:08,623 - src.terrain.core - INFO - Adding data layer 'lake_mask'
+[2026-02-13 15:31:08 INFO] Adding data layer 'lake_mask'
+2026-02-13 15:31:08,623 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:4326
+[2026-02-13 15:31:08 INFO] Reprojecting from EPSG:4326 to EPSG:4326
+2026-02-13 15:31:08,623 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:08 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:08,835 - src.terrain.core - INFO - Successfully added layer 'lake_mask' (reprojected):
+[2026-02-13 15:31:08 INFO] Successfully added layer 'lake_mask' (reprojected):
+2026-02-13 15:31:08,835 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:08 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:08,836 - src.terrain.core - INFO -   Value range: 0.00 to 75.38
+[2026-02-13 15:31:08 INFO]   Value range: 0.00 to 75.38
+2026-02-13 15:31:08,869 - src.terrain.core - INFO - Adding data layer 'lake_outlets'
+[2026-02-13 15:31:08 INFO] Adding data layer 'lake_outlets'
+2026-02-13 15:31:08,869 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:4326
+[2026-02-13 15:31:08 INFO] Reprojecting from EPSG:4326 to EPSG:4326
+2026-02-13 15:31:08,869 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:08 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:09,080 - src.terrain.core - INFO - Successfully added layer 'lake_outlets' (reprojected):
+[2026-02-13 15:31:09 INFO] Successfully added layer 'lake_outlets' (reprojected):
+2026-02-13 15:31:09,081 - src.terrain.core - INFO -   Shape: (1263, 1895)
+[2026-02-13 15:31:09 INFO]   Shape: (1263, 1895)
+2026-02-13 15:31:09,081 - src.terrain.core - INFO -   Value range: 0.00 to 0.03
+[2026-02-13 15:31:09 INFO]   Value range: 0.00 to 0.03
+2026-02-13 15:31:09,081 - src.terrain.core - WARNING - No transforms to apply
+[2026-02-13 15:31:09 WARNING] No transforms to apply
+
+Skipping diagnostic visualizations (use --diagnostics to enable)
+
+Creating 3D terrain...
+[2026-02-13 15:31:09 INFO] Clearing Blender scene...
+[2026-02-13 15:31:09 INFO] Scene cleared successfully
+Loading DEM from data/san_diego_dem...
+2026-02-13 15:31:09,108 - src.terrain.core - INFO - Initializing Terrain Cache
+[2026-02-13 15:31:09 INFO] Initializing Terrain Cache
+2026-02-13 15:31:09,108 - src.terrain.core - INFO - Cache directory contents: []
+[2026-02-13 15:31:09 INFO] Cache directory contents: []
+2026-02-13 15:31:09,108 - src.terrain.core - INFO - Initializing Terrain...
+[2026-02-13 15:31:09 INFO] Initializing Terrain...
+2026-02-13 15:31:09,108 - src.terrain.core - INFO - Converting DEM data from int16 to float32
+[2026-02-13 15:31:09 INFO] Converting DEM data from int16 to float32
+2026-02-13 15:31:09,145 - src.terrain.core - INFO - Adding data layer 'dem'
+[2026-02-13 15:31:09 INFO] Adding data layer 'dem'
+2026-02-13 15:31:09,145 - src.terrain.core - INFO - Added layer 'dem' with original CRS EPSG:4326
+[2026-02-13 15:31:09 INFO] Added layer 'dem' with original CRS EPSG:4326
+2026-02-13 15:31:09,145 - src.terrain.core - INFO - Terrain initialized with DEM data:
+[2026-02-13 15:31:09 INFO] Terrain initialized with DEM data:
+2026-02-13 15:31:09,145 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:09 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:09,145 - src.terrain.core - INFO -   Resolution: 30.92m x 30.92m
+[2026-02-13 15:31:09 INFO]   Resolution: 30.92m x 30.92m
+2026-02-13 15:31:09,173 - src.terrain.core - INFO -   Value range: -83.00 to 3280.00
+[2026-02-13 15:31:09 INFO]   Value range: -83.00 to 3280.00
+2026-02-13 15:31:09,173 - src.terrain.core - INFO - Added transform: reproject(EPSG:4326→EPSG:32611)
+[2026-02-13 15:31:09 INFO] Added transform: reproject(EPSG:4326→EPSG:32611)
+2026-02-13 15:31:09,173 - src.terrain.core - INFO - Added transform: flip_horizontal
+[2026-02-13 15:31:09 INFO] Added transform: flip_horizontal
+2026-02-13 15:31:09,173 - src.terrain.core - INFO - Added transform: scale_elev(×0.0001)
+[2026-02-13 15:31:09 INFO] Added transform: scale_elev(×0.0001)
+2026-02-13 15:31:09,173 - src.terrain.core - INFO - Configuring for 798,336 target vertices
+  Original DEM: 7201 × 10801 (77,778,001 vertices)
+  Calculated zoom_factor: 0.101313
+  Downsampling method: average
+  Resulting grid: 729 × 1094
+[2026-02-13 15:31:09 INFO] Configuring for 798,336 target vertices
+  Original DEM: 7201 × 10801 (77,778,001 vertices)
+  Calculated zoom_factor: 0.101313
+  Downsampling method: average
+  Resulting grid: 729 × 1094
+Adding flow data layers...
+  Flow data at computed resolution: (1263, 1895)
+  Drainage area range: 1.0 - 150034.0
+  Drainage log range: 0.301 - 5.176
+  Non-zero drainage cells: 2,393,385
+Processing data layers:   0%|                                                                                                                                                       | 0/1 [00:00<?, ?it/s]2026-02-13 15:31:09,211 - src.terrain.core - INFO - Cache miss for dem_reproject(EPSG:4326→EPSG:32611)_flip_horizontal_scale_elev(×0.0001)_downsample(0.101, average), computing transforms...
+[2026-02-13 15:31:09 INFO] Cache miss for dem_reproject(EPSG:4326→EPSG:32611)_flip_horizontal_scale_elev(×0.0001)_downsample(0.101, average), computing transforms...
+2026-02-13 15:31:09,246 - src.terrain.core - INFO -   [1/4] Applying reproject(EPSG:4326→EPSG:32611)... (input: 7201×10801 = 77.8M pixels)
+[2026-02-13 15:31:09 INFO]   [1/4] Applying reproject(EPSG:4326→EPSG:32611)... (input: 7201×10801 = 77.8M pixels)
+[2026-02-13 15:31:09 INFO] Reprojecting raster from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:10 INFO] Reprojection complete. New shape: (8120, 10294)
+[2026-02-13 15:31:10 INFO] Value range: -81.81 to 3278.67
+2026-02-13 15:31:10,328 - src.terrain.core - INFO -   [1/4] ✓ reproject(EPSG:4326→EPSG:32611) complete in 1.1s → 8120×10294
+[2026-02-13 15:31:10 INFO]   [1/4] ✓ reproject(EPSG:4326→EPSG:32611) complete in 1.1s → 8120×10294
+2026-02-13 15:31:10,328 - src.terrain.core - INFO -   [2/4] Applying flip_horizontal... (input: 8120×10294 = 83.6M pixels)
+[2026-02-13 15:31:10 INFO]   [2/4] Applying flip_horizontal... (input: 8120×10294 = 83.6M pixels)
+2026-02-13 15:31:10,328 - src.terrain.core - INFO -   [2/4] ✓ flip_horizontal complete in 0.0s → 8120×10294
+[2026-02-13 15:31:10 INFO]   [2/4] ✓ flip_horizontal complete in 0.0s → 8120×10294
+2026-02-13 15:31:10,328 - src.terrain.core - INFO -   [3/4] Applying scale_elev(×0.0001)... (input: 8120×10294 = 83.6M pixels)
+[2026-02-13 15:31:10 INFO]   [3/4] Applying scale_elev(×0.0001)... (input: 8120×10294 = 83.6M pixels)
+[2026-02-13 15:31:10 INFO] Scaling elevation by factor 0.0001
+[2026-02-13 15:31:10 INFO] Original range: -81.81 to 3278.67
+[2026-02-13 15:31:10 INFO] Scaled range: -0.01 to 0.33
+2026-02-13 15:31:10,635 - src.terrain.core - DEBUG -   Updated elevation_scale: 0.0001
+2026-02-13 15:31:10,635 - src.terrain.core - INFO -   [3/4] ✓ scale_elev(×0.0001) complete in 0.3s → 8120×10294
+[2026-02-13 15:31:10 INFO]   [3/4] ✓ scale_elev(×0.0001) complete in 0.3s → 8120×10294
+2026-02-13 15:31:10,635 - src.terrain.core - INFO -   [4/4] Applying downsample(0.101, average)... (input: 8120×10294 = 83.6M pixels)
+[2026-02-13 15:31:10 INFO]   [4/4] Applying downsample(0.101, average)... (input: 8120×10294 = 83.6M pixels)
+[2026-02-13 15:31:10 INFO] Downsampling raster by factor 0.10131283502837213 using average
+[2026-02-13 15:31:13 INFO] Original shape: (8120, 10294)
+[2026-02-13 15:31:13 INFO] Downsampled shape: (822, 1042)
+[2026-02-13 15:31:13 INFO] Value range: -0.01 to 0.32
+2026-02-13 15:31:13,457 - src.terrain.core - INFO -   [4/4] ✓ downsample(0.101, average) complete in 2.8s → 822×1042
+[2026-02-13 15:31:13 INFO]   [4/4] ✓ downsample(0.101, average) complete in 2.8s → 822×1042
+2026-02-13 15:31:13,458 - src.terrain.core - INFO -   All 4 transforms complete in 4.2s total
+[2026-02-13 15:31:13 INFO]   All 4 transforms complete in 4.2s total
+Processing data layers: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:0Processing data layers: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:04<00:00,  4.25s/it]
+2026-02-13 15:31:13,458 - src.terrain.core - INFO - Transforms applied successfully
+[2026-02-13 15:31:13 INFO] Transforms applied successfully
+  Applying gamma correction to elevation: γ=0.70
+    Elevation range: [-83.0, 3280.0] m
+Adding color data layers (post-transform)...
+2026-02-13 15:31:14,203 - src.terrain.core - INFO - Adding data layer 'drainage_area_log'
+[2026-02-13 15:31:14 INFO] Adding data layer 'drainage_area_log'
+2026-02-13 15:31:14,203 - src.terrain.core - DEBUG - Using transformed target shape (7201, 10801) for layer alignment
+2026-02-13 15:31:14,203 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:14 INFO] Reprojecting from EPSG:4326 to EPSG:32611
+2026-02-13 15:31:14,203 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:14 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:14,424 - src.terrain.core - INFO - Successfully added layer 'drainage_area_log' (reprojected):
+[2026-02-13 15:31:14 INFO] Successfully added layer 'drainage_area_log' (reprojected):
+2026-02-13 15:31:14,425 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:14 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:14,453 - src.terrain.core - INFO -   Value range: 0.00 to 4.04
+[2026-02-13 15:31:14 INFO]   Value range: 0.00 to 4.04
+2026-02-13 15:31:14,454 - src.terrain.core - INFO - Adding data layer 'upstream_rainfall_log'
+[2026-02-13 15:31:14 INFO] Adding data layer 'upstream_rainfall_log'
+2026-02-13 15:31:14,454 - src.terrain.core - DEBUG - Using transformed target shape (7201, 10801) for layer alignment
+2026-02-13 15:31:14,454 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:14 INFO] Reprojecting from EPSG:4326 to EPSG:32611
+2026-02-13 15:31:14,454 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:14 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:14,658 - src.terrain.core - INFO - Successfully added layer 'upstream_rainfall_log' (reprojected):
+[2026-02-13 15:31:14 INFO] Successfully added layer 'upstream_rainfall_log' (reprojected):
+2026-02-13 15:31:14,658 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:14 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:14,687 - src.terrain.core - INFO -   Value range: 0.00 to 6.24
+[2026-02-13 15:31:14 INFO]   Value range: 0.00 to 6.24
+2026-02-13 15:31:14,687 - src.terrain.core - INFO - Adding data layer 'discharge_potential_log'
+[2026-02-13 15:31:14 INFO] Adding data layer 'discharge_potential_log'
+2026-02-13 15:31:14,687 - src.terrain.core - DEBUG - Using transformed target shape (7201, 10801) for layer alignment
+2026-02-13 15:31:14,687 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:14 INFO] Reprojecting from EPSG:4326 to EPSG:32611
+2026-02-13 15:31:14,687 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:14 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:14,889 - src.terrain.core - INFO - Successfully added layer 'discharge_potential_log' (reprojected):
+[2026-02-13 15:31:14 INFO] Successfully added layer 'discharge_potential_log' (reprojected):
+2026-02-13 15:31:14,889 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:14 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:14,918 - src.terrain.core - INFO -   Value range: 0.00 to 5.97
+[2026-02-13 15:31:14 INFO]   Value range: 0.00 to 5.97
+  Using ALIGNED data at mesh resolution: (7201, 10801)
+  Applying variable width stream expansion (max 3 pixels)...
+    Array size: (7201, 10801) (890MB for distance transform)
+    Expanded from 42,062 to 42,076 stream pixels
+  Stream cells (top 5.0%): 42,076
+Adding water masks...
+2026-02-13 15:31:18,284 - src.terrain.core - INFO - Adding data layer 'ocean_mask'
+[2026-02-13 15:31:18 INFO] Adding data layer 'ocean_mask'
+2026-02-13 15:31:18,284 - src.terrain.core - DEBUG - Using transformed target shape (7201, 10801) for layer alignment
+2026-02-13 15:31:18,284 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:18 INFO] Reprojecting from EPSG:4326 to EPSG:32611
+2026-02-13 15:31:18,284 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:18 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:18,685 - src.terrain.core - INFO - Successfully added layer 'ocean_mask' (reprojected):
+[2026-02-13 15:31:18 INFO] Successfully added layer 'ocean_mask' (reprojected):
+2026-02-13 15:31:18,685 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:18 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:18,713 - src.terrain.core - INFO -   Value range: 0.00 to 1.00
+[2026-02-13 15:31:18 INFO]   Value range: 0.00 to 1.00
+  Ocean mask: 15,520,622 cells
+2026-02-13 15:31:18,781 - src.terrain.core - INFO - Adding data layer 'lake_mask'
+[2026-02-13 15:31:18 INFO] Adding data layer 'lake_mask'
+2026-02-13 15:31:18,781 - src.terrain.core - DEBUG - Using transformed target shape (7201, 10801) for layer alignment
+2026-02-13 15:31:18,781 - src.terrain.core - INFO - Reprojecting from EPSG:4326 to EPSG:32611
+[2026-02-13 15:31:18 INFO] Reprojecting from EPSG:4326 to EPSG:32611
+2026-02-13 15:31:18,781 - src.terrain.core - INFO - Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+[2026-02-13 15:31:18 INFO] Transforms: | 0.00, 0.00,-118.00|
+| 0.00,-0.00, 34.00|
+| 0.00, 0.00, 1.00| to | 271.75, 0.00, 405529.27|
+| 0.00, 271.75, 3540447.32|
+| 0.00, 0.00, 1.00|
+2026-02-13 15:31:19,184 - src.terrain.core - INFO - Successfully added layer 'lake_mask' (reprojected):
+[2026-02-13 15:31:19 INFO] Successfully added layer 'lake_mask' (reprojected):
+2026-02-13 15:31:19,184 - src.terrain.core - INFO -   Shape: (7201, 10801)
+[2026-02-13 15:31:19 INFO]   Shape: (7201, 10801)
+2026-02-13 15:31:19,212 - src.terrain.core - INFO -   Value range: 0.00 to 1.00
+[2026-02-13 15:31:19 INFO]   Value range: 0.00 to 1.00
+  Lake mask: 2,201,873 cells
+
+  DEBUG - Aligned data layer shapes:
+    DEM (aligned): (7201, 10801)
+    Ocean mask (aligned): (7201, 10801)
+    Lake mask (aligned): (7201, 10801)
+  Combined water mask: 197,651 cells, shape: (7201, 10801)
+Using colormaps: base=modern_terrain (modern_terrain), stream=cividis_r (cividis_r)
+Coloring by elevation + stream overlay (discharge, top 5.0%)...
+2026-02-13 15:31:19,444 - src.terrain.core - INFO - Multi-overlay color mapping configured:
+[2026-02-13 15:31:19 INFO] Multi-overlay color mapping configured:
+2026-02-13 15:31:19,444 - src.terrain.core - INFO -   Base colormap: <lambda> on ['dem']
+[2026-02-13 15:31:19 INFO]   Base colormap: <lambda> on ['dem']
+2026-02-13 15:31:19,444 - src.terrain.core - INFO -   Number of overlays: 1
+[2026-02-13 15:31:19 INFO]   Number of overlays: 1
+2026-02-13 15:31:19,444 - src.terrain.core - INFO -     Overlay 0 (priority 10): stream_colormap on ['stream_colored'] [threshold=0.01]
+[2026-02-13 15:31:19 INFO]     Overlay 0 (priority 10): stream_colormap on ['stream_colored'] [threshold=0.01]
+2026-02-13 15:31:19,444 - src.terrain.core - INFO - Computing multi-overlay colors...
+[2026-02-13 15:31:19 INFO] Computing multi-overlay colors...
+[2026-02-13 15:31:19 INFO] Creating elevation colormap using modern_terrain
+[2026-02-13 15:31:19 INFO] Elevation range: -83.0 to 3280.0 meters
+[2026-02-13 15:31:28 INFO] Created elevation colormap with shape (7201, 10801, 3)
+[2026-02-13 15:31:29 INFO] Creating elevation colormap using cividis_r
+[2026-02-13 15:31:29 INFO] Elevation range: 0.0 to 6.0 meters
+[2026-02-13 15:31:41 INFO] Created elevation colormap with shape (7201, 10801, 3)
+2026-02-13 15:31:41,431 - src.terrain.core - INFO - Overlay 0: using threshold=0.01, 42073 grid pixels
+[2026-02-13 15:31:41 INFO] Overlay 0: using threshold=0.01, 42073 grid pixels
+2026-02-13 15:31:41,671 - src.terrain.core - DEBUG - Overlay 0 (priority 10): applied to 42073 grid pixels
+2026-02-13 15:31:41,671 - src.terrain.core - INFO - Multi-overlay colors computed: 1 overlays applied
+[2026-02-13 15:31:41 INFO] Multi-overlay colors computed: 1 overlays applied
+2026-02-13 15:31:41,671 - src.terrain.core - INFO - Colors stored as grid-space array: (7201, 10801, 4)
+[2026-02-13 15:31:41 INFO] Colors stored as grid-space array: (7201, 10801, 4)
+
+  Color stats after compute_colors():
+    Unique colors: 7201
+    Color range R: 17.000 - 255.000
+    Color range G: 17.000 - 255.000
+    Color range B: 17.000 - 255.000
+    Available layers: ['dem', 'drainage_area_log', 'upstream_rainfall_log', 'discharge_potential_log', 'stream_discharge', 'ocean_mask', 'lake_mask', 'stream_colored']
+
+  DEBUG - Array shapes before create_mesh():
+    DEM (transformed): (7201, 10801) = 77,778,001 pixels
+    water_mask_combined: (7201, 10801) = 77,778,001 pixels
+    Shape match: True
+    Memory for distance_transform_edt: ~1483 MB
+2026-02-13 15:31:55,087 - src.terrain.core - INFO - Creating terrain mesh...
+[2026-02-13 15:31:55 INFO] Creating terrain mesh...
+2026-02-13 15:31:55,109 - src.terrain.core - INFO - Using pre-computed water mask (197651 water pixels)
+[2026-02-13 15:31:55 INFO] Using pre-computed water mask (197651 water pixels)
+2026-02-13 15:31:55,135 - src.terrain.core - INFO - Generating vertex positions...
+[2026-02-13 15:31:55 INFO] Generating vertex positions...
+2026-02-13 15:32:14,601 - src.terrain.core - INFO - Water colored with depth gradient (197651 water pixels)
+[2026-02-13 15:32:14 INFO] Water colored with depth gradient (197651 water pixels)
+2026-02-13 15:32:14,601 - src.terrain.core - INFO - Centering model at origin...
+[2026-02-13 15:32:14 INFO] Centering model at origin...
+2026-02-13 15:32:15,473 - src.terrain.core - INFO - Creating coordinate to index mapping...
+[2026-02-13 15:32:15 INFO] Creating coordinate to index mapping...
+2026-02-13 15:32:37,787 - src.terrain.core - INFO - Finding boundary points with optimized algorithm...
+[2026-02-13 15:32:37 INFO] Finding boundary points with optimized algorithm...
+2026-02-13 15:32:38,751 - src.terrain.core - INFO - Boundary winding direction: clockwise (rectangle edges always clockwise)
+[2026-02-13 15:32:38 INFO] Boundary winding direction: clockwise (rectangle edges always clockwise)
+2026-02-13 15:32:38,751 - src.terrain.core - INFO - Generating faces with vectorized operations...
+[2026-02-13 15:32:38 INFO] Generating faces with vectorized operations...
+2026-02-13 15:33:33,405 - src.terrain.core - INFO - Creating optimized boundary extension...
+[2026-02-13 15:33:33 INFO] Creating optimized boundary extension...
+
+============================================================
+Transform-Aware Fractional Edge Sampling (Curved Boundary)
+============================================================
+Original DEM: 7201×10801 (sampling source)
+Fractional edge vertices: 109101
+Edge sample spacing: 0.3 pixels
+NOTE: Fractional coordinates preserve projection curvature
+============================================================
+
+✓ Rectangle-edge sampling: Using 109101 boundary vertices (morphological had 36000)
+  Deduplicating boundary points...
+  Sorting 109101 points using angular method...
+  Angular sorting: max gap = 0.19 pixels (placed at wrap-around)
+  ✓ Boundary sorted into continuous path
+  Boundary point distribution:
+    Top edge (north):     34718 points
+    Bottom edge (south):  34797 points
+    Left edge (west):     24878 points
+    Right edge (east):    24637 points
+
+[DIAG] Boundary coordinate ranges:
+  Y: min=0.01, max=822.56
+  X: min=-0.09, max=1042.83
+  Mesh Y: min=0, max=7200
+  Mesh X: min=0, max=10800
+
+[DIAG] Vertex interpolation summary:
+  Success: 109101/109101 (100.0%)
+  Failed (no corners): 0
+
+[DIAG] Position interpolation samples (first 80):
+  Fractional edge mode: ENABLED
+  Surface tier: Bilinear interpolation (aligned with mesh, no gap)
+  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)
+     i |     y_in     x_in | surface tier (bilinear) |        z
+  -----+-------------------+-------------------------+---------
+     0 |    6.339 1042.830 | ( -43.5717,  -35.9366) | 514.5984
+     1 |    6.442 1042.701 | ( -43.5730,  -35.9356) | 514.5984
+     2 |    6.443 1042.733 | ( -43.5727,  -35.9356) | 514.5984
+     3 |    6.377 1042.830 | ( -43.5717,  -35.9362) | 514.5984
+     4 |    6.444 1042.765 | ( -43.5724,  -35.9356) | 514.5984
+     5 |    6.414 1042.829 | ( -43.5717,  -35.9359) | 514.5984
+     6 |    6.444 1042.797 | ( -43.5720,  -35.9356) | 514.5984
+     7 |    6.445 1042.829 | ( -43.5717,  -35.9356) | 514.5984
+     8 |    6.452 1042.828 | ( -43.5717,  -35.9355) | 514.5984
+     9 |    6.489 1042.828 | ( -43.5717,  -35.9351) | 514.5984
+    10 |    6.526 1042.827 | ( -43.5717,  -35.9347) | 514.5984
+    11 |    6.564 1042.826 | ( -43.5717,  -35.9344) | 514.5984
+    12 |    6.601 1042.826 | ( -43.5717,  -35.9340) | 514.5984
+    13 |    6.639 1042.825 | ( -43.5718,  -35.9336) | 514.5984
+    14 |    6.676 1042.824 | ( -43.5718,  -35.9332) | 514.5984
+    15 |    6.713 1042.824 | ( -43.5718,  -35.9329) | 514.5984
+    16 |    6.751 1042.823 | ( -43.5718,  -35.9325) | 514.5984
+    17 |    6.788 1042.822 | ( -43.5718,  -35.9321) | 514.5984
+    18 |    6.826 1042.821 | ( -43.5718,  -35.9317) | 514.5984
+    19 |    6.863 1042.821 | ( -43.5718,  -35.9314) | 514.5984
+  ... (60 more samples)
+
+  Output position deltas (smoothness check):
+    X: min=0.000001, max=0.001294, mean=0.000063
+    Y: min=0.000006, max=0.001030, mean=0.000375
+  ℹ️  Wrap-around face: distance = 0.19 pixels (5.1x median, closing loop)
+
+============================================================
+Boundary Face Generation (Two-Tier)
+============================================================
+Boundary winding: clockwise
+Boundary vertices: 109101
+Surface indices (valid): 109101
+Surface indices (None): 0
+Bridge faces created: 0
+Tier faces created: 218202
+Faces skipped (None index): 0
+Faces skipped (distance check): 0
+Total boundary faces: 218202
+Expected faces (ideal): 218202
+Coverage: 100.0%
+
+Sample face indices (first 3 faces):
+  Face 0: (77778001, 77887102, 77887103, 77778002)
+  Face 1: (77887102, 77996203, 77996204, 77887103)
+  Face 2: (77778002, 77887103, 77887104, 77778003)
+============================================================
+
+2026-02-13 15:34:01,849 - src.terrain.core - INFO - Creating Blender mesh with 78105304 vertices and 77978202 faces...
+[2026-02-13 15:34:01 INFO] Creating Blender mesh with 78105304 vertices and 77978202 faces...

@@ -361,6 +361,11 @@ def main():
         default=None,
         help="Min size (cells) to be considered an endorheic basin. Default: adaptive (1/1000 of total cells).",
     )
+    parser.add_argument(
+        "--no-detect-basins",
+        action="store_true",
+        help="Disable automatic endorheic basin detection and preservation (allows flow through Salton Sea, etc.)",
+    )
     args = parser.parse_args()
 
     # Convert stream-top-percent to internal percentile representation
@@ -622,8 +627,8 @@ def main():
         max_breach_depth=args.max_breach_depth if args.breach else 0.0,
         max_breach_length=args.max_breach_length if args.breach else 0,
         parallel_method=args.parallel_method,
-        # Basin preservation (configurable via --min-basin-depth and --min-basin-size)
-        detect_basins=True,       # Automatically detect and preserve endorheic basins
+        # Basin preservation (configurable via --min-basin-depth, --min-basin-size, --no-detect-basins)
+        detect_basins=not args.no_detect_basins,  # Auto-detect and preserve endorheic basins (disable with --no-detect-basins)
         min_basin_size=args.min_basin_size,  # None = adaptive (1/1000 of total cells)
         min_basin_depth=args.min_basin_depth,  # Require significant depth to avoid small depressions
         # Precipitation upscaling (ESRGAN before ocean masking)

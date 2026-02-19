@@ -87,21 +87,22 @@ except (AttributeError, TypeError):
 # =============================================================================
 # Boreal-Mako Colormap (Perceptually Uniform)
 # =============================================================================
-# Winter forest palette: boreal green → blue → cyan → white
+# Winter forest palette: Great Lakes mixed-forest green → blue → cyan → white
 # Built like viridis/mako with monotonically increasing luminance
 # Uses the same LinearSegmentedColormap.from_list() method as the viridis family
 
 def _build_boreal_mako_cmap(purple_position=0.6):
     """Build the boreal_mako colormap.
 
-    Winter forest palette with darkened purple ribbon:
-    - Dark boreal green (cool, blue-tinted forest)
+    Winter forest palette with optional darkened purple ribbon:
+    - Mixed-forest green (warm, Great Lakes hardwood-conifer tone)
     - Transition to blue
-    - Purple ribbon at configurable position
+    - Purple ribbon at configurable position (or omitted if None)
     - Back to blue, then cyan, then white
 
     Args:
-        purple_position: Position of purple ribbon (0.0-1.0), default 0.6
+        purple_position: Position of purple ribbon (0.0-1.0), default 0.6.
+            Set to None to omit the purple band entirely.
 
     Uses the same method as mako: sample key colors and interpolate.
     """
@@ -110,52 +111,10 @@ def _build_boreal_mako_cmap(purple_position=0.6):
 
     # Fixed color stops (independent of purple position)
     base_colors = [
-        (0.00, (0.05, 0.15, 0.10)),  # Dark boreal green (cool, muted)
-        (0.20, (0.08, 0.25, 0.18)),  # Boreal green
-        (0.35, (0.10, 0.30, 0.35)),  # Green-blue transition
+        (0.00, (0.10, 0.22, 0.08)),  # Dark mixed-forest green (warm, Great Lakes hardwoods)
+        (0.15, (0.12, 0.30, 0.12)),  # Mixed deciduous-conifer green
+        (0.30, (0.10, 0.30, 0.30)),  # Green-blue transition
         (0.50, (0.12, 0.35, 0.50)),  # Blue
-    ]
-
-    # Purple ribbon (widened band with internal gradient)
-    purple_width = 0.026  # Width of purple band (±0.026 = 5.2% total width, 2x wider)
-    half_width = purple_width / 2  # 0.013 - midpoint for internal gradient
-
-    pre_purple = purple_position - purple_width
-    mid_pre_purple = purple_position - half_width
-    mid_post_purple = purple_position + half_width
-    post_purple = purple_position + purple_width
-
-    # Interpolate blue colors around purple position
-    # Get blue color at purple position
-    blue_at_purple = (0.15 + (purple_position - 0.5) * 0.2,
-                      0.40 + (purple_position - 0.5) * 0.4,
-                      0.60 + (purple_position - 0.5) * 0.2)
-
-    # Calculate purple colors with perceived luminance matching position in gradient
-    # Base purple ratios (maintaining purple hue: R > G, R > B)
-    # Reference purple at position 0.6: (0.35, 0.15, 0.28)
-    base_purple_ratios = (0.35, 0.15, 0.28)
-    base_brightness = sum(base_purple_ratios) / 3  # 0.26
-
-    # Target brightness based on blue_at_purple (what luminance should be at this position)
-    target_brightness = sum(blue_at_purple) / 3
-
-    # Scale purple to match target brightness while maintaining hue
-    brightness_scale = target_brightness / base_brightness
-    purple_scaled = tuple(c * brightness_scale for c in base_purple_ratios)
-
-    # Create gradient within purple band: lighter edges → darker center
-    # Edge purple: 15% darker than blue (0.85)
-    purple_edge = tuple(c * 0.85 for c in purple_scaled)
-    # Center purple: 30% darker than blue (0.70) - extra dark for emphasis
-    purple_center = tuple(c * 0.70 for c in purple_scaled)
-
-    purple_colors = [
-        (pre_purple, blue_at_purple),          # Outer edge: blue
-        (mid_pre_purple, purple_edge),         # Inner edge: lighter purple
-        (purple_position, purple_center),      # Center: darker purple
-        (mid_post_purple, purple_edge),        # Inner edge: lighter purple
-        (post_purple, blue_at_purple),         # Outer edge: blue
     ]
 
     # High-end colors (cyan to white)
@@ -165,18 +124,65 @@ def _build_boreal_mako_cmap(purple_position=0.6):
         (1.00, (0.85, 0.95, 0.98)),  # Pale white
     ]
 
-    # Combine all colors, filtering out base/high colors that overlap with purple band
-    # to avoid interpolation artifacts
-    # Exclude colors within the purple band range (with small buffer)
-    purple_band_min = pre_purple - 0.05
-    purple_band_max = post_purple + 0.05
+    if purple_position is None:
+        # No purple band - smooth green → blue → cyan → white
+        all_colors = base_colors + high_colors
+    else:
+        # Purple ribbon (widened band with internal gradient)
+        purple_width = 0.026  # Width of purple band (±0.026 = 5.2% total width, 2x wider)
+        half_width = purple_width / 2  # 0.013 - midpoint for internal gradient
 
-    # Keep base colors only if they're well before the purple band
-    filtered_base = [c for c in base_colors if c[0] < purple_band_min]
-    # Keep high colors only if they're well after the purple band
-    filtered_high = [c for c in high_colors if c[0] > purple_band_max]
+        pre_purple = purple_position - purple_width
+        mid_pre_purple = purple_position - half_width
+        mid_post_purple = purple_position + half_width
+        post_purple = purple_position + purple_width
 
-    all_colors = filtered_base + purple_colors + filtered_high
+        # Interpolate blue colors around purple position
+        # Get blue color at purple position
+        blue_at_purple = (0.15 + (purple_position - 0.5) * 0.2,
+                          0.40 + (purple_position - 0.5) * 0.4,
+                          0.60 + (purple_position - 0.5) * 0.2)
+
+        # Calculate purple colors with perceived luminance matching position in gradient
+        # Base purple ratios (maintaining purple hue: R > G, R > B)
+        # Reference purple at position 0.6: (0.35, 0.15, 0.28)
+        base_purple_ratios = (0.35, 0.15, 0.28)
+        base_brightness = sum(base_purple_ratios) / 3  # 0.26
+
+        # Target brightness based on blue_at_purple (what luminance should be at this position)
+        target_brightness = sum(blue_at_purple) / 3
+
+        # Scale purple to match target brightness while maintaining hue
+        brightness_scale = target_brightness / base_brightness
+        purple_scaled = tuple(c * brightness_scale for c in base_purple_ratios)
+
+        # Create gradient within purple band: lighter edges → darker center
+        # Edge purple: 15% darker than blue (0.85)
+        purple_edge = tuple(c * 0.85 for c in purple_scaled)
+        # Center purple: 30% darker than blue (0.70) - extra dark for emphasis
+        purple_center = tuple(c * 0.70 for c in purple_scaled)
+
+        purple_colors = [
+            (pre_purple, blue_at_purple),          # Outer edge: blue
+            (mid_pre_purple, purple_edge),         # Inner edge: lighter purple
+            (purple_position, purple_center),      # Center: darker purple
+            (mid_post_purple, purple_edge),        # Inner edge: lighter purple
+            (post_purple, blue_at_purple),         # Outer edge: blue
+        ]
+
+        # Combine all colors, filtering out base/high colors that overlap with purple band
+        # to avoid interpolation artifacts
+        # Exclude colors within the purple band range (with small buffer)
+        purple_band_min = pre_purple - 0.05
+        purple_band_max = post_purple + 0.05
+
+        # Keep base colors only if they're well before the purple band
+        filtered_base = [c for c in base_colors if c[0] < purple_band_min]
+        # Keep high colors only if they're well after the purple band
+        filtered_high = [c for c in high_colors if c[0] > purple_band_max]
+
+        all_colors = filtered_base + purple_colors + filtered_high
+
     all_colors = sorted(all_colors, key=lambda x: x[0])
 
     # Create colormap using from_list (same method as mako/viridis)

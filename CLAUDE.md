@@ -617,3 +617,7 @@ The roads implementation demonstrates the proper pattern:
 - [🔴 test: add failing tests for learn.js functions (TDD RED)](../../commit/8b90d58)
 - [🔴 test: add failing tests for formatBytes and estimateTokens (TDD RED)](../../commit/1fdac58)
 - [🔴 test: add failing tests for findBrokenLinks (TDD RED phase)](../../commit/8ec6319)
+
+## Analytics Tracking
+
+Simple Analytics tracking is configured in `docs/source/conf.py` using the `html_js_files` configuration. The tracking script is automatically included in all Sphinx-generated HTML pages.
