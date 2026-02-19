@@ -150,16 +150,10 @@ from src.terrain.water import identify_water_by_slope
 from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
 from src.terrain.cache import PipelineCache
 from src.terrain.diagnostics import (
-    generate_full_wavelet_diagnostics,
-    generate_full_adaptive_smooth_diagnostics,
-    generate_bump_removal_diagnostics,
-    generate_upscale_diagnostics,
-    generate_rgb_histogram,
+                    generate_rgb_histogram,
     generate_luminance_histogram,
     generate_score_histogram,
-    generate_road_elevation_diagnostics,
-    plot_road_vertex_z_diagnostics,
-)
+        )
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
 from rasterio.warp import Resampling
@@ -189,7 +183,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s: %(message)s",
     handlers=[file_handler]
 )
-
 
 # =============================================================================
 # PROFILING TIMER
@@ -246,9 +239,7 @@ class PipelineTimer:
         logger.info(f"  {'TOTAL':30s} {total_time:7.2f}s")
         logger.info("=" * 70)
 
-
 import time
-
 
 # =============================================================================
 # IMAGE METADATA EMBEDDING
@@ -338,7 +329,6 @@ def embed_command_metadata(image_path: Path, command: str, extra_metadata: dict 
         logging.getLogger(__name__).warning(f"Failed to embed metadata: {e}")
         return False
 
-
 def read_command_metadata(image_path: Path) -> Optional[str]:
     """
     Read the generation command from an image's metadata.
@@ -395,7 +385,6 @@ def read_command_metadata(image_path: Path) -> Optional[str]:
     except Exception:
         return None
 
-
 # =============================================================================
 # COLOR COMPRESSION FORMULA
 # =============================================================================
@@ -439,7 +428,6 @@ def compress_colormap_score(score, transition):
 
     # Return scalar if input was scalar
     return float(result) if is_scalar else result
-
 
 def modulate_saturation_by_elevation(
     colors: np.ndarray,
@@ -535,7 +523,6 @@ def modulate_saturation_by_elevation(
 
     return result
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -584,7 +571,6 @@ def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Option
     logger.warning("Sledding scores not found, will use mock data")
     return None, None
 
-
 def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
     """Load XC skiing scores from detroit_xc_skiing.py output.
 
@@ -611,7 +597,6 @@ def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optio
     logger.warning("XC skiing scores not found, will use mock data")
     return None, None
 
-
 def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     """Load scored parks from detroit_xc_skiing.py output."""
     parks_path = output_dir / "xc_skiing_parks.json"
@@ -623,18 +608,15 @@ def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     logger.warning("Parks not found")
     return None
 
-
 def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
     """Generate mock score grid."""
     np.random.seed(42)
     score = np.random.uniform(0.3, 0.9, shape).astype(np.float32)
     return score
 
-
 # =============================================================================
 # MAIN
 # =============================================================================
-
 
 def main():
     """Main entry point."""
@@ -1922,47 +1904,6 @@ Examples:
 
             logger.info(f"Upscaled scores: sledding {sledding_scores.shape}, XC {xc_scores.shape}")
 
-            # Always generate upscale diagnostics
-            # Use diagnostic_dir if set, otherwise use output_dir/diagnostics
-            if args.diagnostic_dir:
-                diagnostic_dir = Path(args.diagnostic_dir)
-            else:
-                diagnostic_dir = args.output_dir / "diagnostics"
-            diagnostic_dir.mkdir(parents=True, exist_ok=True)
-
-            # Determine which method was actually used
-            # (auto falls back to bilateral if esrgan not installed)
-            used_method = args.upscale_method
-            if args.upscale_method == "auto":
-                try:
-                    import realesrgan  # noqa: F401
-                    used_method = "esrgan"
-                except ImportError:
-                    used_method = "bilateral"
-
-            # Generate sledding upscale diagnostics
-            generate_upscale_diagnostics(
-                sledding_scores_original,
-                sledding_scores,
-                diagnostic_dir,
-                prefix="sledding_upscale",
-                scale=args.upscale_factor,
-                method=used_method,
-                cmap="plasma",
-            )
-
-            # Generate XC upscale diagnostics
-            generate_upscale_diagnostics(
-                xc_scores_original,
-                xc_scores,
-                diagnostic_dir,
-                prefix="xc_upscale",
-                scale=args.upscale_factor,
-                method=used_method,
-                cmap="viridis",
-            )
-            logger.info(f"Saved upscale diagnostics to {diagnostic_dir}")
-
     # Load parks for XC skiing markers
     parks = None
     if args.no_parks:
@@ -2243,23 +2184,6 @@ Examples:
         # Update the terrain with the denoised DEM
         dem_layer["transformed_data"] = post_wavelet_dem
 
-        # Generate diagnostic plots
-        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
-        logger.info(f"Generating wavelet diagnostic plots in {diagnostic_dir}")
-
-        comparison_path, coefficients_path = generate_full_wavelet_diagnostics(
-            original=pre_wavelet_dem,
-            denoised=post_wavelet_dem,
-            output_dir=diagnostic_dir,
-            prefix="dem_wavelet",
-            wavelet=args.wavelet_type,
-            levels=args.wavelet_levels,
-            threshold_sigma=args.wavelet_sigma,
-        )
-
-        logger.info(f"✓ Saved wavelet comparison: {comparison_path}")
-        if coefficients_path:
-            logger.info(f"✓ Saved coefficient analysis: {coefficients_path}")
 
     # Apply adaptive smoothing with diagnostics (if requested)
     if adaptive_diagnostic_mode:
@@ -2301,23 +2225,6 @@ Examples:
                     f"same_array={verify_dem is scaled_dem}, "
                     f"pre_smooth_std={np.nanstd(pre_smooth_dem):.4f}, post_smooth_std={np.nanstd(post_smooth_dem):.4f}")
 
-        # Generate diagnostic plots (using unscaled data for meaningful elevation values)
-        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
-        logger.info(f"Generating adaptive smooth diagnostic plots in {diagnostic_dir}")
-
-        spatial_path, histogram_path = generate_full_adaptive_smooth_diagnostics(
-            original=pre_smooth_dem,
-            smoothed=post_smooth_dem,
-            output_dir=diagnostic_dir,
-            prefix="dem_adaptive_smooth",
-            slope_threshold=args.adaptive_slope_threshold,
-            smooth_sigma=args.adaptive_smooth_sigma,
-            transition_width=args.adaptive_transition,
-            pixel_size=pixel_size,
-            edge_threshold=args.adaptive_edge_threshold,
-        )
-
-        logger.info(f"✓ Saved adaptive smooth comparison: {spatial_path}")
         logger.info(f"✓ Saved adaptive smooth histogram: {histogram_path}")
 
     # Apply bump removal with diagnostics (if requested)
@@ -2370,15 +2277,6 @@ Examples:
             diag_original = pre_bump_dem
             diag_after = post_bump_dem
 
-        diag_path = generate_bump_removal_diagnostics(
-            original=diag_original,
-            after_removal=diag_after,
-            output_dir=diagnostic_dir,
-            prefix="dem_bump_removal",
-            kernel_size=args.remove_bumps,
-        )
-
-        logger.info(f"✓ Saved bump removal diagnostics: {diag_path}")
 
     # Apply scale_elevation in normal mode (diagnostic modes handle it themselves)
     if not adaptive_diagnostic_mode and not bump_diagnostic_mode:
@@ -2547,71 +2445,6 @@ Examples:
 
             score_floor_info[_floor_layer]["n_floored"] = n_floored
 
-    # === Score floor diagnostic: log-scale histogram showing near-zero gap ===
-    for _fl_name, _fl_info in score_floor_info.items():
-        fig_floor, axes_floor = plt.subplots(1, 2, figsize=(18, 6))
-        fig_floor.suptitle(f"Score Floor Diagnostic: {_fl_name}",
-                           fontsize=14, fontweight='bold')
-
-        pre_nonzero = _fl_info["pre_floor_nonzero"]
-        floor_val = _fl_info["score_floor"]
-        n_floored = _fl_info["n_floored"]
-
-        # Left panel: log-scale histogram with floor line
-        ax_hist = axes_floor[0]
-        log_pre = np.log10(pre_nonzero)
-        ax_hist.hist(log_pre, bins=150, color='steelblue', alpha=0.7, edgecolor='none')
-        if floor_val is not None:
-            ax_hist.axvline(np.log10(floor_val), color='red', linewidth=2, linestyle='--',
-                            label=f'Floor = {floor_val:.4f}')
-        # Mark peak and valley bins
-        peak_i = _fl_info["peak_idx"]
-        valley_i = _fl_info["valley_idx"]
-        hist_edges = _fl_info["log_hist_edges"]
-        ax_hist.axvline(hist_edges[peak_i], color='orange', linewidth=1, linestyle=':',
-                        label=f'Peak bin ({peak_i})')
-        ax_hist.axvline(hist_edges[valley_i], color='green', linewidth=1, linestyle=':',
-                        label=f'Valley bin ({valley_i})')
-        ax_hist.set_xlabel('log₁₀(score)', fontsize=11)
-        ax_hist.set_ylabel('Pixel count', fontsize=11)
-        floor_str = f"{floor_val:.6f}" if floor_val is not None else "NOT DETECTED"
-        ax_hist.set_title(f"Before floor (log scale)\n"
-                          f"n={len(pre_nonzero):,}  floored={n_floored:,}\n"
-                          f"floor={floor_str}", fontsize=10)
-        ax_hist.legend(fontsize=9)
-
-        # Right panel: linear-scale zoom on the low end
-        ax_zoom = axes_floor[1]
-        zoom_max = (floor_val * 5 if floor_val is not None
-                    else float(np.percentile(pre_nonzero, 10)))
-        zoom_max = max(zoom_max, 0.05)
-        low_scores = pre_nonzero[pre_nonzero < zoom_max]
-        if len(low_scores) > 0:
-            ax_zoom.hist(low_scores, bins=100, color='steelblue', alpha=0.7, edgecolor='none')
-            if floor_val is not None:
-                ax_zoom.axvline(floor_val, color='red', linewidth=2, linestyle='--',
-                                label=f'Floor = {floor_val:.4f}')
-                n_below = int(np.sum(low_scores < floor_val))
-                n_above = int(np.sum(low_scores >= floor_val))
-                ax_zoom.set_title(f"Linear zoom: scores < {zoom_max:.3f}\n"
-                                  f"below floor: {n_below:,}  above: {n_above:,}",
-                                  fontsize=10)
-            else:
-                ax_zoom.set_title(f"Linear zoom: scores < {zoom_max:.3f}\n"
-                                  f"(no floor detected — showing low end)",
-                                  fontsize=10)
-        else:
-            ax_zoom.set_title("No scores in zoom range", fontsize=10)
-        ax_zoom.set_xlabel('Score (linear)', fontsize=11)
-        ax_zoom.set_ylabel('Pixel count', fontsize=11)
-        ax_zoom.legend(fontsize=10)
-
-        plt.tight_layout()
-        floor_path = args.output_dir / f"score_floor_{_fl_name}.png"
-        plt.savefig(floor_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {floor_path}")
-        plt.close()
-
     # Compute normalization stats from the rendered region only.
     # Scores were computed over the full SNODAS extent, then aligned to the DEM grid
     # via add_data_layer. We normalize using only pixels where the DEM has valid data
@@ -2637,44 +2470,12 @@ Examples:
         logger.info(f"  Excluded {_water_excluded:,} water pixels from normalization")
     del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
 
-    # === Colormap Visualization Diagnostics ===
-    # Always run (also runs before early exit in --colormap-viz-only mode)
-    logger.info("Generating colormap visualization diagnostics...")
-
-    # Create output directory for visualizations
-    viz_dir = args.output_dir / "colormap_viz"
-    viz_dir.mkdir(parents=True, exist_ok=True)
-
+    # === Compute scores for histogram output ===
     # Use pre-lake-mask scores snapshot (reflects the --base-scores swap)
     # The "sledding" layer key always holds base scores due to swap at args.base_scores=="skiing"
     base_scores = scores_before_lake_mask.get("sledding", terrain_combined.data_layers["sledding"]["data"])
 
-    logger.info(f"Colormap-viz using base scores from --base-scores={args.base_scores} ({base_score_label})")
-    logger.info(f"  Available layers: {list(terrain_combined.data_layers.keys())}")
-    logger.info(f"  'sledding' layer min/max: [{np.nanmin(terrain_combined.data_layers['sledding']['data']):.3f}, {np.nanmax(terrain_combined.data_layers['sledding']['data']):.3f}]")
-    if "xc_skiing" in terrain_combined.data_layers:
-        logger.info(f"  'xc_skiing' layer min/max: [{np.nanmin(terrain_combined.data_layers['xc_skiing']['data']):.3f}, {np.nanmax(terrain_combined.data_layers['xc_skiing']['data']):.3f}]")
-    logger.info(f"Base scores ({base_score_label}) shape: {base_scores.shape}")
-    logger.info(f"Score range: [{np.nanmin(base_scores):.3f}, {np.nanmax(base_scores):.3f}]")
-    logger.info(f"Score mean: {np.nanmean(base_scores):.3f}")
-
-    # Score distribution
-    bins = [0, 0.2, 0.4, 0.40, 0.55, 0.6, 0.8, 1.0]
-    hist, _ = np.histogram(base_scores[~np.isnan(base_scores)], bins=bins)
-    logger.info("Score distribution:")
-    for i in range(len(bins)-1):
-        pct = 100 * hist[i] / np.sum(~np.isnan(base_scores))
-        marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
-        logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
-
-    # Create simple visualization: normalize → gamma → colormap
-    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-    fig.suptitle(f'Detroit {base_score_label.capitalize()} Scores with Boreal-Mako Colormap\n'
-                 f'(normalized, then gamma={args.gamma})',
-                 fontsize=14, fontweight='bold')
-
     # Normalize scores to 0-1.0 range using rendered-region max
-    logger.info(f"Max score (rendered region): {rendered_score_max:.3f}")
     normalized_scores = base_scores / rendered_score_max
 
     if args.normalize_scores:
@@ -2683,32 +2484,9 @@ Examples:
         if 1.0 > norm_min:
             normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
             normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
-        logger.info(f"Scores normalized to full 0-1 range (rendered-region nonzero min={rendered_score_min_nonzero:.3f})")
 
     # Apply gamma correction to normalized scores
     gamma_corrected_scores = np.power(normalized_scores, args.gamma)
-
-    # Apply colormap (get from registry to respect --purple-position)
-    import matplotlib
-    boreal_mako_from_registry = matplotlib.colormaps.get_cmap("boreal_mako")
-    im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_from_registry,
-                  vmin=0, vmax=1.0,
-                  origin='lower', aspect='auto')
-
-    ax.set_title(f'Normalized {base_score_label} scores with gamma={args.gamma} applied',
-                 fontsize=12, fontweight='bold')
-    ax.axis('off')
-
-    # Add colorbar
-    cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
-    cbar.set_label('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11, fontweight='bold')
-
-    plt.tight_layout()
-
-    output_path = viz_dir / "scores_map.png"
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    logger.info(f"✓ Saved: {output_path}")
-    plt.close()
 
     # Create colormap-colored histogram (raw vs transformed)
     norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
@@ -2724,89 +2502,6 @@ Examples:
         normalize_scores=args.normalize_scores,
     )
     logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
-
-    # === 4-panel diagnostic: raw scores → pre-reproject lake mask → reprojected mask → masked scores ===
-    fig_diag, axes_diag = plt.subplots(2, 2, figsize=(20, 16))
-    fig_diag.suptitle("Score Diagnostic: Raw Scores → HydroLAKES (WGS84) → HydroLAKES (reprojected) → Masked Scores",
-                      fontsize=13, fontweight='bold')
-
-    # Panel 1 (top-left): Raw scores (before lake masking)
-    raw_scores = scores_before_lake_mask.get("sledding", base_scores)
-    im1 = axes_diag[0, 0].imshow(raw_scores, cmap=boreal_mako_from_registry,
-                                  vmin=0, vmax=rendered_score_max,
-                                  origin='lower', aspect='auto')
-    n_valid_raw = int(np.sum(~np.isnan(raw_scores)))
-    n_nonzero_raw = int(np.sum((~np.isnan(raw_scores)) & (raw_scores > 0)))
-    axes_diag[0, 0].set_title(f"1. Raw {base_score_label} Scores (before lake mask)\n"
-                               f"valid={n_valid_raw:,}  nonzero={n_nonzero_raw:,}\n"
-                               f"range=[{np.nanmin(raw_scores):.3f}, {np.nanmax(raw_scores):.3f}]",
-                               fontsize=10)
-    axes_diag[0, 0].axis('off')
-    fig_diag.colorbar(im1, ax=axes_diag[0, 0], orientation='horizontal', fraction=0.046, pad=0.04)
-
-    # Panel 2 (top-right): Raw HydroLAKES mask in WGS84 (before reprojection)
-    if lake_mask_raw is not None:
-        lake_binary_raw = (lake_mask_raw > 0).astype(np.float32)
-        im2 = axes_diag[0, 1].imshow(lake_binary_raw, cmap='Blues',
-                                      vmin=0, vmax=1,
-                                      origin='lower', aspect='auto')
-        n_lake_raw = int(np.sum(lake_mask_raw > 0))
-        axes_diag[0, 1].set_title(f"2. HydroLAKES Mask (WGS84, pre-reproject)\n"
-                                   f"lake pixels={n_lake_raw:,}\n"
-                                   f"shape={lake_mask_raw.shape}  res={abs(lake_transform.a):.6f}°",
-                                   fontsize=10)
-    else:
-        axes_diag[0, 1].text(0.5, 0.5, "No raw lake mask", transform=axes_diag[0, 1].transAxes,
-                              ha='center', va='center', fontsize=14)
-        axes_diag[0, 1].set_title("2. HydroLAKES (WGS84) — not available", fontsize=10)
-    axes_diag[0, 1].axis('off')
-
-    # Panel 3 (bottom-left): Reprojected water mask (after add_data_layer alignment)
-    if water_mask is not None:
-        im3 = axes_diag[1, 0].imshow(water_mask.astype(np.float32), cmap='Blues',
-                                      vmin=0, vmax=1,
-                                      origin='lower', aspect='auto')
-        n_water = int(np.sum(water_mask))
-        axes_diag[1, 0].set_title(f"3. Water Mask (reprojected to DEM grid)\n"
-                                   f"water pixels={n_water:,}\n"
-                                   f"shape={water_mask.shape}",
-                                   fontsize=10)
-    else:
-        axes_diag[1, 0].text(0.5, 0.5, "No water mask", transform=axes_diag[1, 0].transAxes,
-                              ha='center', va='center', fontsize=14)
-        axes_diag[1, 0].set_title("3. Water Mask (reprojected) — not available", fontsize=10)
-    axes_diag[1, 0].axis('off')
-
-    # Panel 4 (bottom-right): Masked scores (current state, after lake NaN masking)
-    im4 = axes_diag[1, 1].imshow(base_scores, cmap=boreal_mako_from_registry,
-                                  vmin=0, vmax=rendered_score_max,
-                                  origin='lower', aspect='auto')
-    n_valid_masked = int(np.sum(~np.isnan(base_scores)))
-    n_nan_masked = n_valid_raw - n_valid_masked
-    axes_diag[1, 1].set_title(f"4. Masked {base_score_label} Scores (after lake mask)\n"
-                               f"valid={n_valid_masked:,}  NaN'd by mask={n_nan_masked:,}\n"
-                               f"range=[{np.nanmin(base_scores):.3f}, {np.nanmax(base_scores):.3f}]",
-                               fontsize=10)
-    axes_diag[1, 1].axis('off')
-    fig_diag.colorbar(im4, ax=axes_diag[1, 1], orientation='horizontal', fraction=0.046, pad=0.04)
-
-    plt.tight_layout()
-    diag_path = viz_dir / "score_diagnostic.png"
-    plt.savefig(diag_path, dpi=150, bbox_inches='tight')
-    logger.info(f"✓ Saved: {diag_path}")
-    plt.close()
-
-    logger.info("")
-    logger.info("="*70)
-    logger.info("Colormap visualizations created successfully!")
-    logger.info("="*70)
-    logger.info(f"Output directory: {viz_dir}")
-    logger.info("")
-
-    # Early exit if --colormap-viz-only is set
-    if args.colormap_viz_only:
-        logger.info("Exiting before mesh creation (--colormap-viz-only mode)")
-        return 0
 
     # Compute proximity mask for parks if available (BEFORE mesh creation)
     # This avoids the need for duplicate mesh creation
@@ -2859,17 +2554,7 @@ Examples:
                 logger.info("✓ Road anti-aliasing applied")
 
             # Generate road elevation diagnostic
-            if "roads" in terrain_combined.data_layers:
-                dem_layer = terrain_combined.data_layers["dem"]
-                dem_for_diag = dem_layer.get("transformed_data", dem_layer["data"])
-                road_for_diag = terrain_combined.data_layers["roads"]["data"]
-                generate_road_elevation_diagnostics(
-                    dem=dem_for_diag,
-                    road_mask=road_for_diag,
-                    output_dir=Path(args.output_dir),
-                    prefix="road_elevation",
-                    kernel_radius=3,
-                )
+            # Road elevation diagnostics removed
 
         except Exception as e:
             logger.warning(f"Failed to add roads layer: {e}")
@@ -3129,18 +2814,7 @@ Examples:
             apply_vertex_positions(mesh_combined, offset_vertices, logger)
 
         # Generate vertex-level road Z diagnostic (captures final mesh state)
-        logger.info("Generating vertex-level road Z diagnostics...")
-        final_verts = np.array([v.co[:] for v in mesh_combined.data.vertices])
-        plot_road_vertex_z_diagnostics(
-            vertices=final_verts,
-            road_mask=road_layer_data,
-            y_valid=terrain_combined.y_valid,
-            x_valid=terrain_combined.x_valid,
-            output_dir=Path(args.output_dir),
-            prefix="road_vertex_z",
-            kernel_radius=3,
-            label="post-smoothing+offset",
-        )
+        # Road vertex Z diagnostics removed
 
     # Apply material based on roads and test_material settings
     # Roads use configurable color (default azurite); terrain uses vertex colors or test material
@@ -3443,7 +3117,6 @@ Examples:
     logger.info("=" * 70 + "\n")
 
     return 0
-
 
 if __name__ == "__main__":
     try:
