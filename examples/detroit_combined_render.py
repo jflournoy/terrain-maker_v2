@@ -192,6 +192,65 @@ logging.basicConfig(
 
 
 # =============================================================================
+# PROFILING TIMER
+# =============================================================================
+
+class PipelineTimer:
+    """Track timing for pipeline steps."""
+
+    def __init__(self):
+        self.steps = {}
+        self.start_time = None
+
+    def start(self):
+        """Start overall timer."""
+        self.start_time = time.time()
+
+    def mark(self, step_name: str):
+        """Mark the end of a step and start the next."""
+        current_time = time.time()
+        if self.start_time is None:
+            self.start_time = current_time
+
+        # Calculate elapsed time since last mark or start
+        if not self.steps:
+            elapsed = current_time - self.start_time
+        else:
+            last_time = max(self.steps.values(), key=lambda x: x['end'])['end']
+            elapsed = current_time - last_time
+
+        self.steps[step_name] = {
+            'start': current_time - elapsed,
+            'end': current_time,
+            'elapsed': elapsed
+        }
+
+    def report(self):
+        """Print timing report."""
+        if not self.steps:
+            return
+
+        total_time = sum(s['elapsed'] for s in self.steps.values())
+
+        logger.info("\n" + "=" * 70)
+        logger.info("PIPELINE TIMING REPORT")
+        logger.info("=" * 70)
+
+        for step_name, timing in self.steps.items():
+            pct = (timing['elapsed'] / total_time * 100) if total_time > 0 else 0
+            bar_length = int(pct / 5)  # 20 chars max
+            bar = "█" * bar_length + "░" * (20 - bar_length)
+            logger.info(f"  {step_name:30s} {timing['elapsed']:7.2f}s [{bar}] {pct:5.1f}%")
+
+        logger.info("-" * 70)
+        logger.info(f"  {'TOTAL':30s} {total_time:7.2f}s")
+        logger.info("=" * 70)
+
+
+import time
+
+
+# =============================================================================
 # IMAGE METADATA EMBEDDING
 # =============================================================================
 
@@ -1666,6 +1725,10 @@ Examples:
     cache.define_target("colors_computed", params=color_params, dependencies=["dem_transformed"])
     cache.define_target("mesh_created", params=mesh_params, dependencies=["colors_computed"])
 
+    # Initialize profiling timer
+    timer = PipelineTimer()
+    timer.start()
+
     # Load data
     logger.info("\n" + "=" * 70)
     logger.info("[1/5] Loading Data")
@@ -2001,6 +2064,9 @@ Examples:
     target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier))
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution, {args.vertex_multiplier}x multiplier)")
 
+    # Mark end of data loading phase
+    timer.mark("[1/5] Loading Data")
+
     # Create single terrain mesh with dual colormaps
     # Base: Boreal-Mako colormap for base scores (with gamma)
     # Overlay: Rocket colormap for XC skiing scores near parks
@@ -2082,6 +2148,9 @@ Examples:
     logger.info(f"DEM after geometry transforms: shape={dem_after_geom.shape}, "
                 f"min={np.nanmin(dem_after_geom):.4f}, max={np.nanmax(dem_after_geom):.4f}, "
                 f"std={np.nanstd(dem_after_geom):.4f}")
+
+    # Mark end of geometry transforms phase
+    timer.mark("  └─ Geometry transforms (reproject/flip/downsample)")
 
     # =========================================================================
     # WATER DETECTION: Use HydroLAKES if available, otherwise slope-based fallback
@@ -2324,6 +2393,9 @@ Examples:
     logger.info(f"DEM state before mesh: shape={dem_for_debug.shape}, "
                 f"min={np.nanmin(dem_for_debug):.4f}, max={np.nanmax(dem_for_debug):.4f}, "
                 f"std={np.nanstd(dem_for_debug):.4f}")
+
+    # Mark end of DEM processing (smoothing, despeckle, scaling)
+    timer.mark("  └─ DEM processing (smoothing, scaling, bump removal)")
 
     # Add sledding scores as base layer
     logger.debug("Adding sledding scores layer...")
@@ -2941,6 +3013,9 @@ Examples:
     else:
         logger.info(f"Edge spacing: {edge_spacing} (user-specified)")
 
+    # Mark end of color/score processing
+    timer.mark("  └─ Score processing and color computation")
+
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -3099,6 +3174,9 @@ Examples:
     gc.collect()
     logger.info("Freed original DEM from memory")
 
+    # Mark end of mesh creation phase
+    timer.mark("  └─ Mesh creation and material application")
+
     # Setup camera and lighting
     logger.info("\n[3/4] Setting up Camera & Lighting...")
     logger.info(f"  Camera direction: {args.camera_direction}")
@@ -3201,6 +3279,9 @@ Examples:
     output_format = args.format.upper()
     format_ext = "jpg" if output_format == "JPEG" else "png"
     color_mode = "RGB" if output_format == "JPEG" else "RGBA"
+
+    # Mark end of mesh creation phase
+    timer.mark("[2/4] Creating Combined Terrain Mesh")
 
     # Render if requested
     if not args.no_render:
@@ -3328,6 +3409,12 @@ Examples:
 
         # Print actual Blender settings used for this render
         print_render_settings_report(logger)
+
+        # Mark end of rendering phase
+        timer.mark("[4/4] Rendering")
+
+    # Print timing report
+    timer.report()
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Detroit Combined Terrain Rendering Complete!")
