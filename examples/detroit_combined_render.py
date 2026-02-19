@@ -2022,20 +2022,17 @@ Examples:
     logger.debug("Creating terrain with DEM...")
     terrain_combined = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Downsample FIRST while still in WGS84 - huge memory savings by avoiding
-    # reprojection of full 855M pixel DEM (~40-50s saved per run)
+    # Add standard transforms (cached_reproject saves ~24s on subsequent runs)
+    terrain_combined.add_transform(cached_reproject(src_crs=dem_crs, dst_crs="EPSG:32617"))
+    terrain_combined.add_transform(flip_raster(axis="horizontal"))
+    # Note: scale_elevation is added AFTER adaptive_smooth so slope computation uses real elevations
+
     # Configure downsampling FIRST (all smoothing runs on downsampled data for memory efficiency)
     if target_vertices:
         logger.debug(f"Configuring for target vertices: {target_vertices:,} (method: {args.downsample_method})")
         terrain_combined.configure_for_target_vertices(
             target_vertices=target_vertices, method=args.downsample_method
         )
-
-    # Add standard transforms AFTER downsampling (transforms are applied in order added)
-    # Now reproject the small downsampled DEM instead of 855M pixel original
-    terrain_combined.add_transform(cached_reproject(src_crs=dem_crs, dst_crs="EPSG:32617"))
-    terrain_combined.add_transform(flip_raster(axis="horizontal"))
-    # Note: scale_elevation is added AFTER adaptive_smooth so slope computation uses real elevations
 
     # =========================================================================
     # PHASE 1: Apply geometry transforms (reproject, flip, downsample)
