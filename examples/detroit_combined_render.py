@@ -2471,6 +2471,10 @@ Examples:
     del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
 
     # === Compute scores for histogram output ===
+    # Create output directory for histograms
+    viz_dir = args.output_dir / "histograms"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+
     # Use pre-lake-mask scores snapshot (reflects the --base-scores swap)
     # The "sledding" layer key always holds base scores due to swap at args.base_scores=="skiing"
     base_scores = scores_before_lake_mask.get("sledding", terrain_combined.data_layers["sledding"]["data"])
