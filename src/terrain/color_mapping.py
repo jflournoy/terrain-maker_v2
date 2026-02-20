@@ -6,6 +6,7 @@ using matplotlib colormaps.
 """
 
 import logging
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -91,7 +92,7 @@ except (AttributeError, TypeError):
 # Built like viridis/mako with monotonically increasing luminance
 # Uses the same LinearSegmentedColormap.from_list() method as the viridis family
 
-def _build_boreal_mako_cmap(purple_position=0.6):
+def _build_boreal_mako_cmap(purple_position=0.6, purple_width=1.0):
     """Build the boreal_mako colormap.
 
     Winter forest palette with optional darkened purple ribbon:
@@ -103,6 +104,10 @@ def _build_boreal_mako_cmap(purple_position=0.6):
     Args:
         purple_position: Position of purple ribbon (0.0-1.0), default 0.6.
             Set to None to omit the purple band entirely.
+        purple_width: Width of the purple band as a proportion of the maximum
+            width (0.0-1.0, default 1.0). Maximum width is 5% of the colormap
+            range. Values near 0 produce a hairline band, 1.0 produces the
+            widest band.
 
     Uses the same method as mako: sample key colors and interpolate.
     """
@@ -128,14 +133,16 @@ def _build_boreal_mako_cmap(purple_position=0.6):
         # No purple band - smooth green → blue → cyan → white
         all_colors = base_colors + high_colors
     else:
-        # Purple ribbon (widened band with internal gradient)
-        purple_width = 0.026  # Width of purple band (±0.026 = 5.2% total width, 2x wider)
-        half_width = purple_width / 2  # 0.013 - midpoint for internal gradient
+        # Purple ribbon (band with internal gradient)
+        # Max half-width = 0.025 → total band = 5% of colormap range
+        max_half_width = 0.025
+        band_half_width = max_half_width * purple_width
+        half_width = band_half_width / 2  # midpoint for internal gradient
 
-        pre_purple = purple_position - purple_width
+        pre_purple = purple_position - band_half_width
         mid_pre_purple = purple_position - half_width
         mid_post_purple = purple_position + half_width
-        post_purple = purple_position + purple_width
+        post_purple = purple_position + band_half_width
 
         # Interpolate blue colors around purple position
         # Get blue color at purple position
@@ -197,6 +204,214 @@ try:
     matplotlib.colormaps.register(boreal_mako_cmap, force=True)
 except (AttributeError, TypeError):
     plt.register_cmap(cmap=boreal_mako_cmap)
+
+
+# =============================================================================
+# Print-Safe Gamut Mapping (CMYK)
+# =============================================================================
+# Utilities for compressing RGB colors into the reproducible gamut of CMYK
+# printing. Uses CIELAB perceptual color space to reduce chroma (saturation)
+# while preserving lightness and hue. Targets commercial photo printing
+# (e.g., WHCC) which uses a subset of the sRGB gamut.
+
+
+def _srgb_gamma_to_linear(c):
+    """Convert a single sRGB gamma-encoded channel (0-1) to linear light."""
+    if c <= 0.04045:
+        return c / 12.92
+    return ((c + 0.055) / 1.055) ** 2.4
+
+
+def _linear_to_srgb_gamma(c):
+    """Convert a single linear light value to sRGB gamma-encoded (0-1)."""
+    if c <= 0.0031308:
+        return c * 12.92
+    return 1.055 * c ** (1.0 / 2.4) - 0.055
+
+
+def _srgb_to_lab(r, g, b):
+    """Convert sRGB (0-1) to CIELAB (D65 illuminant).
+
+    Standard conversion: sRGB → linear RGB → XYZ (D65) → CIELAB.
+    """
+    # Linearize sRGB
+    rl = _srgb_gamma_to_linear(r)
+    gl = _srgb_gamma_to_linear(g)
+    bl = _srgb_gamma_to_linear(b)
+
+    # Linear sRGB to CIE XYZ (D65 reference white)
+    x = 0.4124564 * rl + 0.3575761 * gl + 0.1804375 * bl
+    y = 0.2126729 * rl + 0.7151522 * gl + 0.0721750 * bl
+    z = 0.0193339 * rl + 0.1191920 * gl + 0.9503041 * bl
+
+    # D65 reference white
+    xn, yn, zn = 0.95047, 1.00000, 1.08883
+    delta = 6.0 / 29.0
+
+    def f(t):
+        if t > delta ** 3:
+            return t ** (1.0 / 3.0)
+        return t / (3 * delta ** 2) + 4.0 / 29.0
+
+    L = 116 * f(y / yn) - 16
+    a = 500 * (f(x / xn) - f(y / yn))
+    b_lab = 200 * (f(y / yn) - f(z / zn))
+
+    return L, a, b_lab
+
+
+def _lab_to_srgb(L, a, b_lab):
+    """Convert CIELAB (D65) to sRGB (0-1), clamped to valid range.
+
+    Standard conversion: CIELAB → XYZ (D65) → linear RGB → sRGB.
+    Out-of-gamut values are clamped after the linear→sRGB step.
+    """
+    # D65 reference white
+    xn, yn, zn = 0.95047, 1.00000, 1.08883
+    delta = 6.0 / 29.0
+
+    def f_inv(t):
+        if t > delta:
+            return t ** 3
+        return 3 * delta ** 2 * (t - 4.0 / 29.0)
+
+    fy = (L + 16) / 116
+    fx = a / 500 + fy
+    fz = fy - b_lab / 200
+
+    x = xn * f_inv(fx)
+    y = yn * f_inv(fy)
+    z = zn * f_inv(fz)
+
+    # XYZ to linear sRGB (IEC 61966-2-1 matrix)
+    rl = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
+    gl = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
+    bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
+
+    # Clamp to [0, 1] then apply sRGB gamma
+    r = _linear_to_srgb_gamma(max(0.0, min(1.0, rl)))
+    g = _linear_to_srgb_gamma(max(0.0, min(1.0, gl)))
+    b = _linear_to_srgb_gamma(max(0.0, min(1.0, bl)))
+
+    return r, g, b
+
+
+# Approximate CMYK gamut boundary in CIELAB space.
+# Maximum chroma at L*=50 by hue angle, based on US Web Coated (SWOP) v2
+# profile measurements. Cyan-blue region (180-240 deg) is most restricted.
+_CMYK_HUE_POINTS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]
+_CMYK_CHROMA_AT_L50 = [60, 65, 75, 90, 70, 55, 40, 35, 45, 50, 55, 60, 60]
+
+
+def _cmyk_max_chroma(L, hue_deg):
+    """Approximate maximum CIELAB chroma reproducible in CMYK at given L* and hue.
+
+    Based on conservative measurements from US Web Coated (SWOP) v2 profile.
+    Photo labs like WHCC have wider gamuts but this provides a safe baseline.
+
+    Args:
+        L: CIELAB lightness (0-100)
+        hue_deg: Hue angle in degrees (0-360)
+
+    Returns:
+        Approximate maximum chroma value.
+    """
+    hue_deg = hue_deg % 360
+
+    # Interpolate chroma limit at L*=50 from lookup table
+    max_c = _CMYK_CHROMA_AT_L50[-1]
+    for i in range(len(_CMYK_HUE_POINTS) - 1):
+        if _CMYK_HUE_POINTS[i] <= hue_deg <= _CMYK_HUE_POINTS[i + 1]:
+            t = (hue_deg - _CMYK_HUE_POINTS[i]) / (
+                _CMYK_HUE_POINTS[i + 1] - _CMYK_HUE_POINTS[i]
+            )
+            max_c = _CMYK_CHROMA_AT_L50[i] + t * (
+                _CMYK_CHROMA_AT_L50[i + 1] - _CMYK_CHROMA_AT_L50[i]
+            )
+            break
+
+    # Gamut narrows toward L*=0 and L*=100 (parabolic, peak near L*=55)
+    if L <= 0 or L >= 100:
+        return 0.0
+    L_factor = max(1.0 - ((L - 55.0) / 55.0) ** 2, 0.05)
+
+    return max_c * L_factor
+
+
+def _compress_color_to_print_gamut(r, g, b, safety_margin=0.85):
+    """Compress an sRGB color to fit within approximate CMYK print gamut.
+
+    Operates in CIELAB space: reduces chroma (colorfulness) while preserving
+    lightness and hue. This is equivalent to a perceptual rendering intent.
+
+    Args:
+        r, g, b: sRGB values (0-1).
+        safety_margin: Multiplier on gamut boundary (default 0.85 = 15% inset).
+            Lower values are more conservative. 1.0 = use the full boundary.
+
+    Returns:
+        Tuple of (r, g, b) in sRGB, gamut-compressed.
+    """
+    L, a, b_lab = _srgb_to_lab(r, g, b)
+
+    chroma = math.sqrt(a ** 2 + b_lab ** 2)
+    if chroma < 1e-6:
+        return r, g, b  # achromatic, no gamut concern
+
+    hue_deg = math.degrees(math.atan2(b_lab, a)) % 360
+    max_chroma = _cmyk_max_chroma(L, hue_deg) * safety_margin
+
+    if chroma > max_chroma:
+        scale = max_chroma / chroma
+        a *= scale
+        b_lab *= scale
+
+    return _lab_to_srgb(L, a, b_lab)
+
+
+def _build_boreal_mako_print_cmap(source_cmap=None, n_samples=64,
+                                  safety_margin=0.85):
+    """Build a print-safe variant of boreal_mako.
+
+    Samples the source colormap and compresses each color into the approximate
+    CMYK gamut, targeting commercial photo printing (WHCC and similar labs).
+    Preserves the overall character and luminance ramp while ensuring colors
+    are safely reproducible in print.
+
+    Args:
+        source_cmap: Source colormap (default: boreal_mako_cmap).
+        n_samples: Number of sample points for resampling (default: 64).
+        safety_margin: How conservative the compression is (default: 0.85).
+            0.85 means colors stay 15% inside the gamut boundary.
+
+    Returns:
+        A print-safe LinearSegmentedColormap named 'boreal_mako_print'.
+    """
+    if source_cmap is None:
+        source_cmap = boreal_mako_cmap
+
+    positions = np.linspace(0, 1, n_samples)
+    print_colors = []
+
+    for pos in positions:
+        rgba = source_cmap(float(pos))
+        r_safe, g_safe, b_safe = _compress_color_to_print_gamut(
+            rgba[0], rgba[1], rgba[2], safety_margin=safety_margin
+        )
+        print_colors.append((float(pos), (r_safe, g_safe, b_safe)))
+
+    return LinearSegmentedColormap.from_list(
+        'boreal_mako_print', print_colors, N=256
+    )
+
+
+# Build and register the boreal_mako_print colormap
+boreal_mako_print_cmap = _build_boreal_mako_print_cmap()
+try:
+    import matplotlib
+    matplotlib.colormaps.register(boreal_mako_print_cmap, force=True)
+except (AttributeError, TypeError):
+    plt.register_cmap(cmap=boreal_mako_print_cmap)
 
 
 def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None, gamma=1.0):
