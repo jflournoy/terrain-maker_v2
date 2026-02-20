@@ -369,26 +369,36 @@ def _compress_color_to_print_gamut(r, g, b, safety_margin=0.85):
     return _lab_to_srgb(L, a, b_lab)
 
 
-def _build_boreal_mako_print_cmap(source_cmap=None, n_samples=64,
-                                  safety_margin=0.85):
-    """Build a print-safe variant of boreal_mako.
+def make_print_safe_cmap(cmap_or_name, name=None, n_samples=64,
+                         safety_margin=0.85):
+    """Create a print-safe variant of any matplotlib colormap.
 
     Samples the source colormap and compresses each color into the approximate
     CMYK gamut, targeting commercial photo printing (WHCC and similar labs).
-    Preserves the overall character and luminance ramp while ensuring colors
-    are safely reproducible in print.
+    Preserves the overall character and luminance ramp while reducing chroma
+    (colorfulness) to ensure colors are safely reproducible in print.
 
     Args:
-        source_cmap: Source colormap (default: boreal_mako_cmap).
+        cmap_or_name: A matplotlib colormap object or a string name
+            (e.g. "viridis", "plasma", "boreal_mako").
+        name: Name for the output colormap. Defaults to "{source_name}_print".
         n_samples: Number of sample points for resampling (default: 64).
         safety_margin: How conservative the compression is (default: 0.85).
             0.85 means colors stay 15% inside the gamut boundary.
+            Lower values are more conservative.
 
     Returns:
-        A print-safe LinearSegmentedColormap named 'boreal_mako_print'.
+        A print-safe LinearSegmentedColormap.
     """
-    if source_cmap is None:
-        source_cmap = boreal_mako_cmap
+    import matplotlib
+
+    if isinstance(cmap_or_name, str):
+        source_cmap = matplotlib.colormaps.get_cmap(cmap_or_name)
+    else:
+        source_cmap = cmap_or_name
+
+    if name is None:
+        name = f"{source_cmap.name}_print"
 
     positions = np.linspace(0, 1, n_samples)
     print_colors = []
@@ -400,8 +410,29 @@ def _build_boreal_mako_print_cmap(source_cmap=None, n_samples=64,
         )
         print_colors.append((float(pos), (r_safe, g_safe, b_safe)))
 
-    return LinearSegmentedColormap.from_list(
-        'boreal_mako_print', print_colors, N=256
+    return LinearSegmentedColormap.from_list(name, print_colors, N=256)
+
+
+def _build_boreal_mako_print_cmap(source_cmap=None, n_samples=64,
+                                  safety_margin=0.85):
+    """Build a print-safe variant of boreal_mako.
+
+    Thin wrapper around make_print_safe_cmap for backward compatibility.
+
+    Args:
+        source_cmap: Source colormap (default: boreal_mako_cmap).
+        n_samples: Number of sample points for resampling (default: 64).
+        safety_margin: How conservative the compression is (default: 0.85).
+
+    Returns:
+        A print-safe LinearSegmentedColormap named 'boreal_mako_print'.
+    """
+    if source_cmap is None:
+        source_cmap = boreal_mako_cmap
+
+    return make_print_safe_cmap(
+        source_cmap, name='boreal_mako_print',
+        n_samples=n_samples, safety_margin=safety_margin,
     )
 
 

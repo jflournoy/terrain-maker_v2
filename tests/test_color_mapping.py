@@ -484,3 +484,174 @@ class TestColorSpaceConversions:
 
         L, a, b = _srgb_to_lab(0.0, 0.0, 0.0)
         assert abs(L) < 0.5, f"Black L* should be ~0, got {L}"
+
+
+class TestMakePrintSafeCmap:
+    """Tests for the public make_print_safe_cmap function.
+
+    This function should accept any matplotlib colormap (by object or name)
+    and return a CMYK-gamut-compressed variant suitable for commercial printing.
+    """
+
+    def test_importable(self):
+        """make_print_safe_cmap should be importable from color_mapping."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        assert callable(make_print_safe_cmap)
+
+    def test_accepts_cmap_object(self):
+        """Should accept a matplotlib colormap object."""
+        import matplotlib
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        viridis = matplotlib.colormaps.get_cmap("viridis")
+        result = make_print_safe_cmap(viridis)
+
+        assert result is not None
+        assert hasattr(result, "__call__"), "Result should be callable (a colormap)"
+        assert result.name == "viridis_print"
+
+    def test_accepts_cmap_name_string(self):
+        """Should accept a colormap name string."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("plasma")
+
+        assert result is not None
+        assert result.name == "plasma_print"
+
+    def test_custom_output_name(self):
+        """Should use custom name when provided."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("viridis", name="my_safe_viridis")
+        assert result.name == "my_safe_viridis"
+
+    def test_returns_linear_segmented_colormap(self):
+        """Should return a LinearSegmentedColormap."""
+        from matplotlib.colors import LinearSegmentedColormap
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("inferno")
+        assert isinstance(result, LinearSegmentedColormap)
+
+    def test_output_colors_within_cmyk_gamut(self):
+        """All output colors should be within the CMYK gamut boundary."""
+        from src.terrain.color_mapping import (
+            make_print_safe_cmap, _srgb_to_lab, _cmyk_max_chroma,
+        )
+
+        result = make_print_safe_cmap("viridis")
+        positions = np.linspace(0, 1, 64)
+        for pos in positions:
+            rgba = result(float(pos))
+            L, a, b_lab = _srgb_to_lab(rgba[0], rgba[1], rgba[2])
+            chroma = np.sqrt(a ** 2 + b_lab ** 2)
+            hue_deg = np.degrees(np.arctan2(b_lab, a)) % 360
+            max_chroma = _cmyk_max_chroma(L, hue_deg) * 0.85
+
+            assert chroma <= max_chroma + 1.0, \
+                f"viridis_print at pos {pos:.2f} exceeds CMYK gamut: " \
+                f"chroma={chroma:.1f} > max={max_chroma:.1f}"
+
+    def test_chroma_reduced_for_saturated_cmap(self):
+        """Print-safe version of a saturated cmap should have lower chroma."""
+        import matplotlib
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        source = matplotlib.colormaps.get_cmap("viridis")
+        safe = make_print_safe_cmap(source)
+
+        # At least some positions should have reduced chroma
+        chroma_reductions = 0
+        positions = np.linspace(0.1, 0.9, 20)
+        for pos in positions:
+            rgb_src = source(float(pos))[:3]
+            rgb_safe = safe(float(pos))[:3]
+
+            lab_src = color.rgb2lab(np.array([[rgb_src]]))[0, 0]
+            lab_safe = color.rgb2lab(np.array([[rgb_safe]]))[0, 0]
+
+            c_src = np.sqrt(lab_src[1] ** 2 + lab_src[2] ** 2)
+            c_safe = np.sqrt(lab_safe[1] ** 2 + lab_safe[2] ** 2)
+
+            if c_safe < c_src - 0.5:
+                chroma_reductions += 1
+
+        assert chroma_reductions > 0, \
+            "Print-safe viridis should have at least some chroma reduction"
+
+    def test_preserves_lightness(self):
+        """Print-safe variant should preserve L* (lightness) closely."""
+        import matplotlib
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        source = matplotlib.colormaps.get_cmap("plasma")
+        safe = make_print_safe_cmap(source)
+
+        positions = np.linspace(0, 1, 20)
+        for pos in positions:
+            rgb_src = source(float(pos))[:3]
+            rgb_safe = safe(float(pos))[:3]
+
+            lab_src = color.rgb2lab(np.array([[rgb_src]]))[0, 0]
+            lab_safe = color.rgb2lab(np.array([[rgb_safe]]))[0, 0]
+
+            # L* should be very close (gamut compression preserves lightness)
+            assert abs(lab_safe[0] - lab_src[0]) < 5.0, \
+                f"L* drift at pos {pos:.2f}: {lab_src[0]:.1f} -> {lab_safe[0]:.1f}"
+
+    def test_works_with_boreal_mako(self):
+        """Should work with the custom boreal_mako colormap."""
+        from src.terrain.color_mapping import make_print_safe_cmap, boreal_mako_cmap
+
+        result = make_print_safe_cmap(boreal_mako_cmap)
+        assert result.name == "boreal_mako_print"
+
+        # Should produce valid RGBA at all positions
+        for pos in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            rgba = result(pos)
+            assert len(rgba) == 4
+            assert all(0.0 <= c <= 1.0 for c in rgba)
+
+    def test_safety_margin_parameter(self):
+        """Lower safety_margin should produce more aggressive compression."""
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        safe_default = make_print_safe_cmap("viridis", safety_margin=0.85)
+        safe_aggressive = make_print_safe_cmap("viridis", safety_margin=0.60)
+
+        # Aggressive should have equal or lower chroma at most positions
+        lower_count = 0
+        positions = np.linspace(0.1, 0.9, 20)
+        for pos in positions:
+            rgb_default = safe_default(float(pos))[:3]
+            rgb_aggressive = safe_aggressive(float(pos))[:3]
+
+            lab_d = color.rgb2lab(np.array([[rgb_default]]))[0, 0]
+            lab_a = color.rgb2lab(np.array([[rgb_aggressive]]))[0, 0]
+
+            c_d = np.sqrt(lab_d[1] ** 2 + lab_d[2] ** 2)
+            c_a = np.sqrt(lab_a[1] ** 2 + lab_a[2] ** 2)
+
+            if c_a <= c_d + 0.5:
+                lower_count += 1
+
+        assert lower_count >= 15, \
+            f"Aggressive margin should compress more at most positions ({lower_count}/20)"
+
+    def test_n_samples_parameter(self):
+        """Different n_samples should still produce a valid colormap."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result_16 = make_print_safe_cmap("viridis", n_samples=16)
+        result_128 = make_print_safe_cmap("viridis", n_samples=128)
+
+        # Both should be callable and produce valid colors
+        for cmap in [result_16, result_128]:
+            rgba = cmap(0.5)
+            assert len(rgba) == 4
+            assert all(0.0 <= c <= 1.0 for c in rgba)
