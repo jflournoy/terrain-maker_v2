@@ -1282,6 +1282,7 @@ class Terrain:
         target_layer: Optional[str] = None,
         same_extent_as: Optional[str] = None,
         resampling: Resampling = Resampling.bilinear,
+        nodata: Optional[float] = None,
     ) -> None:
         """
         Add a data layer, optionally reprojecting to match another layer.
@@ -1307,6 +1308,11 @@ class Terrain:
                 DEM but at different resolutions. Implies target_layer if not specified.
             resampling (rasterio.enums.Resampling): Resampling method for reprojection
                 (default: Resampling.bilinear). See rasterio docs for options.
+            nodata (float, optional): No-data sentinel value used during reprojection.
+                Source pixels with this value are treated as missing and won't influence
+                bilinear interpolation neighbours. Destination pixels with no source
+                coverage are filled with this value. Defaults to ``np.nan`` for
+                floating-point arrays and ``0`` for integer arrays.
 
         Returns:
             None: Modifies internal data_layers dictionary.
@@ -1438,13 +1444,20 @@ class Terrain:
             self.logger.info(f"Added layer '{name}' with original CRS {crs}")
             return
 
+        # Resolve nodata value: explicit arg > auto-detect from dtype
+        if nodata is None:
+            nodata_value = np.nan if np.issubdtype(data.dtype, np.floating) else 0
+        else:
+            nodata_value = nodata
+
         # Create target array and reproject if needed
         # Note: Affine.__ne__ returns array, so use tuple comparison instead
         transforms_differ = (crs != target_crs) or (tuple(transform) != tuple(target_transform))
         if transforms_differ:
             self.logger.info(f"Reprojecting from {crs} to {target_crs}")
             self.logger.info(f"Transforms: {transform} to {target_transform}")
-            aligned_data = np.zeros(target_shape, dtype=data.dtype)
+            # Initialise with nodata so uncovered destination pixels don't become 0
+            aligned_data = np.full(target_shape, nodata_value, dtype=data.dtype)
 
             try:
                 reproject(
@@ -1455,6 +1468,8 @@ class Terrain:
                     dst_transform=target_transform,
                     dst_crs=target_crs,
                     resampling=resampling,
+                    src_nodata=nodata_value,
+                    dst_nodata=nodata_value,
                 )
 
                 # Store reprojected data
@@ -1471,9 +1486,13 @@ class Terrain:
 
                 self.logger.info(f"Successfully added layer '{name}' (reprojected):")
                 self.logger.info(f"  Shape: {aligned_data.shape}")
-                self.logger.info(
-                    f"  Value range: {np.nanmin(aligned_data):.2f} to {np.nanmax(aligned_data):.2f}"
-                )
+                valid_pixels = aligned_data[~np.isnan(aligned_data)] if np.issubdtype(aligned_data.dtype, np.floating) else aligned_data.ravel()
+                if valid_pixels.size > 0:
+                    self.logger.info(
+                        f"  Value range: {valid_pixels.min():.2f} to {valid_pixels.max():.2f}"
+                    )
+                else:
+                    self.logger.info("  Value range: all nodata (no valid pixels after reprojection)")
 
             except Exception as e:
                 self.logger.error(f"Failed to reproject layer '{name}': {str(e)}")
