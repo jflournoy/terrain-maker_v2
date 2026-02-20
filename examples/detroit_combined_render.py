@@ -1084,11 +1084,28 @@ Examples:
              "Use with --colormap-viz-only to preview different positions.",
     )
     parser.add_argument(
+        "--purple-width",
+        type=float,
+        default=1.0,
+        help="Width of purple ribbon as proportion of max width (0.0-1.0, default: 1.0). "
+             "Max width is 5%% of the colormap range. "
+             "0.5 = half width, 0.25 = narrow accent line. "
+             "Use with --colormap-viz-only to preview.",
+    )
+    parser.add_argument(
         "--no-purple",
         action="store_true",
         default=False,
         help="Remove the purple ribbon from the boreal_mako colormap entirely. "
              "Produces a smooth green → blue → cyan → white gradient.",
+    )
+    parser.add_argument(
+        "--print-colors",
+        action="store_true",
+        default=False,
+        help="Use CMYK-safe variant of boreal_mako colormap for commercial printing "
+             "(e.g., WHCC). Compresses colors into the CMYK gamut so they reproduce "
+             "faithfully on paper. Slightly desaturates blues/cyans.",
     )
 
     parser.add_argument(
@@ -1597,17 +1614,32 @@ Examples:
 
     # Rebuild boreal_mako colormap with specified purple position (or without purple)
     # Always rebuild to ensure consistency between visualization and rendering
-    from src.terrain.color_mapping import _build_boreal_mako_cmap
+    from src.terrain.color_mapping import _build_boreal_mako_cmap, _build_boreal_mako_print_cmap
     import matplotlib
     purple_pos = None if args.no_purple else args.purple_position
-    custom_boreal_mako = _build_boreal_mako_cmap(purple_position=purple_pos)
+    custom_boreal_mako = _build_boreal_mako_cmap(
+        purple_position=purple_pos, purple_width=args.purple_width
+    )
     matplotlib.colormaps.register(custom_boreal_mako, force=True)
+
+    # Choose base vs print-safe colormap
+    if args.print_colors:
+        # Build print-safe variant from the custom boreal_mako (inherits purple settings)
+        custom_print = _build_boreal_mako_print_cmap(source_cmap=custom_boreal_mako)
+        matplotlib.colormaps.register(custom_print, force=True)
+        score_cmap_name = "boreal_mako_print"
+    else:
+        score_cmap_name = "boreal_mako"
+
     if args.no_purple:
         logger.info("Using boreal_mako colormap without purple ribbon (--no-purple)")
-    elif args.purple_position != 0.6:
-        logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}")
+    elif args.purple_position != 0.6 or args.purple_width != 1.0:
+        width_str = f", width={args.purple_width}" if args.purple_width != 1.0 else ""
+        logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}{width_str}")
     else:
         logger.info(f"Using boreal_mako colormap with default purple position (0.6)")
+    if args.print_colors:
+        logger.info("Using CMYK-safe print colors (--print-colors)")
 
     logger.info("\n" + "=" * 70)
     base_label_startup = "XC Skiing" if args.base_scores == "skiing" else "Sledding"
@@ -1672,8 +1704,9 @@ Examples:
     }
 
     color_params = {
-        "colormap": "boreal_mako",
+        "colormap": score_cmap_name,
         "purple_position": None if args.no_purple else args.purple_position,
+        "purple_width": args.purple_width,
         "no_purple": args.no_purple,
         "normalize_scores": args.normalize_scores,
         "gamma": args.gamma,
@@ -2014,7 +2047,7 @@ Examples:
     logger.info("\n[2/4] Creating Combined Terrain Mesh (Dual Colormap)...")
     norm_label = ", normalized to 0-1" if args.normalize_scores else ""
     purple_label = ", no purple band" if args.no_purple else ""
-    logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap - forest green → blue → mint{purple_label}{norm_label})")
+    logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap - forest green → blue → mint{purple_label}{norm_label})")
     logger.info("  Overlay: scores near parks (rocket colormap)")
 
     # For combined rendering, we need a custom terrain creation process
@@ -2512,7 +2545,7 @@ Examples:
         raw_scores=base_scores,
         transformed_scores=gamma_corrected_scores,
         output_path=viz_dir / "scores_histograms.png",
-        cmap_name="boreal_mako",
+        cmap_name=score_cmap_name,
         transform_label=norm_label,
         rendered_max=rendered_score_max,
         rendered_min_nonzero=rendered_score_min_nonzero,
@@ -2629,7 +2662,7 @@ Examples:
                 normalized = np.clip(normalized, 0.0, 1.0)
         return elevation_colormap(
             np.power(normalized, args.gamma),
-            cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
+            cmap_name=score_cmap_name, min_elev=0.0, max_elev=1.0
         )
 
     def xc_skiing_colormap(score):
@@ -2641,7 +2674,7 @@ Examples:
     if args.roads and road_data and road_bbox and parks:
         # With parks: base scores + overlay (no road color overlay)
         logger.info("Setting multi-overlay color mapping:")
-        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
         logger.info("  Overlay: scores near parks (rocket colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
 
@@ -2662,7 +2695,7 @@ Examples:
     elif args.roads and road_data and road_bbox:
         # Roads but no parks: just base scores (no overlays, roads get glassy material)
         logger.info("Setting color mapping:")
-        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
             base_colormap,
@@ -2672,7 +2705,7 @@ Examples:
         # No roads - use original blended or standard color mapping
         if parks:
             logger.info("Setting blended color mapping:")
-            logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} (boreal_mako colormap)")
+            logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
             logger.info("  Overlay: scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
                 base_colormap=base_colormap,
@@ -2682,7 +2715,7 @@ Examples:
                 overlay_mask=park_mask_grid,  # Grid-space mask (converted to vertex-space internally)
             )
         else:
-            logger.info(f"No parks available - using {base_score_label} scores with gamma={args.gamma} (boreal_mako colormap)")
+            logger.info(f"No parks available - using {base_score_label} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
             terrain_combined.set_color_mapping(
                 base_colormap,
                 source_layers=["sledding"],
@@ -3091,7 +3124,7 @@ Examples:
                 raw_scores=raw_scores_for_hist,
                 transformed_scores=trans_scores_for_hist,
                 output_path=score_hist_path,
-                cmap_name="boreal_mako",
+                cmap_name=score_cmap_name,
                 transform_label=norm_label,
                 rendered_max=rendered_score_max,
                 rendered_min_nonzero=rendered_score_min_nonzero,
@@ -3114,9 +3147,11 @@ Examples:
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
     logger.info(f"  ✓ Created combined terrain mesh ({len(mesh_combined.data.vertices)} vertices)")
-    purple_desc = ", no purple" if args.no_purple else f", purple@{args.purple_position}"
+    width_desc = f" w={args.purple_width}" if args.purple_width != 1.0 else ""
+    purple_desc = ", no purple" if args.no_purple else f", purple@{args.purple_position}{width_desc}"
     norm_desc = ", normalized" if args.normalize_scores else ""
-    logger.info(f"    - Base colormap: boreal_mako (forest green → blue → mint{purple_desc}{norm_desc}) for {base_score_label} scores (gamma={args.gamma})")
+    print_desc = ", print-safe" if args.print_colors else ""
+    logger.info(f"    - Base colormap: {score_cmap_name} (forest green → blue → mint{purple_desc}{norm_desc}{print_desc}) for {base_score_label} scores (gamma={args.gamma})")
     logger.info(f"    - Overlay colormap: rocket for overlay scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
