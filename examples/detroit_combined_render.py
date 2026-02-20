@@ -690,6 +690,13 @@ Examples:
     )
 
     parser.add_argument(
+        "--samples",
+        type=int,
+        default=None,
+        help="Override number of render samples (default: 64 for preview, 2048 for --print-quality).",
+    )
+
+    parser.add_argument(
         "--format",
         type=str,
         choices=["png", "jpeg", "PNG", "JPEG"],
@@ -1558,6 +1565,14 @@ Examples:
         help="RGB color for park rings as 'R,G,B' (0-1 range). Default: dark gray (0.15,0.15,0.15).",
     )
 
+    parser.add_argument(
+        "--no-water",
+        action="store_true",
+        default=False,
+        help="Skip water detection and coloring entirely. Terrain will be colored by score "
+             "everywhere without a blue water overlay.",
+    )
+
     args = parser.parse_args()
 
     # Handle --read-command: read metadata from existing image and exit
@@ -1597,7 +1612,7 @@ Examples:
     if args.print_quality:
         render_width = int(args.print_width * args.print_dpi)
         render_height = int(args.print_height * args.print_dpi)
-        render_samples = 4096  # High quality for print (with denoising)
+        render_samples = 2048  # High quality for print (with denoising)
         quality_mode = "PRINT"
         default_vertex_mult = 1.0  # 1 vertex per pixel for print
     else:   
@@ -1607,6 +1622,10 @@ Examples:
         render_samples = 64  # Minimal samples - biggest speed gain
         quality_mode = "PREVIEW"
         default_vertex_mult = 0.5  # Low detail for speed
+
+    # Override samples if explicitly specified
+    if args.samples is not None:
+        render_samples = args.samples
 
     # Apply vertex multiplier default if not explicitly set
     if args.vertex_multiplier is None:
@@ -1963,7 +1982,9 @@ Examples:
     lakes_geojson = None
     lake_mask_raw = None
     lake_transform = None
-    if not args.mock_data:
+    if args.no_water:
+        logger.info("Water overlay disabled (--no-water)")
+    elif not args.mock_data:
         try:
             water_bodies_dir = args.output_dir / "water_bodies"
             water_bodies_dir.mkdir(parents=True, exist_ok=True)
@@ -2143,7 +2164,10 @@ Examples:
     # =========================================================================
     # WATER DETECTION: Use HydroLAKES if available, otherwise slope-based fallback
     # =========================================================================
-    if lake_mask_raw is not None and lake_transform is not None:
+    if args.no_water:
+        water_mask = None
+        logger.info("Skipping water detection (--no-water)")
+    elif lake_mask_raw is not None and lake_transform is not None:
         logger.info("Creating water mask from HydroLAKES data...")
         terrain_combined.add_data_layer(
             "lake_mask",
