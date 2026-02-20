@@ -2489,14 +2489,17 @@ def generate_score_histogram(
     rendered_min_nonzero: Optional[float] = None,
     gamma: float = 1.0,
     normalize_scores: bool = False,
+    print_cmap_name: Optional[str] = None,
 ) -> Optional[Path]:
     """
     Generate a side-by-side histogram of raw and transformed scores with colormap-colored bars.
 
     Left panel shows the raw score distribution with bars colored by their eventual
     colormap color (applying the normalization + gamma pipeline to each bin center).
-    Right panel shows the transformed score distribution with bars colored directly
+    Middle panel shows the transformed score distribution with bars colored directly
     by their position on the colormap.
+    Optional right panel shows the same transformed distribution with the print-safe
+    colormap for visual comparison.
 
     Args:
         raw_scores: Raw score array (2D grid, may contain NaN).
@@ -2508,6 +2511,8 @@ def generate_score_histogram(
         rendered_min_nonzero: Min nonzero score in the rendered region.
         gamma: Gamma value used in the transformation.
         normalize_scores: Whether --normalize-scores stretch was applied.
+        print_cmap_name: Optional print-safe colormap name. When provided, a third
+            panel is added showing the transformed scores with print-safe colors.
 
     Returns:
         Path to the saved histogram image, or None on failure.
@@ -2518,8 +2523,14 @@ def generate_score_histogram(
 
         cmap = matplotlib.colormaps.get_cmap(cmap_name)
 
-        fig, (ax_raw, ax_trans) = plt.subplots(1, 2, figsize=(16, 7))
-        fig.suptitle("Score Distribution: Raw vs Transformed", fontsize=14, fontweight="bold")
+        n_panels = 3 if print_cmap_name else 2
+        fig_width = 24 if print_cmap_name else 16
+        fig, axes = plt.subplots(1, n_panels, figsize=(fig_width, 7))
+        ax_raw, ax_trans = axes[0], axes[1]
+        title = "Score Distribution: Raw vs Transformed"
+        if print_cmap_name:
+            title += " vs Print-Safe"
+        fig.suptitle(title, fontsize=14, fontweight="bold")
 
         # --- Left panel: Raw scores ---
         valid_raw = raw_scores[~np.isnan(raw_scores)]
@@ -2601,6 +2612,39 @@ def generate_score_histogram(
                 fontfamily="monospace",
                 bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
             )
+
+        # --- Third panel: Print-safe colormap (optional) ---
+        if print_cmap_name:
+            ax_print = axes[2]
+            print_cmap = matplotlib.colormaps.get_cmap(print_cmap_name)
+
+            counts_print, bins_print, patches_print = ax_print.hist(
+                valid_trans.flatten(), bins=n_bins, edgecolor="black", linewidth=0.3
+            )
+
+            # Color each bar by its print-safe colormap position
+            for patch, bin_left, bin_right in zip(patches_print, bins_print[:-1], bins_print[1:]):
+                bin_center = (bin_left + bin_right) / 2.0
+                patch.set_facecolor(print_cmap(np.clip(bin_center, 0.0, 1.0)))
+
+            ax_print.set_xlabel(f"Transformed Score (print-safe)", fontsize=11)
+            ax_print.set_ylabel("Pixel Count", fontsize=11)
+            ax_print.set_title(f"Print-Safe ({print_cmap_name})", fontsize=12, fontweight="bold")
+            ax_print.grid(True, alpha=0.3, axis="y")
+            ax_print.set_xlim(0, 1.0)
+
+            if len(valid_trans) > 0:
+                stats_text = (
+                    f"mean: {np.mean(valid_trans):.3f}\n"
+                    f"median: {np.median(valid_trans):.3f}\n"
+                    f"range: [{np.min(valid_trans):.3f}, {np.max(valid_trans):.3f}]"
+                )
+                ax_print.text(
+                    0.98, 0.98, stats_text, transform=ax_print.transAxes,
+                    fontsize=9, verticalalignment="top", horizontalalignment="right",
+                    fontfamily="monospace",
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
+                )
 
         plt.tight_layout()
         plt.savefig(output_path, dpi=150, bbox_inches="tight")

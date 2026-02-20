@@ -2551,6 +2551,7 @@ Examples:
         rendered_min_nonzero=rendered_score_min_nonzero,
         gamma=args.gamma,
         normalize_scores=args.normalize_scores,
+        print_cmap_name="boreal_mako_print" if args.print_colors else None,
     )
     logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
 
