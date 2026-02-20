@@ -220,12 +220,15 @@ def setup_render_settings(
             cprefs = prefs.addons["cycles"].preferences
             cprefs.compute_device_type = compute_device
 
-            # Enable all available devices
+            # Enable GPU devices only — excluding CPU prevents Cycles from
+            # splitting tiles between GPU and CPU, which causes CPU to bottleneck
+            # the render while GPU sits idle waiting for slower CPU tiles.
             device_count = 0
             for device in cprefs.devices:
-                device.use = True
-                device_count += 1
-            logger.info(f"Enabled {device_count} compute devices")
+                device.use = device.type != "CPU"
+                if device.use:
+                    device_count += 1
+            logger.info(f"Enabled {device_count} GPU compute devices (CPU excluded)")
 
         except Exception as e:
             logger.error(f"Failed to configure GPU rendering: {str(e)}")
