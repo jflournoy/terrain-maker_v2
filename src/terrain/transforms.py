@@ -727,6 +727,8 @@ def downsample_then_reproject(
             dst_transform=dst_transform,
             dst_crs=dst_crs,
             resampling=Resampling.bilinear,
+            src_nodata=nodata_value,
+            dst_nodata=nodata_value,
             num_threads=4,  # Fixed value instead of variable
         )
 
