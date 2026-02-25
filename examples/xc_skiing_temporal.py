@@ -586,6 +586,12 @@ def build_ridge_dem(
         # further south into subsequent ridges, creating cascading overlap.
         # Zero-score columns get no dip slope at all (just scarp).
         row = 0  # first scarp position (no headroom needed at north)
+        # Global max for shear normalization: all ridges share the same
+        # scale so weak seasons get proportionally less shear than strong ones.
+        global_max = max(
+            float(np.max(season_matrix)),
+            float(np.max(median_scores)),
+        )
 
         def _write_ridge(scarp_row, score_row, n_scarp, height_scale=1.0):
             # --- Scarp: steep linear drop, anchored at scarp_row ---
@@ -597,9 +603,9 @@ def build_ridge_dem(
                     color_ridges[r] = np.maximum(color_ridges[r], score_row)
 
             # --- Dip slope: sin(pi/2..0) extending southward from scarp ---
-            # Per-column dip length: 0 for zero score, tail_rows+shear for max
-            s_max = float(np.max(score_row))
-            normed = (score_row / s_max) if s_max > 0 else score_row
+            # Per-column dip length scaled by absolute score (global norm),
+            # so weak seasons get less shear than strong ones.
+            normed = (score_row / global_max) if global_max > 0 else score_row
             eff_dip = np.round(normed * (tail_rows + shear)).astype(int)
 
             # Iterate south from scarp end; dy=0 is closest to scarp (peak)
