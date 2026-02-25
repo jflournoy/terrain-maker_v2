@@ -42,7 +42,7 @@ def create_temporal_sculpture(
     ridge_rows: int = 2,
     gap_rows: int = 0,
     tail_rows: int = 6,
-    shear: float = 6.0,
+    shear: float = 20.0,
     gap_below_main: float = 0.3,
     base_depth: float = 0.2,
     edge_base_material: str = "clay",
@@ -117,10 +117,11 @@ def create_temporal_sculpture(
         n_seasons, dem_ridges.shape[1], dem_ridges.shape,
     )
 
-    # Flip columns so earliest calendar days (Nov) are at the west (left)
-    # when viewed from above, matching the main terrain's geographic X axis.
-    dem_ridges = dem_ridges[:, ::-1].copy()
-    color_ridges = color_ridges[:, ::-1].copy()
+    # Flip rows (N-S) so ridge peaks point away from the main terrain
+    # (south in the scene), and flip columns so earliest calendar days
+    # (Nov) are at the west (left) when viewed from above.
+    dem_ridges = dem_ridges[::-1, ::-1].copy()
+    color_ridges = color_ridges[::-1, ::-1].copy()
 
     # --- Create Terrain with no-op transform ---
     # Dummy transform: 1 unit per pixel, origin at top-left.
