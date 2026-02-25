@@ -524,10 +524,11 @@ def build_ridge_dem(
     asymmetric cuesta — a gradual ``sin(0..pi/2)`` dip slope (visible from
     above) followed by a steep scarp face (casts shadow).
 
-    When ``shear>0``, the dip slope length varies per column: high-score days
-    get longer dip slopes extending further south (cascading overlap with
-    subsequent ridges), while zero-score days get no dip slope at all (just
-    the scarp).  The scarp (steep north face) stays anchored.
+    When ``shear>0``, each column shifts northward proportional to its score.
+    Higher scores are taller AND pushed further north, so the cuesta shape
+    emerges naturally: steep scarp at north (only highest scores reach there),
+    gradual back slope trailing south.  Subsequent ridges build atop previous
+    ridges' back slopes via additive accumulation.
 
     Parameters
     ----------
@@ -547,9 +548,9 @@ def build_ridge_dem(
         Extra rows of exponential decay tail per ridge.  0 gives the
         original symmetric hogback; >0 gives cascading asymmetric cuestas.
     shear : float
-        Extra dip-slope rows for max-score columns.  The effective dip length
-        is ``normed_score * (tail_rows + shear)``, so zero-score columns get
-        0 rows and max-score columns get ``tail_rows + shear`` rows.
+        Maximum northward shift (in rows) for the highest-score columns.
+        Each column shifts north by ``(score / global_max) * shear`` rows.
+        0 means no shift; 6 means the global-max column shifts 6 rows north.
 
     Returns
     -------
@@ -570,9 +571,9 @@ def build_ridge_dem(
         + gap_rows
     )
 
-    # max_dip = farthest southward extent of any dip slope (padding at south end)
-    max_dip = (tail_rows + int(np.ceil(shear))) if tail_rows > 0 else 0
-    total_rows = base_rows + max_dip
+    # Headroom at north for shear (high-score columns shift northward)
+    shear_pad = int(np.ceil(shear)) if (tail_rows > 0 and shear > 0) else 0
+    total_rows = shear_pad + base_rows
 
     dem_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
     color_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
@@ -580,54 +581,45 @@ def build_ridge_dem(
     first_half = n_seasons // 2
 
     if tail_rows > 0:
-        # Cuesta: the scarp (steep north face) is anchored at a fixed row.
-        # The dip slope extends southward with length proportional to score
-        # when shear > 0: high-score days get longer dip slopes that reach
-        # further south into subsequent ridges, creating cascading overlap.
-        # Zero-score columns get no dip slope at all (just scarp).
-        row = 0  # first scarp position (no headroom needed at north)
-        # Global max for shear normalization: all ridges share the same
-        # scale so weak seasons get proportionally less shear than strong ones.
+        # Emergent cuesta: each column's thin tent profile shifts northward
+        # proportional to its score.  Higher scores → taller AND further
+        # north, so the cuesta shape emerges naturally:
+        #   - North end: steep scarp (only highest scores reach here)
+        #   - South end: gradual back slope (all scores contribute)
+        # Each subsequent ridge's peaks build atop the previous ridge's
+        # back slope via additive (+=) accumulation.
+        row = shear_pad  # nominal position (headroom north for shifts)
+
         global_max = max(
             float(np.max(season_matrix)),
             float(np.max(median_scores)),
         )
 
-        def _write_ridge(scarp_row, score_row, n_scarp, height_scale=1.0):
-            # --- Scarp: steep linear drop, anchored at scarp_row ---
-            scarp_h = np.linspace(1.0, 0.0, n_scarp)
-            for dy in range(n_scarp):
-                r = scarp_row + dy
-                if 0 <= r < total_rows:
-                    dem_ridges[r] += score_row * scarp_h[dy] * height_scale
-                    color_ridges[r] = np.maximum(color_ridges[r], score_row)
-
-            # --- Dip slope: sin(pi/2..0) extending southward from scarp ---
-            # Per-column dip length scaled by absolute score (global norm),
-            # so weak seasons get less shear than strong ones.
+        def _write_ridge(nom_row, score_row, n_rows, height_scale=1.0):
+            # Each column writes a ramp from nom_row (south, height=0)
+            # northward to nom_row-shift (north, height=score).
+            # The cuesta emerges: steep scarp at north (peak), gradual
+            # back slope trailing south (ramp down to 0).
             normed = (score_row / global_max) if global_max > 0 else score_row
-            eff_dip = np.round(normed * (tail_rows + shear)).astype(int)
+            shifts = np.round(normed * shear).astype(int)
+            safe_shifts = np.maximum(shifts, 1).astype(np.float64)
+            max_shift = int(np.ceil(shear))
 
-            # Iterate south from scarp end; dy=0 is closest to scarp (peak)
-            for dy in range(max_dip):
-                r = scarp_row + n_scarp + dy
+            for k in range(max_shift + 1):
+                r = nom_row - k
                 if r < 0 or r >= total_rows:
                     continue
-                # Column j is active while dy < eff_dip[j]
-                active = dy < eff_dip
-                # Fraction: 1.0 at scarp → 0.0 at tail tip
-                safe_dip = np.maximum(eff_dip, 1).astype(np.float64)
+                # Column j active when k <= its shift
+                active = k <= shifts
+                # Height ramps: 0 at nominal (k=0) → score at peak (k=shift)
                 frac = np.where(
-                    active & (eff_dip > 0),
-                    1.0 - dy / safe_dip,
-                    0.0,
+                    active & (shifts > 0), k / safe_shifts, 0.0,
                 )
-                h = np.where(active, np.sin(np.clip(frac, 0, 1) * np.pi / 2), 0.0)
-                z_vals = (score_row * h * height_scale).astype(np.float32)
-                dem_ridges[r] += z_vals
+                z_vals = (score_row * frac * height_scale).astype(np.float32)
+                dem_ridges[r] += np.where(active, z_vals, 0).astype(np.float32)
                 np.maximum(
                     color_ridges[r],
-                    np.where(active, score_row, 0.0).astype(np.float32),
+                    np.where(active, score_row, 0).astype(np.float32),
                     out=color_ridges[r],
                 )
 
