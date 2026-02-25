@@ -100,6 +100,7 @@ import numpy as np
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
 
 import bpy
+from mathutils import Vector
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -608,11 +609,385 @@ def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     logger.warning("Parks not found")
     return None
 
+def load_xc_skiing_components(output_dir: Path) -> Optional[dict[str, np.ndarray]]:
+    """Load individual XC skiing score component grids from .npz output.
+
+    Component grids are saved with 'component_' prefix by detroit_xc_skiing.py.
+
+    Args:
+        output_dir: Directory containing xc_skiing_scores.npz
+
+    Returns:
+        Dict mapping component names to score arrays, or None if not available.
+        Keys: "snow_depth", "snow_coverage", "snow_consistency"
+    """
+    score_path = output_dir / "xc_skiing_scores.npz"
+    if not score_path.exists():
+        logger.warning("XC skiing scores file not found: %s", score_path)
+        return None
+
+    data = np.load(score_path)
+    components = {}
+    for key in ["snow_depth", "snow_coverage", "snow_consistency"]:
+        npz_key = f"component_{key}"
+        if npz_key in data:
+            components[key] = data[npz_key]
+
+    if not components:
+        logger.warning(
+            "No component scores found in %s. "
+            "Re-run detroit_xc_skiing.py to generate component data.",
+            score_path,
+        )
+        return None
+
+    logger.info(
+        "Loaded %d score components from %s", len(components), score_path
+    )
+    return components
+
+
 def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
     """Generate mock score grid."""
     np.random.seed(42)
     score = np.random.uniform(0.3, 0.9, shape).astype(np.float32)
     return score
+
+# =============================================================================
+# COMPONENT PANEL RENDERING
+# =============================================================================
+
+
+def create_component_panels(
+    args,
+    dem: np.ndarray,
+    dem_transform,
+    dem_crs: str,
+    components: dict[str, np.ndarray],
+    component_transform,
+    water_mask: Optional[np.ndarray],
+    water_transform=None,
+    water_crs: Optional[str] = None,
+    render_width: int = 640,
+    render_height: int = 360,
+    main_mesh: "bpy.types.Object" = None,
+    score_colormap=None,
+) -> list:
+    """Create component panel meshes for display to the right of the main mesh.
+
+    Creates one Terrain per component. Each panel uses the same colormap name
+    (boreal_mako) but its gradient is independently normalized to that panel's
+    own data range, so gradients are never shared between panels.
+
+    Args:
+        args: Parsed CLI arguments (for transform params like vertex_multiplier).
+        dem: Original DEM array (before transforms).
+        dem_transform: Affine transform for DEM.
+        dem_crs: CRS string for DEM (e.g., "EPSG:4326").
+        components: Dict mapping component names to score arrays.
+        component_transform: Affine transform for the component score grids.
+        water_mask: Pre-computed water mask array, or None.
+        water_transform: Affine transform for water mask, or None.
+        water_crs: CRS string for water mask, or None.
+        render_width: Render width in pixels.
+        render_height: Render height in pixels.
+        main_mesh: The main terrain mesh object to position panels relative to.
+
+    Returns:
+        List of Blender mesh objects for the component panels.
+    """
+    from src.terrain.color_mapping import elevation_colormap
+    from src.terrain.transforms import downsample_then_reproject, flip_raster, scale_elevation
+
+    component_names = ["snow_depth", "snow_coverage", "snow_consistency"]
+    component_labels = {
+        "snow_depth": "Snow Depth (30%)",
+        "snow_coverage": "Snow Coverage (60%)",
+        "snow_consistency": "Snow Consistency (10%)",
+    }
+
+    active_components = [c for c in component_names if c in components]
+    n_panels = len(active_components)
+
+    if n_panels == 0:
+        logger.warning("No score components available for panel rendering")
+        return []
+
+    logger.info("Creating %d Score Component Panels", n_panels)
+
+    # Calculate target vertices for panels - they display at ≤30% linear scale (9% area),
+    # so they need far fewer vertices than the main mesh. Use 1/10 of main resolution
+    # (still provides ample quality at panel display size).
+    target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier / 10))
+    dem_height_px, dem_width_px = dem.shape
+    original_vertices = dem_height_px * dem_width_px
+    zoom_factor = np.sqrt(target_vertices / original_vertices)
+
+    mesh_objects = []
+    for i, comp_name in enumerate(active_components):
+        logger.info(
+            "  Panel %d/%d: %s",
+            i + 1, n_panels, component_labels.get(comp_name, comp_name),
+        )
+
+        # Create fresh Terrain with same DEM
+        terrain = Terrain(dem.copy(), dem_transform, dem_crs=dem_crs)
+
+        # Apply same transform chain as the main render
+        terrain.add_transform(downsample_then_reproject(
+            src_crs=dem_crs,
+            dst_crs="EPSG:32617",
+            downsample_zoom_factor=zoom_factor,
+            downsample_method=getattr(args, "downsample_method", "lanczos"),
+        ))
+        terrain.add_transform(flip_raster(axis="horizontal"))
+        terrain.apply_transforms()
+
+        # Scale elevation to match main mesh (main pipeline applies 0.0001 scale)
+        dem_layer = terrain.data_layers["dem"]
+        scaled_dem, _, _ = scale_elevation(scale_factor=0.0001)(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = scaled_dem
+
+        # Component data is already a 0-1 score where high = good conditions.
+        # snow_consistency() already returns 1-inconsistency, so no inversion needed.
+        comp_data = components[comp_name]
+
+        # Add component score as a data layer
+        terrain.add_data_layer(
+            name=comp_name,
+            data=comp_data,
+            transform=component_transform,
+            crs="EPSG:4326",
+            target_layer="dem",
+        )
+
+        # Add water mask if available
+        panel_water_mask = None
+        if water_mask is not None and water_transform is not None:
+            terrain.add_data_layer(
+                name="water",
+                data=water_mask.astype(np.float32),
+                transform=water_transform,
+                crs=water_crs or "EPSG:4326",
+                target_layer="dem",
+            )
+            panel_water_mask = terrain.data_layers["water"]["data"] > 0.5
+
+        # Colormap range from the aligned (reprojected) data — this is what
+        # compute_colors actually renders, so the gradient covers the true
+        # displayed range for this panel, independent of other panels.
+        aligned = terrain.data_layers[comp_name]["data"]
+        valid_aligned = aligned[np.isfinite(aligned)]
+        if valid_aligned.size > 0:
+            vmin, vmax = float(valid_aligned.min()), float(valid_aligned.max())
+        else:
+            # Fallback: use raw data range if alignment left no valid pixels
+            valid_raw = comp_data[np.isfinite(comp_data)]
+            vmin, vmax = float(valid_raw.min()), float(valid_raw.max())
+            logger.warning("    No valid pixels after alignment for %s; using raw range", comp_name)
+        logger.info("    Data range (aligned): %.4f – %.4f", vmin, vmax)
+        cmap = "boreal_mako_print" if getattr(args, "print_colors", False) else "boreal_mako"
+        def raw_colormap(score, _cmap=cmap, _min=vmin, _max=vmax):
+            return elevation_colormap(score, cmap_name=_cmap, min_elev=_min, max_elev=_max)
+
+        terrain.set_color_mapping(
+            color_func=raw_colormap,
+            source_layers=[comp_name],
+        )
+
+        mesh_obj = terrain.create_mesh(
+            scale_factor=100.0,
+            height_scale=getattr(args, "height_scale", 25.0),
+            water_mask=panel_water_mask,
+            boundary_extension=True,
+            two_tier_edge=getattr(args, "two_tier_edge", True),
+            base_depth=getattr(args, "base_depth", 0.2),
+            edge_base_material=getattr(args, "edge_base_material", "clay"),
+            edge_blend_colors=not getattr(args, "no_edge_blend_colors", False),
+            use_fractional_edges=getattr(args, "use_fractional_edges", True),
+            edge_sample_spacing=2.0,  # Coarser edges for panels (they're small thumbnails)
+        )
+
+        if mesh_obj is not None:
+            mesh_objects.append(mesh_obj)
+            logger.info("    ✓ Created mesh '%s' (%d verts)", mesh_obj.name, len(mesh_obj.data.vertices))
+            # Apply same terrain material preset as the main mesh
+            if mesh_obj.data.materials:
+                from src.terrain.materials import apply_colormap_material as _apply_mat
+                terrain_mat = getattr(args, "terrain_material", "satin")
+                _apply_mat(mesh_obj.data.materials[0], terrain_material=terrain_mat)
+                logger.info("    → Applied '%s' terrain material", terrain_mat)
+        else:
+            logger.warning("    ✗ create_mesh returned None for %s", comp_name)
+
+    if not mesh_objects:
+        logger.error("No meshes created for component panels")
+        return []
+
+    # Scale panels to fit as thumbnails on the right side of the main mesh
+    panel_scale = 0.25
+    if main_mesh is not None:
+        bpy.context.view_layer.update()
+        main_bb = main_mesh.bound_box
+        main_corners = [main_mesh.matrix_world @ Vector(c) for c in main_bb]
+        main_min_x = min(c.x for c in main_corners)
+        main_max_x = max(c.x for c in main_corners)
+        main_min_y = min(c.y for c in main_corners)
+        main_max_y = max(c.y for c in main_corners)
+        main_width = main_max_x - main_min_x
+        main_depth = main_max_y - main_min_y
+
+        # Scale panels so n panels stacked vertically span ~main_depth with padding.
+        # Use Y-extent (depth) as the stacking direction reference, not the wider
+        # of the two axes — after the panel vertex-count reduction the raw bounding
+        # box is much smaller, so we must use the correct axis.
+        bb = mesh_objects[0].bound_box
+        raw_panel_width = max(v[0] for v in bb) - min(v[0] for v in bb)
+        raw_panel_depth = max(v[1] for v in bb) - min(v[1] for v in bb)
+        ref_depth = raw_panel_depth  # Y-extent: the stacking direction
+        # n panels + ~10% inter-panel padding should fill main_depth
+        panel_scale = main_depth / (ref_depth * n_panels * 1.1)
+        panel_scale = min(panel_scale, 2.0)  # Safety cap (generous, panels are now low-res)
+        panel_scale *= getattr(args, "component_scale", 1.0)
+
+    for obj in mesh_objects:
+        obj.scale = (panel_scale, panel_scale, panel_scale)
+
+    bpy.context.view_layer.update()
+
+    # Compute scaled panel dimensions
+    bb = mesh_objects[0].bound_box
+    scaled_corners = [mesh_objects[0].matrix_world @ Vector(c) for c in bb]
+    panel_width = max(c.x for c in scaled_corners) - min(c.x for c in scaled_corners)
+    panel_depth = max(c.y for c in scaled_corners) - min(c.y for c in scaled_corners)
+
+    logger.info("  Created %d component panels (scale=%.2f), awaiting positioning",
+                len(mesh_objects), panel_scale)
+    return {
+        "meshes": mesh_objects,
+        "panel_width": panel_width,
+        "panel_depth": panel_depth,
+        "panel_scale": panel_scale,
+    }
+
+
+def position_component_panels(
+    panel_info: dict,
+    main_mesh: "bpy.types.Object",
+    camera: "bpy.types.Object",
+):
+    """Position component panels on the right side of the camera frame.
+
+    Uses the camera's orientation to determine 'right in frame' direction,
+    so panels appear to the right regardless of camera direction. Panels are
+    stacked vertically, centered on the main mesh's vertical extent.
+
+    Args:
+        panel_info: Dict from create_component_panels with meshes and layout metadata.
+        main_mesh: The main terrain mesh.
+        camera: The positioned camera object.
+    """
+    mesh_objects = panel_info["meshes"]
+    panel_width = panel_info["panel_width"]
+    panel_depth = panel_info["panel_depth"]
+    panel_scale = panel_info["panel_scale"]
+
+    if not mesh_objects:
+        return
+
+    bpy.context.view_layer.update()
+
+    # Project camera's "right in frame" and "down in frame" onto XY ground plane.
+    # This keeps panels in the ground plane regardless of camera tilt.
+    cam_matrix = camera.matrix_world.to_3x3()
+    cam_down_3d = -(cam_matrix @ Vector((0, 1, 0)))  # Down in frame (3D)
+    cam_right_3d = cam_matrix @ Vector((1, 0, 0))     # Right in frame (3D)
+
+    cam_down_xy = Vector((cam_down_3d.x, cam_down_3d.y, 0))
+    cam_right_xy = Vector((cam_right_3d.x, cam_right_3d.y, 0))
+
+    if cam_down_xy.length < 1e-6:
+        cam_down_xy = Vector((0, -1, 0))
+    else:
+        cam_down_xy.normalize()
+
+    if cam_right_xy.length < 1e-6:
+        cam_right_xy = Vector((1, 0, 0))
+    else:
+        cam_right_xy.normalize()
+
+    # Compute main mesh center and extents in world space
+    main_corners = [main_mesh.matrix_world @ Vector(c) for c in main_mesh.bound_box]
+    main_center = Vector((
+        sum(c.x for c in main_corners) / 8,
+        sum(c.y for c in main_corners) / 8,
+        sum(c.z for c in main_corners) / 8,
+    ))
+
+    # Main mesh's lowest world-space z (the skirt base); panels must match this.
+    # create_mesh(center_model=True) only centers X/Y — Z stays at absolute DEM
+    # elevation, so we can't assume the base is at z=0.
+    main_min_z_world = min(c.z for c in main_corners)
+
+    # Right edge of main mesh in camera-frame right direction
+    main_extents_right = [Vector((c.x, c.y, 0)).dot(cam_right_xy) for c in main_corners]
+    main_right = max(main_extents_right)
+
+    # North/south extents of main mesh in camera-frame down direction
+    main_extents_down = [Vector((c.x, c.y, 0)).dot(cam_down_xy) for c in main_corners]
+    main_north = min(main_extents_down)
+    main_south = max(main_extents_down)
+    main_ns_extent = main_south - main_north
+
+    # Projection of main_center onto cam_down axis.  For a perfectly centred mesh
+    # this is (main_north+main_south)/2, but reprojection / skirt asymmetry can
+    # leave a small residual that shifts the whole stack.
+    main_center_down_proj = Vector((main_center.x, main_center.y, 0)).dot(cam_down_xy)
+
+    # Panel's own cam-down extent before positioning (accounts for any bounding-box
+    # asymmetry around its local origin after downsampling / reprojection).
+    panel0_world_corners = [mesh_objects[0].matrix_world @ Vector(c)
+                            for c in mesh_objects[0].bound_box]
+    panel0_extents_down = [Vector((c.x, c.y, 0)).dot(cam_down_xy)
+                           for c in panel0_world_corners]
+    panel_north_before = min(panel0_extents_down)
+    panel_cam_down_extent = max(panel0_extents_down) - panel_north_before
+
+    # Place panels to the right of the main mesh
+    gap = panel_width * 0.3
+    panel_right_offset = main_right + gap + panel_width / 2
+
+    # Stack panels so their combined extent exactly matches the main mesh
+    # north-to-south.  down_offset is a displacement *relative to* main_center,
+    # so: actual_cam_down = main_center_down_proj + down_offset.
+    # For panel 0 north edge = main_north:
+    #   main_center_down_proj + stack_start - panel_north_before_offset = main_north
+    # → stack_start = main_north - panel_north_before - main_center_down_proj
+    n = len(mesh_objects)
+    if n == 1:
+        # Centre single panel on the main mesh
+        panel_center_before = (panel_north_before + max(panel0_extents_down)) / 2
+        stack_start = (main_north + main_south) / 2 - panel_center_before - main_center_down_proj
+    else:
+        spacing = max(0.0, (main_ns_extent - n * panel_cam_down_extent) / (n - 1))
+        stack_start = main_north - panel_north_before - main_center_down_proj
+
+    for i, obj in enumerate(mesh_objects):
+        down_offset = stack_start + i * (panel_cam_down_extent + spacing)
+        world_pos = main_center + cam_right_xy * panel_right_offset + cam_down_xy * down_offset
+        # Align the panel's skirt base to the main mesh's skirt base (not z=0).
+        # Panel vertices live at absolute DEM elevation in local space; after
+        # scaling by obj.scale.z the world base = location.z + scale.z * local_min_z,
+        # so: location.z = main_min_z_world - scale.z * local_min_z.
+        local_min_z = min(v[2] for v in obj.bound_box)
+        z_aligned = main_min_z_world - obj.scale.z * local_min_z
+        obj.location = (world_pos.x, world_pos.y, z_aligned)
+
+    bpy.context.view_layer.update()
+
+    logger.info("  Positioned %d component panels on right side of camera frame (scale=%.2f)",
+                n, panel_scale)
+
 
 # =============================================================================
 # MAIN
@@ -623,6 +998,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Detroit Combined Terrain Rendering (Sledding with XC Skiing Parks)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        fromfile_prefix_chars="@",
         epilog="""
 Examples:
   # Render with pre-computed scores (1920x1080, 2048 samples)
@@ -644,6 +1020,10 @@ Examples:
 
   # Specify output directory for results
   python examples/detroit_combined_render.py --output-dir ./renders
+
+  # Load a saved preset (one arg per line in the file)
+  python examples/detroit_combined_render.py @examples/presets/skiing_overhead_dark_print.args
+  python examples/detroit_combined_render.py @examples/presets/skiing_overhead_dark_print.args --output-dir ./renders
         """,
     )
 
@@ -1571,6 +1951,55 @@ Examples:
         default=False,
         help="Skip water detection and coloring entirely. Terrain will be colored by score "
              "everywhere without a blue water overlay.",
+    )
+
+    parser.add_argument(
+        "--show-components",
+        action="store_true",
+        default=False,
+        help="After the main render, create a separate panel image showing "
+             "individual XC skiing score components (snow depth, coverage, "
+             "consistency) side-by-side. Requires component data from "
+             "detroit_xc_skiing.py (re-run it if needed).",
+    )
+    parser.add_argument(
+        "--component-scale",
+        type=float,
+        default=1.0,
+        metavar="FACTOR",
+        help="Multiply the auto-computed component panel size by FACTOR "
+             "(default: 1.0). Values >1 make panels larger, <1 smaller. "
+             "Useful when adding headings or adjusting layout.",
+    )
+
+    # -- Temporal landscape sculpture --
+    temporal_group = parser.add_argument_group("Temporal landscape sculpture")
+    temporal_group.add_argument(
+        "--temporal-landscape",
+        action="store_true",
+        default=False,
+        help="Add temporal XC skiing score ridge sculpture below main terrain.",
+    )
+    temporal_group.add_argument(
+        "--temporal-cache",
+        type=Path,
+        default=project_root / "examples" / "output" / "xc_skiing" / "temporal_timeseries.npz",
+        metavar="PATH",
+        help="Path to temporal timeseries .npz cache (default: examples/output/xc_skiing/temporal_timeseries.npz).",
+    )
+    temporal_group.add_argument(
+        "--temporal-gap",
+        type=float,
+        default=0.3,
+        metavar="FRAC",
+        help="Gap as fraction of temporal mesh depth (default: 0.3, like component panels).",
+    )
+    temporal_group.add_argument(
+        "--temporal-ridge-height",
+        type=float,
+        default=0.5,
+        metavar="FRAC",
+        help="Ridge peak height as fraction of main terrain Z range (default: 0.5).",
     )
 
     args = parser.parse_args()
@@ -2800,6 +3229,7 @@ Examples:
     if mesh_combined is None:
         logger.error("Failed to create combined terrain mesh")
         return 1
+    mesh_vertex_count = len(mesh_combined.data.vertices)
 
     # Apply vertex colors (already applied during create_mesh, but check if available)
     logger.debug("Vertex colors applied during mesh creation")
@@ -2918,11 +3348,57 @@ Examples:
 
     logger.info("✓ Combined terrain mesh created successfully")
 
-    # Free the original DEM array from memory (it's no longer needed)
-    # The Terrain objects have their own downsampled copies
-    del dem
-    gc.collect()
-    logger.info("Freed original DEM from memory")
+    # Create component panels in the same scene if requested
+    component_panel_info = None
+    if args.show_components:
+        xc_scores_dir = args.scores_dir / "xc_skiing"
+        components = load_xc_skiing_components(xc_scores_dir)
+        if components is not None:
+            _, comp_transform = load_xc_skiing_scores(xc_scores_dir)
+            if comp_transform is None:
+                comp_transform = xc_transform  # Fallback
+            component_panel_info = create_component_panels(
+                args=args,
+                dem=dem,
+                dem_transform=transform,
+                dem_crs=dem_crs,
+                components=components,
+                component_transform=comp_transform,
+                water_mask=lake_mask_raw,
+                water_transform=lake_transform,
+                water_crs="EPSG:4326",
+                render_width=render_width,
+                render_height=render_height,
+                main_mesh=mesh_combined,
+                score_colormap=base_colormap,
+            )
+        else:
+            logger.warning(
+                "--show-components requested but no component scores found. "
+                "Re-run detroit_xc_skiing.py to generate component data."
+            )
+
+    # Create temporal landscape sculpture if requested
+    temporal_mesh = None
+    if args.temporal_landscape:
+        logger.info("\nBuilding temporal landscape sculpture...")
+        from examples.temporal_sculpture import create_temporal_sculpture
+        temporal_mesh = create_temporal_sculpture(
+            main_mesh=mesh_combined,
+            snodas_dir=Path("data/snodas_data"),
+            cache_file=args.temporal_cache,
+            height_scale=args.height_scale,
+            ridge_height_fraction=args.temporal_ridge_height,
+            gap_below_main=args.temporal_gap,
+            base_depth=args.base_depth,
+            edge_base_material=args.edge_base_material,
+            edge_blend_colors=args.edge_blend_colors,
+            use_fractional_edges=args.use_fractional_edges,
+        )
+        if temporal_mesh:
+            logger.info("✓ Temporal landscape sculpture created")
+        else:
+            logger.warning("Temporal landscape sculpture creation failed")
 
     # Mark end of mesh creation phase
     timer.mark("  └─ Mesh creation and material application")
@@ -2933,13 +3409,84 @@ Examples:
     logger.info(f"  Height scale: {args.height_scale}")
     logger.info(f"  Ortho scale: {args.ortho_scale}")
     logger.info(f"  Camera elevation: {args.camera_elevation}")
+
+    # Always use position_camera_relative so preset camera settings are respected
+    cam_meshes = [mesh_combined] + ([temporal_mesh] if temporal_mesh else [])
     camera = position_camera_relative(
-        mesh_obj=mesh_combined,
+        mesh_obj=cam_meshes if len(cam_meshes) > 1 else mesh_combined,
         direction=args.camera_direction,
         camera_type="ORTHO",
         ortho_scale=args.ortho_scale,
         elevation=args.camera_elevation,
     )
+
+    # Position component panels at the bottom of the camera frame
+    component_mesh_list = []
+    if component_panel_info and component_panel_info["meshes"]:
+        position_component_panels(component_panel_info, mesh_combined, camera)
+        component_mesh_list = component_panel_info["meshes"]
+        logger.info(f"  Component panels: {len(component_mesh_list)} meshes in scene")
+        for i, obj in enumerate(component_mesh_list):
+            logger.info(f"    Panel {i}: '{obj.name}' at ({obj.location.x:.1f}, {obj.location.y:.1f}, {obj.location.z:.1f}), scale={obj.scale.x:.3f}")
+        # Re-center camera on the combined visual center (main mesh + panels)
+        # and widen ortho_scale to fit everything.
+        bpy.context.view_layer.update()
+        cam_matrix = camera.matrix_world.to_3x3()
+        cam_right = cam_matrix @ Vector((1, 0, 0))
+        cam_up = cam_matrix @ Vector((0, 1, 0))
+        cam_forward = cam_matrix @ Vector((0, 0, -1))
+
+        # Compute combined bounding box in camera space
+        min_right = min_up = min_depth = float("inf")
+        max_right = max_up = max_depth = float("-inf")
+        temporal_list = [temporal_mesh] if temporal_mesh else []
+        for obj in [mesh_combined] + component_mesh_list + temporal_list:
+            for corner in obj.bound_box:
+                wc = obj.matrix_world @ Vector(corner)
+                r = wc.dot(cam_right)
+                u = wc.dot(cam_up)
+                d = wc.dot(cam_forward)
+                min_right = min(min_right, r)
+                max_right = max(max_right, r)
+                min_up = min(min_up, u)
+                max_up = max(max_up, u)
+                min_depth = min(min_depth, d)
+                max_depth = max(max_depth, d)
+
+        # Shift camera to center on the combined bounding box
+        combined_center_right = (min_right + max_right) / 2
+        combined_center_up = (min_up + max_up) / 2
+        cam_pos = camera.matrix_world.translation
+        old_center_right = cam_pos.dot(cam_right)
+        old_center_up = cam_pos.dot(cam_up)
+        shift_right = combined_center_right - old_center_right
+        shift_up = combined_center_up - old_center_up
+        camera.location.x += cam_right.x * shift_right + cam_up.x * shift_up
+        camera.location.y += cam_right.y * shift_right + cam_up.y * shift_up
+        # Keep camera Z unchanged (don't move closer/further)
+        logger.info(f"  Re-centered camera: shift=({shift_right:.2f} right, {shift_up:.2f} up)")
+        logger.info(f"  Camera now at ({camera.location.x:.2f}, {camera.location.y:.2f}, {camera.location.z:.2f})")
+
+        # Compute needed ortho_scale from the combined extent
+        horizontal_extent = max_right - min_right
+        vertical_extent = max_up - min_up
+        aspect_ratio = render_height / render_width  # < 1 for landscape
+        needed_scale = max(horizontal_extent, vertical_extent / aspect_ratio) * 1.1
+        logger.info(f"  Camera extents: horizontal={horizontal_extent:.1f}, vertical={vertical_extent:.1f}, aspect={aspect_ratio:.3f}")
+        logger.info(f"  Needed ortho_scale={needed_scale:.1f}, current={camera.data.ortho_scale:.1f}")
+        if needed_scale > camera.data.ortho_scale:
+            logger.info(f"  Widened ortho_scale from {camera.data.ortho_scale:.2f} to {needed_scale:.2f} to fit component panels")
+            camera.data.ortho_scale = needed_scale
+        # Ensure clip range covers all meshes along camera depth
+        depth_range = max_depth - min_depth + 200
+        camera.data.clip_end = max(camera.data.clip_end, depth_range)
+    elif args.show_components:
+        logger.warning("  --show-components: component_panel_info=%s", type(component_panel_info))
+
+    # Diagnostic: count all mesh objects in scene
+    scene_meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    logger.info(f"  Scene contains {len(scene_meshes)} mesh objects: {[o.name for o in scene_meshes]}")
+
     # Setup HDRI sky lighting (invisible but adds realistic ambient illumination)
     # HDRI sky includes a physically-simulated sun, so we use that instead of explicit lights
     if args.hdri_lighting:
@@ -3012,9 +3559,13 @@ Examples:
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
         logger.info(f"  Size multiplier: {args.background_size}x")
+        # Include all meshes so the background plane covers the full scene.
+        # Z is driven by the lowest mesh vertex; XY centers on all meshes.
+        temporal_mesh_list = [temporal_mesh] if temporal_mesh else []
+        all_scene_meshes = [mesh_combined] + component_mesh_list + temporal_mesh_list if (component_mesh_list or temporal_mesh_list) else mesh_combined
         background_plane = create_background_plane(
             camera=camera,
-            mesh_or_meshes=mesh_combined,
+            mesh_or_meshes=all_scene_meshes,
             distance_below=args.background_distance,
             color=args.background_color,
             size_multiplier=args.background_size,
@@ -3166,12 +3717,20 @@ Examples:
     # Print timing report
     timer.report()
 
+    # Free the original DEM array from memory
+    try:
+        del dem
+    except UnboundLocalError:
+        pass
+    gc.collect()
+    logger.info("Freed original DEM from memory")
+
     logger.info("\n" + "=" * 70)
     logger.info("✓ Detroit Combined Terrain Rendering Complete!")
     logger.info("=" * 70)
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
-    logger.info(f"  ✓ Created combined terrain mesh ({len(mesh_combined.data.vertices)} vertices)")
+    logger.info(f"  ✓ Created combined terrain mesh ({mesh_vertex_count} vertices)")
     width_desc = f" w={args.purple_width}" if args.purple_width != 1.0 else ""
     purple_desc = ", no purple" if args.no_purple else f", purple@{args.purple_position}{width_desc}"
     norm_desc = ", normalized" if args.normalize_scores else ""
