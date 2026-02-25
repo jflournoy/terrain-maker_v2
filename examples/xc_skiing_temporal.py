@@ -634,6 +634,13 @@ def build_ridge_dem(
             _write_ridge(row, season_matrix[i], ridge_rows)
             row += ridge_rows + gap_rows
 
+        # Smooth along N-S axis to remove integer-shift quantization steps.
+        # Sigma scales with shear so the smoothing matches the ramp resolution.
+        from scipy.ndimage import gaussian_filter1d
+        sigma = max(1.0, shear / 8.0)
+        dem_ridges = gaussian_filter1d(dem_ridges, sigma=sigma, axis=0)
+        color_ridges = gaussian_filter1d(color_ridges, sigma=sigma, axis=0)
+
     else:
         # Symmetric hogback (triangle/tent): [0, 1, 0] — no shear support
         def _hogback(n):
