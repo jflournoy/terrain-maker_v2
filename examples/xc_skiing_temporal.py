@@ -525,9 +525,9 @@ def build_ridge_dem(
     above) followed by a steep scarp face (casts shadow).
 
     When ``shear>0``, the dip slope length varies per column: high-score days
-    get longer dip slopes extending further north (more overlap with previous
-    ridges), while low-score days have shorter dip slopes.  The scarp (steep
-    south face) stays anchored at its fixed position.
+    get longer dip slopes extending further south (cascading overlap with
+    subsequent ridges), while zero-score days get no dip slope at all (just
+    the scarp).  The scarp (steep north face) stays anchored.
 
     Parameters
     ----------
@@ -547,9 +547,9 @@ def build_ridge_dem(
         Extra rows of exponential decay tail per ridge.  0 gives the
         original symmetric hogback; >0 gives cascading asymmetric cuestas.
     shear : float
-        Extra dip-slope rows added for the highest-score columns.  0 means
-        all columns have the same dip length (``tail_rows``); 6 means a
-        max-score column gets a dip slope of ``tail_rows + 6`` rows.
+        Extra dip-slope rows for max-score columns.  The effective dip length
+        is ``normed_score * (tail_rows + shear)``, so zero-score columns get
+        0 rows and max-score columns get ``tail_rows + shear`` rows.
 
     Returns
     -------
@@ -570,9 +570,9 @@ def build_ridge_dem(
         + gap_rows
     )
 
-    # max_dip = farthest northward extent of any dip slope (headroom needed)
+    # max_dip = farthest southward extent of any dip slope (padding at south end)
     max_dip = (tail_rows + int(np.ceil(shear))) if tail_rows > 0 else 0
-    total_rows = max_dip + base_rows
+    total_rows = base_rows + max_dip
 
     dem_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
     color_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
@@ -580,11 +580,12 @@ def build_ridge_dem(
     first_half = n_seasons // 2
 
     if tail_rows > 0:
-        # Cuesta: the scarp (steep south face) is anchored at a fixed row.
-        # The dip slope extends northward with length proportional to score
-        # when shear > 0: high-score days reach further north (more overlap
-        # with previous ridges), low-score days have shorter dip slopes.
-        row = max_dip  # first scarp position (headroom for northward dip)
+        # Cuesta: the scarp (steep north face) is anchored at a fixed row.
+        # The dip slope extends southward with length proportional to score
+        # when shear > 0: high-score days get longer dip slopes that reach
+        # further south into subsequent ridges, creating cascading overlap.
+        # Zero-score columns get no dip slope at all (just scarp).
+        row = 0  # first scarp position (no headroom needed at north)
 
         def _write_ridge(scarp_row, score_row, n_scarp, height_scale=1.0):
             # --- Scarp: steep linear drop, anchored at scarp_row ---
@@ -595,28 +596,24 @@ def build_ridge_dem(
                     dem_ridges[r] += score_row * scarp_h[dy] * height_scale
                     color_ridges[r] = np.maximum(color_ridges[r], score_row)
 
-            # --- Dip slope: sin(0..pi/2) extending northward from scarp ---
-            # Per-column dip length varies with score when shear > 0
-            if shear > 0:
-                s_max = float(np.max(score_row))
-                normed = (score_row / s_max) if s_max > 0 else score_row
-                extra = np.round(normed * shear).astype(int)
-                eff_dip = tail_rows + extra  # per-column, shape (n_days,)
-            else:
-                eff_dip = np.full(n_days, tail_rows, dtype=int)
+            # --- Dip slope: sin(pi/2..0) extending southward from scarp ---
+            # Per-column dip length: 0 for zero score, tail_rows+shear for max
+            s_max = float(np.max(score_row))
+            normed = (score_row / s_max) if s_max > 0 else score_row
+            eff_dip = np.round(normed * (tail_rows + shear)).astype(int)
 
-            # Iterate over all possible dip rows (north to south toward scarp)
+            # Iterate south from scarp end; dy=0 is closest to scarp (peak)
             for dy in range(max_dip):
-                r = scarp_row - max_dip + dy
+                r = scarp_row + n_scarp + dy
                 if r < 0 or r >= total_rows:
                     continue
-                # Each column's dip slope starts at a different offset
-                dy_start = max_dip - eff_dip  # per-column
-                active = dy >= dy_start
-                # Position within this column's dip: 0.0 at start → 1.0 at peak
+                # Column j is active while dy < eff_dip[j]
+                active = dy < eff_dip
+                # Fraction: 1.0 at scarp → 0.0 at tail tip
+                safe_dip = np.maximum(eff_dip, 1).astype(np.float64)
                 frac = np.where(
                     active & (eff_dip > 0),
-                    (dy - dy_start).astype(np.float64) / eff_dip,
+                    1.0 - dy / safe_dip,
                     0.0,
                 )
                 h = np.where(active, np.sin(np.clip(frac, 0, 1) * np.pi / 2), 0.0)

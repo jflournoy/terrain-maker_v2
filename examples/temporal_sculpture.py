@@ -117,6 +117,11 @@ def create_temporal_sculpture(
         n_seasons, dem_ridges.shape[1], dem_ridges.shape,
     )
 
+    # Flip columns so earliest calendar days (Nov) are at the west (left)
+    # when viewed from above, matching the main terrain's geographic X axis.
+    dem_ridges = dem_ridges[:, ::-1].copy()
+    color_ridges = color_ridges[:, ::-1].copy()
+
     # --- Create Terrain with no-op transform ---
     # Dummy transform: 1 unit per pixel, origin at top-left.
     # Scale DEM values up so ridges dominate the base_depth in create_mesh.
