@@ -524,9 +524,10 @@ def build_ridge_dem(
     asymmetric cuesta — a gradual ``sin(0..pi/2)`` dip slope (visible from
     above) followed by a steep scarp face (casts shadow).
 
-    When ``shear>0``, each column is shifted northward proportional to its
-    score: high-score days lean over the previous ridge while low-score days
-    stay put.  This creates visible overlap from above.
+    When ``shear>0``, the dip slope length varies per column: high-score days
+    get longer dip slopes extending further north (more overlap with previous
+    ridges), while low-score days have shorter dip slopes.  The scarp (steep
+    south face) stays anchored at its fixed position.
 
     Parameters
     ----------
@@ -546,8 +547,9 @@ def build_ridge_dem(
         Extra rows of exponential decay tail per ridge.  0 gives the
         original symmetric hogback; >0 gives cascading asymmetric cuestas.
     shear : float
-        Northward shift (in rows) for the highest-score columns.  0 means
-        no shear; 6 means a score=1.0 column shifts 6 rows north.
+        Extra dip-slope rows added for the highest-score columns.  0 means
+        all columns have the same dip length (``tail_rows``); 6 means a
+        max-score column gets a dip slope of ``tail_rows + 6`` rows.
 
     Returns
     -------
@@ -558,7 +560,6 @@ def build_ridge_dem(
     """
     n_seasons, n_days = season_matrix.shape
     median_ridge_rows = ridge_rows * median_width_mult
-    shear_pad = int(np.ceil(shear)) if shear > 0 else 0
 
     # Layout: first_half seasons + median + second_half seasons
     # Each season block = ridge_rows + gap_rows
@@ -568,29 +569,78 @@ def build_ridge_dem(
         + median_width_mult * ridge_rows
         + gap_rows
     )
-    # Extra rows: tail overhang + shear headroom at the north end
-    total_rows = base_rows + tail_rows + shear_pad
+
+    # max_dip = farthest northward extent of any dip slope (headroom needed)
+    max_dip = (tail_rows + int(np.ceil(shear))) if tail_rows > 0 else 0
+    total_rows = max_dip + base_rows
 
     dem_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
     color_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
 
-    # --- Cross-section profiles ---
-    if tail_rows > 0:
-        # Cuesta: long gradual dip slope (north, visible from above) →
-        # steep scarp face (south, casts shadow).  Overlapping dip slopes
-        # accumulate additively, so each ridge builds on prior residual.
-        def _cuesta(n_scarp, n_dip):
-            dip = np.sin(np.linspace(0, np.pi / 2, n_dip + 1))[:-1]
-            scarp = np.linspace(1, 0, n_scarp)
-            return np.concatenate([dip, scarp])
+    first_half = n_seasons // 2
 
-        profile_season = _cuesta(ridge_rows, tail_rows)
-        profile_median = _cuesta(median_ridge_rows, tail_rows)
-        # Color the whole visible surface (dip slope + scarp)
-        color_rows_season = len(profile_season)
-        color_rows_median = len(profile_median)
+    if tail_rows > 0:
+        # Cuesta: the scarp (steep south face) is anchored at a fixed row.
+        # The dip slope extends northward with length proportional to score
+        # when shear > 0: high-score days reach further north (more overlap
+        # with previous ridges), low-score days have shorter dip slopes.
+        row = max_dip  # first scarp position (headroom for northward dip)
+
+        def _write_ridge(scarp_row, score_row, n_scarp, height_scale=1.0):
+            # --- Scarp: steep linear drop, anchored at scarp_row ---
+            scarp_h = np.linspace(1.0, 0.0, n_scarp)
+            for dy in range(n_scarp):
+                r = scarp_row + dy
+                if 0 <= r < total_rows:
+                    dem_ridges[r] += score_row * scarp_h[dy] * height_scale
+                    color_ridges[r] = np.maximum(color_ridges[r], score_row)
+
+            # --- Dip slope: sin(0..pi/2) extending northward from scarp ---
+            # Per-column dip length varies with score when shear > 0
+            if shear > 0:
+                s_max = float(np.max(score_row))
+                normed = (score_row / s_max) if s_max > 0 else score_row
+                extra = np.round(normed * shear).astype(int)
+                eff_dip = tail_rows + extra  # per-column, shape (n_days,)
+            else:
+                eff_dip = np.full(n_days, tail_rows, dtype=int)
+
+            # Iterate over all possible dip rows (north to south toward scarp)
+            for dy in range(max_dip):
+                r = scarp_row - max_dip + dy
+                if r < 0 or r >= total_rows:
+                    continue
+                # Each column's dip slope starts at a different offset
+                dy_start = max_dip - eff_dip  # per-column
+                active = dy >= dy_start
+                # Position within this column's dip: 0.0 at start → 1.0 at peak
+                frac = np.where(
+                    active & (eff_dip > 0),
+                    (dy - dy_start).astype(np.float64) / eff_dip,
+                    0.0,
+                )
+                h = np.where(active, np.sin(np.clip(frac, 0, 1) * np.pi / 2), 0.0)
+                z_vals = (score_row * h * height_scale).astype(np.float32)
+                dem_ridges[r] += z_vals
+                np.maximum(
+                    color_ridges[r],
+                    np.where(active, score_row, 0.0).astype(np.float32),
+                    out=color_ridges[r],
+                )
+
+        for i in range(first_half):
+            _write_ridge(row, season_matrix[i], ridge_rows)
+            row += ridge_rows + gap_rows
+
+        _write_ridge(row, median_scores, median_ridge_rows, median_height_scale)
+        row += median_ridge_rows + gap_rows
+
+        for i in range(first_half, n_seasons):
+            _write_ridge(row, season_matrix[i], ridge_rows)
+            row += ridge_rows + gap_rows
+
     else:
-        # Symmetric hogback (triangle/tent): [0, 1, 0]
+        # Symmetric hogback (triangle/tent): [0, 1, 0] — no shear support
         def _hogback(n):
             mid = (n - 1) / 2.0
             return np.clip(
@@ -599,63 +649,26 @@ def build_ridge_dem(
 
         profile_season = _hogback(ridge_rows)
         profile_median = _hogback(median_ridge_rows)
-        color_rows_season = ridge_rows
-        color_rows_median = median_ridge_rows
+        row = 0
 
-    # Split seasons: first half before median, second half after
-    first_half = n_seasons // 2
-    # Offset start south by shear_pad to leave room for northward lean
-    row = shear_pad
-
-    def _write_ridge(start_row, score_row, profile, n_color, height_scale=1.0):
-        """Write one ridge into dem_ridges and color_ridges.
-
-        DEM uses += so overlapping profiles accumulate.
-        When shear > 0, each column shifts north proportional to its score
-        so high-score days lean over the previous ridge.
-        """
-        if shear > 0:
-            # Per-column northward shift: normalize by max so full shear
-            # range maps to actual data range (scores peak ~0.5, not 1.0)
-            s_max = np.max(score_row)
-            normed = (score_row / s_max) if s_max > 0 else score_row
-            col_shifts = np.round(normed * shear).astype(int)
-            for dy in range(len(profile)):
-                h = profile[dy]
-                z_vals = score_row * h * height_scale
-                rows = start_row + dy - col_shifts
-                valid = (rows >= 0) & (rows < total_rows)
-                for r_val in np.unique(rows[valid]):
-                    mask = valid & (rows == r_val)
-                    dem_ridges[r_val, mask] += z_vals[mask]
-                    if dy < n_color:
-                        color_ridges[r_val, mask] = np.maximum(
-                            color_ridges[r_val, mask], score_row[mask],
-                        )
-        else:
-            for dy in range(len(profile)):
+        def _write_ridge_hog(start_row, score_row, profile, height_scale=1.0):
+            n = len(profile)
+            for dy in range(n):
                 r = start_row + dy
                 if 0 <= r < total_rows:
                     dem_ridges[r] += score_row * profile[dy] * height_scale
-            for dy in range(n_color):
-                r = start_row + dy
-                if 0 <= r < total_rows:
                     color_ridges[r] = np.maximum(color_ridges[r], score_row)
 
-    # First half of seasons (oldest)
-    for i in range(first_half):
-        _write_ridge(row, season_matrix[i], profile_season, color_rows_season)
-        row += ridge_rows + gap_rows
+        for i in range(first_half):
+            _write_ridge_hog(row, season_matrix[i], profile_season)
+            row += ridge_rows + gap_rows
 
-    # Median ridge (center)
-    _write_ridge(row, median_scores, profile_median, color_rows_median,
-                 median_height_scale)
-    row += median_ridge_rows + gap_rows
+        _write_ridge_hog(row, median_scores, profile_median, median_height_scale)
+        row += median_ridge_rows + gap_rows
 
-    # Second half of seasons (newest)
-    for i in range(first_half, n_seasons):
-        _write_ridge(row, season_matrix[i], profile_season, color_rows_season)
-        row += ridge_rows + gap_rows
+        for i in range(first_half, n_seasons):
+            _write_ridge_hog(row, season_matrix[i], profile_season)
+            row += ridge_rows + gap_rows
 
     return dem_ridges, color_ridges
 
