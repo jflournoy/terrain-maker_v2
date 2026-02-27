@@ -108,6 +108,13 @@ examples/output/flow_data/
 *.blend
 *.blend1
 
+# Image editor project files
+*.xcf
+*.psd
+
+# Derived render artifacts (JPEGs in docs/images)
+docs/images/**/*.jpg
+
 # Large data files
 *.npz
 *.pkl
