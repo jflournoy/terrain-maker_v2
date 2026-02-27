@@ -1,0 +1,8 @@
+{
+  "software": "terrain-maker (detroit_combined_render.py)",
+  "generation_command": "python examples/detroit_combined_render.py @examples/presets/skiing_overhead_dark_print.args",
+  "generation_date": "2026-02-27T07:14:45.512892",
+  "Resolution": "4200x3300",
+  "Samples": "2048",
+  "Quality": "print"
+}
