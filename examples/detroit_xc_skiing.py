@@ -43,14 +43,9 @@ from src.terrain.core import Terrain
 from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import (
     downsample_for_viz,
-    create_mock_snow_data,
-    GriddedDataLoader,
     TiledDataConfig,
 )
-from src.snow import (
-    batch_process_snodas_data,
-    calculate_snow_statistics,
-)
+from src.snow import load_snodas_stats
 from src.scoring.configs import (
     DEFAULT_XC_SKIING_SCORER,
     xc_skiing_compute_derived_inputs,
@@ -420,61 +415,19 @@ def run_step_snow(
     logger.info("Step 2: Snow Statistics (Memory-Safe via GriddedDataLoader)")
     logger.info("=" * 70)
 
-    if mock_data:
-        # Create mock data at safe fixed resolution
-        logger.info("Using mock snow data")
-        snow_stats = create_mock_snow_data(MOCK_DATA_SHAPE)
-        logger.info(f"Mock snow data shape: {MOCK_DATA_SHAPE}")
-    else:
-        # Try to load real SNODAS data using GriddedDataLoader
-        if snodas_dir and snodas_dir.exists() and terrain:
-            logger.info(f"Loading real SNODAS data from: {snodas_dir}")
-            try:
-                # Configure for memory-safe processing
-                tile_config = TiledDataConfig(
-                    max_output_pixels=4 * 1024 * 1024,  # 4M pixels max per array
-                    target_tile_outputs=1000,  # 1000x1000 tiles
-                    max_memory_percent=75.0,  # Conservative memory limit
-                )
-
-                # Define pipeline steps
-                pipeline = [
-                    ("load_snodas", batch_process_snodas_data, {}),
-                    ("compute_stats", calculate_snow_statistics, {}),
-                ]
-
-                # Create loader with terrain context
-                loader = GriddedDataLoader(
-                    terrain=terrain,
-                    cache_dir=Path("xc_skiing_cache"),
-                    tile_config=tile_config,
-                )
-
-                # Run pipeline with automatic tiling
-                result = loader.run_pipeline(
-                    data_source=snodas_dir,
-                    pipeline=pipeline,
-                    cache_name="xc_snodas",
-                )
-
-                # Extract snow statistics (remove metadata)
-                snow_stats = {k: v for k, v in result.items() if k not in ("metadata", "failed_files")}
-                failed = result.get("failed_files", [])
-                logger.info(f"✓ Loaded SNODAS data ({len(failed)} files failed)")
-
-            except Exception as e:
-                logger.warning(f"Failed to load SNODAS data: {e}")
-                logger.info("Falling back to mock data")
-                snow_stats = create_mock_snow_data(MOCK_DATA_SHAPE)
-        else:
-            if not snodas_dir:
-                logger.warning("No SNODAS directory specified (use --snodas-dir)")
-            elif snodas_dir and not snodas_dir.exists():
-                logger.warning(f"SNODAS directory not found: {snodas_dir}")
-            else:
-                logger.warning("Terrain object not available for SNODAS processing")
-            logger.info("Falling back to mock data")
-            snow_stats = create_mock_snow_data(MOCK_DATA_SHAPE)
+    snow_stats = load_snodas_stats(
+        terrain=terrain,
+        snodas_dir=snodas_dir,
+        cache_dir=Path("xc_skiing_cache"),
+        cache_name="xc_snodas",
+        tile_config=TiledDataConfig(
+            max_output_pixels=4 * 1024 * 1024,
+            target_tile_outputs=1000,
+            max_memory_percent=75.0,
+        ),
+        mock_data=mock_data,
+        mock_shape=MOCK_DATA_SHAPE,
+    )
 
     # Log snow statistics info
     snow_shape = snow_stats["median_max_depth"].shape
@@ -500,7 +453,7 @@ def run_step_snow(
 def run_step_score(
     output_dir: Path,
     snow_stats: dict,
-) -> np.ndarray:
+) -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
     Compute XC skiing suitability scores.
 
@@ -509,7 +462,11 @@ def run_step_score(
         snow_stats: Snow statistics dict
 
     Returns:
-        Score grid at snow_stats resolution
+        Tuple of (final score grid, component scores dict, raw inputs dict)
+        at snow_stats resolution. Component scores dict maps component names
+        to their transformed score arrays. Raw inputs dict maps component
+        names to their pre-transform values (snow depth in mm, coverage
+        ratio, consistency score).
     """
     logger.info("\n" + "=" * 70)
     logger.info("Step 3: XC Skiing Suitability Scoring")
@@ -526,6 +483,12 @@ def run_step_score(
 
     # Compute scores grid (same shape as snow_stats arrays)
     score_grid = DEFAULT_XC_SKIING_SCORER.compute(inputs)
+
+    # Compute individual component scores for visualization
+    component_scores = DEFAULT_XC_SKIING_SCORER.get_component_scores(inputs)
+    for comp_name, comp_arr in component_scores.items():
+        if isinstance(comp_arr, np.ndarray):
+            logger.info(f"  Component '{comp_name}': range=[{comp_arr.min():.3f}, {comp_arr.max():.3f}]")
 
     # Get expected shape from snow stats
     expected_shape = snow_stats["median_max_depth"].shape
@@ -555,7 +518,7 @@ def run_step_score(
     plt.close()
     logger.info(f"✓ Score visualization: {output_path}")
 
-    return score_grid
+    return score_grid, component_scores, inputs
 
 
 def run_step_parks(
@@ -658,6 +621,8 @@ def save_outputs(
     scored_parks: list[dict],
     output_dir: Path,
     score_transform: Affine,
+    component_scores: dict[str, np.ndarray] | None = None,
+    raw_inputs: dict[str, np.ndarray] | None = None,
 ):
     """Save analysis outputs.
 
@@ -666,6 +631,8 @@ def save_outputs(
         scored_parks: List of parks with scores
         output_dir: Directory for visualizations (docs/images/)
         score_transform: Affine transform for the score grid
+        component_scores: Optional dict mapping component names to score arrays
+        raw_inputs: Optional dict mapping component names to pre-transform values
     """
     logger.info("\n" + "=" * 70)
     logger.info("Step 5: Saving Outputs")
@@ -684,8 +651,24 @@ def save_outputs(
         score_transform.a, score_transform.b, score_transform.c,
         score_transform.d, score_transform.e, score_transform.f
     )
-    np.savez_compressed(score_path, score=score_grid, transform=transform_tuple, crs="EPSG:4326")
+    # Build save dict: final score + transform + optional component scores
+    save_dict = dict(score=score_grid, transform=transform_tuple, crs="EPSG:4326")
+    if component_scores:
+        for comp_name, comp_arr in component_scores.items():
+            save_dict[f"component_{comp_name}"] = np.asarray(comp_arr, dtype=np.float32)
+        logger.info(f"  Including {len(component_scores)} component score grids")
+    if raw_inputs:
+        for comp_name, comp_arr in raw_inputs.items():
+            save_dict[f"raw_{comp_name}"] = np.asarray(comp_arr, dtype=np.float32)
+        logger.info(f"  Including {len(raw_inputs)} raw input grids")
+    np.savez_compressed(score_path, **save_dict)
     logger.info(f"✓ Score grid saved: {score_path} ({score_path.stat().st_size / 1024:.1f} KB) (with transform)")
+
+    # Also save to output_dir so combined render can find it (--scores-dir defaults to docs/images/)
+    output_score_path = output_dir / "xc_skiing_scores.npz"
+    if output_score_path.resolve() != score_path.resolve():
+        np.savez_compressed(output_score_path, **save_dict)
+        logger.info(f"✓ Score grid also saved: {output_score_path}")
 
     # Save parks as .json
     parks_path = data_dir / "xc_skiing_parks.json"
@@ -888,6 +871,12 @@ Examples:
         help="Path to SNODAS data directory",
     )
 
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Skip 3D rendering (data pipeline only)",
+    )
+
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -916,16 +905,16 @@ Examples:
     )
 
     # Compute suitability scores
-    score_grid = run_step_score(args.output_dir, snow_stats)
+    score_grid, component_scores, raw_inputs = run_step_score(args.output_dir, snow_stats)
 
     # Find and score parks
     scored_parks, score_transform = run_step_parks(args.output_dir, dem, transform, score_grid)
 
-    # Save outputs (with transform metadata for use by other examples)
-    save_outputs(score_grid, scored_parks, args.output_dir, score_transform)
+    # Save outputs (with transform metadata, component scores, and raw inputs)
+    save_outputs(score_grid, scored_parks, args.output_dir, score_transform, component_scores, raw_inputs)
 
-    # Render 3D visualization (if bpy available)
-    if scored_parks:
+    # Render 3D visualization (if bpy available and not skipped)
+    if scored_parks and not args.no_render:
         run_step_render_3d(
             args.output_dir,
             dem,

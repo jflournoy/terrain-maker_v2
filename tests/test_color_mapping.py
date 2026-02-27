@@ -313,3 +313,345 @@ class TestColormapCompressionFormula:
         # Should be in green zone (G > R, G > B)
         assert rgb_low[1] > rgb_low[0] and rgb_low[1] > rgb_low[2], \
             f"Low-end should be greenish: RGB={rgb_low}"
+
+
+class TestBorealMakoPrintColormap:
+    """Tests for the print-safe boreal_mako_print colormap.
+
+    Validates CMYK gamut compression: the print variant should preserve
+    the overall character of boreal_mako (green→blue→pale) while keeping
+    all colors within the approximate CMYK gamut boundary.
+    """
+
+    def test_print_cmap_imports(self):
+        """boreal_mako_print_cmap should be importable."""
+        from src.terrain.color_mapping import boreal_mako_print_cmap
+
+        assert boreal_mako_print_cmap is not None
+
+    def test_print_cmap_registered_with_matplotlib(self):
+        """boreal_mako_print should be registered with matplotlib."""
+        import matplotlib
+
+        cmap = matplotlib.colormaps.get_cmap("boreal_mako_print")
+        assert cmap is not None
+        assert cmap.name == "boreal_mako_print"
+
+    def test_print_cmap_works_with_elevation_colormap(self):
+        """boreal_mako_print should work with elevation_colormap function."""
+        from src.terrain.color_mapping import elevation_colormap
+
+        scores = np.array([[0.0, 0.5], [0.75, 1.0]])
+        colors = elevation_colormap(scores, cmap_name="boreal_mako_print")
+
+        assert colors.shape == (2, 2, 3)
+        assert colors.dtype == np.uint8
+
+    def test_print_cmap_preserves_green_low_end(self):
+        """Low end should still read as green (boreal forest)."""
+        from src.terrain.color_mapping import boreal_mako_print_cmap
+
+        rgb = boreal_mako_print_cmap(0.1)[:3]
+        assert rgb[1] > rgb[0], "Green should be > Red at low end"
+        assert rgb[1] > rgb[2], "Green should be > Blue at low end"
+
+    def test_print_cmap_preserves_pale_high_end(self):
+        """High end should still be pale (high luminance)."""
+        from src.terrain.color_mapping import boreal_mako_print_cmap
+
+        rgb = boreal_mako_print_cmap(0.95)[:3]
+        assert rgb[0] > 0.6, f"Red should be high at pale end, got {rgb[0]:.3f}"
+        assert rgb[1] > 0.6, f"Green should be high at pale end, got {rgb[1]:.3f}"
+        assert rgb[2] > 0.6, f"Blue should be high at pale end, got {rgb[2]:.3f}"
+
+    def test_print_cmap_monotonic_luminance(self):
+        """Print cmap should have generally increasing L* (like the source)."""
+        from src.terrain.color_mapping import boreal_mako_print_cmap
+        from skimage import color
+
+        positions = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9]
+        lightnesses = []
+        for pos in positions:
+            rgb = boreal_mako_print_cmap(pos)[:3]
+            lab = color.rgb2lab(np.array([[rgb]]))[0, 0]
+            lightnesses.append(lab[0])
+
+        # L* should generally increase (allow small tolerance for purple ribbon)
+        for i in range(len(lightnesses) - 1):
+            assert lightnesses[i + 1] >= lightnesses[i] - 15, \
+                f"L* should increase: {positions[i]}->{positions[i+1]}: " \
+                f"{lightnesses[i]:.1f} -> {lightnesses[i+1]:.1f}"
+
+    def test_print_cmap_lower_chroma_than_source(self):
+        """Print cmap should have equal or lower chroma than boreal_mako."""
+        from src.terrain.color_mapping import boreal_mako_cmap, boreal_mako_print_cmap
+        from skimage import color
+
+        positions = np.linspace(0, 1, 20)
+        for pos in positions:
+            rgb_src = boreal_mako_cmap(float(pos))[:3]
+            rgb_prt = boreal_mako_print_cmap(float(pos))[:3]
+
+            lab_src = color.rgb2lab(np.array([[rgb_src]]))[0, 0]
+            lab_prt = color.rgb2lab(np.array([[rgb_prt]]))[0, 0]
+
+            chroma_src = np.sqrt(lab_src[1] ** 2 + lab_src[2] ** 2)
+            chroma_prt = np.sqrt(lab_prt[1] ** 2 + lab_prt[2] ** 2)
+
+            assert chroma_prt <= chroma_src + 0.5, \
+                f"Print chroma should be <= source at pos {pos:.2f}: " \
+                f"{chroma_prt:.1f} > {chroma_src:.1f}"
+
+    def test_print_colors_within_cmyk_gamut(self):
+        """All print cmap colors should be within the CMYK gamut boundary."""
+        from src.terrain.color_mapping import (
+            boreal_mako_print_cmap, _srgb_to_lab, _cmyk_max_chroma,
+        )
+
+        positions = np.linspace(0, 1, 64)
+        for pos in positions:
+            rgba = boreal_mako_print_cmap(float(pos))
+            L, a, b_lab = _srgb_to_lab(rgba[0], rgba[1], rgba[2])
+            chroma = np.sqrt(a ** 2 + b_lab ** 2)
+            hue_deg = np.degrees(np.arctan2(b_lab, a)) % 360
+            max_chroma = _cmyk_max_chroma(L, hue_deg) * 0.85
+
+            assert chroma <= max_chroma + 1.0, \
+                f"Color at pos {pos:.2f} exceeds CMYK gamut: " \
+                f"chroma={chroma:.1f} > max={max_chroma:.1f} " \
+                f"(L*={L:.1f}, hue={hue_deg:.0f})"
+
+
+class TestColorSpaceConversions:
+    """Tests for the sRGB <-> CIELAB conversion helpers."""
+
+    def test_lab_roundtrip_white(self):
+        """White should survive Lab round-trip."""
+        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+
+        L, a, b = _srgb_to_lab(1.0, 1.0, 1.0)
+        r, g, b_out = _lab_to_srgb(L, a, b)
+
+        assert abs(r - 1.0) < 0.01, f"White round-trip R: {r}"
+        assert abs(g - 1.0) < 0.01, f"White round-trip G: {g}"
+        assert abs(b_out - 1.0) < 0.01, f"White round-trip B: {b_out}"
+
+    def test_lab_roundtrip_black(self):
+        """Black should survive Lab round-trip."""
+        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+
+        L, a, b = _srgb_to_lab(0.0, 0.0, 0.0)
+        r, g, b_out = _lab_to_srgb(L, a, b)
+
+        assert abs(r) < 0.01, f"Black round-trip R: {r}"
+        assert abs(g) < 0.01, f"Black round-trip G: {g}"
+        assert abs(b_out) < 0.01, f"Black round-trip B: {b_out}"
+
+    def test_lab_roundtrip_midtones(self):
+        """Several midtone colors should survive Lab round-trip."""
+        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+
+        test_colors = [
+            (0.5, 0.5, 0.5),   # mid gray
+            (0.2, 0.5, 0.7),   # blue (similar to boreal_mako mid)
+            (0.1, 0.3, 0.1),   # dark green
+            (0.8, 0.9, 0.95),  # pale cyan
+        ]
+
+        for r_in, g_in, b_in in test_colors:
+            L, a, b_lab = _srgb_to_lab(r_in, g_in, b_in)
+            r_out, g_out, b_out = _lab_to_srgb(L, a, b_lab)
+
+            assert abs(r_out - r_in) < 0.02, \
+                f"Round-trip R for ({r_in},{g_in},{b_in}): {r_out}"
+            assert abs(g_out - g_in) < 0.02, \
+                f"Round-trip G for ({r_in},{g_in},{b_in}): {g_out}"
+            assert abs(b_out - b_in) < 0.02, \
+                f"Round-trip B for ({r_in},{g_in},{b_in}): {b_out}"
+
+    def test_white_has_L100(self):
+        """White sRGB should have L* close to 100."""
+        from src.terrain.color_mapping import _srgb_to_lab
+
+        L, a, b = _srgb_to_lab(1.0, 1.0, 1.0)
+        assert abs(L - 100) < 0.5, f"White L* should be ~100, got {L}"
+        assert abs(a) < 0.5, f"White a* should be ~0, got {a}"
+        assert abs(b) < 0.5, f"White b* should be ~0, got {b}"
+
+    def test_black_has_L0(self):
+        """Black sRGB should have L* close to 0."""
+        from src.terrain.color_mapping import _srgb_to_lab
+
+        L, a, b = _srgb_to_lab(0.0, 0.0, 0.0)
+        assert abs(L) < 0.5, f"Black L* should be ~0, got {L}"
+
+
+class TestMakePrintSafeCmap:
+    """Tests for the public make_print_safe_cmap function.
+
+    This function should accept any matplotlib colormap (by object or name)
+    and return a CMYK-gamut-compressed variant suitable for commercial printing.
+    """
+
+    def test_importable(self):
+        """make_print_safe_cmap should be importable from color_mapping."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        assert callable(make_print_safe_cmap)
+
+    def test_accepts_cmap_object(self):
+        """Should accept a matplotlib colormap object."""
+        import matplotlib
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        viridis = matplotlib.colormaps.get_cmap("viridis")
+        result = make_print_safe_cmap(viridis)
+
+        assert result is not None
+        assert hasattr(result, "__call__"), "Result should be callable (a colormap)"
+        assert result.name == "viridis_print"
+
+    def test_accepts_cmap_name_string(self):
+        """Should accept a colormap name string."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("plasma")
+
+        assert result is not None
+        assert result.name == "plasma_print"
+
+    def test_custom_output_name(self):
+        """Should use custom name when provided."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("viridis", name="my_safe_viridis")
+        assert result.name == "my_safe_viridis"
+
+    def test_returns_linear_segmented_colormap(self):
+        """Should return a LinearSegmentedColormap."""
+        from matplotlib.colors import LinearSegmentedColormap
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result = make_print_safe_cmap("inferno")
+        assert isinstance(result, LinearSegmentedColormap)
+
+    def test_output_colors_within_cmyk_gamut(self):
+        """All output colors should be within the CMYK gamut boundary."""
+        from src.terrain.color_mapping import (
+            make_print_safe_cmap, _srgb_to_lab, _cmyk_max_chroma,
+        )
+
+        result = make_print_safe_cmap("viridis")
+        positions = np.linspace(0, 1, 64)
+        for pos in positions:
+            rgba = result(float(pos))
+            L, a, b_lab = _srgb_to_lab(rgba[0], rgba[1], rgba[2])
+            chroma = np.sqrt(a ** 2 + b_lab ** 2)
+            hue_deg = np.degrees(np.arctan2(b_lab, a)) % 360
+            max_chroma = _cmyk_max_chroma(L, hue_deg) * 0.85
+
+            assert chroma <= max_chroma + 1.0, \
+                f"viridis_print at pos {pos:.2f} exceeds CMYK gamut: " \
+                f"chroma={chroma:.1f} > max={max_chroma:.1f}"
+
+    def test_chroma_reduced_for_saturated_cmap(self):
+        """Print-safe version of a saturated cmap should have lower chroma."""
+        import matplotlib
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        source = matplotlib.colormaps.get_cmap("viridis")
+        safe = make_print_safe_cmap(source)
+
+        # At least some positions should have reduced chroma
+        chroma_reductions = 0
+        positions = np.linspace(0.1, 0.9, 20)
+        for pos in positions:
+            rgb_src = source(float(pos))[:3]
+            rgb_safe = safe(float(pos))[:3]
+
+            lab_src = color.rgb2lab(np.array([[rgb_src]]))[0, 0]
+            lab_safe = color.rgb2lab(np.array([[rgb_safe]]))[0, 0]
+
+            c_src = np.sqrt(lab_src[1] ** 2 + lab_src[2] ** 2)
+            c_safe = np.sqrt(lab_safe[1] ** 2 + lab_safe[2] ** 2)
+
+            if c_safe < c_src - 0.5:
+                chroma_reductions += 1
+
+        assert chroma_reductions > 0, \
+            "Print-safe viridis should have at least some chroma reduction"
+
+    def test_preserves_lightness(self):
+        """Print-safe variant should preserve L* (lightness) closely."""
+        import matplotlib
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        source = matplotlib.colormaps.get_cmap("plasma")
+        safe = make_print_safe_cmap(source)
+
+        positions = np.linspace(0, 1, 20)
+        for pos in positions:
+            rgb_src = source(float(pos))[:3]
+            rgb_safe = safe(float(pos))[:3]
+
+            lab_src = color.rgb2lab(np.array([[rgb_src]]))[0, 0]
+            lab_safe = color.rgb2lab(np.array([[rgb_safe]]))[0, 0]
+
+            # L* should be very close (gamut compression preserves lightness)
+            assert abs(lab_safe[0] - lab_src[0]) < 5.0, \
+                f"L* drift at pos {pos:.2f}: {lab_src[0]:.1f} -> {lab_safe[0]:.1f}"
+
+    def test_works_with_boreal_mako(self):
+        """Should work with the custom boreal_mako colormap."""
+        from src.terrain.color_mapping import make_print_safe_cmap, boreal_mako_cmap
+
+        result = make_print_safe_cmap(boreal_mako_cmap)
+        assert result.name == "boreal_mako_print"
+
+        # Should produce valid RGBA at all positions
+        for pos in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            rgba = result(pos)
+            assert len(rgba) == 4
+            assert all(0.0 <= c <= 1.0 for c in rgba)
+
+    def test_safety_margin_parameter(self):
+        """Lower safety_margin should produce more aggressive compression."""
+        from skimage import color
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        safe_default = make_print_safe_cmap("viridis", safety_margin=0.85)
+        safe_aggressive = make_print_safe_cmap("viridis", safety_margin=0.60)
+
+        # Aggressive should have equal or lower chroma at most positions
+        lower_count = 0
+        positions = np.linspace(0.1, 0.9, 20)
+        for pos in positions:
+            rgb_default = safe_default(float(pos))[:3]
+            rgb_aggressive = safe_aggressive(float(pos))[:3]
+
+            lab_d = color.rgb2lab(np.array([[rgb_default]]))[0, 0]
+            lab_a = color.rgb2lab(np.array([[rgb_aggressive]]))[0, 0]
+
+            c_d = np.sqrt(lab_d[1] ** 2 + lab_d[2] ** 2)
+            c_a = np.sqrt(lab_a[1] ** 2 + lab_a[2] ** 2)
+
+            if c_a <= c_d + 0.5:
+                lower_count += 1
+
+        assert lower_count >= 15, \
+            f"Aggressive margin should compress more at most positions ({lower_count}/20)"
+
+    def test_n_samples_parameter(self):
+        """Different n_samples should still produce a valid colormap."""
+        from src.terrain.color_mapping import make_print_safe_cmap
+
+        result_16 = make_print_safe_cmap("viridis", n_samples=16)
+        result_128 = make_print_safe_cmap("viridis", n_samples=128)
+
+        # Both should be callable and produce valid colors
+        for cmap in [result_16, result_128]:
+            rgba = cmap(0.5)
+            assert len(rgba) == 4
+            assert all(0.0 <= c <= 1.0 for c in rgba)

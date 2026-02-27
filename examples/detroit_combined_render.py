@@ -100,6 +100,7 @@ import numpy as np
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
 
 import bpy
+from mathutils import Vector
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -130,7 +131,7 @@ from src.terrain.transforms import (
     wavelet_denoise_dem,
     slope_adaptive_smooth,
     remove_bumps,
-    cached_reproject,
+    downsample_then_reproject,
     upscale_scores,
 )
 from src.terrain.scene_setup import create_background_plane
@@ -147,19 +148,16 @@ from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files, lo
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
 from src.terrain.water import identify_water_by_slope
+from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
 from src.terrain.cache import PipelineCache
 from src.terrain.diagnostics import (
-    generate_full_wavelet_diagnostics,
-    generate_full_adaptive_smooth_diagnostics,
-    generate_bump_removal_diagnostics,
-    generate_upscale_diagnostics,
-    generate_rgb_histogram,
+                    generate_rgb_histogram,
     generate_luminance_histogram,
-    generate_road_elevation_diagnostics,
-    plot_road_vertex_z_diagnostics,
-)
+    generate_score_histogram,
+        )
 from examples.detroit_roads import get_roads_tiled
 from affine import Affine
+from rasterio.warp import Resampling
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for headless rendering
 import matplotlib.pyplot as plt
@@ -187,6 +185,62 @@ logging.basicConfig(
     handlers=[file_handler]
 )
 
+# =============================================================================
+# PROFILING TIMER
+# =============================================================================
+
+class PipelineTimer:
+    """Track timing for pipeline steps."""
+
+    def __init__(self):
+        self.steps = {}
+        self.start_time = None
+
+    def start(self):
+        """Start overall timer."""
+        self.start_time = time.time()
+
+    def mark(self, step_name: str):
+        """Mark the end of a step and start the next."""
+        current_time = time.time()
+        if self.start_time is None:
+            self.start_time = current_time
+
+        # Calculate elapsed time since last mark or start
+        if not self.steps:
+            elapsed = current_time - self.start_time
+        else:
+            last_time = max(self.steps.values(), key=lambda x: x['end'])['end']
+            elapsed = current_time - last_time
+
+        self.steps[step_name] = {
+            'start': current_time - elapsed,
+            'end': current_time,
+            'elapsed': elapsed
+        }
+
+    def report(self):
+        """Print timing report."""
+        if not self.steps:
+            return
+
+        total_time = sum(s['elapsed'] for s in self.steps.values())
+
+        logger.info("\n" + "=" * 70)
+        logger.info("PIPELINE TIMING REPORT")
+        logger.info("=" * 70)
+
+        for step_name, timing in self.steps.items():
+            pct = (timing['elapsed'] / total_time * 100) if total_time > 0 else 0
+            bar_length = int(pct / 5)  # 20 chars max
+            bar = "█" * bar_length + "░" * (20 - bar_length)
+            logger.info(f"  {step_name:30s} {timing['elapsed']:7.2f}s [{bar}] {pct:5.1f}%")
+
+        logger.info("-" * 70)
+        logger.info(f"  {'TOTAL':30s} {total_time:7.2f}s")
+        logger.info("=" * 70)
+
+import time
 
 # =============================================================================
 # IMAGE METADATA EMBEDDING
@@ -276,7 +330,6 @@ def embed_command_metadata(image_path: Path, command: str, extra_metadata: dict 
         logging.getLogger(__name__).warning(f"Failed to embed metadata: {e}")
         return False
 
-
 def read_command_metadata(image_path: Path) -> Optional[str]:
     """
     Read the generation command from an image's metadata.
@@ -333,7 +386,6 @@ def read_command_metadata(image_path: Path) -> Optional[str]:
     except Exception:
         return None
 
-
 # =============================================================================
 # COLOR COMPRESSION FORMULA
 # =============================================================================
@@ -377,7 +429,6 @@ def compress_colormap_score(score, transition):
 
     # Return scalar if input was scalar
     return float(result) if is_scalar else result
-
 
 def modulate_saturation_by_elevation(
     colors: np.ndarray,
@@ -473,7 +524,6 @@ def modulate_saturation_by_elevation(
 
     return result
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -522,7 +572,6 @@ def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Option
     logger.warning("Sledding scores not found, will use mock data")
     return None, None
 
-
 def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
     """Load XC skiing scores from detroit_xc_skiing.py output.
 
@@ -549,7 +598,6 @@ def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optio
     logger.warning("XC skiing scores not found, will use mock data")
     return None, None
 
-
 def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     """Load scored parks from detroit_xc_skiing.py output."""
     parks_path = output_dir / "xc_skiing_parks.json"
@@ -561,6 +609,64 @@ def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     logger.warning("Parks not found")
     return None
 
+def load_xc_skiing_components(output_dir: Path) -> Optional[dict[str, np.ndarray]]:
+    """Load individual XC skiing raw input grids from .npz output.
+
+    Raw input grids are saved with 'raw_' prefix by detroit_xc_skiing.py.
+    These are the pre-transform values (snow depth in mm, coverage ratio,
+    consistency score) — not the transformed [0,1] component scores.
+
+    Falls back to transformed component scores (component_ prefix) if raw
+    inputs are not available (older .npz files).
+
+    Args:
+        output_dir: Directory containing xc_skiing_scores.npz
+
+    Returns:
+        Dict mapping component names to raw input arrays, or None if not available.
+        Keys: "snow_depth", "snow_coverage", "snow_consistency"
+    """
+    score_path = output_dir / "xc_skiing_scores.npz"
+    if not score_path.exists():
+        logger.warning("XC skiing scores file not found: %s", score_path)
+        return None
+
+    data = np.load(score_path)
+    components = {}
+
+    # Prefer raw inputs (pre-transform values)
+    for key in ["snow_depth", "snow_coverage", "snow_consistency"]:
+        raw_key = f"raw_{key}"
+        if raw_key in data:
+            components[key] = data[raw_key]
+
+    if components:
+        logger.info(
+            "Loaded %d raw input grids from %s", len(components), score_path
+        )
+        return components
+
+    # Fallback: use transformed component scores from older .npz files
+    for key in ["snow_depth", "snow_coverage", "snow_consistency"]:
+        npz_key = f"component_{key}"
+        if npz_key in data:
+            components[key] = data[npz_key]
+
+    if not components:
+        logger.warning(
+            "No component scores found in %s. "
+            "Re-run detroit_xc_skiing.py to generate component data.",
+            score_path,
+        )
+        return None
+
+    logger.warning(
+        "Loaded %d transformed component scores (raw inputs not available). "
+        "Re-run detroit_xc_skiing.py to generate raw input data.",
+        len(components),
+    )
+    return components
+
 
 def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
     """Generate mock score grid."""
@@ -568,17 +674,392 @@ def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
     score = np.random.uniform(0.3, 0.9, shape).astype(np.float32)
     return score
 
+# =============================================================================
+# COMPONENT PANEL RENDERING
+# =============================================================================
+
+
+def create_component_panels(
+    args,
+    dem: np.ndarray,
+    dem_transform,
+    dem_crs: str,
+    components: dict[str, np.ndarray],
+    component_transform,
+    water_mask: Optional[np.ndarray],
+    water_transform=None,
+    water_crs: Optional[str] = None,
+    render_width: int = 640,
+    render_height: int = 360,
+    main_mesh: "bpy.types.Object" = None,
+    score_colormap=None,
+    component_colormaps: list[str] | None = None,
+) -> list:
+    """Create component panel meshes for display to the right of the main mesh.
+
+    Creates one Terrain per component using raw (pre-transform) input data.
+    Each panel uses the same colormap name (boreal_mako) but its gradient is
+    independently normalized to that panel's own data range, so the full
+    gradient is used regardless of the data's native scale.
+
+    Args:
+        args: Parsed CLI arguments (for transform params like vertex_multiplier).
+        dem: Original DEM array (before transforms).
+        dem_transform: Affine transform for DEM.
+        dem_crs: CRS string for DEM (e.g., "EPSG:4326").
+        components: Dict mapping component names to score arrays.
+        component_transform: Affine transform for the component score grids.
+        water_mask: Pre-computed water mask array, or None.
+        water_transform: Affine transform for water mask, or None.
+        water_crs: CRS string for water mask, or None.
+        render_width: Render width in pixels.
+        render_height: Render height in pixels.
+        main_mesh: The main terrain mesh object to position panels relative to.
+
+    Returns:
+        List of Blender mesh objects for the component panels.
+    """
+    from src.terrain.color_mapping import elevation_colormap
+    from src.terrain.transforms import downsample_then_reproject, flip_raster, scale_elevation
+
+    component_names = ["snow_depth", "snow_coverage", "snow_consistency"]
+    component_labels = {
+        "snow_depth": "Snow Depth",
+        "snow_coverage": "Season Coverage",
+        "snow_consistency": "Variability",
+    }
+
+    active_components = [c for c in component_names if c in components]
+    n_panels = len(active_components)
+
+    if n_panels == 0:
+        logger.warning("No score components available for panel rendering")
+        return []
+
+    logger.info("Creating %d Score Component Panels", n_panels)
+
+    # Calculate target vertices for panels - they display at ≤30% linear scale (9% area),
+    # so they need far fewer vertices than the main mesh. Use 1/10 of main resolution
+    # (still provides ample quality at panel display size).
+    target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier / 10))
+    dem_height_px, dem_width_px = dem.shape
+    original_vertices = dem_height_px * dem_width_px
+    zoom_factor = np.sqrt(target_vertices / original_vertices)
+
+    mesh_objects = []
+    for i, comp_name in enumerate(active_components):
+        logger.info(
+            "  Panel %d/%d: %s",
+            i + 1, n_panels, component_labels.get(comp_name, comp_name),
+        )
+
+        # Create fresh Terrain with same DEM
+        terrain = Terrain(dem.copy(), dem_transform, dem_crs=dem_crs)
+
+        # Apply same transform chain as the main render
+        terrain.add_transform(downsample_then_reproject(
+            src_crs=dem_crs,
+            dst_crs="EPSG:32617",
+            downsample_zoom_factor=zoom_factor,
+            downsample_method=getattr(args, "downsample_method", "lanczos"),
+        ))
+        terrain.add_transform(flip_raster(axis="horizontal"))
+        terrain.apply_transforms()
+
+        # Scale elevation to match main mesh (main pipeline applies 0.0001 scale)
+        dem_layer = terrain.data_layers["dem"]
+        scaled_dem, _, _ = scale_elevation(scale_factor=0.0001)(dem_layer["transformed_data"])
+        dem_layer["transformed_data"] = scaled_dem
+
+        # Component data is raw (pre-transform): snow depth in mm, coverage
+        # ratio, consistency score.  The colormap is normalized to [vmin, vmax]
+        # so the full gradient range is used regardless of the data's native scale.
+        comp_data = components[comp_name]
+
+        # Add component score as a data layer
+        terrain.add_data_layer(
+            name=comp_name,
+            data=comp_data,
+            transform=component_transform,
+            crs="EPSG:4326",
+            target_layer="dem",
+        )
+
+        # Downsample water mask with the same resampling as the DEM, then
+        # re-threshold.  This keeps lake boundaries aligned with terrain
+        # features rather than producing jagged nearest-neighbor edges.
+        panel_water_mask = None
+        if water_mask is not None and water_transform is not None:
+            terrain.add_data_layer(
+                name="water",
+                data=water_mask.astype(np.float32),
+                transform=water_transform,
+                crs=water_crs or "EPSG:4326",
+                target_layer="dem",
+            )
+            panel_water_mask = terrain.data_layers["water"]["data"] > 0.5
+
+        # Colormap range from aligned data, EXCLUDING water pixels so lakes
+        # don't skew the gradient.  Augment HydroLAKES with zero-snow-depth
+        # as a water indicator — pixels with no snow across all seasons are
+        # water or outside SNODAS coverage and are meaningless for all
+        # components (depth=0, coverage=0, consistency=1.0 artificially).
+        aligned = terrain.data_layers[comp_name]["data"]
+        if panel_water_mask is None:
+            panel_water_mask = np.zeros(aligned.shape, dtype=bool)
+        # Add zero-snow-depth mask: align snow_depth to this panel's grid
+        if "snow_depth" in components:
+            terrain.add_data_layer(
+                name="_depth_for_mask",
+                data=components["snow_depth"],
+                transform=component_transform,
+                crs="EPSG:4326",
+                target_layer="dem",
+            )
+            aligned_depth = terrain.data_layers["_depth_for_mask"]["data"]
+            panel_water_mask = panel_water_mask | (aligned_depth <= 0)
+        land_mask = np.isfinite(aligned) & ~panel_water_mask
+        valid_land = aligned[land_mask]
+        if valid_land.size > 0:
+            vmin, vmax = float(valid_land.min()), float(valid_land.max())
+        else:
+            valid_raw = comp_data[np.isfinite(comp_data)]
+            vmin, vmax = float(valid_raw.min()), float(valid_raw.max())
+            logger.warning("    No valid land pixels after alignment for %s; using raw range", comp_name)
+        logger.info("    Data range (land only): %.4f – %.4f", vmin, vmax)
+
+        if component_colormaps and i < len(component_colormaps):
+            cmap = component_colormaps[i]
+        else:
+            cmap = "boreal_mako_print" if getattr(args, "print_colors", False) else "boreal_mako"
+        logger.info("    Colormap: %s", cmap)
+
+        # Dark water color — not black, but dark enough to read as water.
+        _lake_rgb = (0.08, 0.07, 0.06)
+        def raw_colormap(score, _cmap=cmap, _min=vmin, _max=vmax,
+                         _water=panel_water_mask, _lake=_lake_rgb):
+            colors = elevation_colormap(score, cmap_name=_cmap, min_elev=_min, max_elev=_max)
+            if _water is not None:
+                # Paint lake pixels dark; colors is uint8 (H, W, 3)
+                lake_u8 = np.array([int(c * 255) for c in _lake], dtype=np.uint8)
+                # _water may need shape alignment with colors
+                wh, ww = _water.shape
+                ch, cw = colors.shape[:2]
+                if (wh, ww) == (ch, cw):
+                    colors[_water] = lake_u8
+            return colors
+
+        terrain.set_color_mapping(
+            color_func=raw_colormap,
+            source_layers=[comp_name],
+        )
+
+        # Don't pass water_mask to create_mesh — we handle lake coloring
+        # ourselves above to avoid the gradient edge effects at low resolution.
+        mesh_obj = terrain.create_mesh(
+            scale_factor=100.0,
+            height_scale=getattr(args, "height_scale", 25.0),
+            water_mask=None,
+            boundary_extension=True,
+            two_tier_edge=getattr(args, "two_tier_edge", True),
+            base_depth=getattr(args, "base_depth", 0.2),
+            edge_base_material=getattr(args, "edge_base_material", "clay"),
+            edge_blend_colors=not getattr(args, "no_edge_blend_colors", False),
+            use_fractional_edges=getattr(args, "use_fractional_edges", True),
+            edge_sample_spacing=2.0,  # Coarser edges for panels (they're small thumbnails)
+        )
+
+        if mesh_obj is not None:
+            mesh_objects.append(mesh_obj)
+            logger.info("    ✓ Created mesh '%s' (%d verts)", mesh_obj.name, len(mesh_obj.data.vertices))
+            # Apply same terrain material preset as the main mesh
+            if mesh_obj.data.materials:
+                from src.terrain.materials import apply_colormap_material as _apply_mat
+                terrain_mat = getattr(args, "terrain_material", "satin")
+                _apply_mat(mesh_obj.data.materials[0], terrain_material=terrain_mat)
+                logger.info("    → Applied '%s' terrain material", terrain_mat)
+        else:
+            logger.warning("    ✗ create_mesh returned None for %s", comp_name)
+
+    if not mesh_objects:
+        logger.error("No meshes created for component panels")
+        return []
+
+    # Scale panels to fit as thumbnails on the right side of the main mesh
+    panel_scale = 0.25
+    if main_mesh is not None:
+        bpy.context.view_layer.update()
+        main_bb = main_mesh.bound_box
+        main_corners = [main_mesh.matrix_world @ Vector(c) for c in main_bb]
+        main_min_x = min(c.x for c in main_corners)
+        main_max_x = max(c.x for c in main_corners)
+        main_min_y = min(c.y for c in main_corners)
+        main_max_y = max(c.y for c in main_corners)
+        main_width = main_max_x - main_min_x
+        main_depth = main_max_y - main_min_y
+
+        # Scale panels so n panels stacked vertically span ~main_depth with padding.
+        # Use Y-extent (depth) as the stacking direction reference, not the wider
+        # of the two axes — after the panel vertex-count reduction the raw bounding
+        # box is much smaller, so we must use the correct axis.
+        bb = mesh_objects[0].bound_box
+        raw_panel_width = max(v[0] for v in bb) - min(v[0] for v in bb)
+        raw_panel_depth = max(v[1] for v in bb) - min(v[1] for v in bb)
+        ref_depth = raw_panel_depth  # Y-extent: the stacking direction
+        # n panels + ~10% inter-panel padding should fill main_depth
+        panel_scale = main_depth / (ref_depth * n_panels * 1.1)
+        panel_scale = min(panel_scale, 2.0)  # Safety cap (generous, panels are now low-res)
+        panel_scale *= getattr(args, "component_scale", 1.0)
+
+    for obj in mesh_objects:
+        obj.scale = (panel_scale, panel_scale, panel_scale)
+
+    bpy.context.view_layer.update()
+
+    # Compute scaled panel dimensions
+    bb = mesh_objects[0].bound_box
+    scaled_corners = [mesh_objects[0].matrix_world @ Vector(c) for c in bb]
+    panel_width = max(c.x for c in scaled_corners) - min(c.x for c in scaled_corners)
+    panel_depth = max(c.y for c in scaled_corners) - min(c.y for c in scaled_corners)
+
+    logger.info("  Created %d component panels (scale=%.2f), awaiting positioning",
+                len(mesh_objects), panel_scale)
+    return {
+        "meshes": mesh_objects,
+        "panel_width": panel_width,
+        "panel_depth": panel_depth,
+        "panel_scale": panel_scale,
+    }
+
+
+def position_component_panels(
+    panel_info: dict,
+    main_mesh: "bpy.types.Object",
+    camera: "bpy.types.Object",
+):
+    """Position component panels on the right side of the camera frame.
+
+    Uses the camera's orientation to determine 'right in frame' direction,
+    so panels appear to the right regardless of camera direction. Panels are
+    stacked vertically, centered on the main mesh's vertical extent.
+
+    Args:
+        panel_info: Dict from create_component_panels with meshes and layout metadata.
+        main_mesh: The main terrain mesh.
+        camera: The positioned camera object.
+    """
+    mesh_objects = panel_info["meshes"]
+    panel_width = panel_info["panel_width"]
+    panel_depth = panel_info["panel_depth"]
+    panel_scale = panel_info["panel_scale"]
+
+    if not mesh_objects:
+        return
+
+    bpy.context.view_layer.update()
+
+    # Project camera's "right in frame" and "down in frame" onto XY ground plane.
+    # This keeps panels in the ground plane regardless of camera tilt.
+    cam_matrix = camera.matrix_world.to_3x3()
+    cam_down_3d = -(cam_matrix @ Vector((0, 1, 0)))  # Down in frame (3D)
+    cam_right_3d = cam_matrix @ Vector((1, 0, 0))     # Right in frame (3D)
+
+    cam_down_xy = Vector((cam_down_3d.x, cam_down_3d.y, 0))
+    cam_right_xy = Vector((cam_right_3d.x, cam_right_3d.y, 0))
+
+    if cam_down_xy.length < 1e-6:
+        cam_down_xy = Vector((0, -1, 0))
+    else:
+        cam_down_xy.normalize()
+
+    if cam_right_xy.length < 1e-6:
+        cam_right_xy = Vector((1, 0, 0))
+    else:
+        cam_right_xy.normalize()
+
+    # Compute main mesh center and extents in world space
+    main_corners = [main_mesh.matrix_world @ Vector(c) for c in main_mesh.bound_box]
+    main_center = Vector((
+        sum(c.x for c in main_corners) / 8,
+        sum(c.y for c in main_corners) / 8,
+        sum(c.z for c in main_corners) / 8,
+    ))
+
+    # Main mesh's lowest world-space z (the skirt base); panels must match this.
+    # create_mesh(center_model=True) only centers X/Y — Z stays at absolute DEM
+    # elevation, so we can't assume the base is at z=0.
+    main_min_z_world = min(c.z for c in main_corners)
+
+    # Right edge of main mesh in camera-frame right direction
+    main_extents_right = [Vector((c.x, c.y, 0)).dot(cam_right_xy) for c in main_corners]
+    main_right = max(main_extents_right)
+
+    # North/south extents of main mesh in camera-frame down direction
+    main_extents_down = [Vector((c.x, c.y, 0)).dot(cam_down_xy) for c in main_corners]
+    main_north = min(main_extents_down)
+    main_south = max(main_extents_down)
+    main_ns_extent = main_south - main_north
+
+    # Projection of main_center onto cam_down axis.  For a perfectly centred mesh
+    # this is (main_north+main_south)/2, but reprojection / skirt asymmetry can
+    # leave a small residual that shifts the whole stack.
+    main_center_down_proj = Vector((main_center.x, main_center.y, 0)).dot(cam_down_xy)
+
+    # Panel's own cam-down extent before positioning (accounts for any bounding-box
+    # asymmetry around its local origin after downsampling / reprojection).
+    panel0_world_corners = [mesh_objects[0].matrix_world @ Vector(c)
+                            for c in mesh_objects[0].bound_box]
+    panel0_extents_down = [Vector((c.x, c.y, 0)).dot(cam_down_xy)
+                           for c in panel0_world_corners]
+    panel_north_before = min(panel0_extents_down)
+    panel_cam_down_extent = max(panel0_extents_down) - panel_north_before
+
+    # Place panels to the right of the main mesh
+    gap = panel_width * 0.3
+    panel_right_offset = main_right + gap + panel_width / 2
+
+    # Stack panels so their combined extent exactly matches the main mesh
+    # north-to-south.  down_offset is a displacement *relative to* main_center,
+    # so: actual_cam_down = main_center_down_proj + down_offset.
+    # For panel 0 north edge = main_north:
+    #   main_center_down_proj + stack_start - panel_north_before_offset = main_north
+    # → stack_start = main_north - panel_north_before - main_center_down_proj
+    n = len(mesh_objects)
+    if n == 1:
+        # Centre single panel on the main mesh
+        panel_center_before = (panel_north_before + max(panel0_extents_down)) / 2
+        stack_start = (main_north + main_south) / 2 - panel_center_before - main_center_down_proj
+    else:
+        spacing = max(0.0, (main_ns_extent - n * panel_cam_down_extent) / (n - 1))
+        stack_start = main_north - panel_north_before - main_center_down_proj
+
+    for i, obj in enumerate(mesh_objects):
+        down_offset = stack_start + i * (panel_cam_down_extent + spacing)
+        world_pos = main_center + cam_right_xy * panel_right_offset + cam_down_xy * down_offset
+        # Align the panel's skirt base to the main mesh's skirt base (not z=0).
+        # Panel vertices live at absolute DEM elevation in local space; after
+        # scaling by obj.scale.z the world base = location.z + scale.z * local_min_z,
+        # so: location.z = main_min_z_world - scale.z * local_min_z.
+        local_min_z = min(v[2] for v in obj.bound_box)
+        z_aligned = main_min_z_world - obj.scale.z * local_min_z
+        obj.location = (world_pos.x, world_pos.y, z_aligned)
+
+    bpy.context.view_layer.update()
+
+    logger.info("  Positioned %d component panels on right side of camera frame (scale=%.2f)",
+                n, panel_scale)
+
 
 # =============================================================================
 # MAIN
 # =============================================================================
-
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Detroit Combined Terrain Rendering (Sledding with XC Skiing Parks)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        fromfile_prefix_chars="@",
         epilog="""
 Examples:
   # Render with pre-computed scores (1920x1080, 2048 samples)
@@ -600,6 +1081,10 @@ Examples:
 
   # Specify output directory for results
   python examples/detroit_combined_render.py --output-dir ./renders
+
+  # Load a saved preset (one arg per line in the file)
+  python examples/detroit_combined_render.py @examples/presets/skiing_overhead_dark_print.args
+  python examples/detroit_combined_render.py @examples/presets/skiing_overhead_dark_print.args --output-dir ./renders
         """,
     )
 
@@ -618,6 +1103,16 @@ Examples:
     )
 
     parser.add_argument(
+        "--base-scores",
+        type=str,
+        choices=["sledding", "skiing"],
+        default="sledding",
+        help="Which score type to use as the base colormap layer. "
+             "'sledding' (default) uses sledding suitability scores. "
+             "'skiing' uses XC skiing scores as the base instead.",
+    )
+
+    parser.add_argument(
         "--mock-data",
         action="store_true",
         help="Use mock data for all inputs (skips loading real DEM)",
@@ -633,6 +1128,13 @@ Examples:
         "--print-quality",
         action="store_true",
         help="Render at print quality with configurable DPI and size (default: 10x8 inches @ 300 DPI)",
+    )
+
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=None,
+        help="Override number of render samples (default: 64 for preview, 2048 for --print-quality).",
     )
 
     parser.add_argument(
@@ -1029,6 +1531,30 @@ Examples:
              "The purple band marks a score threshold (e.g., 0.5 for mid-range, 0.7 for high scores). "
              "Use with --colormap-viz-only to preview different positions.",
     )
+    parser.add_argument(
+        "--purple-width",
+        type=float,
+        default=1.0,
+        help="Width of purple ribbon as proportion of max width (0.0-1.0, default: 1.0). "
+             "Max width is 5%% of the colormap range. "
+             "0.5 = half width, 0.25 = narrow accent line. "
+             "Use with --colormap-viz-only to preview.",
+    )
+    parser.add_argument(
+        "--no-purple",
+        action="store_true",
+        default=False,
+        help="Remove the purple ribbon from the boreal_mako colormap entirely. "
+             "Produces a smooth green → blue → cyan → white gradient.",
+    )
+    parser.add_argument(
+        "--print-colors",
+        action="store_true",
+        default=False,
+        help="Use CMYK-safe variant of boreal_mako colormap for commercial printing "
+             "(e.g., WHCC). Compresses colors into the CMYK gamut so they reproduce "
+             "faithfully on paper. Slightly desaturates blues/cyans.",
+    )
 
     parser.add_argument(
         "--gamma",
@@ -1040,6 +1566,25 @@ Examples:
              "Affects where scores map to the colormap gradient.",
     )
 
+    parser.add_argument(
+        "--normalize-scores",
+        action="store_true",
+        default=False,
+        help="Normalize scores to use the full 0-1 colormap range based on the actual "
+             "min/max values present in the data. Without this, scores map directly to the "
+             "colormap (e.g., if max score is 0.4, only the bottom 40%% of the gradient is used). "
+             "With this flag, the lowest score maps to 0 and the highest to 1, using the full "
+             "color gradient.",
+    )
+    parser.add_argument(
+        "--score-floor",
+        type=float,
+        default=None,
+        help="Floor for near-zero scores. Scores between 0 and this value are snapped "
+             "up to this value before normalization. Eliminates the near-zero spike from "
+             "marginal terrain that compresses the colormap range. "
+             "If not set, automatic gap detection is attempted. Example: --score-floor 0.04",
+    )
     parser.add_argument(
         "--colormap-viz-only",
         action="store_true",
@@ -1424,6 +1969,13 @@ Examples:
              "Higher elevations appear darker, lower elevations stay bright.",
     )
 
+    parser.add_argument(
+        "--no-parks",
+        action="store_true",
+        default=False,
+        help="Disable park proximity overlay zones (use base colormap everywhere).",
+    )
+
     # Park ring outline arguments
     parser.add_argument(
         "--park-rings",
@@ -1454,6 +2006,129 @@ Examples:
         help="RGB color for park rings as 'R,G,B' (0-1 range). Default: dark gray (0.15,0.15,0.15).",
     )
 
+    parser.add_argument(
+        "--no-water",
+        action="store_true",
+        default=False,
+        help="Skip water detection and coloring entirely. Terrain will be colored by score "
+             "everywhere without a blue water overlay.",
+    )
+
+    parser.add_argument(
+        "--show-components",
+        action="store_true",
+        default=False,
+        help="After the main render, create a separate panel image showing "
+             "individual XC skiing score components (snow depth, coverage, "
+             "consistency) side-by-side. Requires component data from "
+             "detroit_xc_skiing.py (re-run it if needed).",
+    )
+    parser.add_argument(
+        "--component-scale",
+        type=float,
+        default=1.0,
+        metavar="FACTOR",
+        help="Multiply the auto-computed component panel size by FACTOR "
+             "(default: 1.0). Values >1 make panels larger, <1 smaller. "
+             "Useful when adding headings or adjusting layout.",
+    )
+    parser.add_argument(
+        "--component-colormaps",
+        nargs=3,
+        default=None,
+        metavar=("DEPTH", "COVERAGE", "VARIABILITY"),
+        help="Colormaps for the 3 component panels: snow depth, season "
+             "coverage, variability. Default: viridis plasma cividis, or "
+             "warm_gray warm_gray warm_gray with --print-colors. "
+             "Accepts any matplotlib colormap name.",
+    )
+
+    # -- Temporal landscape sculpture --
+    temporal_group = parser.add_argument_group("Temporal landscape sculpture")
+    temporal_group.add_argument(
+        "--temporal-landscape",
+        action="store_true",
+        default=False,
+        help="Add temporal XC skiing score ridge sculpture below main terrain.",
+    )
+    temporal_group.add_argument(
+        "--temporal-cache",
+        type=Path,
+        default=project_root / "examples" / "output" / "xc_skiing" / "temporal_timeseries.npz",
+        metavar="PATH",
+        help="Path to temporal timeseries .npz cache (default: examples/output/xc_skiing/temporal_timeseries.npz).",
+    )
+    temporal_group.add_argument(
+        "--temporal-gap",
+        type=float,
+        default=0.10,
+        metavar="FRAC",
+        help=(
+            "Gap between main terrain bottom and sculpture top, as a fraction of the "
+            "main terrain WIDTH (default: 0.10 = 10%% of main width). "
+            "Independent of --temporal-depth and --temporal-col-scale."
+        ),
+    )
+    temporal_group.add_argument(
+        "--temporal-ridge-height",
+        type=float,
+        default=0.5,
+        metavar="FRAC",
+        help="Ridge peak height as fraction of main terrain Z range (default: 0.5).",
+    )
+    temporal_group.add_argument(
+        "--temporal-smooth",
+        type=float,
+        default=None,
+        metavar="SIGMA",
+        help="Gaussian smoothing sigma for temporal ridges (default: None = no smoothing).",
+    )
+    temporal_group.add_argument(
+        "--temporal-col-scale",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Column (day) upscale factor (default: 0 = auto-match main mesh pixel density).",
+    )
+    temporal_group.add_argument(
+        "--temporal-row-scale",
+        type=int,
+        default=8,
+        metavar="N",
+        help=(
+            "Row (N-S) upscale factor for ridge profiles (default: 8). "
+            "Higher values reduce stairstepping on ridge slopes. "
+            "Increase to 16-32 for smoother ridges."
+        ),
+    )
+    temporal_group.add_argument(
+        "--temporal-depth",
+        type=float,
+        default=0.35,
+        metavar="FRAC",
+        help=(
+            "N-S depth of the sculpture as a fraction of the main terrain WIDTH "
+            "(default: 0.35 = 35%% as deep as the terrain is wide). "
+            "Independent of --temporal-col-scale — changing column density "
+            "does not change the physical depth."
+        ),
+    )
+    temporal_group.add_argument(
+        "--temporal-summary-color-scale",
+        type=float,
+        default=1.5,
+        metavar="MULT",
+        help="Color multiplier for the IQR summary ridge (default: 1.5).",
+    )
+    temporal_group.add_argument(
+        "--temporal-colormap",
+        type=str,
+        default=None,
+        metavar="CMAP",
+        help="Colormap for the temporal sculpture (default: same as main score "
+             "colormap). Accepts any matplotlib colormap name.",
+    )
+
     args = parser.parse_args()
 
     # Handle --read-command: read metadata from existing image and exit
@@ -1471,6 +2146,15 @@ Examples:
         sys.exit(0)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve default colormaps for components and temporal
+    if args.component_colormaps is None:
+        if args.print_colors:
+            args.component_colormaps = ["warm_gray"] * 3
+        else:
+            args.component_colormaps = ["viridis", "plasma", "cividis"]
+    if args.temporal_colormap is None and args.print_colors:
+        args.temporal_colormap = "warm_gray"
 
     # Parse edge_base_material (could be a material name or RGB tuple string)
     if args.two_tier_edge:
@@ -1493,9 +2177,9 @@ Examples:
     if args.print_quality:
         render_width = int(args.print_width * args.print_dpi)
         render_height = int(args.print_height * args.print_dpi)
-        render_samples = 4096  # High quality for print (with denoising)
+        render_samples = 2048  # High quality for print (with denoising)
         quality_mode = "PRINT"
-        default_vertex_mult = 2.5  # High detail for print
+        default_vertex_mult = 1.0  # 1 vertex per pixel for print
     else:   
         # FAST preview mode - optimized for quick iteration
         render_width = 640  # Low res for speed
@@ -1504,26 +2188,50 @@ Examples:
         quality_mode = "PREVIEW"
         default_vertex_mult = 0.5  # Low detail for speed
 
+    # Override samples if explicitly specified
+    if args.samples is not None:
+        render_samples = args.samples
+
     # Apply vertex multiplier default if not explicitly set
     if args.vertex_multiplier is None:
         args.vertex_multiplier = default_vertex_mult
 
-    # Rebuild boreal_mako colormap with specified purple position
+    # Rebuild boreal_mako colormap with specified purple position (or without purple)
     # Always rebuild to ensure consistency between visualization and rendering
-    from src.terrain.color_mapping import _build_boreal_mako_cmap
+    from src.terrain.color_mapping import _build_boreal_mako_cmap, _build_boreal_mako_print_cmap
     import matplotlib
-    custom_boreal_mako = _build_boreal_mako_cmap(purple_position=args.purple_position)
+    purple_pos = None if args.no_purple else args.purple_position
+    custom_boreal_mako = _build_boreal_mako_cmap(
+        purple_position=purple_pos, purple_width=args.purple_width
+    )
     matplotlib.colormaps.register(custom_boreal_mako, force=True)
-    if args.purple_position != 0.6:
-        logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}")
+
+    # Choose base vs print-safe colormap
+    if args.print_colors:
+        # Build print-safe variant from the custom boreal_mako (inherits purple settings)
+        custom_print = _build_boreal_mako_print_cmap(source_cmap=custom_boreal_mako)
+        matplotlib.colormaps.register(custom_print, force=True)
+        score_cmap_name = "boreal_mako_print"
+    else:
+        score_cmap_name = "boreal_mako"
+
+    if args.no_purple:
+        logger.info("Using boreal_mako colormap without purple ribbon (--no-purple)")
+    elif args.purple_position != 0.6 or args.purple_width != 1.0:
+        width_str = f", width={args.purple_width}" if args.purple_width != 1.0 else ""
+        logger.info(f"Using boreal_mako colormap with purple ribbon at position {args.purple_position}{width_str}")
     else:
         logger.info(f"Using boreal_mako colormap with default purple position (0.6)")
+    if args.print_colors:
+        logger.info("Using CMYK-safe print colors (--print-colors)")
 
     logger.info("\n" + "=" * 70)
-    logger.info("Detroit Combined Terrain Rendering (Sledding + XC Parks)")
+    base_label_startup = "XC Skiing" if args.base_scores == "skiing" else "Sledding"
+    logger.info(f"Detroit Combined Terrain Rendering ({base_label_startup} + XC Parks)")
     logger.info("=" * 70)
     logger.info(f"Output directory: {args.output_dir}")
     logger.info(f"Scores directory: {args.scores_dir}")
+    logger.info(f"Base scores: {args.base_scores}")
     logger.info(f"Quality mode: {quality_mode}")
     if args.print_quality:
         logger.info(f"  Resolution: {render_width}×{render_height} ({args.print_width}×{args.print_height} inches @ {args.print_dpi} DPI)")
@@ -1580,8 +2288,11 @@ Examples:
     }
 
     color_params = {
-        "colormap": "boreal_mako",
-        "purple_position": args.purple_position,
+        "colormap": score_cmap_name,
+        "purple_position": None if args.no_purple else args.purple_position,
+        "purple_width": args.purple_width,
+        "no_purple": args.no_purple,
+        "normalize_scores": args.normalize_scores,
         "gamma": args.gamma,
         "smooth_scores": args.smooth_scores,
         "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
@@ -1612,6 +2323,10 @@ Examples:
     cache.define_target("dem_transformed", params=transform_params, dependencies=["dem_loaded"])
     cache.define_target("colors_computed", params=color_params, dependencies=["dem_transformed"])
     cache.define_target("mesh_created", params=mesh_params, dependencies=["colors_computed"])
+
+    # Initialize profiling timer
+    timer = PipelineTimer()
+    timer.start()
 
     # Load data
     logger.info("\n" + "=" * 70)
@@ -1698,6 +2413,12 @@ Examples:
             # Legacy fallback: use sledding transform (assumes same extent)
             xc_transform = score_transform
             logger.info("No transform in XC score file, using sledding transform")
+
+    # Swap base scores if using skiing as base
+    if args.base_scores == "skiing":
+        logger.info("Using XC skiing scores as base layer (swapping with sledding)")
+        sledding_scores, xc_scores = xc_scores, sledding_scores
+        score_transform, xc_transform = xc_transform, score_transform
 
     # Despeckle scores BEFORE upscaling (removes isolated outliers at native resolution)
     if args.despeckle_scores and not args.mock_data:
@@ -1800,53 +2521,61 @@ Examples:
 
             logger.info(f"Upscaled scores: sledding {sledding_scores.shape}, XC {xc_scores.shape}")
 
-            # Always generate upscale diagnostics
-            # Use diagnostic_dir if set, otherwise use output_dir/diagnostics
-            if args.diagnostic_dir:
-                diagnostic_dir = Path(args.diagnostic_dir)
-            else:
-                diagnostic_dir = args.output_dir / "diagnostics"
-            diagnostic_dir.mkdir(parents=True, exist_ok=True)
-
-            # Determine which method was actually used
-            # (auto falls back to bilateral if esrgan not installed)
-            used_method = args.upscale_method
-            if args.upscale_method == "auto":
-                try:
-                    import realesrgan  # noqa: F401
-                    used_method = "esrgan"
-                except ImportError:
-                    used_method = "bilateral"
-
-            # Generate sledding upscale diagnostics
-            generate_upscale_diagnostics(
-                sledding_scores_original,
-                sledding_scores,
-                diagnostic_dir,
-                prefix="sledding_upscale",
-                scale=args.upscale_factor,
-                method=used_method,
-                cmap="plasma",
-            )
-
-            # Generate XC upscale diagnostics
-            generate_upscale_diagnostics(
-                xc_scores_original,
-                xc_scores,
-                diagnostic_dir,
-                prefix="xc_upscale",
-                scale=args.upscale_factor,
-                method=used_method,
-                cmap="viridis",
-            )
-            logger.info(f"Saved upscale diagnostics to {diagnostic_dir}")
-
     # Load parks for XC skiing markers
     parks = None
-    if not args.mock_data:
+    if args.no_parks:
+        logger.info("Park overlay disabled (--no-parks)")
+    elif not args.mock_data:
         parks = load_xc_skiing_parks(args.scores_dir / "xc_skiing")
         if parks:
             logger.info(f"Loaded {len(parks)} parks for markers")
+
+    # Compute WGS84 bbox from DEM (used by roads and HydroLAKES)
+    dem_height, dem_width = dem.shape
+    west = transform.c
+    north = transform.f
+    east = west + dem_width * transform.a
+    south = north + dem_height * transform.e
+    if south > north:
+        south, north = north, south
+    if west > east:
+        west, east = east, west
+    dem_bbox = (south, west, north, east)
+    logger.info(f"DEM bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+
+    # Load HydroLAKES water bodies (before terrain creation so mask is ready)
+    lakes_geojson = None
+    lake_mask_raw = None
+    lake_transform = None
+    if args.no_water:
+        logger.info("Water overlay disabled (--no-water)")
+    elif not args.mock_data:
+        try:
+            water_bodies_dir = args.output_dir / "water_bodies"
+            water_bodies_dir.mkdir(parents=True, exist_ok=True)
+            geojson_path = download_water_bodies(
+                bbox=dem_bbox,
+                output_dir=str(water_bodies_dir),
+                data_source="hydrolakes",
+                min_area_km2=0.1,
+            )
+            with open(geojson_path) as f:
+                lakes_geojson = json.load(f)
+            n_lakes = len(lakes_geojson.get("features", []))
+            logger.info(f"Loaded {n_lakes} lakes from HydroLAKES")
+
+            # Use moderate resolution for lake mask — it's binary, so we don't
+            # need DEM-level resolution. 0.001° ≈ 100m is plenty for lake boundaries
+            # and avoids creating a 500M+ pixel array at full DEM resolution.
+            lake_resolution = 0.001
+            lake_mask_raw, lake_transform = rasterize_lakes_to_mask(
+                lakes_geojson, dem_bbox, lake_resolution
+            )
+            logger.info(f"Rasterized lake mask: shape={lake_mask_raw.shape}, "
+                        f"{np.sum(lake_mask_raw > 0):,} lake pixels")
+        except Exception as e:
+            logger.warning(f"HydroLAKES loading failed: {e}")
+            logger.warning("Will fall back to slope-based water detection")
 
     # Load road data
     road_data = None
@@ -1854,23 +2583,9 @@ Examples:
     if args.roads:
         logger.info("Loading road data from OpenStreetMap...")
         try:
-            # Compute bbox from DEM transform to match actual rendered area
-            dem_height, dem_width = dem.shape
-
-            # Get corners from transform
-            west = transform.c
-            north = transform.f
-            east = west + dem_width * transform.a
-            south = north + dem_height * transform.e
-
-            # Ensure correct ordering
-            if south > north:
-                south, north = north, south
-            if west > east:
-                west, east = east, west
-
-            road_bbox = (south, west, north, east)
-            logger.info(f"  DEM bbox: lat [{south:.2f}, {north:.2f}], lon [{west:.2f}, {east:.2f}]")
+            road_bbox = dem_bbox
+            logger.info(f"  Road bbox: lat [{dem_bbox[0]:.2f}, {dem_bbox[2]:.2f}], "
+                        f"lon [{dem_bbox[1]:.2f}, {dem_bbox[3]:.2f}]")
 
             # Use get_roads_tiled() - handles tiling and retries automatically
             road_data = get_roads_tiled(road_bbox, args.road_types)
@@ -1884,7 +2599,8 @@ Examples:
             logger.warning(f"Failed to load road data: {e}")
             road_data = None
 
-    logger.info(f"Loaded: DEM {dem.shape}, sledding scores {sledding_scores.shape}, XC scores {xc_scores.shape}")
+    base_score_label = "XC skiing" if args.base_scores == "skiing" else "sledding"
+    logger.info(f"Loaded: DEM {dem.shape}, base ({base_score_label}) scores {sledding_scores.shape}, overlay scores {xc_scores.shape}")
 
     # Create Blender scene
     logger.info("\n" + "=" * 70)
@@ -1908,29 +2624,48 @@ Examples:
     target_vertices = int(np.floor(render_width * render_height * args.vertex_multiplier))
     logger.info(f"Target vertices: {target_vertices:,} ({quality_mode} resolution, {args.vertex_multiplier}x multiplier)")
 
+    # Mark end of data loading phase
+    timer.mark("[1/5] Loading Data")
+
     # Create single terrain mesh with dual colormaps
-    # Base: Boreal-Mako colormap for sledding suitability scores (with gamma=0.5)
+    # Base: Boreal-Mako colormap for base scores (with gamma)
     # Overlay: Rocket colormap for XC skiing scores near parks
     logger.info("\n[2/4] Creating Combined Terrain Mesh (Dual Colormap)...")
-    logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap - forest green → blue → mint)")
-    logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+    norm_label = ", normalized to 0-1" if args.normalize_scores else ""
+    purple_label = ", no purple band" if args.no_purple else ""
+    logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap - forest green → blue → mint{purple_label}{norm_label})")
+    logger.info("  Overlay: scores near parks (rocket colormap)")
 
     # For combined rendering, we need a custom terrain creation process
-    # to add both sledding and XC skiing scores as separate layers
+    # to add both score types as separate layers
     logger.debug("Creating terrain with DEM...")
     terrain_combined = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Add standard transforms (cached_reproject saves ~24s on subsequent runs)
-    terrain_combined.add_transform(cached_reproject(src_crs=dem_crs, dst_crs="EPSG:32617"))
+    # Optimized: combine downsampling and reprojection into a single operation
+    # This avoids the expensive 855M pixel reprojection by downsampling first
+    if target_vertices:
+        # Calculate downsample zoom factor from target vertices (same as configure_for_target_vertices)
+        dem_height, dem_width = dem.shape
+        original_vertices = dem_height * dem_width
+        zoom_factor = np.sqrt(target_vertices / original_vertices)
+
+        logger.debug(f"Configuring for target vertices: {target_vertices:,} (zoom factor: {zoom_factor:.6f}, method: {args.downsample_method})")
+
+        # Use combined downsampling-and-reprojection (saves ~40-50s by avoiding full-resolution reproject)
+        terrain_combined.add_transform(downsample_then_reproject(
+            src_crs=dem_crs,
+            dst_crs="EPSG:32617",
+            downsample_zoom_factor=zoom_factor,
+            downsample_method=args.downsample_method,
+        ))
+    else:
+        # If no target vertices specified, just reproject without downsampling
+        logger.warning("No target_vertices specified - skipping downsampling before reprojection")
+        # For backwards compatibility, we'd need to use cached_reproject here
+        # but it's disabled for now since downsampling is typically needed
+
     terrain_combined.add_transform(flip_raster(axis="horizontal"))
     # Note: scale_elevation is added AFTER adaptive_smooth so slope computation uses real elevations
-
-    # Configure downsampling FIRST (all smoothing runs on downsampled data for memory efficiency)
-    if target_vertices:
-        logger.debug(f"Configuring for target vertices: {target_vertices:,} (method: {args.downsample_method})")
-        terrain_combined.configure_for_target_vertices(
-            target_vertices=target_vertices, method=args.downsample_method
-        )
 
     # =========================================================================
     # PHASE 1: Apply geometry transforms (reproject, flip, downsample)
@@ -1988,19 +2723,39 @@ Examples:
                 f"min={np.nanmin(dem_after_geom):.4f}, max={np.nanmax(dem_after_geom):.4f}, "
                 f"std={np.nanstd(dem_after_geom):.4f}")
 
+    # Mark end of geometry transforms phase
+    timer.mark("  └─ Geometry transforms (reproject/flip/downsample)")
+
     # =========================================================================
-    # WATER DETECTION: Detect water on pre-smoothed DEM (before any smoothing)
-    # This ensures accurate slope-based detection without smoothing artifacts
+    # WATER DETECTION: Use HydroLAKES if available, otherwise slope-based fallback
     # =========================================================================
-    logger.debug("Detecting water bodies on pre-smoothed DEM...")
-    dem_for_water = terrain_combined.data_layers["dem"]["transformed_data"]
-    water_mask = identify_water_by_slope(
-        dem_for_water,
-        slope_threshold=0.01,  # Very flat areas only (water is slope ≈ 0)
-        fill_holes=True,
-    )
-    water_pixel_count = np.sum(water_mask) if water_mask is not None else 0
-    logger.info(f"Water detection: {water_pixel_count:,} pixels detected as water")
+    if args.no_water:
+        water_mask = None
+        logger.info("Skipping water detection (--no-water)")
+    elif lake_mask_raw is not None and lake_transform is not None:
+        logger.info("Creating water mask from HydroLAKES data...")
+        terrain_combined.add_data_layer(
+            "lake_mask",
+            (lake_mask_raw > 0).astype(np.float32),
+            lake_transform,
+            "EPSG:4326",
+            target_layer="dem",
+            resampling=Resampling.nearest,  # Nearest-neighbor for binary mask
+        )
+        water_mask = terrain_combined.data_layers["lake_mask"]["data"] > 0.5
+        water_pixel_count = int(np.sum(water_mask))
+        logger.info(f"Water mask (HydroLAKES): {water_pixel_count:,} pixels")
+    else:
+        # Fallback: slope-based detection on pre-smoothed DEM
+        logger.info("Using slope-based water detection (HydroLAKES not available)...")
+        dem_for_water = terrain_combined.data_layers["dem"]["transformed_data"]
+        water_mask = identify_water_by_slope(
+            dem_for_water,
+            slope_threshold=0.01,
+            fill_holes=True,
+        )
+        water_pixel_count = int(np.sum(water_mask)) if water_mask is not None else 0
+        logger.info(f"Water mask (slope-based): {water_pixel_count:,} pixels")
 
     # =========================================================================
     # PHASE 2: Apply smoothing transforms (after water detection)
@@ -2065,23 +2820,6 @@ Examples:
         # Update the terrain with the denoised DEM
         dem_layer["transformed_data"] = post_wavelet_dem
 
-        # Generate diagnostic plots
-        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
-        logger.info(f"Generating wavelet diagnostic plots in {diagnostic_dir}")
-
-        comparison_path, coefficients_path = generate_full_wavelet_diagnostics(
-            original=pre_wavelet_dem,
-            denoised=post_wavelet_dem,
-            output_dir=diagnostic_dir,
-            prefix="dem_wavelet",
-            wavelet=args.wavelet_type,
-            levels=args.wavelet_levels,
-            threshold_sigma=args.wavelet_sigma,
-        )
-
-        logger.info(f"✓ Saved wavelet comparison: {comparison_path}")
-        if coefficients_path:
-            logger.info(f"✓ Saved coefficient analysis: {coefficients_path}")
 
     # Apply adaptive smoothing with diagnostics (if requested)
     if adaptive_diagnostic_mode:
@@ -2123,23 +2861,6 @@ Examples:
                     f"same_array={verify_dem is scaled_dem}, "
                     f"pre_smooth_std={np.nanstd(pre_smooth_dem):.4f}, post_smooth_std={np.nanstd(post_smooth_dem):.4f}")
 
-        # Generate diagnostic plots (using unscaled data for meaningful elevation values)
-        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
-        logger.info(f"Generating adaptive smooth diagnostic plots in {diagnostic_dir}")
-
-        spatial_path, histogram_path = generate_full_adaptive_smooth_diagnostics(
-            original=pre_smooth_dem,
-            smoothed=post_smooth_dem,
-            output_dir=diagnostic_dir,
-            prefix="dem_adaptive_smooth",
-            slope_threshold=args.adaptive_slope_threshold,
-            smooth_sigma=args.adaptive_smooth_sigma,
-            transition_width=args.adaptive_transition,
-            pixel_size=pixel_size,
-            edge_threshold=args.adaptive_edge_threshold,
-        )
-
-        logger.info(f"✓ Saved adaptive smooth comparison: {spatial_path}")
         logger.info(f"✓ Saved adaptive smooth histogram: {histogram_path}")
 
     # Apply bump removal with diagnostics (if requested)
@@ -2192,15 +2913,6 @@ Examples:
             diag_original = pre_bump_dem
             diag_after = post_bump_dem
 
-        diag_path = generate_bump_removal_diagnostics(
-            original=diag_original,
-            after_removal=diag_after,
-            output_dir=diagnostic_dir,
-            prefix="dem_bump_removal",
-            kernel_size=args.remove_bumps,
-        )
-
-        logger.info(f"✓ Saved bump removal diagnostics: {diag_path}")
 
     # Apply scale_elevation in normal mode (diagnostic modes handle it themselves)
     if not adaptive_diagnostic_mode and not bump_diagnostic_mode:
@@ -2215,6 +2927,9 @@ Examples:
     logger.info(f"DEM state before mesh: shape={dem_for_debug.shape}, "
                 f"min={np.nanmin(dem_for_debug):.4f}, max={np.nanmax(dem_for_debug):.4f}, "
                 f"std={np.nanstd(dem_for_debug):.4f}")
+
+    # Mark end of DEM processing (smoothing, despeckle, scaling)
+    timer.mark("  └─ DEM processing (smoothing, scaling, bump removal)")
 
     # Add sledding scores as base layer
     logger.debug("Adding sledding scores layer...")
@@ -2274,97 +2989,160 @@ Examples:
 
     # Note: despeckle_scores is now applied earlier (before upscaling) for better results
 
-    # === Colormap Visualization Mode ===
-    # If --colormap-viz-only is set, create matplotlib visualizations and exit
-    if args.colormap_viz_only:
-        logger.info("Colormap visualization mode - creating matplotlib plots...")
+    # Save pre-lake-mask scores for diagnostics (before NaN masking)
+    scores_before_lake_mask = {}
+    for _layer_name in ("sledding", "xc_skiing"):
+        if _layer_name in terrain_combined.data_layers:
+            scores_before_lake_mask[_layer_name] = terrain_combined.data_layers[_layer_name]["data"].copy()
 
-        # Create output directory for visualizations
-        viz_dir = args.output_dir / "colormap_viz"
-        viz_dir.mkdir(parents=True, exist_ok=True)
+    # Mask scores in lake areas — these pixels get colored blue, not by score colormap.
+    # Setting to NaN ensures they don't affect normalization, gamma, or colormap at all.
+    if water_mask is not None and np.any(water_mask):
+        for layer_name in ("sledding", "xc_skiing"):
+            if layer_name in terrain_combined.data_layers:
+                layer_data = terrain_combined.data_layers[layer_name]["data"]
+                if layer_data.shape == water_mask.shape:
+                    n_masked = int(np.sum(water_mask & ~np.isnan(layer_data) & (layer_data != 0)))
+                    layer_data[water_mask] = np.nan
+                    if n_masked > 0:
+                        logger.info(f"Masked {n_masked:,} lake pixels in '{layer_name}' scores")
 
-        # Get the sledding scores (downsampled, already processed)
-        sledding_scores = terrain_combined.data_layers["sledding"]["data"]
+    # Floor near-zero scores: the multiplicative scoring model produces a spike of
+    # scores barely above zero (e.g., 0.001-0.03) from marginal terrain. These compress
+    # the colormap range. Detect the gap and snap them up to the next meaningful value.
+    score_floor_info = {}  # Save for diagnostics
+    for _floor_layer in ("sledding", "xc_skiing"):
+        if _floor_layer not in terrain_combined.data_layers:
+            continue
+        _floor_data = terrain_combined.data_layers[_floor_layer]["data"]
+        _nonzero = _floor_data[(~np.isnan(_floor_data)) & (_floor_data > 0)]
+        if len(_nonzero) == 0:
+            continue
 
-        logger.info(f"Sledding scores shape: {sledding_scores.shape}")
-        logger.info(f"Score range: [{np.nanmin(sledding_scores):.3f}, {np.nanmax(sledding_scores):.3f}]")
-        logger.info(f"Score mean: {np.nanmean(sledding_scores):.3f}")
+        # Save pre-floor distribution for diagnostic plot
+        _pre_floor_nonzero = _nonzero.copy()
 
-        # Score distribution
-        bins = [0, 0.2, 0.4, 0.40, 0.55, 0.6, 0.8, 1.0]
-        hist, _ = np.histogram(sledding_scores[~np.isnan(sledding_scores)], bins=bins)
-        logger.info("Score distribution:")
-        for i in range(len(bins)-1):
-            pct = 100 * hist[i] / np.sum(~np.isnan(sledding_scores))
-            marker = " ← PURPLE ZONE (WIDER)" if bins[i] == 0.40 else ""
-            logger.info(f"  [{bins[i]:.2f}, {bins[i+1]:.2f}): {hist[i]:6d} ({pct:5.1f}%){marker}")
+        # Log percentile distribution to show the gap
+        pcts = [1, 2, 5, 10, 15, 20, 25, 50]
+        pct_vals = np.percentile(_nonzero, pcts)
+        logger.info(f"Score floor analysis for '{_floor_layer}':")
+        logger.info(f"  Nonzero scores: {len(_nonzero):,}")
+        for p, v in zip(pcts, pct_vals):
+            logger.info(f"  P{p:02d}={v:.6f}")
 
-        # Create simple visualization: normalize → gamma → colormap
-        fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-        fig.suptitle(f'Detroit Sledding Scores with Boreal-Mako Colormap\n(normalized, then gamma={args.gamma})',
-                     fontsize=14, fontweight='bold')
+        # Find gap: use histogram in log space to detect bimodal split
+        log_scores = np.log10(_nonzero)
+        log_bins = np.linspace(log_scores.min(), log_scores.max(), 100)
+        hist_counts, hist_edges = np.histogram(log_scores, bins=log_bins)
 
-        # Normalize scores to 0-1.0 range (max score becomes 1.0)
-        max_score = np.nanmax(sledding_scores)
-        logger.info(f"Max score before normalization: {max_score:.3f}")
-        normalized_scores = sledding_scores / max_score
+        # Find the first valley after the initial peak (near-zero spike)
+        # Walk from low end: find peak, then find valley
+        peak_idx = np.argmax(hist_counts[:30])  # Initial peak in first 30% of bins
+        valley_idx = peak_idx
+        for i in range(peak_idx + 1, min(len(hist_counts), 50)):
+            if hist_counts[i] <= hist_counts[valley_idx]:
+                valley_idx = i
+            # Stop when counts start rising again (next mode)
+            if hist_counts[i] > hist_counts[valley_idx] * 2 and hist_counts[i] > 10:
+                break
 
-        # Apply gamma correction to normalized scores
-        gamma_corrected_scores = np.power(normalized_scores, args.gamma)
+        # Determine floor: manual arg takes priority, then auto-detect
+        score_floor = None
+        if args.score_floor is not None:
+            score_floor = args.score_floor
+            logger.info(f"  Using manual score floor: {score_floor:.6f}")
+        elif valley_idx > peak_idx:
+            score_floor = 10 ** hist_edges[valley_idx + 1]
+            logger.info(f"  Auto-detected score floor: {score_floor:.6f}")
+        else:
+            logger.info(f"  No near-zero gap detected, skipping floor")
 
-        # Apply colormap (get from registry to respect --purple-position)
-        import matplotlib
-        boreal_mako_from_registry = matplotlib.colormaps.get_cmap("boreal_mako")
-        im = ax.imshow(gamma_corrected_scores, cmap=boreal_mako_from_registry,
-                      vmin=0, vmax=1.0,
-                      origin='lower', aspect='auto')
+        # Always save distribution info for diagnostics
+        score_floor_info[_floor_layer] = {
+            "pre_floor_nonzero": _pre_floor_nonzero,
+            "score_floor": score_floor,
+            "n_floored": 0,
+            "log_hist_counts": hist_counts,
+            "log_hist_edges": hist_edges,
+            "peak_idx": peak_idx,
+            "valley_idx": valley_idx,
+        }
 
-        ax.set_title(f'Normalized scores with gamma={args.gamma} applied', fontsize=12, fontweight='bold')
-        ax.axis('off')
+        if score_floor is not None:
+            n_below = int(np.sum(_nonzero < score_floor))
+            pct_below = 100 * n_below / len(_nonzero)
+            logger.info(f"  {n_below:,} pixels ({pct_below:.1f}%) below floor")
 
-        # Add colorbar
-        cbar = fig.colorbar(im, ax=ax, orientation='horizontal', fraction=0.046, pad=0.04)
-        cbar.set_label('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11, fontweight='bold')
+            # Snap near-zero scores up to the floor value
+            floor_mask = (~np.isnan(_floor_data)) & (_floor_data > 0) & (_floor_data < score_floor)
+            _floor_data[floor_mask] = score_floor
+            n_floored = int(np.sum(floor_mask))
+            logger.info(f"  Floored {n_floored:,} near-zero pixels to {score_floor:.6f}")
 
-        plt.tight_layout()
+            score_floor_info[_floor_layer]["n_floored"] = n_floored
 
-        output_path = viz_dir / "scores_map.png"
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {output_path}")
-        plt.close()
+    # Compute normalization stats from the rendered region only.
+    # Scores were computed over the full SNODAS extent, then aligned to the DEM grid
+    # via add_data_layer. We normalize using only pixels where the DEM has valid data
+    # (i.e., the region that will actually appear in the rendered mesh), so that the
+    # colormap range isn't compressed by high/low scores outside the visible area.
+    # Water pixels (lakes) are excluded — they get colored blue, not by the score colormap.
+    _dem_for_norm = terrain_combined.data_layers["dem"]["transformed_data"]
+    _sled_for_norm = terrain_combined.data_layers["sledding"]["data"]
+    _water_mask_for_norm = water_mask if water_mask is not None else np.zeros(_dem_for_norm.shape, dtype=bool)
+    _valid_rendered = ~np.isnan(_dem_for_norm) & ~np.isnan(_sled_for_norm) & ~_water_mask_for_norm
+    _full_max = float(np.nanmax(_sled_for_norm))
+    rendered_score_max = float(np.nanmax(_sled_for_norm[_valid_rendered])) if np.any(_valid_rendered) else _full_max
+    _nonzero_valid = _valid_rendered & (_sled_for_norm > 0)
+    rendered_score_min_nonzero = float(np.nanmin(_sled_for_norm[_nonzero_valid])) if np.any(_nonzero_valid) else 0.0
+    if abs(rendered_score_max - _full_max) > 1e-6:
+        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} "
+                     f"(full grid max={_full_max:.4f}, delta={_full_max - rendered_score_max:.4f})")
+    else:
+        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} (matches full grid)")
+    logger.info(f"  Rendered region nonzero min={rendered_score_min_nonzero:.4f}")
+    _water_excluded = int(np.sum(_water_mask_for_norm & ~np.isnan(_dem_for_norm)))
+    if _water_excluded > 0:
+        logger.info(f"  Excluded {_water_excluded:,} water pixels from normalization")
+    del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
 
-        # Create histogram plot
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-        fig.suptitle(f'Detroit Score Distribution (normalized, then gamma={args.gamma})',
-                     fontsize=14, fontweight='bold')
+    # === Compute scores for histogram output ===
+    # Create output directory for histograms
+    viz_dir = args.output_dir / "histograms"
+    viz_dir.mkdir(parents=True, exist_ok=True)
 
-        valid_gamma = gamma_corrected_scores[~np.isnan(gamma_corrected_scores)]
+    # Use pre-lake-mask scores snapshot (reflects the --base-scores swap)
+    # The "sledding" layer key always holds base scores due to swap at args.base_scores=="skiing"
+    base_scores = scores_before_lake_mask.get("sledding", terrain_combined.data_layers["sledding"]["data"])
 
-        # Histogram (showing gamma-corrected values)
-        counts, bins, patches = ax.hist(valid_gamma.flatten(), bins=100,
-                                       color='steelblue', alpha=0.7,
-                                       edgecolor='black', linewidth=0.3)
+    # Normalize scores to 0-1.0 range using rendered-region max
+    normalized_scores = base_scores / rendered_score_max
 
-        ax.set_xlabel('Gamma-Corrected Score (normalized score ^ 0.5)', fontsize=11)
-        ax.set_ylabel('Pixel Count', fontsize=11)
-        ax.grid(True, alpha=0.3, axis='y')
-        ax.set_xlim(0, 1.0)
+    if args.normalize_scores:
+        # Stretch to full 0-1 range based on rendered-region min/max
+        norm_min = rendered_score_min_nonzero / rendered_score_max
+        if 1.0 > norm_min:
+            normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
+            normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
 
-        plt.tight_layout()
+    # Apply gamma correction to normalized scores
+    gamma_corrected_scores = np.power(normalized_scores, args.gamma)
 
-        output_path = viz_dir / "scores_histograms.png"
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        logger.info(f"✓ Saved: {output_path}")
-        plt.close()
-
-        logger.info("")
-        logger.info("="*70)
-        logger.info("Colormap visualizations created successfully!")
-        logger.info("="*70)
-        logger.info(f"Output directory: {viz_dir}")
-        logger.info("")
-        logger.info("Exiting before mesh creation (--colormap-viz-only mode)")
-        return 0
+    # Create colormap-colored histogram (raw vs transformed)
+    norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
+    generate_score_histogram(
+        raw_scores=base_scores,
+        transformed_scores=gamma_corrected_scores,
+        output_path=viz_dir / "scores_histograms.png",
+        cmap_name=score_cmap_name,
+        transform_label=norm_label,
+        rendered_max=rendered_score_max,
+        rendered_min_nonzero=rendered_score_min_nonzero,
+        gamma=args.gamma,
+        normalize_scores=args.normalize_scores,
+        print_cmap_name="boreal_mako_print" if args.print_colors else None,
+    )
+    logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
 
     # Compute proximity mask for parks if available (BEFORE mesh creation)
     # This avoids the need for duplicate mesh creation
@@ -2417,17 +3195,7 @@ Examples:
                 logger.info("✓ Road anti-aliasing applied")
 
             # Generate road elevation diagnostic
-            if "roads" in terrain_combined.data_layers:
-                dem_layer = terrain_combined.data_layers["dem"]
-                dem_for_diag = dem_layer.get("transformed_data", dem_layer["data"])
-                road_for_diag = terrain_combined.data_layers["roads"]["data"]
-                generate_road_elevation_diagnostics(
-                    dem=dem_for_diag,
-                    road_mask=road_for_diag,
-                    output_dir=Path(args.output_dir),
-                    prefix="road_elevation",
-                    kernel_radius=3,
-                )
+            # Road elevation diagnostics removed
 
         except Exception as e:
             logger.warning(f"Failed to add roads layer: {e}")
@@ -2473,9 +3241,18 @@ Examples:
 
     # Define base colormap functions (will be wrapped with saturation modulation if enabled)
     def sledding_colormap(score):
+        # Normalize using rendered-region max (pre-computed above) so the colormap
+        # range reflects only the area that will actually be visible in the mesh.
+        normalized = score / rendered_score_max
+        if args.normalize_scores:
+            # Stretch actual score range to full 0-1 colormap range
+            norm_min = rendered_score_min_nonzero / rendered_score_max
+            if 1.0 > norm_min:
+                normalized = (normalized - norm_min) / (1.0 - norm_min)
+                normalized = np.clip(normalized, 0.0, 1.0)
         return elevation_colormap(
-            np.power(score / np.nanmax(score), args.gamma),
-            cmap_name="boreal_mako", min_elev=0.0, max_elev=1.0
+            np.power(normalized, args.gamma),
+            cmap_name=score_cmap_name, min_elev=0.0, max_elev=1.0
         )
 
     def xc_skiing_colormap(score):
@@ -2485,10 +3262,10 @@ Examples:
     base_colormap = make_sat_colormap(sledding_colormap)
 
     if args.roads and road_data and road_bbox and parks:
-        # With parks: base sledding + XC skiing overlay (no road color overlay)
+        # With parks: base scores + overlay (no road color overlay)
         logger.info("Setting multi-overlay color mapping:")
-        logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
-        logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
+        logger.info("  Overlay: scores near parks (rocket colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
 
         overlays = [
@@ -2506,9 +3283,9 @@ Examples:
             overlays=overlays,
         )
     elif args.roads and road_data and road_bbox:
-        # Roads but no parks: just base sledding (no overlays, roads get glassy material)
+        # Roads but no parks: just base scores (no overlays, roads get glassy material)
         logger.info("Setting color mapping:")
-        logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
+        logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
         logger.info("  Roads: Keep terrain color, apply glassy material via mask")
         terrain_combined.set_color_mapping(
             base_colormap,
@@ -2518,8 +3295,8 @@ Examples:
         # No roads - use original blended or standard color mapping
         if parks:
             logger.info("Setting blended color mapping:")
-            logger.info(f"  Base: Sledding scores with gamma={args.gamma} (boreal_mako colormap)")
-            logger.info("  Overlay: XC skiing scores near parks (rocket colormap)")
+            logger.info(f"  Base: {base_score_label.capitalize()} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
+            logger.info("  Overlay: scores near parks (rocket colormap)")
             terrain_combined.set_blended_color_mapping(
                 base_colormap=base_colormap,
                 base_source_layers=["sledding"],
@@ -2528,7 +3305,7 @@ Examples:
                 overlay_mask=park_mask_grid,  # Grid-space mask (converted to vertex-space internally)
             )
         else:
-            logger.info(f"No parks available - using sledding scores with gamma={args.gamma} (boreal_mako colormap)")
+            logger.info(f"No parks available - using {base_score_label} scores with gamma={args.gamma} ({score_cmap_name} colormap)")
             terrain_combined.set_color_mapping(
                 base_colormap,
                 source_layers=["sledding"],
@@ -2562,6 +3339,9 @@ Examples:
     else:
         logger.info(f"Edge spacing: {edge_spacing} (user-specified)")
 
+    # Mark end of color/score processing
+    timer.mark("  └─ Score processing and color computation")
+
     mesh_combined = terrain_combined.create_mesh(
         scale_factor=100,
         height_scale=args.height_scale,
@@ -2585,6 +3365,7 @@ Examples:
     if mesh_combined is None:
         logger.error("Failed to create combined terrain mesh")
         return 1
+    mesh_vertex_count = len(mesh_combined.data.vertices)
 
     # Apply vertex colors (already applied during create_mesh, but check if available)
     logger.debug("Vertex colors applied during mesh creation")
@@ -2604,7 +3385,10 @@ Examples:
             purple_avg = colors_rgb[is_purple].mean(axis=0)
             logger.info(f"    Average purple color: R={purple_avg[0]:.3f} G={purple_avg[1]:.3f} B={purple_avg[2]:.3f}")
         else:
-            logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
+            if args.no_purple:
+                logger.info("  ✓ No purple vertices (--no-purple enabled)")
+            else:
+                logger.warning(f"  ⚠ No purple vertices found in mesh colors (expected with --purple-position {args.purple_position})")
     else:
         logger.debug("Colors already applied to mesh (diagnostic check skipped)")
 
@@ -2672,18 +3456,7 @@ Examples:
             apply_vertex_positions(mesh_combined, offset_vertices, logger)
 
         # Generate vertex-level road Z diagnostic (captures final mesh state)
-        logger.info("Generating vertex-level road Z diagnostics...")
-        final_verts = np.array([v.co[:] for v in mesh_combined.data.vertices])
-        plot_road_vertex_z_diagnostics(
-            vertices=final_verts,
-            road_mask=road_layer_data,
-            y_valid=terrain_combined.y_valid,
-            x_valid=terrain_combined.x_valid,
-            output_dir=Path(args.output_dir),
-            prefix="road_vertex_z",
-            kernel_radius=3,
-            label="post-smoothing+offset",
-        )
+        # Road vertex Z diagnostics removed
 
     # Apply material based on roads and test_material settings
     # Roads use configurable color (default azurite); terrain uses vertex colors or test material
@@ -2711,11 +3484,66 @@ Examples:
 
     logger.info("✓ Combined terrain mesh created successfully")
 
-    # Free the original DEM array from memory (it's no longer needed)
-    # The Terrain objects have their own downsampled copies
-    del dem
-    gc.collect()
-    logger.info("Freed original DEM from memory")
+    # Create component panels in the same scene if requested
+    component_panel_info = None
+    if args.show_components:
+        xc_scores_dir = args.scores_dir / "xc_skiing"
+        components = load_xc_skiing_components(xc_scores_dir)
+        if components is not None:
+            _, comp_transform = load_xc_skiing_scores(xc_scores_dir)
+            if comp_transform is None:
+                comp_transform = xc_transform  # Fallback
+            component_panel_info = create_component_panels(
+                args=args,
+                dem=dem,
+                dem_transform=transform,
+                dem_crs=dem_crs,
+                components=components,
+                component_transform=comp_transform,
+                water_mask=lake_mask_raw,
+                water_transform=lake_transform,
+                water_crs="EPSG:4326",
+                render_width=render_width,
+                render_height=render_height,
+                main_mesh=mesh_combined,
+                score_colormap=base_colormap,
+                component_colormaps=args.component_colormaps,
+            )
+        else:
+            logger.warning(
+                "--show-components requested but no component scores found. "
+                "Re-run detroit_xc_skiing.py to generate component data."
+            )
+
+    # Create temporal landscape sculpture if requested
+    temporal_mesh = None
+    temporal_bg_plane = None
+    if args.temporal_landscape:
+        logger.info("\nBuilding temporal landscape sculpture...")
+        from examples.temporal_sculpture import create_temporal_sculpture
+        _temporal_result = create_temporal_sculpture(
+            main_mesh=mesh_combined,
+            snodas_dir=Path("data/snodas_data"),
+            cache_file=args.temporal_cache,
+            height_scale=args.height_scale,
+            ridge_height_fraction=args.temporal_ridge_height,
+            gap_fraction=args.temporal_gap,
+            smooth_sigma=args.temporal_smooth,
+            col_scale=args.temporal_col_scale,
+            row_scale=args.temporal_row_scale,
+            depth_fraction=args.temporal_depth,
+            summary_color_scale=args.temporal_summary_color_scale,
+            diagnostic_dir=args.output_dir / "diagnostics",
+            score_colormap=args.temporal_colormap or score_cmap_name,
+        )
+        if _temporal_result:
+            temporal_mesh, temporal_bg_plane = _temporal_result
+            logger.info("✓ Temporal landscape sculpture created")
+        else:
+            logger.warning("Temporal landscape sculpture creation failed")
+
+    # Mark end of mesh creation phase
+    timer.mark("  └─ Mesh creation and material application")
 
     # Setup camera and lighting
     logger.info("\n[3/4] Setting up Camera & Lighting...")
@@ -2723,13 +3551,94 @@ Examples:
     logger.info(f"  Height scale: {args.height_scale}")
     logger.info(f"  Ortho scale: {args.ortho_scale}")
     logger.info(f"  Camera elevation: {args.camera_elevation}")
+
+    # Always use position_camera_relative so preset camera settings are respected
+    cam_meshes = [mesh_combined] + ([temporal_mesh] if temporal_mesh else [])
     camera = position_camera_relative(
-        mesh_obj=mesh_combined,
+        mesh_obj=cam_meshes if len(cam_meshes) > 1 else mesh_combined,
         direction=args.camera_direction,
         camera_type="ORTHO",
         ortho_scale=args.ortho_scale,
         elevation=args.camera_elevation,
     )
+
+    # Position component panels at the bottom of the camera frame
+    component_mesh_list = []
+    if component_panel_info and component_panel_info["meshes"]:
+        position_component_panels(component_panel_info, mesh_combined, camera)
+        component_mesh_list = component_panel_info["meshes"]
+        logger.info(f"  Component panels: {len(component_mesh_list)} meshes in scene")
+        for i, obj in enumerate(component_mesh_list):
+            logger.info(f"    Panel {i}: '{obj.name}' at ({obj.location.x:.1f}, {obj.location.y:.1f}, {obj.location.z:.1f}), scale={obj.scale.x:.3f}")
+
+        # Extend temporal mesh (and its bg plane) to span from main west edge
+        # to component east edge.
+        if temporal_mesh:
+            from examples.temporal_sculpture import extend_to_scene_width
+            extend_to_scene_width(
+                temporal_mesh, mesh_combined, component_mesh_list,
+                bg_plane=temporal_bg_plane,
+            )
+
+        # Re-center camera on the combined visual center (main mesh + panels)
+        # and widen ortho_scale to fit everything.
+        bpy.context.view_layer.update()
+        cam_matrix = camera.matrix_world.to_3x3()
+        cam_right = cam_matrix @ Vector((1, 0, 0))
+        cam_up = cam_matrix @ Vector((0, 1, 0))
+        cam_forward = cam_matrix @ Vector((0, 0, -1))
+
+        # Compute combined bounding box in camera space
+        min_right = min_up = min_depth = float("inf")
+        max_right = max_up = max_depth = float("-inf")
+        temporal_list = [temporal_mesh] if temporal_mesh else []
+        for obj in [mesh_combined] + component_mesh_list + temporal_list:
+            for corner in obj.bound_box:
+                wc = obj.matrix_world @ Vector(corner)
+                r = wc.dot(cam_right)
+                u = wc.dot(cam_up)
+                d = wc.dot(cam_forward)
+                min_right = min(min_right, r)
+                max_right = max(max_right, r)
+                min_up = min(min_up, u)
+                max_up = max(max_up, u)
+                min_depth = min(min_depth, d)
+                max_depth = max(max_depth, d)
+
+        # Shift camera to center on the combined bounding box
+        combined_center_right = (min_right + max_right) / 2
+        combined_center_up = (min_up + max_up) / 2
+        cam_pos = camera.matrix_world.translation
+        old_center_right = cam_pos.dot(cam_right)
+        old_center_up = cam_pos.dot(cam_up)
+        shift_right = combined_center_right - old_center_right
+        shift_up = combined_center_up - old_center_up
+        camera.location.x += cam_right.x * shift_right + cam_up.x * shift_up
+        camera.location.y += cam_right.y * shift_right + cam_up.y * shift_up
+        # Keep camera Z unchanged (don't move closer/further)
+        logger.info(f"  Re-centered camera: shift=({shift_right:.2f} right, {shift_up:.2f} up)")
+        logger.info(f"  Camera now at ({camera.location.x:.2f}, {camera.location.y:.2f}, {camera.location.z:.2f})")
+
+        # Compute needed ortho_scale from the combined extent
+        horizontal_extent = max_right - min_right
+        vertical_extent = max_up - min_up
+        aspect_ratio = render_height / render_width  # < 1 for landscape
+        needed_scale = max(horizontal_extent, vertical_extent / aspect_ratio) * 1.1
+        logger.info(f"  Camera extents: horizontal={horizontal_extent:.1f}, vertical={vertical_extent:.1f}, aspect={aspect_ratio:.3f}")
+        logger.info(f"  Needed ortho_scale={needed_scale:.1f}, current={camera.data.ortho_scale:.1f}")
+        if needed_scale > camera.data.ortho_scale:
+            logger.info(f"  Widened ortho_scale from {camera.data.ortho_scale:.2f} to {needed_scale:.2f} to fit component panels")
+            camera.data.ortho_scale = needed_scale
+        # Ensure clip range covers all meshes along camera depth
+        depth_range = max_depth - min_depth + 200
+        camera.data.clip_end = max(camera.data.clip_end, depth_range)
+    elif args.show_components:
+        logger.warning("  --show-components: component_panel_info=%s", type(component_panel_info))
+
+    # Diagnostic: count all mesh objects in scene
+    scene_meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    logger.info(f"  Scene contains {len(scene_meshes)} mesh objects: {[o.name for o in scene_meshes]}")
+
     # Setup HDRI sky lighting (invisible but adds realistic ambient illumination)
     # HDRI sky includes a physically-simulated sun, so we use that instead of explicit lights
     if args.hdri_lighting:
@@ -2802,9 +3711,13 @@ Examples:
         logger.info(f"  Color: {args.background_color}")
         logger.info(f"  Distance below terrain: {args.background_distance} units")
         logger.info(f"  Size multiplier: {args.background_size}x")
+        # Include all meshes so the background plane covers the full scene.
+        # Z is driven by the lowest mesh vertex; XY centers on all meshes.
+        temporal_mesh_list = [temporal_mesh] if temporal_mesh else []
+        all_scene_meshes = [mesh_combined] + component_mesh_list + temporal_mesh_list if (component_mesh_list or temporal_mesh_list) else mesh_combined
         background_plane = create_background_plane(
             camera=camera,
-            mesh_or_meshes=mesh_combined,
+            mesh_or_meshes=all_scene_meshes,
             distance_below=args.background_distance,
             color=args.background_color,
             size_multiplier=args.background_size,
@@ -2819,6 +3732,9 @@ Examples:
     output_format = args.format.upper()
     format_ext = "jpg" if output_format == "JPEG" else "png"
     color_mode = "RGB" if output_format == "JPEG" else "RGBA"
+
+    # Mark end of mesh creation phase
+    timer.mark("[2/4] Creating Combined Terrain Mesh")
 
     # Render if requested
     if not args.no_render:
@@ -2920,17 +3836,59 @@ Examples:
             lum_histogram_path = output_path.parent / lum_histogram_filename
             generate_luminance_histogram(output_path, lum_histogram_path)
 
+            # Generate score distribution histogram (raw vs transformed with colormap colors)
+            score_hist_path = output_path.parent / (output_path.stem + "_score_distribution.png")
+            raw_scores_for_hist = terrain_combined.data_layers["sledding"]["data"]
+            # Compute transformed scores (same pipeline as sledding_colormap)
+            trans_scores_for_hist = raw_scores_for_hist / rendered_score_max
+            if args.normalize_scores:
+                norm_min = rendered_score_min_nonzero / rendered_score_max
+                if 1.0 > norm_min:
+                    trans_scores_for_hist = (trans_scores_for_hist - norm_min) / (1.0 - norm_min)
+                    trans_scores_for_hist = np.clip(trans_scores_for_hist, 0.0, 1.0)
+            trans_scores_for_hist = np.power(trans_scores_for_hist, args.gamma)
+            norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
+            generate_score_histogram(
+                raw_scores=raw_scores_for_hist,
+                transformed_scores=trans_scores_for_hist,
+                output_path=score_hist_path,
+                cmap_name=score_cmap_name,
+                transform_label=norm_label,
+                rendered_max=rendered_score_max,
+                rendered_min_nonzero=rendered_score_min_nonzero,
+                gamma=args.gamma,
+                normalize_scores=args.normalize_scores,
+            )
+
         # Print actual Blender settings used for this render
         print_render_settings_report(logger)
+
+        # Mark end of rendering phase
+        timer.mark("[4/4] Rendering")
+
+    # Print timing report
+    timer.report()
+
+    # Free the original DEM array from memory
+    try:
+        del dem
+    except UnboundLocalError:
+        pass
+    gc.collect()
+    logger.info("Freed original DEM from memory")
 
     logger.info("\n" + "=" * 70)
     logger.info("✓ Detroit Combined Terrain Rendering Complete!")
     logger.info("=" * 70)
     logger.info("\nSummary:")
     logger.info(f"  ✓ Loaded DEM and terrain scores")
-    logger.info(f"  ✓ Created combined terrain mesh ({len(mesh_combined.data.vertices)} vertices)")
-    logger.info(f"    - Base colormap: boreal_mako (forest green → blue → mint) for sledding scores (gamma={args.gamma})")
-    logger.info(f"    - Overlay colormap: rocket for XC skiing scores near parks")
+    logger.info(f"  ✓ Created combined terrain mesh ({mesh_vertex_count} vertices)")
+    width_desc = f" w={args.purple_width}" if args.purple_width != 1.0 else ""
+    purple_desc = ", no purple" if args.no_purple else f", purple@{args.purple_position}{width_desc}"
+    norm_desc = ", normalized" if args.normalize_scores else ""
+    print_desc = ", print-safe" if args.print_colors else ""
+    logger.info(f"    - Base colormap: {score_cmap_name} (forest green → blue → mint{purple_desc}{norm_desc}{print_desc}) for {base_score_label} scores (gamma={args.gamma})")
+    logger.info(f"    - Overlay colormap: rocket for overlay scores near parks")
     logger.info(f"    - 10km zones around {len(parks) if parks else 0} park locations")
     logger.info(f"  ✓ Applied geographic transforms (WGS84 → UTM, flip, scale)")
     logger.info(f"  ✓ Detected and colored water bodies blue")
@@ -2948,7 +3906,6 @@ Examples:
     logger.info("=" * 70 + "\n")
 
     return 0
-
 
 if __name__ == "__main__":
     try:

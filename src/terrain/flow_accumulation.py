@@ -283,6 +283,273 @@ def _save_to_cache(
         json.dump(full_metadata, f, indent=2)
 
 
+def compute_flow_with_basins(
+    dem: np.ndarray,
+    dem_transform: Affine,
+    precipitation: Optional[np.ndarray] = None,
+    precip_transform: Optional[Affine] = None,
+    lake_mask: Optional[np.ndarray] = None,
+    lake_outlets: Optional[np.ndarray] = None,
+    detect_basins: bool = True,
+    min_basin_size: int = 5000,
+    min_basin_depth: float = 1.0,
+    backend: str = "spec",
+    coastal_elev_threshold: float = 0.0,
+    edge_mode: str = "all",
+    max_breach_depth: float = 25.0,
+    max_breach_length: int = 150,
+    epsilon: float = 1e-4,
+    ocean_threshold: float = 0.0,
+    ocean_border_only: bool = True,
+    upscale_precip: bool = False,
+    upscale_factor: int = 4,
+    upscale_method: str = "auto",
+    verbose: bool = True,
+) -> Dict[str, any]:
+    """Compute flow using validated basin preservation pattern (array-based API).
+
+    This is the array-based entry point for flow computation with basin-aware
+    lake handling. Unlike ``flow_accumulation()`` which takes file paths,
+    this accepts numpy arrays directly.
+
+    Steps:
+    1. Detect ocean mask
+    2. Detect endorheic basins (optional)
+    3. Create conditioning mask (ocean + basins + selective lakes)
+    4. Condition DEM with combined mask
+    5. Compute flow direction with DEM-based spillway lake routing
+    6. Compute drainage area
+    7. Compute upstream rainfall (if precipitation provided)
+
+    Parameters
+    ----------
+    dem : np.ndarray
+        Digital elevation model (2D array)
+    dem_transform : Affine
+        Geographic transform for DEM
+    precipitation : np.ndarray, optional
+        Precipitation data (same shape as DEM)
+    lake_mask : np.ndarray, optional
+        Labeled mask of water bodies (0 = no lake, >0 = lake ID)
+    lake_outlets : np.ndarray, optional
+        Boolean mask of lake outlet cells
+    detect_basins : bool, default=True
+        Whether to detect and preserve endorheic basins
+    verbose : bool, default=True
+        Print progress messages
+
+    Returns
+    -------
+    dict
+        Keys: 'flow_direction', 'drainage_area', 'dem_conditioned',
+        'breached_dem', 'ocean_mask', 'basin_mask', 'lake_inlets',
+        'upstream_rainfall', 'conditioning_mask'
+    """
+    from src.terrain.water_bodies import (
+        identify_lake_inlets,
+        create_lake_flow_routing,
+        compute_outlet_downstream_directions,
+        find_lake_spillways,
+    )
+    from src.terrain.transforms import upscale_scores
+
+    if verbose:
+        print("=" * 60)
+        print("FLOW PIPELINE WITH BASIN PRESERVATION")
+        print("=" * 60)
+
+    # Step 1: Detect ocean
+    if verbose:
+        print("\n1. Detecting ocean...")
+    ocean_mask = detect_ocean_mask(
+        dem, threshold=ocean_threshold, border_only=ocean_border_only
+    )
+    if verbose:
+        ocean_pct = 100 * np.sum(ocean_mask) / dem.size
+        print(f"   Ocean cells: {np.sum(ocean_mask):,} ({ocean_pct:.1f}%)")
+
+    # Step 2: Detect endorheic basins (optional)
+    basin_mask = None
+
+    if detect_basins:
+        if verbose:
+            print("\n2. Detecting endorheic basins...")
+        total_cells = dem.size
+        adaptive_min_size = int(1e-3 * total_cells)
+        effective_min_size = adaptive_min_size if min_basin_size == 5000 else min_basin_size
+
+        if verbose and effective_min_size != min_basin_size:
+            print(f"   Adaptive basin size: {effective_min_size:,} cells "
+                  f"({100*effective_min_size/total_cells:.4f}% of domain)")
+
+        basin_mask, endorheic_basins = detect_endorheic_basins(
+            dem, min_size=effective_min_size, exclude_mask=ocean_mask,
+            min_depth=min_basin_depth,
+        )
+
+        if basin_mask is not None and np.any(basin_mask):
+            num_basins = len(endorheic_basins)
+            if verbose:
+                print(f"   Found {num_basins} endorheic basin(s)")
+        else:
+            if verbose:
+                print("   No significant endorheic basins detected")
+            basin_mask = None
+
+    # Step 3: Create conditioning mask (basin-aware lake pre-masking)
+    if verbose:
+        print("\n3. Creating DEM conditioning mask...")
+    conditioning_mask = ocean_mask.copy()
+
+    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
+        lakes_in_basins = (lake_mask > 0) & basin_mask
+        if np.any(lakes_in_basins):
+            if verbose:
+                print(f"   Pre-masking {np.sum(lakes_in_basins):,} lake cells "
+                      "inside basins (drainage sinks)")
+            conditioning_mask = conditioning_mask | lakes_in_basins
+        lakes_outside = (lake_mask > 0) & ~basin_mask
+        if np.any(lakes_outside) and verbose:
+            print(f"   NOT masking {np.sum(lakes_outside):,} lake cells "
+                  "outside basins (river connectors)")
+    elif lake_mask is not None and np.any(lake_mask > 0):
+        if verbose:
+            print(f"   NOT masking {np.sum(lake_mask > 0):,} lake cells "
+                  "(no basins detected, all are connectors)")
+
+    if basin_mask is not None and np.any(basin_mask):
+        if verbose:
+            print(f"   Pre-masking {np.sum(basin_mask):,} basin cells "
+                  "to preserve topography")
+        conditioning_mask = conditioning_mask | basin_mask
+
+    # Step 4: Condition DEM
+    if verbose:
+        print(f"\n4. Conditioning DEM (backend={backend})...")
+    if backend == "spec":
+        dem_conditioned, outlets, breached_dem = condition_dem_spec(
+            dem, nodata_mask=conditioning_mask,
+            coastal_elev_threshold=coastal_elev_threshold,
+            edge_mode=edge_mode, max_breach_depth=max_breach_depth,
+            max_breach_length=max_breach_length, epsilon=epsilon,
+        )
+    else:
+        dem_conditioned = condition_dem(
+            dem, method="breach", ocean_mask=conditioning_mask,
+            min_basin_size=min_basin_size, min_basin_depth=min_basin_depth,
+        )
+        breached_dem = None
+
+    # Step 5: Identify lake inlets
+    lake_inlets = None
+    if lake_mask is not None and np.any(lake_mask > 0):
+        if verbose:
+            print("\n5. Identifying lake inlets...")
+        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
+        inlets_dict = identify_lake_inlets(
+            lake_mask, dem_conditioned, outlet_mask=outlet_mask_for_inlets
+        )
+        if inlets_dict:
+            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
+            for lake_id, inlet_cells in inlets_dict.items():
+                for row, col in inlet_cells:
+                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
+                        lake_inlets[row, col] = True
+            if verbose:
+                print(f"   Inlet cells: {np.sum(lake_inlets)}")
+
+    # Step 6: Compute flow direction with DEM-based spillway lake routing
+    if verbose:
+        print("\n6. Computing flow direction...")
+    flow_dir_base = compute_flow_direction(dem_conditioned, mask=ocean_mask)
+    flow_dir = flow_dir_base.copy()
+
+    if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
+        if verbose:
+            print("   Applying lake flow routing (DEM-based spillways)...")
+
+        labeled_lakes = lake_mask.copy()
+        if basin_mask is not None and np.any(basin_mask):
+            labeled_lakes[basin_mask] = 0
+            lakes_outside = (lake_mask > 0) & ~basin_mask
+        else:
+            lakes_outside = lake_mask > 0
+
+        if np.any(lakes_outside):
+            spillways = find_lake_spillways(labeled_lakes, dem_conditioned)
+            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
+            for lake_id, (sr, sc, _sdir) in spillways.items():
+                spillway_outlets[sr, sc] = True
+
+            if verbose:
+                print(f"   DEM spillway detection: {len(spillways)} spillways")
+
+            lake_flow = create_lake_flow_routing(
+                labeled_lakes, spillway_outlets, dem_conditioned
+            )
+            flow_dir = np.where(lakes_outside, lake_flow, flow_dir_base)
+
+            if np.any(spillway_outlets):
+                flow_dir = compute_outlet_downstream_directions(
+                    flow_dir, labeled_lakes, spillway_outlets,
+                    dem_conditioned, basin_mask=basin_mask, spillways=spillways,
+                )
+
+            if verbose:
+                print(f"   Applied routing to {np.sum(lakes_outside):,} cells "
+                      f"with {len(spillways)} spillway outlets")
+
+    # Step 7: Compute drainage area
+    if verbose:
+        print("\n7. Computing drainage area...")
+    drainage_area = compute_drainage_area(flow_dir)
+
+    # Step 8: Compute upstream rainfall (optional)
+    upstream_rainfall = None
+    if precipitation is not None:
+        if verbose:
+            print("\n8. Computing upstream rainfall...")
+        precip_for_accumulation = precipitation.copy()
+
+        if upscale_precip and precipitation.shape != dem.shape:
+            scale_y = dem.shape[0] / precipitation.shape[0]
+            scale_x = dem.shape[1] / precipitation.shape[1]
+            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
+                scale_int = int(round(scale_y))
+                precip_for_accumulation = upscale_scores(
+                    precipitation, scale=scale_int,
+                    method=upscale_method, nodata_value=0.0
+                )
+            else:
+                from scipy.ndimage import zoom
+                precip_for_accumulation = zoom(
+                    precipitation, (scale_y, scale_x), order=3, mode='reflect'
+                )
+            if verbose:
+                print(f"   Upscaled precipitation: {precipitation.shape} → "
+                      f"{precip_for_accumulation.shape}")
+
+        precip_masked = precip_for_accumulation.copy()
+        precip_masked[ocean_mask] = 0
+        upstream_rainfall = compute_upstream_rainfall(flow_dir, precip_masked)
+
+    if verbose:
+        print("\nFlow pipeline complete.")
+        print("=" * 60)
+
+    return {
+        "flow_direction": flow_dir,
+        "drainage_area": drainage_area,
+        "dem_conditioned": dem_conditioned,
+        "breached_dem": breached_dem,
+        "ocean_mask": ocean_mask,
+        "basin_mask": basin_mask,
+        "lake_inlets": lake_inlets,
+        "upstream_rainfall": upstream_rainfall,
+        "conditioning_mask": conditioning_mask,
+    }
+
+
 def flow_accumulation(
     dem_path: str,
     precipitation_path: str,
@@ -816,6 +1083,21 @@ def flow_accumulation(
     # (Lakes handled later in the pipeline based on basin location)
     conditioning_mask = ocean_mask.copy() if ocean_mask is not None else np.zeros(dem_data.shape, dtype=bool)
 
+    # Basin-aware lake pre-masking:
+    # Lakes INSIDE basins → masked (drainage sinks like Salton Sea)
+    # Lakes OUTSIDE basins → NOT masked (river connectors)
+    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
+        lakes_in_basins = (lake_mask > 0) & basin_mask
+        if np.any(lakes_in_basins):
+            conditioning_mask = conditioning_mask | lakes_in_basins
+            print(f"  Pre-masking {np.sum(lakes_in_basins):,} lake cells inside basins (drainage sinks)")
+
+        lakes_outside = (lake_mask > 0) & ~basin_mask
+        if np.any(lakes_outside):
+            print(f"  NOT masking {np.sum(lakes_outside):,} lake cells outside basins (river connectors)")
+    elif lake_mask is not None and np.any(lake_mask > 0):
+        print(f"  NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
+
     if basin_mask is not None and np.any(basin_mask):
         conditioning_mask = conditioning_mask | basin_mask
         print(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
@@ -971,15 +1253,70 @@ def flow_accumulation(
         )
 
     # Step 3.5: Apply lake routing if lake_mask provided
-    if lake_mask is not None and lake_outlets is not None:
-        from src.terrain.water_bodies import create_lake_flow_routing
-        print("Applying lake flow routing...")
-        lake_flow = create_lake_flow_routing(lake_mask, lake_outlets, conditioned_dem)
-        # Merge: lake cells use lake_flow, others keep terrain_flow
-        flow_direction = np.where(lake_mask > 0, lake_flow, flow_direction)
-        lake_count = len(np.unique(lake_mask[lake_mask > 0]))
-        outlet_count = np.sum(lake_outlets)
-        print(f"  Routed {lake_count} lakes with {outlet_count} outlets")
+    # Uses DEM-based spillway detection (boundary cells) instead of HydroLAKES
+    # pour points (which land in lake interiors and create terminal outlets).
+    # Basin-aware: only routes lakes outside preserved endorheic basins.
+    if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
+        from src.terrain.water_bodies import (
+            create_lake_flow_routing,
+            find_lake_spillways,
+            compute_outlet_downstream_directions,
+        )
+        print("Applying lake flow routing (DEM-based spillways)...")
+
+        # Basin-aware: only route lakes OUTSIDE preserved basins
+        labeled_lakes = lake_mask.copy()
+        if basin_mask is not None and np.any(basin_mask):
+            labeled_lakes[basin_mask] = 0
+            lakes_outside = (lake_mask > 0) & ~basin_mask
+            n_in = len(np.unique(lake_mask[(lake_mask > 0) & basin_mask]))
+            n_out = len(np.unique(lake_mask[lakes_outside]))
+            print(f"  {n_in} lakes inside basins (natural flow), "
+                  f"{n_out} lakes outside basins (explicit routing)")
+        else:
+            lakes_outside = lake_mask > 0
+
+        if np.any(lakes_outside):
+            # DEM-based spillways: find lowest boundary cell for each lake
+            spillways = find_lake_spillways(labeled_lakes, conditioned_dem)
+            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
+            for lake_id, (sr, sc, _sdir) in spillways.items():
+                spillway_outlets[sr, sc] = True
+
+            print(f"  DEM spillway detection: {len(spillways)} spillways "
+                  f"(replacing {int(np.sum(lake_outlets)):,} HydroLAKES pour points)")
+
+            # BFS routing: all lake cells route toward DEM spillway
+            lake_flow = create_lake_flow_routing(
+                labeled_lakes, spillway_outlets, conditioned_dem
+            )
+            flow_direction = np.where(lakes_outside, lake_flow, flow_direction)
+
+            # Connect spillway outlets to downstream terrain (cycle-safe)
+            if np.any(spillway_outlets):
+                flow_direction = compute_outlet_downstream_directions(
+                    flow_direction, labeled_lakes, spillway_outlets,
+                    conditioned_dem, basin_mask=basin_mask, spillways=spillways,
+                )
+
+            print(f"  Applied routing to {np.sum(lakes_outside):,} cells "
+                  f"with {len(spillways)} spillway outlets")
+
+    # Step 3.6: Identify lake inlets (after DEM conditioning + lake routing)
+    lake_inlets = None
+    if lake_mask is not None and np.any(lake_mask > 0):
+        from src.terrain.water_bodies import identify_lake_inlets
+        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
+        inlets_dict = identify_lake_inlets(
+            lake_mask, conditioned_dem, outlet_mask=outlet_mask_for_inlets
+        )
+        if inlets_dict:
+            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
+            for lake_id, inlet_cells in inlets_dict.items():
+                for row, col in inlet_cells:
+                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
+                        lake_inlets[row, col] = True
+            print(f"  Lake inlets: {np.sum(lake_inlets):,} cells")
 
     # Step 4: Compute drainage area and upstream rainfall
     if backend == "pysheds":
@@ -1073,6 +1410,9 @@ def flow_accumulation(
         "conditioned_dem": conditioned_dem,
         "breached_dem": breached_dem,
         "lake_mask": lake_mask,  # Downsampled lake mask (or None if not provided)
+        "lake_inlets": lake_inlets,
+        "basin_mask": basin_mask,
+        "ocean_mask": ocean_mask,
         "metadata": metadata,
         "files": files,
     }

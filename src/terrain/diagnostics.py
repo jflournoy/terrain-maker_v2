@@ -2472,3 +2472,187 @@ def generate_luminance_histogram(
     except Exception as e:
         logger.warning(f"Failed to generate luminance histogram: {e}")
         return None
+
+
+# =============================================================================
+# SCORE DISTRIBUTION DIAGNOSTICS
+# =============================================================================
+
+
+def generate_score_histogram(
+    raw_scores: np.ndarray,
+    transformed_scores: np.ndarray,
+    output_path: Path,
+    cmap_name: str = "boreal_mako",
+    transform_label: str = "Normalized + Gamma",
+    rendered_max: Optional[float] = None,
+    rendered_min_nonzero: Optional[float] = None,
+    gamma: float = 1.0,
+    normalize_scores: bool = False,
+    print_cmap_name: Optional[str] = None,
+) -> Optional[Path]:
+    """
+    Generate a side-by-side histogram of raw and transformed scores with colormap-colored bars.
+
+    Left panel shows the raw score distribution with bars colored by their eventual
+    colormap color (applying the normalization + gamma pipeline to each bin center).
+    Middle panel shows the transformed score distribution with bars colored directly
+    by their position on the colormap.
+    Optional right panel shows the same transformed distribution with the print-safe
+    colormap for visual comparison.
+
+    Args:
+        raw_scores: Raw score array (2D grid, may contain NaN).
+        transformed_scores: Scores after normalization + gamma (2D grid, may contain NaN).
+        output_path: Path to save the histogram image.
+        cmap_name: Matplotlib colormap name for coloring bars.
+        transform_label: Label describing the transformation (e.g. "Normalized, gamma=0.5").
+        rendered_max: Max score in the rendered region (used for normalization reference lines).
+        rendered_min_nonzero: Min nonzero score in the rendered region.
+        gamma: Gamma value used in the transformation.
+        normalize_scores: Whether --normalize-scores stretch was applied.
+        print_cmap_name: Optional print-safe colormap name. When provided, a third
+            panel is added showing the transformed scores with print-safe colors.
+
+    Returns:
+        Path to the saved histogram image, or None on failure.
+    """
+    try:
+        import matplotlib
+        import matplotlib.pyplot as plt
+
+        cmap = matplotlib.colormaps.get_cmap(cmap_name)
+
+        n_panels = 3 if print_cmap_name else 2
+        fig_width = 24 if print_cmap_name else 16
+        fig, axes = plt.subplots(1, n_panels, figsize=(fig_width, 7))
+        ax_raw, ax_trans = axes[0], axes[1]
+        title = "Score Distribution: Raw vs Transformed"
+        if print_cmap_name:
+            title += " vs Print-Safe"
+        fig.suptitle(title, fontsize=14, fontweight="bold")
+
+        # --- Left panel: Raw scores ---
+        valid_raw = raw_scores[~np.isnan(raw_scores)]
+        n_bins = 100
+        counts_raw, bins_raw, patches_raw = ax_raw.hist(
+            valid_raw.flatten(), bins=n_bins, edgecolor="black", linewidth=0.3
+        )
+
+        # Color each bar by its eventual colormap color
+        for patch, bin_left, bin_right in zip(patches_raw, bins_raw[:-1], bins_raw[1:]):
+            bin_center = (bin_left + bin_right) / 2.0
+            # Apply the same transform pipeline the render uses
+            if rendered_max and rendered_max > 0:
+                val = bin_center / rendered_max
+            else:
+                raw_max = np.nanmax(valid_raw) if len(valid_raw) > 0 else 1.0
+                val = bin_center / raw_max if raw_max > 0 else 0.0
+            if normalize_scores and rendered_min_nonzero is not None and rendered_max:
+                norm_min = rendered_min_nonzero / rendered_max
+                if 1.0 > norm_min:
+                    val = (val - norm_min) / (1.0 - norm_min)
+            val = np.clip(val, 0.0, 1.0) ** gamma
+            patch.set_facecolor(cmap(val))
+
+        ax_raw.set_xlabel("Raw Score", fontsize=11)
+        ax_raw.set_ylabel("Pixel Count", fontsize=11)
+        ax_raw.set_title("Raw Scores (before normalization)", fontsize=12, fontweight="bold")
+        ax_raw.grid(True, alpha=0.3, axis="y")
+
+        # Reference lines and stats
+        if rendered_max is not None:
+            ax_raw.axvline(rendered_max, color="red", linestyle="--", alpha=0.7, label=f"max={rendered_max:.3f}")
+        if rendered_min_nonzero is not None and rendered_min_nonzero > 0:
+            ax_raw.axvline(rendered_min_nonzero, color="orange", linestyle="--", alpha=0.7,
+                           label=f"min (nonzero)={rendered_min_nonzero:.3f}")
+        if len(valid_raw) > 0:
+            n_zero = np.sum(valid_raw == 0)
+            pct_zero = 100.0 * n_zero / len(valid_raw)
+            stats_text = (
+                f"mean: {np.mean(valid_raw):.3f}\n"
+                f"median: {np.median(valid_raw):.3f}\n"
+                f"zero: {pct_zero:.1f}%"
+            )
+            ax_raw.text(
+                0.98, 0.98, stats_text, transform=ax_raw.transAxes,
+                fontsize=9, verticalalignment="top", horizontalalignment="right",
+                fontfamily="monospace",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
+            )
+        ax_raw.legend(fontsize=9, loc="upper left")
+
+        # --- Right panel: Transformed scores ---
+        valid_trans = transformed_scores[~np.isnan(transformed_scores)]
+        counts_trans, bins_trans, patches_trans = ax_trans.hist(
+            valid_trans.flatten(), bins=n_bins, edgecolor="black", linewidth=0.3
+        )
+
+        # Color each bar directly by its colormap position
+        for patch, bin_left, bin_right in zip(patches_trans, bins_trans[:-1], bins_trans[1:]):
+            bin_center = (bin_left + bin_right) / 2.0
+            patch.set_facecolor(cmap(np.clip(bin_center, 0.0, 1.0)))
+
+        norm_label = " + stretch" if normalize_scores else ""
+        ax_trans.set_xlabel(f"Transformed Score (÷max, gamma={gamma}{norm_label})", fontsize=11)
+        ax_trans.set_ylabel("Pixel Count", fontsize=11)
+        ax_trans.set_title(transform_label, fontsize=12, fontweight="bold")
+        ax_trans.grid(True, alpha=0.3, axis="y")
+        ax_trans.set_xlim(0, 1.0)
+
+        if len(valid_trans) > 0:
+            stats_text = (
+                f"mean: {np.mean(valid_trans):.3f}\n"
+                f"median: {np.median(valid_trans):.3f}\n"
+                f"range: [{np.min(valid_trans):.3f}, {np.max(valid_trans):.3f}]"
+            )
+            ax_trans.text(
+                0.98, 0.98, stats_text, transform=ax_trans.transAxes,
+                fontsize=9, verticalalignment="top", horizontalalignment="right",
+                fontfamily="monospace",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
+            )
+
+        # --- Third panel: Print-safe colormap (optional) ---
+        if print_cmap_name:
+            ax_print = axes[2]
+            print_cmap = matplotlib.colormaps.get_cmap(print_cmap_name)
+
+            counts_print, bins_print, patches_print = ax_print.hist(
+                valid_trans.flatten(), bins=n_bins, edgecolor="black", linewidth=0.3
+            )
+
+            # Color each bar by its print-safe colormap position
+            for patch, bin_left, bin_right in zip(patches_print, bins_print[:-1], bins_print[1:]):
+                bin_center = (bin_left + bin_right) / 2.0
+                patch.set_facecolor(print_cmap(np.clip(bin_center, 0.0, 1.0)))
+
+            ax_print.set_xlabel(f"Transformed Score (print-safe)", fontsize=11)
+            ax_print.set_ylabel("Pixel Count", fontsize=11)
+            ax_print.set_title(f"Print-Safe ({print_cmap_name})", fontsize=12, fontweight="bold")
+            ax_print.grid(True, alpha=0.3, axis="y")
+            ax_print.set_xlim(0, 1.0)
+
+            if len(valid_trans) > 0:
+                stats_text = (
+                    f"mean: {np.mean(valid_trans):.3f}\n"
+                    f"median: {np.median(valid_trans):.3f}\n"
+                    f"range: [{np.min(valid_trans):.3f}, {np.max(valid_trans):.3f}]"
+                )
+                ax_print.text(
+                    0.98, 0.98, stats_text, transform=ax_print.transAxes,
+                    fontsize=9, verticalalignment="top", horizontalalignment="right",
+                    fontfamily="monospace",
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.9),
+                )
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+
+        logger.info(f"Score distribution histogram saved: {output_path}")
+        return output_path
+
+    except Exception as e:
+        logger.warning(f"Failed to generate score histogram: {e}")
+        return None

@@ -114,7 +114,7 @@ Examples of honest responses:
 
 ## Example and Render Scripts
 
-**CRITICAL: NEVER run example or render scripts**
+**Do NOT run example or render scripts unless explicitly told to by the user**
 
 Example scripts in `examples/` directory (e.g., `detroit_combined_render.py`, `detroit_elevation_real.py`, `san_diego_flow_demo.py`) are computationally expensive and time-consuming. They:
 - Process large datasets (DEMs, flow accumulation, precipitation)
@@ -123,9 +123,8 @@ Example scripts in `examples/` directory (e.g., `detroit_combined_render.py`, `d
 - Consume significant CPU/GPU/memory resources
 
 **Rules:**
-- **NEVER** execute example scripts via Bash tool
-- **NEVER** run rendering operations
-- User will run these scripts manually when ready
+- Do NOT execute example scripts via Bash tool unless the user explicitly asks you to
+- Do NOT run rendering operations unless the user explicitly asks you to
 - You may READ example scripts to understand code
 - You may EDIT example scripts to fix bugs or add features
 - You may suggest commands for the user to run
@@ -612,8 +611,12 @@ The roads implementation demonstrates the proper pattern:
 
 ### TDD Examples
 
-- [🔴 test: add failing test for updateCommandCatalog isolation (TDD RED)](../../commit/00e7a22)
-- [🔴 test: add failing tests for tdd.js framework detection (TDD RED)](../../commit/2ce43d1)
-- [🔴 test: add failing tests for learn.js functions (TDD RED)](../../commit/8b90d58)
-- [🔴 test: add failing tests for formatBytes and estimateTokens (TDD RED)](../../commit/1fdac58)
-- [🔴 test: add failing tests for findBrokenLinks (TDD RED phase)](../../commit/8ec6319)
+- [🔴 test: add failing test for updateCommandCatalog isolation (TDD RED)](../../commit/e8e89c5)
+- [🔴 test: add failing tests for tdd.js framework detection (TDD RED)](../../commit/7c91aa3)
+- [🔴 test: add failing tests for learn.js functions (TDD RED)](../../commit/e8f1507)
+- [🔴 test: add failing tests for formatBytes and estimateTokens (TDD RED)](../../commit/621c638)
+- [🔴 test: add failing tests for findBrokenLinks (TDD RED phase)](../../commit/8eca9f9)
+
+## Analytics Tracking
+
+Simple Analytics tracking is configured in `docs/source/conf.py` using the `html_js_files` configuration. The tracking script is automatically included in all Sphinx-generated HTML pages.

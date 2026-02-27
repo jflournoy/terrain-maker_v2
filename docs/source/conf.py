@@ -65,3 +65,8 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
 }
+
+# Simple Analytics tracking
+html_js_files = [
+    ('https://scripts.simpleanalyticscdn.com/latest.js', {'async': 'async'}),
+]

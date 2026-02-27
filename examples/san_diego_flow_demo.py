@@ -361,6 +361,11 @@ def main():
         default=None,
         help="Min size (cells) to be considered an endorheic basin. Default: adaptive (1/1000 of total cells).",
     )
+    parser.add_argument(
+        "--no-detect-basins",
+        action="store_true",
+        help="Disable automatic endorheic basin detection and preservation (allows flow through Salton Sea, etc.)",
+    )
     args = parser.parse_args()
 
     # Convert stream-top-percent to internal percentile representation
@@ -622,8 +627,8 @@ def main():
         max_breach_depth=args.max_breach_depth if args.breach else 0.0,
         max_breach_length=args.max_breach_length if args.breach else 0,
         parallel_method=args.parallel_method,
-        # Basin preservation (configurable via --min-basin-depth and --min-basin-size)
-        detect_basins=True,       # Automatically detect and preserve endorheic basins
+        # Basin preservation (configurable via --min-basin-depth, --min-basin-size, --no-detect-basins)
+        detect_basins=not args.no_detect_basins,  # Auto-detect and preserve endorheic basins (disable with --no-detect-basins)
         min_basin_size=args.min_basin_size,  # None = adaptive (1/1000 of total cells)
         min_basin_depth=args.min_basin_depth,  # Require significant depth to avoid small depressions
         # Precipitation upscaling (ESRGAN before ocean masking)
@@ -939,11 +944,18 @@ def main():
     dem_crs = metadata.get("crs", "EPSG:4326")
     terrain = Terrain(dem, transform, dem_crs=dem_crs)
 
-    # Add transforms: reproject to UTM, flip, scale, downsample
-    terrain.add_transform(reproject_raster("EPSG:4326", "EPSG:32611", num_threads=4))
+    # Add transforms: optimized reproject + downsample, flip, scale
+    dem_h, dem_w = dem.shape
+    zoom_factor = np.sqrt(args.target_vertices / (dem_h * dem_w))
+
+    # Combined downsampling + reprojection (saves 40-50s on large DEMs)
+    terrain.add_transform(downsample_then_reproject(
+        src_crs="EPSG:4326",
+        dst_crs="EPSG:32611",
+        downsample_zoom_factor=zoom_factor,
+    ))
     terrain.add_transform(flip_raster(axis="horizontal"))
     terrain.add_transform(scale_elevation(scale_factor=0.0001))
-    terrain.configure_for_target_vertices(args.target_vertices, method="average")
 
     # Add flow accumulation results as data layers
     print("Adding flow data layers...")

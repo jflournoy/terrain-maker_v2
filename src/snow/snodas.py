@@ -7,6 +7,9 @@ NOAA SNODAS (Snow Data Assimilation System) snow depth data.
 Pipeline steps:
 - batch_process_snodas_data: Load and reproject SNODAS files
 - calculate_snow_statistics: Compute aggregated snow statistics
+
+High-level orchestration:
+- load_snodas_stats: Complete pipeline with tiling, caching, and mock fallback
 """
 
 import gzip
@@ -473,6 +476,8 @@ def calculate_snow_statistics(
         running_max = None
         running_sum = None
         running_sum_sq = None
+        running_snow_sum = None      # sum of depth on snow-days only
+        running_snow_sum_sq = None   # sum of squared depth on snow-days only
         snow_days = None
         N_successful = 0
 
@@ -492,16 +497,22 @@ def calculate_snow_statistics(
                     filled = data.filled(0.0).astype(np.float64)
                     running_sum = filled.copy()
                     running_sum_sq = filled**2
-                    snow_days = (data > 0).astype(np.int32)
+                    snow_mask = filled > 0
+                    snow_days = snow_mask.astype(np.int32)
+                    running_snow_sum = np.where(snow_mask, filled, 0.0)
+                    running_snow_sum_sq = np.where(snow_mask, filled**2, 0.0)
                 else:
                     # update maximum
                     running_max = np.maximum(running_max, data)
-                    # update sum & sum of squares
+                    # update sum & sum of squares (all days, for interseason CV)
                     filled = data.filled(0.0).astype(np.float64)
                     running_sum += filled
                     running_sum_sq += filled**2
-                    # update snow-days count
-                    snow_days += (data > 0).astype(np.int32)
+                    # update snow-day accumulators (snow-days only, for intraseason CV)
+                    snow_mask = filled > 0
+                    snow_days += snow_mask.astype(np.int32)
+                    running_snow_sum += np.where(snow_mask, filled, 0.0)
+                    running_snow_sum_sq += np.where(snow_mask, filled**2, 0.0)
                 N_successful += 1
                 if metadata is None:
                     metadata = meta
@@ -530,11 +541,26 @@ def calculate_snow_statistics(
             f"max {running_max.shape}, mean {mean_depth.shape}, std {std_depth.shape}"
         )
 
-        logger.debug(f"Computing cv_depth for season {season}")
+        # Intraseason CV: computed on snow-days only to avoid contamination from
+        # zero-depth shoulder-season days, which inflate CV by pulling the mean
+        # down while std captures the full seasonal arc (0 -> peak -> 0).
+        # Result: CV measures within-season depth stability when snow is present.
+        logger.debug(f"Computing intraseason cv_depth for season {season}")
         with np.errstate(divide="ignore", invalid="ignore"):
-            cv_depth = stats_dict["std_depth"] / stats_dict["mean_depth"]
-            # Replace NaN/Inf with 0 for areas with no snow (mean_depth ~ 0)
-            # These areas have no meaningful variability to measure
+            snow_day_count = snow_days.astype(np.float64)
+            mean_snow_depth = np.where(
+                snow_day_count > 0, running_snow_sum / snow_day_count, 0.0
+            )
+            # Clamp variance to >=0 to guard against floating-point underflow
+            var_snow_depth = np.where(
+                snow_day_count > 1,
+                np.maximum(running_snow_sum_sq / snow_day_count - mean_snow_depth**2, 0.0),
+                0.0,
+            )
+            std_snow_depth = np.sqrt(var_snow_depth)
+            cv_depth = np.where(
+                mean_snow_depth > 0, std_snow_depth / mean_snow_depth, 0.0
+            )
             cv_depth = np.where(np.isfinite(cv_depth), cv_depth, 0.0)
             stats_dict["cv_depth"] = cv_depth
 
@@ -589,3 +615,101 @@ def calculate_snow_statistics(
     final_stats["failed_files"] = failed_files
 
     return final_stats
+
+
+def load_snodas_stats(
+    terrain=None,
+    snodas_dir: Optional[Path] = None,
+    *,
+    cache_dir: Path = Path("snodas_cache"),
+    cache_name: str = "snodas",
+    tile_config=None,
+    mock_data: bool = False,
+    mock_shape: tuple = (500, 500),
+) -> Dict[str, np.ndarray]:
+    """Load SNODAS snow statistics with automatic tiling, caching, and mock fallback.
+
+    Orchestrates the standard SNODAS pipeline:
+    1. batch_process_snodas_data (load and reproject)
+    2. calculate_snow_statistics (aggregate seasonal stats)
+
+    Uses GriddedDataLoader for memory-safe tiled processing. Falls back to
+    mock data when real data is unavailable or loading fails.
+
+    Args:
+        terrain: Terrain object providing extent and resolution context.
+            Required for real data; can be None with mock_data=True.
+        snodas_dir: Directory containing SNODAS .dat.gz files.
+        cache_dir: Directory for pipeline caching.
+        cache_name: Base name for cache files.
+        tile_config: Optional TiledDataConfig for memory-safe processing.
+            If None, uses GriddedDataLoader defaults.
+        mock_data: If True, return mock data without attempting real loading.
+        mock_shape: Shape for mock data arrays.
+
+    Returns:
+        Dict with snow statistics arrays:
+        - median_max_depth: Median of seasonal max depths (mm)
+        - mean_snow_day_ratio: Average fraction of days with snow
+        - interseason_cv: Year-to-year variability
+        - mean_intraseason_cv: Within-winter variability
+    """
+    from src.terrain.gridded_data import (
+        GriddedDataLoader,
+        create_mock_snow_data,
+    )
+
+    if mock_data:
+        logger.info("Using mock snow data")
+        return create_mock_snow_data(mock_shape)
+
+    # Validate prerequisites for real data
+    can_load = True
+    if not snodas_dir:
+        logger.warning("No SNODAS directory specified")
+        can_load = False
+    elif not Path(snodas_dir).exists():
+        logger.warning("SNODAS directory not found: %s", snodas_dir)
+        can_load = False
+    if not terrain:
+        logger.warning("Terrain object not available for SNODAS processing")
+        can_load = False
+
+    if not can_load:
+        logger.info("Falling back to mock data")
+        return create_mock_snow_data(mock_shape)
+
+    try:
+        logger.info("Loading real SNODAS data from: %s", snodas_dir)
+
+        pipeline = [
+            ("load_snodas", batch_process_snodas_data, {}),
+            ("compute_stats", calculate_snow_statistics, {}),
+        ]
+
+        loader_kwargs: Dict[str, Any] = {
+            "terrain": terrain,
+            "cache_dir": cache_dir,
+        }
+        if tile_config is not None:
+            loader_kwargs["tile_config"] = tile_config
+
+        loader = GriddedDataLoader(**loader_kwargs)
+        result = loader.run_pipeline(
+            data_source=snodas_dir,
+            pipeline=pipeline,
+            cache_name=cache_name,
+        )
+
+        snow_stats = {
+            k: v for k, v in result.items()
+            if k not in ("metadata", "failed_files")
+        }
+        failed = result.get("failed_files", [])
+        logger.info("Loaded SNODAS data (%d files failed)", len(failed))
+        return snow_stats
+
+    except Exception as e:
+        logger.warning("Failed to load SNODAS data: %s", e)
+        logger.info("Falling back to mock data")
+        return create_mock_snow_data(mock_shape)

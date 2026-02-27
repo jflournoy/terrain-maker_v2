@@ -453,17 +453,17 @@ Explore how we use our own tools in practice. Each example demonstrates a key pr
 
 #### Simplification & Token Efficiency
 
-- [feat: remove all detailed command variants for token efficiency](../../commit/0e46070) — Less is more
-- [feat: remove 3 more complex maintenance commands](../../commit/993dd82) — Ruthless simplification
-- [refactor: remove script tests in favor of utility testing](../../commit/18f164d) — Focus testing effort
+- [feat: remove all detailed command variants for token efficiency](../../commit/938fd09) — Less is more
+- [feat: remove 3 more complex maintenance commands](../../commit/f69d8e2) — Ruthless simplification
+- [refactor: remove script tests in favor of utility testing](../../commit/03001e4) — Focus testing effort
 
 #### Architecture & Design
 
-- [feat: rewrite setup.js with intelligent conflict handling](../../commit/3adfa17) — Smart automation
-- [feat: add repo-quality-auditor agent for comprehensive quality analysis](../../commit/e498add) — Agent vs command pattern
-- [refactor: migrate to GitHub Issues for task management](../../commit/bac950b) — Modern workflow
+- [feat: rewrite setup.js with intelligent conflict handling](../../commit/94aa977) — Smart automation
+- [feat: add repo-quality-auditor agent for comprehensive quality analysis](../../commit/1a2b2fb) — Agent vs command pattern
+- [refactor: migrate to GitHub Issues for task management](../../commit/de7ca65) — Modern workflow
 
 #### Continuous Improvement
 
-- [fix: update docs script to count all commands recursively](../../commit/30f57e8) — Iterative refinement
-- [docs: add critical instruction to always use date command](../../commit/33b2c2f) — Learning from mistakes
+- [fix: update docs script to count all commands recursively](../../commit/50afdcc) — Iterative refinement
+- [docs: add critical instruction to always use date command](../../commit/a207133) — Learning from mistakes

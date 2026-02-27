@@ -1800,6 +1800,162 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -85.9823291,
+          43.0249716
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422491"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9831198,
+          43.0183449
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422494"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9821058,
+          43.0220545
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422497"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9840963,
+          43.016956
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422498"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9840531,
+          43.0173169
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422499"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9842817,
+          43.0184628
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422501"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9852204,
+          43.0172141
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422502"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9849793,
+          43.0183643
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422504"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9852419,
+          43.0188164
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422506"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9860011,
+          43.0213801
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422507"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9839357,
+          43.0200674
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422508"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9853519,
+          43.0174318
+        ]
+      },
+      "properties": {
+        "name": "Trail_194422509"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -79.5032117,
           46.3425403
         ]
@@ -1969,6 +2125,32 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -79.7942536,
+          39.6461465
+        ]
+      },
+      "properties": {
+        "name": "Headwaters Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.8042686,
+          39.6513858
+        ]
+      },
+      "properties": {
+        "name": "Advanced Ski Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -87.9219317,
           42.2667614
         ]
@@ -2027,6 +2209,71 @@
       },
       "properties": {
         "name": "Hedrick Road"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3442523,
+          46.835076
+        ]
+      },
+      "properties": {
+        "name": "Belleau Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2701122,
+          46.8095491
+        ]
+      },
+      "properties": {
+        "name": "Trappers Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3442834,
+          46.8079884
+        ]
+      },
+      "properties": {
+        "name": "Jackrabbit Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3187975,
+          46.8002325
+        ]
+      },
+      "properties": {
+        "name": "Peterson Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3289907,
+          46.819524
+        ]
+      },
+      "properties": {
+        "name": "Evans Lake Trail"
       }
     },
     {
@@ -2131,6 +2378,19 @@
       },
       "properties": {
         "name": "Lookout Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.7939635,
+          39.649976
+        ]
+      },
+      "properties": {
+        "name": "Intermediate Ski Trail"
       }
     },
     {
@@ -2481,7 +2741,7 @@
         ]
       },
       "properties": {
-        "name": "Coldwater Creek Extension"
+        "name": "Coldwater Creek"
       }
     },
     {
@@ -2494,7 +2754,7 @@
         ]
       },
       "properties": {
-        "name": "Fish Hatchery Extension"
+        "name": "Fish Hatchery"
       }
     },
     {
@@ -2503,7 +2763,7 @@
         "type": "Point",
         "coordinates": [
           -88.5927099,
-          42.820086
+          42.8200735
         ]
       },
       "properties": {
@@ -2515,8 +2775,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5972062,
-          42.815819
+          -88.5972197,
+          42.8158231
         ]
       },
       "properties": {
@@ -3698,6 +3958,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -79.8672481,
+          39.6279493
+        ]
+      },
+      "properties": {
+        "name": "Reservoir Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -88.3873404,
           43.0329076
         ]
@@ -3756,6 +4029,19 @@
       },
       "properties": {
         "name": "South Shore Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.191998,
+          42.8199167
+        ]
+      },
+      "properties": {
+        "name": "Trail_368876351"
       }
     },
     {
@@ -3919,6 +4205,32 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -79.4925956,
+          39.1128197
+        ]
+      },
+      "properties": {
+        "name": "Spudder Track"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.5124669,
+          39.1028247
+        ]
+      },
+      "properties": {
+        "name": "Cherry Lane Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -83.363929,
           42.1268601
         ]
@@ -3951,6 +4263,19 @@
       },
       "properties": {
         "name": "Cross Country Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.5283024,
+          39.1004202
+        ]
+      },
+      "properties": {
+        "name": "Lindy Point Trail"
       }
     },
     {
@@ -4101,7 +4426,7 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -81.5658229,
+          -81.5656368,
           41.2641935
         ]
       },
@@ -4432,6 +4757,19 @@
       },
       "properties": {
         "name": "Sweetwater Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.9830848,
+          37.5343977
+        ]
+      },
+      "properties": {
+        "name": "Lake Shore Trail"
       }
     },
     {
@@ -5011,6 +5349,32 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -80.9870121,
+          37.5357408
+        ]
+      },
+      "properties": {
+        "name": "Cottage Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.9887251,
+          37.5327062
+        ]
+      },
+      "properties": {
+        "name": "Turkey Spur Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -88.3822521,
           42.1841107
         ]
@@ -5030,6 +5394,32 @@
       },
       "properties": {
         "name": "Trail_554744627"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.990529,
+          37.5304925
+        ]
+      },
+      "properties": {
+        "name": "South Side Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.9864343,
+          37.5292903
+        ]
+      },
+      "properties": {
+        "name": "Lake View Trail"
       }
     },
     {
@@ -5420,6 +5810,19 @@
       },
       "properties": {
         "name": "Valley Spur Bike Loop 3 & 4 (W)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.59577,
+          42.8205476
+        ]
+      },
+      "properties": {
+        "name": "Purple Shortcut"
       }
     },
     {
@@ -6103,6 +6506,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -79.4912779,
+          39.1022166
+        ]
+      },
+      "properties": {
+        "name": "Stemwinder Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -83.1985964,
           40.1577876
         ]
@@ -6473,6 +6889,32 @@
       },
       "properties": {
         "name": "Ski Brule"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1298465,
+          39.6280929
+        ]
+      },
+      "properties": {
+        "name": "Turnpike Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1321113,
+          39.6274847
+        ]
+      },
+      "properties": {
+        "name": "Hemlock Trail"
       }
     },
     {
@@ -6915,6 +7357,721 @@
       },
       "properties": {
         "name": "Skate-Ski Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1898715,
+          42.8241132
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226654"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1872745,
+          42.824688
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226655"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1872733,
+          42.8250818
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226656"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1855829,
+          42.8232886
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226657"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.185301,
+          42.8248688
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226658"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1878695,
+          42.8246285
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226660"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1969603,
+          42.8220019
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226662"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1935243,
+          42.8205387
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226663"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1905044,
+          42.8200052
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226664"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1902906,
+          42.8213968
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226665"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1907384,
+          42.8219729
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226666"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1884303,
+          42.8223564
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226668"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1879483,
+          42.8205033
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226669"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1867465,
+          42.8242077
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226670"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1879154,
+          42.8245189
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226671"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1878844,
+          42.8237361
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226672"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1891408,
+          42.8225395
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226673"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1892402,
+          42.8237144
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226674"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1932724,
+          42.8227523
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226675"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1952481,
+          42.8211976
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226676"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1928913,
+          42.8195614
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226677"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1895839,
+          42.8189974
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226678"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.187111,
+          42.8179231
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226679"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1863496,
+          42.8176461
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226680"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1847485,
+          42.8172326
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226681"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1848915,
+          42.8173219
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226682"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.186424,
+          42.8180105
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226685"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.182953,
+          42.8177658
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226687"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1805327,
+          42.8183306
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226689"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1787105,
+          42.8178019
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226691"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1784737,
+          42.8212144
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226693"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1784997,
+          42.8214738
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226694"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1782685,
+          42.8233546
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226695"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1793812,
+          42.8232022
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226696"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1796123,
+          42.8224443
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226697"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1807573,
+          42.8235014
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226698"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1829134,
+          42.82376
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226699"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1856291,
+          42.8240265
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226700"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1852312,
+          42.8237269
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226701"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1867671,
+          42.8235642
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226702"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1850053,
+          42.8241117
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226703"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1846855,
+          42.8245834
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226704"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1830762,
+          42.8248612
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226705"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1837627,
+          42.8249876
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226706"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1788405,
+          42.8211368
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226709"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.179813,
+          42.8209051
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226711"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1809801,
+          42.8221857
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226712"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1861694,
+          42.8226377
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226713"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1844515,
+          42.8234509
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226714"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1780038,
+          42.817739
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226715"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1792111,
+          42.8208357
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226717"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1783832,
+          42.8193076
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226720"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1854033,
+          42.8244992
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226724"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1814184,
+          42.8253552
+        ]
+      },
+      "properties": {
+        "name": "Trail_861226725"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1799093,
+          42.8208006
+        ]
+      },
+      "properties": {
+        "name": "Trail_861236566"
       }
     },
     {
@@ -9704,6 +10861,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -86.1804926,
+          42.8171589
+        ]
+      },
+      "properties": {
+        "name": "Trail_942263592"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -88.3351501,
           41.9219385
         ]
@@ -9770,7 +10940,7 @@
         "type": "Point",
         "coordinates": [
           -83.1247575,
-          42.714406
+          42.7143934
         ]
       },
       "properties": {
@@ -10472,7 +11642,7 @@
         "type": "Point",
         "coordinates": [
           -84.2881937,
-          46.5822566
+          46.5820647
         ]
       },
       "properties": {
@@ -10523,8 +11693,21 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -84.2531772,
-          46.598845
+          -84.2937326,
+          46.5680123
+        ]
+      },
+      "properties": {
+        "name": "Coldwater Creek Extension"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2524083,
+          46.5983839
         ]
       },
       "properties": {
@@ -10549,8 +11732,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -84.2364502,
-          46.6054801
+          -84.2368563,
+          46.60542
         ]
       },
       "properties": {
@@ -12331,7 +13514,7 @@
         "type": "Point",
         "coordinates": [
           -78.1291414,
-          44.626625
+          44.6268369
         ]
       },
       "properties": {
@@ -13045,8 +14228,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -78.13136,
-          44.621515
+          -78.1318,
+          44.621405
         ]
       },
       "properties": {
@@ -13461,7 +14644,7 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -84.376064,
+          -84.3755594,
           46.5766461
         ]
       },
@@ -13643,6 +14826,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -84.3476745,
+          46.7770485
+        ]
+      },
+      "properties": {
+        "name": "McGuffin Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -84.6634984,
           44.9549229
         ]
@@ -13766,6 +14962,19 @@
       },
       "properties": {
         "name": "West Ridge Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3470406,
+          46.7831725
+        ]
+      },
+      "properties": {
+        "name": "Stokely Roth Trail"
       }
     },
     {
@@ -14098,6 +15307,71 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -84.3150704,
+          46.8121194
+        ]
+      },
+      "properties": {
+        "name": "Sayer Creek"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.32414,
+          46.81541
+        ]
+      },
+      "properties": {
+        "name": "Sayer Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3359597,
+          46.7939966
+        ]
+      },
+      "properties": {
+        "name": "Eva's Way"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3194304,
+          46.8053311
+        ]
+      },
+      "properties": {
+        "name": "Cora's Crossing"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3256712,
+          46.8032214
+        ]
+      },
+      "properties": {
+        "name": "Hannes' Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -78.1325844,
           44.6195054
         ]
@@ -14124,6 +15398,71 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -84.3414004,
+          46.7980174
+        ]
+      },
+      "properties": {
+        "name": "Tier Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3368741,
+          46.8110966
+        ]
+      },
+      "properties": {
+        "name": "Walker Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3355162,
+          46.7954344
+        ]
+      },
+      "properties": {
+        "name": "Peterson Homerun Connector"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3508192,
+          46.7863433
+        ]
+      },
+      "properties": {
+        "name": "Stokely Access Road"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3430068,
+          46.7910508
+        ]
+      },
+      "properties": {
+        "name": "Homerun Hill"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -78.7379437,
           46.3648685
         ]
@@ -14143,6 +15482,149 @@
       },
       "properties": {
         "name": "Leaf Lake Ski Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3333566,
+          46.7886925
+        ]
+      },
+      "properties": {
+        "name": "Erling Strom Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3375241,
+          46.7880519
+        ]
+      },
+      "properties": {
+        "name": "King Mountain Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3272883,
+          46.7816267
+        ]
+      },
+      "properties": {
+        "name": "Hakon Lien Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.33925,
+          46.806438
+        ]
+      },
+      "properties": {
+        "name": "Walker Lake Return"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3199657,
+          46.8227652
+        ]
+      },
+      "properties": {
+        "name": "Interlochen"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.30917,
+          46.82365
+        ]
+      },
+      "properties": {
+        "name": "North Sayer Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.287945,
+          46.815107
+        ]
+      },
+      "properties": {
+        "name": "Bas' Bypass"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3703139,
+          46.8144132
+        ]
+      },
+      "properties": {
+        "name": "Lapointe Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3602776,
+          46.8209315
+        ]
+      },
+      "properties": {
+        "name": "Sam Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3372106,
+          46.7989014
+        ]
+      },
+      "properties": {
+        "name": "Dustin"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3280037,
+          46.7992545
+        ]
+      },
+      "properties": {
+        "name": "Julie's Trail"
       }
     },
     {
@@ -14384,8 +15866,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5921063,
-          42.8211165
+          -88.5920079,
+          42.8211102
         ]
       },
       "properties": {
@@ -14788,7 +16270,7 @@
         "type": "Point",
         "coordinates": [
           -85.2460018,
-          45.3349716
+          45.3348754
         ]
       },
       "properties": {
@@ -14858,6 +16340,58 @@
       },
       "properties": {
         "name": "Trail_1079339829"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1407318,
+          39.6197357
+        ]
+      },
+      "properties": {
+        "name": "Dynamite Shack Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1344108,
+          39.6206642
+        ]
+      },
+      "properties": {
+        "name": "Dog Leg Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1284261,
+          39.6256216
+        ]
+      },
+      "properties": {
+        "name": "Acorn Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.1233033,
+          39.6285148
+        ]
+      },
+      "properties": {
+        "name": "Cabin Loop"
       }
     },
     {
@@ -15008,8 +16542,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -86.3003775,
-          41.9518497
+          -86.3002622,
+          41.9516402
         ]
       },
       "properties": {
@@ -15208,7 +16742,7 @@
         ]
       },
       "properties": {
-        "name": "Adam Scott Heritage W2-W1"
+        "name": "MUT connector W2-W1"
       }
     },
     {
@@ -15261,6 +16795,32 @@
       },
       "properties": {
         "name": "Red Fox W1-T9"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3485185,
+          46.7870456
+        ]
+      },
+      "properties": {
+        "name": "Trail_1122817143"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3047507,
+          46.8140898
+        ]
+      },
+      "properties": {
+        "name": "Pyykonen Pass"
       }
     },
     {
@@ -15723,8 +17283,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -80.4917402,
-          43.4810363
+          -80.4918926,
+          43.4809105
         ]
       },
       "properties": {
@@ -15736,8 +17296,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -80.4930244,
-          43.4812162
+          -80.4930956,
+          43.4812869
         ]
       },
       "properties": {
@@ -16067,6 +17627,45 @@
       },
       "properties": {
         "name": "Trail_1196653856"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -79.5030638,
+          39.104101
+        ]
+      },
+      "properties": {
+        "name": "Red Spruce Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1876424,
+          42.8186879
+        ]
+      },
+      "properties": {
+        "name": "Trail_1209862097"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1835751,
+          42.8181994
+        ]
+      },
+      "properties": {
+        "name": "Trail_1209862098"
       }
     },
     {
@@ -16561,6 +18160,19 @@
       },
       "properties": {
         "name": "Trail_1237098122"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.6005176,
+          42.8210858
+        ]
+      },
+      "properties": {
+        "name": "Trail_1238653680"
       }
     },
     {
@@ -18128,6 +19740,45 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -86.1845454,
+          42.8249089
+        ]
+      },
+      "properties": {
+        "name": "Trail_1285234425"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1797713,
+          42.8192322
+        ]
+      },
+      "properties": {
+        "name": "Trail_1285234426"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1780752,
+          42.8175562
+        ]
+      },
+      "properties": {
+        "name": "Trail_1285234427"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -86.7081611,
           46.3562347
         ]
@@ -18492,6 +20143,19 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -84.3296174,
+          46.7771355
+        ]
+      },
+      "properties": {
+        "name": "Lower Taylor"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -80.9629427,
           46.4284114
         ]
@@ -18537,6 +20201,97 @@
       },
       "properties": {
         "name": "Oh Deer"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2850255,
+          46.5836913
+        ]
+      },
+      "properties": {
+        "name": "Trail_1327888767"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2895128,
+          46.5819681
+        ]
+      },
+      "properties": {
+        "name": "Easier"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3733861,
+          46.8107653
+        ]
+      },
+      "properties": {
+        "name": "Trail_1328162566"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3380144,
+          46.7939438
+        ]
+      },
+      "properties": {
+        "name": "Trail_1328162576"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2687892,
+          46.8178312
+        ]
+      },
+      "properties": {
+        "name": "Pickard Lake Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3090825,
+          46.7727129
+        ]
+      },
+      "properties": {
+        "name": "Robertson Cliffs"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3067059,
+          46.7759975
+        ]
+      },
+      "properties": {
+        "name": "Trail_1328188163"
       }
     },
     {
@@ -18687,25 +20442,12 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -86.3087059,
-          41.9511161
+          -86.3093525,
+          41.9515766
         ]
       },
       "properties": {
         "name": "Love Creek Valley Loop"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -86.3067825,
-          41.9516255
-        ]
-      },
-      "properties": {
-        "name": "Cabin Loop"
       }
     },
     {
@@ -18726,19 +20468,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -86.299829,
-          41.9536498
-        ]
-      },
-      "properties": {
-        "name": "Trail_1340395382"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -86.3040029,
           41.9529656
         ]
@@ -18752,8 +20481,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -86.3067723,
-          41.9542077
+          -86.306932,
+          41.9537331
         ]
       },
       "properties": {
@@ -18765,12 +20494,12 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -86.3085592,
+          -86.3087982,
           41.9530746
         ]
       },
       "properties": {
-        "name": "Johanna's Woods Loop"
+        "name": "Joanna's Wood Loop"
       }
     },
     {
@@ -18843,12 +20572,38 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -80.9939045,
+          37.5335167
+        ]
+      },
+      "properties": {
+        "name": "North Side Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -78.1050181,
           44.6393064
         ]
       },
       "properties": {
         "name": "MUT Connector"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -78.1044151,
+          44.6348143
+        ]
+      },
+      "properties": {
+        "name": "MUT Connector to L12"
       }
     },
     {
@@ -19278,19 +21033,6 @@
       },
       "properties": {
         "name": "Trail_1351229557"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -84.7029966,
-          44.7852037
-        ]
-      },
-      "properties": {
-        "name": "Homerun Hill"
       }
     },
     {
@@ -20169,6 +21911,58 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -84.24112,
+          46.6039716
+        ]
+      },
+      "properties": {
+        "name": "Trail_1453117064"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2920144,
+          46.5648861
+        ]
+      },
+      "properties": {
+        "name": "Wishart Park Connector Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2909923,
+          46.5658221
+        ]
+      },
+      "properties": {
+        "name": "Trail_1453235377"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2930486,
+          46.5660025
+        ]
+      },
+      "properties": {
+        "name": "Trail_1453235378"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -88.0315535,
           42.9224539
         ]
@@ -20949,6 +22743,396 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
+          -86.3097873,
+          41.9524912
+        ]
+      },
+      "properties": {
+        "name": "Trail_1463566448"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3165488,
+          46.8076209
+        ]
+      },
+      "properties": {
+        "name": "Stokely Creek Lodge"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3425482,
+          46.7784409
+        ]
+      },
+      "properties": {
+        "name": "Roth Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2917406,
+          46.5813462
+        ]
+      },
+      "properties": {
+        "name": "Trail_1466592265"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2929501,
+          46.5664911
+        ]
+      },
+      "properties": {
+        "name": "Trail_1466592269"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2935717,
+          46.5666866
+        ]
+      },
+      "properties": {
+        "name": "Trail_1466592272"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.4884683,
+          43.4816366
+        ]
+      },
+      "properties": {
+        "name": "Trail_1467880863"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.4885267,
+          43.4812601
+        ]
+      },
+      "properties": {
+        "name": "Trail_1467880864"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.4903942,
+          43.4813851
+        ]
+      },
+      "properties": {
+        "name": "Trail_1467880865"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -80.4897964,
+          43.4816898
+        ]
+      },
+      "properties": {
+        "name": "Trail_1467880866"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.3019384,
+          41.951156
+        ]
+      },
+      "properties": {
+        "name": "Trail_1467913693"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9823574,
+          43.0161725
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468766095"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -85.9823129,
+          43.0222264
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468766096"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1915606,
+          42.8213186
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792682"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1896893,
+          42.8215613
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792683"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1826456,
+          42.8233428
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792684"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1805625,
+          42.8242314
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792685"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1809293,
+          42.8252513
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792686"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1797833,
+          42.8198795
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792687"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1811976,
+          42.8198656
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792688"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -86.1788457,
+          42.8183895
+        ]
+      },
+      "properties": {
+        "name": "Trail_1468792690"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.38213,
+          46.78162
+        ]
+      },
+      "properties": {
+        "name": "Popsicle Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.386375,
+          46.7803814
+        ]
+      },
+      "properties": {
+        "name": "Popsicle"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.3904065,
+          46.7765492
+        ]
+      },
+      "properties": {
+        "name": "Core Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.4878,
+          46.624675
+        ]
+      },
+      "properties": {
+        "name": "White Pine Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.48312,
+          46.641135
+        ]
+      },
+      "properties": {
+        "name": "Maple Loop Access"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.48485,
+          46.640045
+        ]
+      },
+      "properties": {
+        "name": "Maple Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.4783,
+          46.632365
+        ]
+      },
+      "properties": {
+        "name": "Ironwood Loop"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.48567,
+          46.631935
+        ]
+      },
+      "properties": {
+        "name": "Basswood Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.7826995,
+          43.9588459
+        ]
+      },
+      "properties": {
+        "name": "Snow Snake Ski Resort"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
           -85.4605529,
           44.7277211
         ]
@@ -21586,19 +23770,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -78.11106,
-          44.63086
-        ]
-      },
-      "properties": {
-        "name": "Adam Scott Heritage Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -78.12248,
           44.629805
         ]
@@ -21703,45 +23874,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -79.5283024,
-          39.1004202
-        ]
-      },
-      "properties": {
-        "name": "Lindy Point Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -79.4912779,
-          39.1022166
-        ]
-      },
-      "properties": {
-        "name": "Stemwinder Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -79.4970588,
-          39.1045081
-        ]
-      },
-      "properties": {
-        "name": "Red Spruce Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -79.5057059,
           39.1048162
         ]
@@ -21800,19 +23932,6 @@
       },
       "properties": {
         "name": "Yellow Birch Trail"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          -79.5124669,
-          39.1028247
-        ]
-      },
-      "properties": {
-        "name": "Cherry Lane Trail"
       }
     },
     {
@@ -21885,19 +24004,6 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          -88.5981918,
-          42.8202971
-        ]
-      },
-      "properties": {
-        "name": "Brown Loop"
-      }
-    },
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
           -88.1899076,
           42.9796783
         ]
@@ -21917,6 +24023,19 @@
       },
       "properties": {
         "name": "Prairie Trails"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -88.1068384,
+          43.7493912
+        ]
+      },
+      "properties": {
+        "name": "Brown Loop"
       }
     },
     {
@@ -22029,7 +24148,7 @@
         "type": "Point",
         "coordinates": [
           -86.3006779,
-          41.9534611
+          41.9536047
         ]
       },
       "properties": {
@@ -22268,6 +24387,45 @@
       },
       "properties": {
         "name": "Skate Ski Trail"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.3452848,
+          46.7817744
+        ]
+      },
+      "properties": {
+        "name": "Roth"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.29195,
+          46.5661739
+        ]
+      },
+      "properties": {
+        "name": "Wishart Park"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -84.2868368,
+          46.5924498
+        ]
+      },
+      "properties": {
+        "name": "Farmer Bob's Loop"
       }
     }
   ]

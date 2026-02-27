@@ -255,25 +255,14 @@ def create_terrain_with_score(
     # Build transform pipeline: geographic transforms + downsampling
     logger.debug(f"  Building transform pipeline for {name}...")
 
-    # 1. Reproject to UTM Zone 17N for proper geographic scaling
-    # Use dem_crs as source CRS (typically EPSG:4326 for real data)
-    utm_reproject = reproject_raster(src_crs=dem_crs, dst_crs="EPSG:32617", num_threads=4)
-    terrain.add_transform(utm_reproject)
-
-    # 2. Flip raster horizontally to correct orientation
-    terrain.add_transform(flip_raster(axis="horizontal"))
-
-    # 3. Scale elevation to prevent extreme Z values
-    terrain.add_transform(scale_elevation(scale_factor=0.0001))
-
-    # 4. Configure downsampling BEFORE apply_transforms() so it's included in the pipeline
+    # 1. Optimized reproject + downsample: combines both operations for 40-50s savings
     zoom_factor = 1.0
     if target_vertices is not None:
         original_h, original_w = terrain.dem_shape
         original_vertices = original_h * original_w
 
         if original_vertices > target_vertices:
-            zoom_factor = terrain.configure_for_target_vertices(target_vertices, method="average")
+            zoom_factor = np.sqrt(target_vertices / original_vertices)
             logger.info(
                 f"Downsampling {name}: {original_vertices:,} → ~{target_vertices:,} vertices "
                 f"(zoom={zoom_factor:.6f})"
@@ -282,6 +271,25 @@ def create_terrain_with_score(
             logger.debug(
                 f"No downsampling needed for {name}: {original_vertices:,} ≤ {target_vertices:,}"
             )
+
+    # Add optimized downsampling + reprojection
+    if zoom_factor < 1.0:
+        # Combined operation saves ~40-50s on large DEMs by avoiding full-resolution reproject
+        terrain.add_transform(downsample_then_reproject(
+            src_crs=dem_crs,
+            dst_crs="EPSG:32617",
+            downsample_zoom_factor=zoom_factor,
+        ))
+    else:
+        # No downsampling needed, use standard reproject
+        utm_reproject = reproject_raster(src_crs=dem_crs, dst_crs="EPSG:32617", num_threads=4)
+        terrain.add_transform(utm_reproject)
+
+    # 2. Flip raster horizontally to correct orientation
+    terrain.add_transform(flip_raster(axis="horizontal"))
+
+    # 3. Scale elevation to prevent extreme Z values
+    terrain.add_transform(scale_elevation(scale_factor=0.0001))
 
     # 5. Apply transforms to DEM only first (reproject + flip + scale + downsample)
     logger.debug(f"  Applying transforms to DEM...")

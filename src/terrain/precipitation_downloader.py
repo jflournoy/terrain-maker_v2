@@ -39,6 +39,14 @@ DATASETS = {
         "description": "Global climate data (covers USA, Mexico, and worldwide)",
         "coverage": "Global",
     },
+    "worldclim_30s": {
+        "name": "WorldClim 30-second",
+        "resolution": "1km (30 arc-seconds)",
+        "temporal_coverage": "1970-2000",
+        "url": "https://www.worldclim.org",
+        "description": "High-resolution global climate data (~1km). Download is ~1GB.",
+        "coverage": "Global",
+    },
     "chelsa": {
         "name": "CHELSA",
         "resolution": "1km (30 arc-seconds)",
@@ -120,6 +128,11 @@ def download_precipitation(
             data, transform = download_real_worldclim_annual(bbox, output_dir=str(output_path))
         else:
             data, transform = _create_synthetic_precipitation(bbox)
+    elif dataset == "worldclim_30s":
+        if use_real_data:
+            data, transform = download_real_worldclim_30s_annual(bbox, output_dir=str(output_path))
+        else:
+            data, transform = _create_synthetic_precipitation(bbox, resolution=1/120)  # 30 arc-seconds
     elif dataset == "chelsa":
         # Stub for CHELSA (would implement actual download)
         data, transform = _create_synthetic_precipitation(bbox)
@@ -236,6 +249,206 @@ def download_real_worldclim_annual(
         raise Exception(f"Network error downloading WorldClim data: {e}") from e
     except Exception as e:
         raise Exception(f"Failed to download WorldClim data: {e}") from e
+
+
+def download_real_worldclim_30s_annual(
+    bbox: Tuple[float, float, float, float], output_dir: str
+) -> Tuple[np.ndarray, Affine]:
+    """
+    Download real WorldClim 30-second (~1km) annual precipitation data.
+
+    Downloads monthly precipitation data and sums to annual total.
+    File size: ~1GB download for global coverage.
+
+    Parameters
+    ----------
+    bbox : tuple
+        Bounding box (min_lat, min_lon, max_lat, max_lon)
+    output_dir : str
+        Output directory
+
+    Returns
+    -------
+    np.ndarray
+        Precipitation data (mm/year)
+    Affine
+        Geographic transform
+
+    Raises
+    ------
+    Exception
+        If download fails or network is unavailable
+    """
+    min_lat, min_lon, max_lat, max_lon = bbox
+
+    # WorldClim 2.1 monthly precipitation at 30 seconds (~1km)
+    # Contains 12 TIF files (one per month), we sum them for annual total
+    base_url = "https://geodata.ucdavis.edu/climate/worldclim/2_1/base/wc2.1_30s_prec.zip"
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Check if we already have the raw data cached
+    cache_dir = output_path / "worldclim_30s_raw"
+    annual_cache = cache_dir / "wc2.1_30s_prec_annual.tif"
+
+    if annual_cache.exists():
+        print(f"Using cached WorldClim 30s annual precipitation: {annual_cache}")
+        with rasterio.open(annual_cache) as src:
+            return _extract_worldclim_subset(src, bbox)
+
+    print(f"Downloading WorldClim 30-second precipitation from {base_url}...")
+    print(f"  (~1km resolution, ~1GB download, may take several minutes)")
+
+    try:
+        # Download the ZIP file with progress indication
+        response = requests.get(base_url, timeout=1800, stream=True)  # 30 min timeout
+        response.raise_for_status()
+
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        chunks = []
+
+        for chunk in response.iter_content(chunk_size=1024 * 1024):  # 1MB chunks
+            chunks.append(chunk)
+            downloaded += len(chunk)
+            if total_size > 0:
+                pct = (downloaded / total_size) * 100
+                print(f"\r  Downloaded: {downloaded / 1e6:.1f} MB / {total_size / 1e6:.1f} MB ({pct:.1f}%)", end="", flush=True)
+            else:
+                print(f"\r  Downloaded: {downloaded / 1e6:.1f} MB", end="", flush=True)
+
+        print()  # newline after progress
+        content = b''.join(chunks)
+
+        # Extract ZIP contents
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            # Find all monthly precipitation TIF files
+            monthly_files = sorted([
+                name for name in zf.namelist()
+                if name.endswith('.tif') and 'prec' in name.lower()
+            ])
+
+            if len(monthly_files) != 12:
+                raise ValueError(f"Expected 12 monthly files, found {len(monthly_files)}: {monthly_files}")
+
+            print(f"✓ Extracting {len(monthly_files)} monthly precipitation files...")
+
+            # Extract all monthly files
+            extracted_paths = []
+            for name in monthly_files:
+                tif_path = cache_dir / Path(name).name
+                with open(tif_path, 'wb') as f:
+                    f.write(zf.read(name))
+                extracted_paths.append(tif_path)
+
+            # Sum monthly to annual
+            print("  Summing monthly precipitation to annual total...")
+            annual_data = None
+            transform = None
+            crs = None
+
+            for i, tif_path in enumerate(extracted_paths):
+                with rasterio.open(tif_path) as src:
+                    monthly_data = src.read(1).astype(np.float32)
+                    # Handle nodata (typically -32768 or similar)
+                    nodata = src.nodata
+                    if nodata is not None:
+                        monthly_data = np.where(monthly_data == nodata, 0, monthly_data)
+
+                    if annual_data is None:
+                        annual_data = monthly_data.copy()
+                        transform = src.transform
+                        crs = src.crs
+                    else:
+                        annual_data += monthly_data
+
+                print(f"\r  Processed month {i + 1}/12", end="", flush=True)
+
+            print()  # newline
+
+            # Save annual total to cache
+            print(f"  Caching annual total to {annual_cache}...")
+            with rasterio.open(
+                annual_cache,
+                "w",
+                driver="GTiff",
+                height=annual_data.shape[0],
+                width=annual_data.shape[1],
+                count=1,
+                dtype=annual_data.dtype,
+                crs=crs,
+                transform=transform,
+                compress="lzw",
+            ) as dst:
+                dst.write(annual_data, 1)
+
+            # Clean up monthly files to save space
+            for tif_path in extracted_paths:
+                tif_path.unlink()
+
+            print(f"✓ Created annual precipitation raster: {annual_cache}")
+            print(f"  Shape: {annual_data.shape}, Range: {annual_data.min():.1f} - {annual_data.max():.1f} mm/year")
+
+            # Extract subset for bbox
+            with rasterio.open(annual_cache) as src:
+                return _extract_worldclim_subset(src, bbox)
+
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"Network error downloading WorldClim 30s data: {e}") from e
+    except Exception as e:
+        raise Exception(f"Failed to download WorldClim 30s data: {e}") from e
+
+
+def _extract_worldclim_subset(
+    src: rasterio.DatasetReader, bbox: Tuple[float, float, float, float]
+) -> Tuple[np.ndarray, Affine]:
+    """
+    Extract a subset from a WorldClim raster for the given bbox.
+
+    Parameters
+    ----------
+    src : rasterio.DatasetReader
+        Open rasterio dataset
+    bbox : tuple
+        Bounding box (min_lat, min_lon, max_lat, max_lon)
+
+    Returns
+    -------
+    np.ndarray
+        Subset precipitation data
+    Affine
+        Geographic transform for subset
+    """
+    from rasterio.transform import rowcol
+
+    min_lat, min_lon, max_lat, max_lon = bbox
+
+    full_data = src.read(1).astype(np.float32)
+    full_transform = src.transform
+
+    # Get row/col for bbox corners
+    min_row, min_col = rowcol(full_transform, min_lon, max_lat)  # Upper-left
+    max_row, max_col = rowcol(full_transform, max_lon, min_lat)  # Lower-right
+
+    # Clamp to raster bounds
+    min_row = max(0, min_row)
+    min_col = max(0, min_col)
+    max_row = min(full_data.shape[0], max_row)
+    max_col = min(full_data.shape[1], max_col)
+
+    # Extract subset
+    subset_data = full_data[min_row:max_row, min_col:max_col].copy()
+
+    # Create transform for subset
+    subset_transform = full_transform * Affine.translation(min_col, min_row)
+
+    print(f"✓ Extracted subset: {subset_data.shape} pixels for bbox")
+    print(f"  Precipitation range: {subset_data.min():.1f} to {subset_data.max():.1f} mm/year")
+
+    return subset_data, subset_transform
 
 
 def download_real_prism_annual(

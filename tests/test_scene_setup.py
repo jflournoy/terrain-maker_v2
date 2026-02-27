@@ -424,6 +424,162 @@ class TestSunPosition:
         assert len(sun_lights) > 0, "Should create sun light when sun_energy > 0"
 
 
+class TestLayoutPanelPositions:
+    """Tests for layout_panel_positions function (pure geometry, no bpy needed)."""
+
+    def test_layout_panel_positions_imports(self):
+        """Test that layout_panel_positions can be imported."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        assert callable(layout_panel_positions)
+
+    def test_single_panel_at_origin(self):
+        """Single panel should be placed at origin."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        positions = layout_panel_positions(n=1, panel_width=10.0, panel_depth=8.0)
+        assert len(positions) == 1
+        assert positions[0] == (0.0, 0.0)
+
+    def test_three_panels_row(self):
+        """Three panels should be in a single row, evenly spaced."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        positions = layout_panel_positions(
+            n=3, panel_width=10.0, panel_depth=8.0, spacing=2.0
+        )
+        assert len(positions) == 3
+        # All should be on the same Y row
+        assert all(pos[1] == positions[0][1] for pos in positions)
+        # X positions should increase by panel_width + spacing = 12.0
+        assert positions[1][0] - positions[0][0] == pytest.approx(12.0)
+        assert positions[2][0] - positions[1][0] == pytest.approx(12.0)
+
+    def test_wraps_to_second_row(self):
+        """Six panels with max_cols=3 should wrap into 2 rows."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        positions = layout_panel_positions(
+            n=6, panel_width=10.0, panel_depth=8.0, spacing=2.0, max_cols=3
+        )
+        assert len(positions) == 6
+        # First row: indices 0,1,2 share same Y
+        assert positions[0][1] == positions[1][1] == positions[2][1]
+        # Second row: indices 3,4,5 share same Y
+        assert positions[3][1] == positions[4][1] == positions[5][1]
+        # Second row Y is lower (more negative) than first row
+        assert positions[3][1] < positions[0][1]
+        # Row spacing should be panel_depth + spacing = 10.0
+        assert positions[0][1] - positions[3][1] == pytest.approx(10.0)
+
+    def test_custom_origin(self):
+        """Origin offset should propagate to all positions."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        positions = layout_panel_positions(
+            n=2, panel_width=10.0, panel_depth=8.0, spacing=2.0,
+            origin=(100.0, 50.0)
+        )
+        assert len(positions) == 2
+        assert positions[0] == (100.0, 50.0)
+        assert positions[1][0] == pytest.approx(112.0)
+        assert positions[1][1] == pytest.approx(50.0)
+
+    def test_four_panels_no_wrap(self):
+        """Four panels with default max_cols=4 should stay in one row."""
+        from src.terrain.scene_setup import layout_panel_positions
+
+        positions = layout_panel_positions(
+            n=4, panel_width=5.0, panel_depth=5.0, spacing=1.0
+        )
+        assert len(positions) == 4
+        # All same Y
+        assert all(pos[1] == positions[0][1] for pos in positions)
+
+
+class TestPositionMeshAt:
+    """Tests for position_mesh_at function."""
+
+    def test_position_mesh_at_imports(self):
+        """Test that position_mesh_at can be imported."""
+        from src.terrain.scene_setup import position_mesh_at
+
+        assert callable(position_mesh_at)
+
+    def test_position_mesh_at_moves_object(self):
+        """Test that position_mesh_at sets X and Y location."""
+        import bpy
+        from src.terrain.scene_setup import position_mesh_at
+
+        # Create test object
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+        bpy.ops.mesh.primitive_cube_add(location=(0, 0, 5))
+        obj = bpy.context.active_object
+
+        position_mesh_at(obj, 10.0, 20.0)
+
+        assert obj.location.x == pytest.approx(10.0)
+        assert obj.location.y == pytest.approx(20.0)
+        # Z should be preserved
+        assert obj.location.z == pytest.approx(5.0)
+
+
+class TestFrameCameraToObjects:
+    """Tests for frame_camera_to_objects function."""
+
+    def test_frame_camera_to_objects_imports(self):
+        """Test that frame_camera_to_objects can be imported."""
+        from src.terrain.scene_setup import frame_camera_to_objects
+
+        assert callable(frame_camera_to_objects)
+
+    def test_frame_camera_creates_ortho_looking_down(self):
+        """Camera should be orthographic and positioned above objects."""
+        import bpy
+        from src.terrain.scene_setup import frame_camera_to_objects
+
+        # Clear scene
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+
+        # Create two cubes at different positions
+        bpy.ops.mesh.primitive_cube_add(location=(0, 0, 0))
+        obj1 = bpy.context.active_object
+        bpy.ops.mesh.primitive_cube_add(location=(20, 0, 0))
+        obj2 = bpy.context.active_object
+
+        frame_camera_to_objects([obj1, obj2])
+
+        camera = bpy.context.scene.camera
+        assert camera is not None
+        assert camera.data.type == "ORTHO"
+        # Camera should be above the highest point
+        assert camera.location.z > 1.0
+        # Ortho scale should be wide enough to see both objects
+        assert camera.data.ortho_scale > 20.0
+
+    def test_frame_camera_centers_between_objects(self):
+        """Camera X,Y should be centered between objects."""
+        import bpy
+        from src.terrain.scene_setup import frame_camera_to_objects
+
+        for obj in list(bpy.data.objects):
+            bpy.data.objects.remove(obj)
+
+        bpy.ops.mesh.primitive_cube_add(location=(-10, 0, 0))
+        obj1 = bpy.context.active_object
+        bpy.ops.mesh.primitive_cube_add(location=(10, 0, 0))
+        obj2 = bpy.context.active_object
+
+        frame_camera_to_objects([obj1, obj2])
+
+        camera = bpy.context.scene.camera
+        # Camera X should be near center (0)
+        assert abs(camera.location.x) < 2.0
+        assert abs(camera.location.y) < 2.0
+
+
 class TestSetupWorldAtmosphere:
     """Tests for setup_world_atmosphere function."""
 
