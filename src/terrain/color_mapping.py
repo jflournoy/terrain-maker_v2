@@ -445,6 +445,30 @@ except (AttributeError, TypeError):
     plt.register_cmap(cmap=boreal_mako_print_cmap)
 
 
+# =============================================================================
+# Warm Gray Colormap (Subtle, Print-Friendly)
+# =============================================================================
+# Gentle grayscale with a hint of warmth, designed for secondary panels
+# that should complement rather than compete with the main colormap.
+# Low contrast: dark warm gray → light warm cream.
+
+_warm_gray_colors = [
+    (0.0, (0.08, 0.07, 0.06)),   # Near-black, warm
+    (0.25, (0.20, 0.18, 0.16)),  # Dark warm gray
+    (0.5, (0.40, 0.37, 0.34)),   # Mid warm gray
+    (0.75, (0.62, 0.58, 0.54)),  # Light warm gray
+    (1.0, (0.82, 0.78, 0.73)),   # Warm cream (not full white)
+]
+
+warm_gray_cmap = LinearSegmentedColormap.from_list(
+    'warm_gray', _warm_gray_colors, N=256,
+)
+try:
+    matplotlib.colormaps.register(warm_gray_cmap, force=True)
+except (AttributeError, TypeError):
+    plt.register_cmap(cmap=warm_gray_cmap)
+
+
 def elevation_colormap(dem_data, cmap_name="viridis", min_elev=None, max_elev=None, gamma=1.0):
     """
     Create a colormap based on elevation values.
