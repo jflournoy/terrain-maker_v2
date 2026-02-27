@@ -114,7 +114,7 @@ Examples of honest responses:
 
 ## Example and Render Scripts
 
-**CRITICAL: NEVER run example or render scripts**
+**Do NOT run example or render scripts unless explicitly told to by the user**
 
 Example scripts in `examples/` directory (e.g., `detroit_combined_render.py`, `detroit_elevation_real.py`, `san_diego_flow_demo.py`) are computationally expensive and time-consuming. They:
 - Process large datasets (DEMs, flow accumulation, precipitation)
@@ -123,9 +123,8 @@ Example scripts in `examples/` directory (e.g., `detroit_combined_render.py`, `d
 - Consume significant CPU/GPU/memory resources
 
 **Rules:**
-- **NEVER** execute example scripts via Bash tool
-- **NEVER** run rendering operations
-- User will run these scripts manually when ready
+- Do NOT execute example scripts via Bash tool unless the user explicitly asks you to
+- Do NOT run rendering operations unless the user explicitly asks you to
 - You may READ example scripts to understand code
 - You may EDIT example scripts to fix bugs or add features
 - You may suggest commands for the user to run
