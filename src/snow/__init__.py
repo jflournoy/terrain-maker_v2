@@ -10,9 +10,11 @@ This module provides utilities for working with snow data:
 from .snodas import (
     batch_process_snodas_data,
     calculate_snow_statistics,
+    load_snodas_stats,
 )
 
 __all__ = [
     "batch_process_snodas_data",
     "calculate_snow_statistics",
+    "load_snodas_stats",
 ]
