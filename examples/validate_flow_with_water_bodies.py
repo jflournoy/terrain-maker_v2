@@ -43,6 +43,7 @@ from src.terrain.flow_accumulation import (
     D8_OFFSETS,
 )
 
+
 # Import water body functions
 from src.terrain.water_bodies import (
     rasterize_lakes_to_mask,
