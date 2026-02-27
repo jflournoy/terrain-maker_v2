@@ -97,15 +97,14 @@ def create_default_sledding_scorer() -> ScoreCombiner:
                 weight=0.25,
             ),
 
-            # Snow consistency: year-to-year reliability (CV)
-            # Lower CV = more reliable = better (inverted)
+            # Snow consistency: year-to-year reliability
+            # Input is already a 0-1 score from snow_consistency() where 1=consistent=good
             # WEIGHT: 20% - predictable snow year-over-year is important
             ScoreComponent(
                 name="snow_consistency",
                 transform="linear",
                 transform_params={
-                    "value_range": (0, 1.5),  # CV range
-                    "invert": True,           # Low CV = high score
+                    "value_range": (0, 1),  # Already inverted consistency score
                 },
                 role="additive",
                 weight=0.20,
