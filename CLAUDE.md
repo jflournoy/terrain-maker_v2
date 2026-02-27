@@ -611,11 +611,11 @@ The roads implementation demonstrates the proper pattern:
 
 ### TDD Examples
 
-- [🔴 test: add failing test for updateCommandCatalog isolation (TDD RED)](../../commit/00e7a22)
-- [🔴 test: add failing tests for tdd.js framework detection (TDD RED)](../../commit/2ce43d1)
-- [🔴 test: add failing tests for learn.js functions (TDD RED)](../../commit/8b90d58)
-- [🔴 test: add failing tests for formatBytes and estimateTokens (TDD RED)](../../commit/1fdac58)
-- [🔴 test: add failing tests for findBrokenLinks (TDD RED phase)](../../commit/8ec6319)
+- [🔴 test: add failing test for updateCommandCatalog isolation (TDD RED)](../../commit/e8e89c5)
+- [🔴 test: add failing tests for tdd.js framework detection (TDD RED)](../../commit/7c91aa3)
+- [🔴 test: add failing tests for learn.js functions (TDD RED)](../../commit/e8f1507)
+- [🔴 test: add failing tests for formatBytes and estimateTokens (TDD RED)](../../commit/621c638)
+- [🔴 test: add failing tests for findBrokenLinks (TDD RED phase)](../../commit/8eca9f9)
 
 ## Analytics Tracking
 
