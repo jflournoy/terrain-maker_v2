@@ -43,8 +43,8 @@ sys.path.insert(0, str(project_root))
 
 from src.terrain.core import Terrain
 from src.terrain.data_loading import load_dem_files
-from src.terrain.gridded_data import downsample_for_viz, create_mock_snow_data
-from src.snow import batch_process_snodas_data, calculate_snow_statistics
+from src.terrain.gridded_data import downsample_for_viz
+from src.snow import load_snodas_stats
 
 # Configure logging with both console and file output
 LOG_FILE = Path(__file__).parent / "detroit_snow_sledding.log"
@@ -75,8 +75,8 @@ logging.basicConfig(
     handlers=[file_handler]
 )
 
-# Note: downsample_for_viz and create_mock_snow_data imported from src.terrain.gridded_data
-# Note: batch_process_snodas_data and calculate_snow_statistics imported from src.snow
+# Note: downsample_for_viz imported from src.terrain.gridded_data
+# Note: load_snodas_stats imported from src.snow
 
 try:
     import bpy
@@ -199,7 +199,7 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
 # Visualization Helpers
 # =============================================================================
 
-# Note: create_mock_snow_data imported from src.terrain.gridded_data
+# Note: load_snodas_stats imported from src.snow
 
 
 def visualize_dem(dem: np.ndarray, output_path: Path):
@@ -1252,50 +1252,14 @@ def run_step_snow(output_dir: Path, dem: np.ndarray, use_mock: bool, terrain=Non
     logger.info("Step 2: Snow Depth Analysis")
     logger.info("=" * 70)
 
-    if use_mock:
-        # Create mock snow data
-        logger.info("Using mock snow data")
-        snow_stats = create_mock_snow_data(dem.shape)
-    else:
-        # Try to load real SNODAS data using GriddedDataLoader
-        if snodas_dir and snodas_dir.exists() and terrain:
-            logger.info(f"Loading real SNODAS data from: {snodas_dir}")
-            try:
-                from src.terrain.gridded_data import GriddedDataLoader
-
-                # Define pipeline steps
-                pipeline = [
-                    ("load_snodas", batch_process_snodas_data, {}),
-                    ("compute_stats", calculate_snow_statistics, {}),
-                ]
-
-                # Create loader with terrain context
-                loader = GriddedDataLoader(terrain=terrain, cache_dir=Path("snow_analysis_cache"))
-
-                # Run pipeline
-                result = loader.run_pipeline(
-                    data_source=snodas_dir,
-                    pipeline=pipeline,
-                    cache_name="snodas"
-                )
-
-                # Extract snow statistics (remove metadata and failed_files)
-                snow_stats = {k: v for k, v in result.items() if k not in ("metadata", "failed_files")}
-                failed = result.get("failed_files", [])
-                logger.info(f"✓ Loaded SNODAS data ({len(failed)} files failed)")
-            except Exception as e:
-                logger.warning(f"Failed to load SNODAS data: {e}")
-                logger.info("Falling back to mock data")
-                snow_stats = create_mock_snow_data(dem.shape)
-        else:
-            if not snodas_dir:
-                logger.warning("No SNODAS directory specified (use --snodas-dir)")
-            elif not snodas_dir.exists():
-                logger.warning(f"SNODAS directory not found: {snodas_dir}")
-            else:
-                logger.warning("Terrain object not available for SNODAS processing")
-            logger.info("Falling back to mock data")
-            snow_stats = create_mock_snow_data(dem.shape)
+    snow_stats = load_snodas_stats(
+        terrain=terrain,
+        snodas_dir=snodas_dir,
+        cache_dir=Path("snow_analysis_cache"),
+        cache_name="snodas",
+        mock_data=use_mock,
+        mock_shape=dem.shape,
+    )
 
     # Visualize snow depth (downsample if needed for memory efficiency)
     snow_data = snow_stats["median_max_depth"]

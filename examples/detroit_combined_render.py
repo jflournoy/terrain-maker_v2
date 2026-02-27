@@ -610,15 +610,20 @@ def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
     return None
 
 def load_xc_skiing_components(output_dir: Path) -> Optional[dict[str, np.ndarray]]:
-    """Load individual XC skiing score component grids from .npz output.
+    """Load individual XC skiing raw input grids from .npz output.
 
-    Component grids are saved with 'component_' prefix by detroit_xc_skiing.py.
+    Raw input grids are saved with 'raw_' prefix by detroit_xc_skiing.py.
+    These are the pre-transform values (snow depth in mm, coverage ratio,
+    consistency score) — not the transformed [0,1] component scores.
+
+    Falls back to transformed component scores (component_ prefix) if raw
+    inputs are not available (older .npz files).
 
     Args:
         output_dir: Directory containing xc_skiing_scores.npz
 
     Returns:
-        Dict mapping component names to score arrays, or None if not available.
+        Dict mapping component names to raw input arrays, or None if not available.
         Keys: "snow_depth", "snow_coverage", "snow_consistency"
     """
     score_path = output_dir / "xc_skiing_scores.npz"
@@ -628,6 +633,20 @@ def load_xc_skiing_components(output_dir: Path) -> Optional[dict[str, np.ndarray
 
     data = np.load(score_path)
     components = {}
+
+    # Prefer raw inputs (pre-transform values)
+    for key in ["snow_depth", "snow_coverage", "snow_consistency"]:
+        raw_key = f"raw_{key}"
+        if raw_key in data:
+            components[key] = data[raw_key]
+
+    if components:
+        logger.info(
+            "Loaded %d raw input grids from %s", len(components), score_path
+        )
+        return components
+
+    # Fallback: use transformed component scores from older .npz files
     for key in ["snow_depth", "snow_coverage", "snow_consistency"]:
         npz_key = f"component_{key}"
         if npz_key in data:
@@ -641,8 +660,10 @@ def load_xc_skiing_components(output_dir: Path) -> Optional[dict[str, np.ndarray
         )
         return None
 
-    logger.info(
-        "Loaded %d score components from %s", len(components), score_path
+    logger.warning(
+        "Loaded %d transformed component scores (raw inputs not available). "
+        "Re-run detroit_xc_skiing.py to generate raw input data.",
+        len(components),
     )
     return components
 
@@ -672,12 +693,14 @@ def create_component_panels(
     render_height: int = 360,
     main_mesh: "bpy.types.Object" = None,
     score_colormap=None,
+    component_colormaps: list[str] | None = None,
 ) -> list:
     """Create component panel meshes for display to the right of the main mesh.
 
-    Creates one Terrain per component. Each panel uses the same colormap name
-    (boreal_mako) but its gradient is independently normalized to that panel's
-    own data range, so gradients are never shared between panels.
+    Creates one Terrain per component using raw (pre-transform) input data.
+    Each panel uses the same colormap name (boreal_mako) but its gradient is
+    independently normalized to that panel's own data range, so the full
+    gradient is used regardless of the data's native scale.
 
     Args:
         args: Parsed CLI arguments (for transform params like vertex_multiplier).
@@ -701,9 +724,9 @@ def create_component_panels(
 
     component_names = ["snow_depth", "snow_coverage", "snow_consistency"]
     component_labels = {
-        "snow_depth": "Snow Depth (30%)",
-        "snow_coverage": "Snow Coverage (60%)",
-        "snow_consistency": "Snow Consistency (10%)",
+        "snow_depth": "Snow Depth",
+        "snow_coverage": "Season Coverage",
+        "snow_consistency": "Variability",
     }
 
     active_components = [c for c in component_names if c in components]
@@ -748,8 +771,9 @@ def create_component_panels(
         scaled_dem, _, _ = scale_elevation(scale_factor=0.0001)(dem_layer["transformed_data"])
         dem_layer["transformed_data"] = scaled_dem
 
-        # Component data is already a 0-1 score where high = good conditions.
-        # snow_consistency() already returns 1-inconsistency, so no inversion needed.
+        # Component data is raw (pre-transform): snow depth in mm, coverage
+        # ratio, consistency score.  The colormap is normalized to [vmin, vmax]
+        # so the full gradient range is used regardless of the data's native scale.
         comp_data = components[comp_name]
 
         # Add component score as a data layer
@@ -761,7 +785,9 @@ def create_component_panels(
             target_layer="dem",
         )
 
-        # Add water mask if available
+        # Downsample water mask with the same resampling as the DEM, then
+        # re-threshold.  This keeps lake boundaries aligned with terrain
+        # features rather than producing jagged nearest-neighbor edges.
         panel_water_mask = None
         if water_mask is not None and water_transform is not None:
             terrain.add_data_layer(
@@ -773,32 +799,67 @@ def create_component_panels(
             )
             panel_water_mask = terrain.data_layers["water"]["data"] > 0.5
 
-        # Colormap range from the aligned (reprojected) data — this is what
-        # compute_colors actually renders, so the gradient covers the true
-        # displayed range for this panel, independent of other panels.
+        # Colormap range from aligned data, EXCLUDING water pixels so lakes
+        # don't skew the gradient.  Augment HydroLAKES with zero-snow-depth
+        # as a water indicator — pixels with no snow across all seasons are
+        # water or outside SNODAS coverage and are meaningless for all
+        # components (depth=0, coverage=0, consistency=1.0 artificially).
         aligned = terrain.data_layers[comp_name]["data"]
-        valid_aligned = aligned[np.isfinite(aligned)]
-        if valid_aligned.size > 0:
-            vmin, vmax = float(valid_aligned.min()), float(valid_aligned.max())
+        if panel_water_mask is None:
+            panel_water_mask = np.zeros(aligned.shape, dtype=bool)
+        # Add zero-snow-depth mask: align snow_depth to this panel's grid
+        if "snow_depth" in components:
+            terrain.add_data_layer(
+                name="_depth_for_mask",
+                data=components["snow_depth"],
+                transform=component_transform,
+                crs="EPSG:4326",
+                target_layer="dem",
+            )
+            aligned_depth = terrain.data_layers["_depth_for_mask"]["data"]
+            panel_water_mask = panel_water_mask | (aligned_depth <= 0)
+        land_mask = np.isfinite(aligned) & ~panel_water_mask
+        valid_land = aligned[land_mask]
+        if valid_land.size > 0:
+            vmin, vmax = float(valid_land.min()), float(valid_land.max())
         else:
-            # Fallback: use raw data range if alignment left no valid pixels
             valid_raw = comp_data[np.isfinite(comp_data)]
             vmin, vmax = float(valid_raw.min()), float(valid_raw.max())
-            logger.warning("    No valid pixels after alignment for %s; using raw range", comp_name)
-        logger.info("    Data range (aligned): %.4f – %.4f", vmin, vmax)
-        cmap = "boreal_mako_print" if getattr(args, "print_colors", False) else "boreal_mako"
-        def raw_colormap(score, _cmap=cmap, _min=vmin, _max=vmax):
-            return elevation_colormap(score, cmap_name=_cmap, min_elev=_min, max_elev=_max)
+            logger.warning("    No valid land pixels after alignment for %s; using raw range", comp_name)
+        logger.info("    Data range (land only): %.4f – %.4f", vmin, vmax)
+
+        if component_colormaps and i < len(component_colormaps):
+            cmap = component_colormaps[i]
+        else:
+            cmap = "boreal_mako_print" if getattr(args, "print_colors", False) else "boreal_mako"
+        logger.info("    Colormap: %s", cmap)
+
+        # Dark water color — not black, but dark enough to read as water.
+        _lake_rgb = (0.08, 0.07, 0.06)
+        def raw_colormap(score, _cmap=cmap, _min=vmin, _max=vmax,
+                         _water=panel_water_mask, _lake=_lake_rgb):
+            colors = elevation_colormap(score, cmap_name=_cmap, min_elev=_min, max_elev=_max)
+            if _water is not None:
+                # Paint lake pixels dark; colors is uint8 (H, W, 3)
+                lake_u8 = np.array([int(c * 255) for c in _lake], dtype=np.uint8)
+                # _water may need shape alignment with colors
+                wh, ww = _water.shape
+                ch, cw = colors.shape[:2]
+                if (wh, ww) == (ch, cw):
+                    colors[_water] = lake_u8
+            return colors
 
         terrain.set_color_mapping(
             color_func=raw_colormap,
             source_layers=[comp_name],
         )
 
+        # Don't pass water_mask to create_mesh — we handle lake coloring
+        # ourselves above to avoid the gradient edge effects at low resolution.
         mesh_obj = terrain.create_mesh(
             scale_factor=100.0,
             height_scale=getattr(args, "height_scale", 25.0),
-            water_mask=panel_water_mask,
+            water_mask=None,
             boundary_extension=True,
             two_tier_edge=getattr(args, "two_tier_edge", True),
             base_depth=getattr(args, "base_depth", 0.2),
@@ -1971,6 +2032,16 @@ Examples:
              "(default: 1.0). Values >1 make panels larger, <1 smaller. "
              "Useful when adding headings or adjusting layout.",
     )
+    parser.add_argument(
+        "--component-colormaps",
+        nargs=3,
+        default=None,
+        metavar=("DEPTH", "COVERAGE", "VARIABILITY"),
+        help="Colormaps for the 3 component panels: snow depth, season "
+             "coverage, variability. Default: viridis plasma cividis, or "
+             "warm_gray warm_gray warm_gray with --print-colors. "
+             "Accepts any matplotlib colormap name.",
+    )
 
     # -- Temporal landscape sculpture --
     temporal_group = parser.add_argument_group("Temporal landscape sculpture")
@@ -1990,9 +2061,13 @@ Examples:
     temporal_group.add_argument(
         "--temporal-gap",
         type=float,
-        default=0.3,
+        default=0.10,
         metavar="FRAC",
-        help="Gap as fraction of temporal mesh depth (default: 0.3, like component panels).",
+        help=(
+            "Gap between main terrain bottom and sculpture top, as a fraction of the "
+            "main terrain WIDTH (default: 0.10 = 10%% of main width). "
+            "Independent of --temporal-depth and --temporal-col-scale."
+        ),
     )
     temporal_group.add_argument(
         "--temporal-ridge-height",
@@ -2000,6 +2075,58 @@ Examples:
         default=0.5,
         metavar="FRAC",
         help="Ridge peak height as fraction of main terrain Z range (default: 0.5).",
+    )
+    temporal_group.add_argument(
+        "--temporal-smooth",
+        type=float,
+        default=None,
+        metavar="SIGMA",
+        help="Gaussian smoothing sigma for temporal ridges (default: None = no smoothing).",
+    )
+    temporal_group.add_argument(
+        "--temporal-col-scale",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Column (day) upscale factor (default: 0 = auto-match main mesh pixel density).",
+    )
+    temporal_group.add_argument(
+        "--temporal-row-scale",
+        type=int,
+        default=8,
+        metavar="N",
+        help=(
+            "Row (N-S) upscale factor for ridge profiles (default: 8). "
+            "Higher values reduce stairstepping on ridge slopes. "
+            "Increase to 16-32 for smoother ridges."
+        ),
+    )
+    temporal_group.add_argument(
+        "--temporal-depth",
+        type=float,
+        default=0.35,
+        metavar="FRAC",
+        help=(
+            "N-S depth of the sculpture as a fraction of the main terrain WIDTH "
+            "(default: 0.35 = 35%% as deep as the terrain is wide). "
+            "Independent of --temporal-col-scale — changing column density "
+            "does not change the physical depth."
+        ),
+    )
+    temporal_group.add_argument(
+        "--temporal-summary-color-scale",
+        type=float,
+        default=1.5,
+        metavar="MULT",
+        help="Color multiplier for the IQR summary ridge (default: 1.5).",
+    )
+    temporal_group.add_argument(
+        "--temporal-colormap",
+        type=str,
+        default=None,
+        metavar="CMAP",
+        help="Colormap for the temporal sculpture (default: same as main score "
+             "colormap). Accepts any matplotlib colormap name.",
     )
 
     args = parser.parse_args()
@@ -2019,6 +2146,15 @@ Examples:
         sys.exit(0)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve default colormaps for components and temporal
+    if args.component_colormaps is None:
+        if args.print_colors:
+            args.component_colormaps = ["warm_gray"] * 3
+        else:
+            args.component_colormaps = ["viridis", "plasma", "cividis"]
+    if args.temporal_colormap is None and args.print_colors:
+        args.temporal_colormap = "warm_gray"
 
     # Parse edge_base_material (could be a material name or RGB tuple string)
     if args.two_tier_edge:
@@ -3371,6 +3507,7 @@ Examples:
                 render_height=render_height,
                 main_mesh=mesh_combined,
                 score_colormap=base_colormap,
+                component_colormaps=args.component_colormaps,
             )
         else:
             logger.warning(
@@ -3380,22 +3517,27 @@ Examples:
 
     # Create temporal landscape sculpture if requested
     temporal_mesh = None
+    temporal_bg_plane = None
     if args.temporal_landscape:
         logger.info("\nBuilding temporal landscape sculpture...")
         from examples.temporal_sculpture import create_temporal_sculpture
-        temporal_mesh = create_temporal_sculpture(
+        _temporal_result = create_temporal_sculpture(
             main_mesh=mesh_combined,
             snodas_dir=Path("data/snodas_data"),
             cache_file=args.temporal_cache,
             height_scale=args.height_scale,
             ridge_height_fraction=args.temporal_ridge_height,
-            gap_below_main=args.temporal_gap,
-            base_depth=args.base_depth,
-            edge_base_material=args.edge_base_material,
-            edge_blend_colors=args.edge_blend_colors,
-            use_fractional_edges=args.use_fractional_edges,
+            gap_fraction=args.temporal_gap,
+            smooth_sigma=args.temporal_smooth,
+            col_scale=args.temporal_col_scale,
+            row_scale=args.temporal_row_scale,
+            depth_fraction=args.temporal_depth,
+            summary_color_scale=args.temporal_summary_color_scale,
+            diagnostic_dir=args.output_dir / "diagnostics",
+            score_colormap=args.temporal_colormap or score_cmap_name,
         )
-        if temporal_mesh:
+        if _temporal_result:
+            temporal_mesh, temporal_bg_plane = _temporal_result
             logger.info("✓ Temporal landscape sculpture created")
         else:
             logger.warning("Temporal landscape sculpture creation failed")
@@ -3428,6 +3570,16 @@ Examples:
         logger.info(f"  Component panels: {len(component_mesh_list)} meshes in scene")
         for i, obj in enumerate(component_mesh_list):
             logger.info(f"    Panel {i}: '{obj.name}' at ({obj.location.x:.1f}, {obj.location.y:.1f}, {obj.location.z:.1f}), scale={obj.scale.x:.3f}")
+
+        # Extend temporal mesh (and its bg plane) to span from main west edge
+        # to component east edge.
+        if temporal_mesh:
+            from examples.temporal_sculpture import extend_to_scene_width
+            extend_to_scene_width(
+                temporal_mesh, mesh_combined, component_mesh_list,
+                bg_plane=temporal_bg_plane,
+            )
+
         # Re-center camera on the combined visual center (main mesh + panels)
         # and widen ortho_scale to fit everything.
         bpy.context.view_layer.update()

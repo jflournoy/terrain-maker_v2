@@ -56,8 +56,8 @@ DEFAULT_SNODAS_DIR = ROOT / "data" / "snodas_data"
 DEFAULT_CACHE = ROOT / "examples" / "output" / "xc_skiing" / "temporal_timeseries.npz"
 DEFAULT_OUTPUT = ROOT / "docs" / "images" / "xc_skiing" / "temporal_analysis.png"
 
-# Winter season months (November = 11 through April = 4)
-SEASON_MONTHS = frozenset({11, 12, 1, 2, 3, 4})
+# Winter season months (October = 10 through May = 5)
+SEASON_MONTHS = frozenset({10, 11, 12, 1, 2, 3, 4, 5})
 
 # Trapezoidal depth score thresholds (mm) – from src/scoring/configs/xc_skiing.py
 RAMP_LOW = 50      # minimum usable depth
@@ -222,6 +222,20 @@ def _study_area_stats(
         return nan5
 
 
+def _process_batch(
+    jobs: List[Tuple[str, "date", Path]],
+    row_start: int, row_end: int,
+    col_start: int, col_end: int,
+    meta: dict,
+) -> dict:
+    """Process a batch of SNODAS files sequentially.  Called once per worker."""
+    results = {}
+    for season, d, dat_path in jobs:
+        stats = _study_area_stats(dat_path, row_start, row_end, col_start, col_end, meta)
+        results[(season, d)] = stats
+    return results
+
+
 # ===========================================================================
 # File discovery
 # ===========================================================================
@@ -230,7 +244,7 @@ def _find_winter_files(
     snodas_dir: Path,
 ) -> Dict[str, List[Tuple[date, Path]]]:
     """
-    Discover all SNODAS .dat.gz files for winter months (Nov–Apr).
+    Discover all SNODAS .dat.gz files for winter months (Oct–May).
 
     Returns a dict keyed by season string, e.g. "2020-2021", where each value
     is a chronologically sorted list of (date, Path) tuples.
@@ -254,7 +268,7 @@ def _find_winter_files(
             continue
 
         season_key = (
-            f"{d.year}-{d.year + 1}" if d.month >= 11
+            f"{d.year}-{d.year + 1}" if d.month >= 10
             else f"{d.year - 1}-{d.year}"
         )
         seasons.setdefault(season_key, []).append((d, dat))
@@ -265,13 +279,13 @@ def _find_winter_files(
     return seasons
 
 
-def _days_since_nov1(d: date) -> int:
-    """Number of days since November 1 of the current winter season."""
-    if d.month >= 11:
-        nov1 = date(d.year, 11, 1)
+def _days_since_oct1(d: date) -> int:
+    """Number of days since October 1 of the current winter season."""
+    if d.month >= 10:
+        oct1 = date(d.year, 10, 1)
     else:
-        nov1 = date(d.year - 1, 11, 1)
-    return (d - nov1).days
+        oct1 = date(d.year - 1, 10, 1)
+    return (d - oct1).days
 
 
 # ===========================================================================
@@ -329,7 +343,7 @@ def build_timeseries(
         dates    – {season: [date, ...]}
         depths   – {season: float32 array of area-mean depths in mm}
         frac50   – {season: float32 array of fraction of pixels with depth≥50mm}
-        doy      – {season: int32 array of day-of-season (0 = Nov 1)}
+        doy      – {season: int32 array of day-of-season (0 = Oct 1)}
     """
     if not force and cache_file.exists():
         logger.info("Loading cached timeseries: %s", cache_file)
@@ -370,7 +384,34 @@ def build_timeseries(
         "seasons": [], "dates": {}, "depths": {}, "frac50": {}, "frac100": {},
         "median_depth_score": {}, "median_coverage_score": {}, "doy": {},
     }
-    total = sum(len(v) for v in seasons_files.values())
+
+    # Flatten all (season, date, path) for parallel batch processing
+    all_jobs: List[Tuple[str, date, Path]] = []
+    for season in sorted(seasons_files):
+        for d, dat_path in seasons_files[season]:
+            all_jobs.append((season, d, dat_path))
+
+    # Shuffle so each batch gets a mix of large (winter) and small (shoulder)
+    # files — avoids one batch getting all the 12 MB Dec–Mar files
+    import random
+    random.Random(42).shuffle(all_jobs)
+
+    total = len(all_jobs)
+    import os
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    n_workers = min(os.cpu_count() or 1, 4)
+    n_batches = n_workers * 8  # 32 small batches → smooth progress
+    logger.info(
+        "Reading %d SNODAS files with %d workers (%d batches)",
+        total, n_workers, n_batches,
+    )
+
+    def _chunked(lst, n):
+        k, m = divmod(len(lst), n)
+        return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
+
+    chunks = _chunked(all_jobs, n_batches)
 
     try:
         from tqdm.auto import tqdm
@@ -382,37 +423,35 @@ def build_timeseries(
             def __exit__(self, *a): pass
         pbar = _NullPbar()
 
-    with pbar:
-        for season in sorted(seasons_files):
-            dates_s: List[date] = []
-            depths_s: List[float] = []
-            frac50_s: List[float] = []
-            frac100_s: List[float] = []
-            median_depth_score_s: List[float] = []
-            median_coverage_score_s: List[float] = []
-
-            for d, dat_path in seasons_files[season]:
-                depth, frac50, frac100, med_depth_score, med_coverage_score = _study_area_stats(
-                    dat_path, row_start, row_end, col_start, col_end, meta
-                )
-                dates_s.append(d)
-                depths_s.append(depth)
-                frac50_s.append(frac50)
-                frac100_s.append(frac100)
-                median_depth_score_s.append(med_depth_score)
-                median_coverage_score_s.append(med_coverage_score)
-                pbar.update(1)
-
-            result["seasons"].append(season)
-            result["dates"][season]  = dates_s
-            result["depths"][season] = np.array(depths_s,  dtype=np.float32)
-            result["frac50"][season] = np.array(frac50_s,  dtype=np.float32)
-            result["frac100"][season] = np.array(frac100_s, dtype=np.float32)
-            result["median_depth_score"][season] = np.array(median_depth_score_s, dtype=np.float32)
-            result["median_coverage_score"][season] = np.array(median_coverage_score_s, dtype=np.float32)
-            result["doy"][season]    = np.array(
-                [_days_since_nov1(d) for d in dates_s], dtype=np.int32
+    with pbar, ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = [
+            pool.submit(
+                _process_batch, chunk,
+                row_start, row_end, col_start, col_end, meta,
             )
+            for chunk in chunks
+        ]
+        stats_by_key: dict = {}
+        for future in as_completed(futures):
+            batch_results = future.result()
+            stats_by_key.update(batch_results)
+            pbar.update(len(batch_results))
+
+    # Reassemble results by season (sorted by date within each season)
+    for season in sorted(seasons_files):
+        dates_s = [d for d, _ in seasons_files[season]]
+        stats = [stats_by_key[(season, d)] for d in dates_s]
+
+        result["seasons"].append(season)
+        result["dates"][season] = dates_s
+        result["depths"][season] = np.array([s[0] for s in stats], dtype=np.float32)
+        result["frac50"][season] = np.array([s[1] for s in stats], dtype=np.float32)
+        result["frac100"][season] = np.array([s[2] for s in stats], dtype=np.float32)
+        result["median_depth_score"][season] = np.array([s[3] for s in stats], dtype=np.float32)
+        result["median_coverage_score"][season] = np.array([s[4] for s in stats], dtype=np.float32)
+        result["doy"][season] = np.array(
+            [_days_since_oct1(d) for d in dates_s], dtype=np.int32
+        )
 
     _save_cache(result, cache_file)
     logger.info("Timeseries cached → %s", cache_file)
@@ -462,10 +501,10 @@ def _band(mat: np.ndarray):
 
 
 def build_combined_matrix(
-    data: dict, n_days: int = 182
-) -> tuple[np.ndarray, list[str], np.ndarray]:
+    data: dict, n_days: int = 243
+) -> tuple[np.ndarray, list[str], np.ndarray, np.ndarray, np.ndarray]:
     """
-    Build the (n_seasons x n_days) XC skiing combined score matrix + median.
+    Build the (n_seasons x n_days) XC skiing combined score matrix + summary.
 
     Parameters
     ----------
@@ -473,7 +512,7 @@ def build_combined_matrix(
         Output of ``build_timeseries()``.  Must contain keys ``"seasons"``,
         ``"doy"``, ``"median_depth_score"``, ``"median_coverage_score"``.
     n_days : int
-        Length of the common day-of-season grid (default 182, Nov 1 → Apr 30).
+        Length of the common day-of-season grid (default 243, Oct 1 → May 31).
 
     Returns
     -------
@@ -482,7 +521,11 @@ def build_combined_matrix(
     seasons : list[str]
         Season labels sorted chronologically.
     median_scores : np.ndarray
-        float32 (n_days,).  Median across seasons, NaN replaced with 0.
+        float32 (n_days,).  Median (50th percentile) across seasons.
+    q1_scores : np.ndarray
+        float32 (n_days,).  25th percentile across seasons.
+    q3_scores : np.ndarray
+        float32 (n_days,).  75th percentile across seasons.
     """
     seasons = sorted(data["seasons"])
     doy_grid = np.arange(0, n_days)
@@ -497,38 +540,45 @@ def build_combined_matrix(
         )
 
     median_scores = np.nanmedian(season_matrix, axis=0)
+    q1_scores = np.nanpercentile(season_matrix, 25, axis=0).astype(np.float32)
+    q3_scores = np.nanpercentile(season_matrix, 75, axis=0).astype(np.float32)
 
     # Replace NaN with 0 (missing data = no snow)
     np.nan_to_num(season_matrix, nan=0.0, copy=False)
     np.nan_to_num(median_scores, nan=0.0, copy=False)
+    np.nan_to_num(q1_scores, nan=0.0, copy=False)
+    np.nan_to_num(q3_scores, nan=0.0, copy=False)
 
-    return season_matrix, seasons, median_scores
+    return season_matrix, seasons, median_scores, q1_scores, q3_scores
 
 
 def build_ridge_dem(
     season_matrix: np.ndarray,
     median_scores: np.ndarray,
+    q1_scores: np.ndarray | None = None,
+    q3_scores: np.ndarray | None = None,
     ridge_rows: int = 7,
     gap_rows: int = 3,
     median_width_mult: int = 2,
     median_height_scale: float = 1.5,
     tail_rows: int = 0,
     shear: float = 0.0,
+    smooth_sigma: float | None = None,
+    summary_gap_rows: int = 6,
+    row_scale: int = 1,
+    summary_color_scale: float = 1.0,
+    col_scale: int = 1,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Build a composite ridge DEM and color array for the temporal sculpture.
 
-    Each season becomes a ridge placed at the center layout position.  When
-    ``tail_rows=0`` (default), the cross-section is a symmetric hogback
-    (triangle/tent).  When ``tail_rows>0``, the cross-section becomes an
-    asymmetric cuesta — a gradual ``sin(0..pi/2)`` dip slope (visible from
-    above) followed by a steep scarp face (casts shadow).
+    When ``q1_scores`` and ``q3_scores`` are provided, uses a **two-group
+    layout**: all individual seasons in one group, then a gap, then a
+    summary group of Q1 / median / Q3.  Otherwise falls back to the legacy
+    layout with the median embedded among the seasons.
 
-    When ``shear>0``, each column shifts northward proportional to its score.
-    Higher scores are taller AND pushed further north, so the cuesta shape
-    emerges naturally: steep scarp at north (only highest scores reach there),
-    gradual back slope trailing south.  Subsequent ridges build atop previous
-    ridges' back slopes via additive accumulation.
+    When ``shear>0``, each column shifts northward proportional to its score,
+    creating an emergent cuesta shape via differential shifting.
 
     Parameters
     ----------
@@ -536,6 +586,11 @@ def build_ridge_dem(
         (n_seasons, n_days) score matrix from ``build_combined_matrix()``.
     median_scores : np.ndarray
         (n_days,) median scores from ``build_combined_matrix()``.
+    q1_scores : np.ndarray or None
+        (n_days,) 25th-percentile scores.  When provided together with
+        ``q3_scores``, enables the two-group layout.
+    q3_scores : np.ndarray or None
+        (n_days,) 75th-percentile scores.
     ridge_rows : int
         Number of rows for the core rise of each ridge cross-section.
     gap_rows : int
@@ -551,6 +606,30 @@ def build_ridge_dem(
         Maximum northward shift (in rows) for the highest-score columns.
         Each column shifts north by ``(score / global_max) * shear`` rows.
         0 means no shift; 6 means the global-max column shifts 6 rows north.
+    smooth_sigma : float or None
+        Gaussian smoothing sigma along the N-S axis after ridge construction.
+        ``None`` (default) means no smoothing — float-precision shifts produce
+        inherently smooth ramps.  Set to a positive value for extra smoothing
+        if desired (e.g. ``1.0``).
+    summary_gap_rows : int
+        Number of zero-height rows separating the season group from the
+        summary group (two-group layout only).
+    row_scale : int
+        Multiplier for all row-related dimensions (ridge_rows, gap_rows,
+        shear, summary_gap_rows).  Higher values give finer Y resolution
+        so float scores are not quantized to coarse integer row positions.
+        1 (default) keeps original resolution; 8 gives 8× finer grid.
+    summary_color_scale : float
+        Multiplier for the IQR summary ridge color values.  Values > 1
+        make the summary ridge more vivid relative to per-season ridges.
+        1.0 (default) = no boost.
+    col_scale : int
+        Column (E-W / day-of-season) upscaling factor.  Score arrays are
+        linearly interpolated along the day axis *before* building the
+        ridge DEM, so every intermediate column gets its own properly
+        computed ramp profile.  This preserves line-graph fidelity (no
+        peak-sag from interpolating 2D profiles with different shear
+        offsets).  1 (default) = no upsampling.
 
     Returns
     -------
@@ -560,117 +639,251 @@ def build_ridge_dem(
         float32 (total_rows, n_days) — flat score for colormap (no bell).
     """
     n_seasons, n_days = season_matrix.shape
-    median_ridge_rows = ridge_rows * median_width_mult
+    has_summary = q1_scores is not None and q3_scores is not None
 
-    # Layout: first_half seasons + median + second_half seasons
-    # Each season block = ridge_rows + gap_rows
-    # Median block = median_ridge_rows + gap_rows (extra, not replacing a season)
+    # Upsample score arrays along day axis BEFORE building ridges.
+    # This ensures every intermediate column gets its own ramp profile
+    # computed from the interpolated score, preserving line-graph peaks.
+    # Uses np.interp with exact placement: original day i → column i*col_scale.
+    if col_scale > 1:
+        x_old = np.arange(n_days)
+        n_out = (n_days - 1) * col_scale + 1
+        x_new = np.arange(n_out) / col_scale  # 0, 1/cs, 2/cs, ..., n_days-1
+        upsampled = np.zeros((n_seasons, n_out), dtype=np.float32)
+        for i in range(n_seasons):
+            upsampled[i] = np.interp(x_new, x_old, season_matrix[i])
+        season_matrix = upsampled
+        median_scores = np.interp(x_new, x_old, median_scores).astype(np.float32)
+        if q1_scores is not None:
+            q1_scores = np.interp(x_new, x_old, q1_scores).astype(np.float32)
+        if q3_scores is not None:
+            q3_scores = np.interp(x_new, x_old, q3_scores).astype(np.float32)
+        n_days = n_out
+
+    # Scale all row dimensions for finer Y resolution
+    if row_scale > 1:
+        ridge_rows *= row_scale
+        gap_rows *= row_scale
+        shear *= row_scale
+        summary_gap_rows *= row_scale
+
+    if tail_rows > 0:
+        return _build_cuesta_dem(
+            season_matrix, median_scores, q1_scores, q3_scores,
+            ridge_rows, gap_rows,
+            median_width_mult, median_height_scale,
+            shear, smooth_sigma, summary_gap_rows,
+            summary_color_scale,
+        )
+
+    # ----- Legacy hogback path (tail_rows=0, no shear) -----
+    median_ridge_rows = ridge_rows * median_width_mult
+    first_half = n_seasons // 2
     base_rows = (
         n_seasons * (ridge_rows + gap_rows)
         + median_width_mult * ridge_rows
         + gap_rows
     )
-
-    # Headroom at north for shear (high-score columns shift northward)
-    shear_pad = int(np.ceil(shear)) if (tail_rows > 0 and shear > 0) else 0
-    total_rows = shear_pad + base_rows
-
+    total_rows = base_rows
     dem_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
     color_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
 
-    first_half = n_seasons // 2
+    def _hogback(n):
+        mid = (n - 1) / 2.0
+        return np.clip(
+            1.0 - np.abs(np.arange(n) - mid) / mid, 0, 1,
+        ) if mid > 0 else np.ones(n)
 
-    if tail_rows > 0:
-        # Emergent cuesta: each column's thin tent profile shifts northward
-        # proportional to its score.  Higher scores → taller AND further
-        # north, so the cuesta shape emerges naturally:
-        #   - North end: steep scarp (only highest scores reach here)
-        #   - South end: gradual back slope (all scores contribute)
-        # Each subsequent ridge's peaks build atop the previous ridge's
-        # back slope via additive (+=) accumulation.
-        row = shear_pad  # nominal position (headroom north for shifts)
+    profile_season = _hogback(ridge_rows)
+    profile_median = _hogback(median_ridge_rows)
+    row = 0
 
-        global_max = max(
-            float(np.max(season_matrix)),
-            float(np.max(median_scores)),
-        )
+    def _write_ridge_hog(start_row, score_row, profile, height_scale=1.0):
+        n = len(profile)
+        for dy in range(n):
+            r = start_row + dy
+            if 0 <= r < total_rows:
+                dem_ridges[r] += score_row * profile[dy] * height_scale
+                color_ridges[r] = score_row * profile[dy]
 
-        def _write_ridge(nom_row, score_row, n_rows, height_scale=1.0):
-            # Each column writes a ramp from nom_row (south, height=0)
-            # northward to nom_row-shift (north, height=score).
-            # The cuesta emerges: steep scarp at north (peak), gradual
-            # back slope trailing south (ramp down to 0).
-            normed = (score_row / global_max) if global_max > 0 else score_row
-            shifts = np.round(normed * shear).astype(int)
-            safe_shifts = np.maximum(shifts, 1).astype(np.float64)
-            max_shift = int(np.ceil(shear))
+    for i in range(first_half):
+        _write_ridge_hog(row, season_matrix[i], profile_season)
+        row += ridge_rows + gap_rows
 
-            for k in range(max_shift + 1):
-                r = nom_row - k
-                if r < 0 or r >= total_rows:
-                    continue
-                # Column j active when k <= its shift
-                active = k <= shifts
-                # Height ramps: 0 at nominal (k=0) → score at peak (k=shift)
-                frac = np.where(
-                    active & (shifts > 0), k / safe_shifts, 0.0,
-                )
-                z_vals = (score_row * frac * height_scale).astype(np.float32)
-                dem_ridges[r] += np.where(active, z_vals, 0).astype(np.float32)
-                np.maximum(
-                    color_ridges[r],
-                    np.where(active, score_row, 0).astype(np.float32),
-                    out=color_ridges[r],
-                )
+    _write_ridge_hog(row, median_scores, profile_median, median_height_scale)
+    row += median_ridge_rows + gap_rows
 
-        for i in range(first_half):
-            _write_ridge(row, season_matrix[i], ridge_rows)
-            row += ridge_rows + gap_rows
+    for i in range(first_half, n_seasons):
+        _write_ridge_hog(row, season_matrix[i], profile_season)
+        row += ridge_rows + gap_rows
 
-        _write_ridge(row, median_scores, median_ridge_rows, median_height_scale)
-        row += median_ridge_rows + gap_rows
+    return dem_ridges, color_ridges
 
-        for i in range(first_half, n_seasons):
-            _write_ridge(row, season_matrix[i], ridge_rows)
-            row += ridge_rows + gap_rows
 
-        # Smooth along N-S axis to remove integer-shift quantization steps.
-        # Sigma scales with shear so the smoothing matches the ramp resolution.
-        from scipy.ndimage import gaussian_filter1d
-        sigma = max(1.0, shear / 8.0)
-        dem_ridges = gaussian_filter1d(dem_ridges, sigma=sigma, axis=0)
-        color_ridges = gaussian_filter1d(color_ridges, sigma=sigma, axis=0)
+def _build_cuesta_dem(
+    season_matrix: np.ndarray,
+    median_scores: np.ndarray,
+    q1_scores: np.ndarray | None,
+    q3_scores: np.ndarray | None,
+    ridge_rows: int,
+    gap_rows: int,
+    median_width_mult: int,
+    median_height_scale: float,
+    shear: float,
+    smooth_sigma: float | None,
+    summary_gap_rows: int,
+    summary_color_scale: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Emergent cuesta path (tail_rows>0).  Extracted for clarity."""
+    n_seasons, n_days = season_matrix.shape
+    has_summary = q1_scores is not None and q3_scores is not None
+    shear_pad = int(np.ceil(shear)) if shear > 0 else 0
 
+    if has_summary:
+        # Two-group layout (DEM row order, before the [::-1] flip):
+        #   [shear_pad] [summary: single IQR ridge] [summary_gap + shear_pad] [seasons]
+        #
+        # The IQR ridge uses median for height/color; Q1/Q3 define the
+        # N-S footprint (where the ridge contacts the background).
+        #
+        # After the [::-1] row-flip in temporal_sculpture.py:
+        #   scene-north (near main terrain): all seasons
+        #   scene-south (below):             IQR summary ridge
+        summary_block = ridge_rows + gap_rows  # single ridge slot
+        season_block = n_seasons * (ridge_rows + gap_rows)
+        total_rows = shear_pad + summary_block + summary_gap_rows + shear_pad + season_block
     else:
-        # Symmetric hogback (triangle/tent): [0, 1, 0] — no shear support
-        def _hogback(n):
-            mid = (n - 1) / 2.0
-            return np.clip(
-                1.0 - np.abs(np.arange(n) - mid) / mid, 0, 1,
-            ) if mid > 0 else np.ones(n)
+        # Legacy embedded-median layout
+        median_ridge_rows = ridge_rows * median_width_mult
+        base_rows = (
+            n_seasons * (ridge_rows + gap_rows)
+            + median_width_mult * ridge_rows
+            + gap_rows
+        )
+        total_rows = shear_pad + base_rows
 
-        profile_season = _hogback(ridge_rows)
-        profile_median = _hogback(median_ridge_rows)
-        row = 0
+    dem_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
+    color_ridges = np.zeros((total_rows, n_days), dtype=np.float32)
+    # Track per-cell max z contribution for height-based color ownership.
+    # When ridges overlap (tall peaks leaning into adjacent territory),
+    # whichever ridge contributes the MOST height at a cell owns its color.
+    _max_z_grid = np.zeros((total_rows, n_days), dtype=np.float32)
 
-        def _write_ridge_hog(start_row, score_row, profile, height_scale=1.0):
-            n = len(profile)
-            for dy in range(n):
-                r = start_row + dy
-                if 0 <= r < total_rows:
-                    dem_ridges[r] += score_row * profile[dy] * height_scale
-                    color_ridges[r] = np.maximum(color_ridges[r], score_row)
+    # Global max across all data for consistent shear normalization
+    all_maxes = [float(np.max(season_matrix)), float(np.max(median_scores))]
+    if has_summary:
+        all_maxes.extend([float(np.max(q1_scores)), float(np.max(q3_scores))])
+    global_max = max(all_maxes)
+
+    def _write_ridge(nom_row, score_row, height_scale=1.0):
+        """Write one cuesta ridge with float-precision shear."""
+        normed = (score_row / global_max) if global_max > 0 else score_row
+        shifts_float = normed * shear
+        safe_shifts = np.maximum(shifts_float, 1e-6)
+        max_shift = int(np.ceil(shear))
+
+        for k in range(max_shift + 1):
+            r = nom_row - k
+            if r < 0 or r >= total_rows:
+                continue
+            active_w = np.clip(shifts_float - k + 1, 0, 1)
+            active = active_w > 0
+            frac = np.minimum(k / safe_shifts, 1.0) * active_w
+            z_vals = (score_row * frac * height_scale).astype(np.float32)
+            new_z = np.where(active, z_vals, 0).astype(np.float32)
+            # Max (not sum): each cuesta keeps its own consistent slope profile.
+            # Overlapping tails don't artificially inflate height.
+            dem_ridges[r] = np.maximum(dem_ridges[r], new_z)
+            owns = new_z > _max_z_grid[r]
+            _max_z_grid[r] = np.maximum(_max_z_grid[r], new_z)
+            color_val = (score_row * frac).astype(np.float32)
+            color_ridges[r] = np.where(owns, color_val, color_ridges[r])
+
+    def _write_iqr_ridge(nom_row):
+        """Write a single IQR-envelope summary ridge.
+
+        Height and color driven by median_scores.  The N-S footprint
+        (where the ridge contacts the background) is set by Q1 (south
+        contact) and Q3 (north contact).  Between Q1 and median the
+        surface ramps up; between median and Q3 it ramps back down.
+        """
+        q1_shifts = (q1_scores / global_max * shear) if global_max > 0 else np.zeros(n_days)
+        med_shifts = (median_scores / global_max * shear) if global_max > 0 else np.zeros(n_days)
+        q3_shifts = (q3_scores / global_max * shear) if global_max > 0 else np.zeros(n_days)
+
+        # Ensure ordering even with noisy quantile estimates
+        q1_shifts = np.minimum(q1_shifts, med_shifts)
+        q3_shifts = np.maximum(q3_shifts, med_shifts)
+
+        south_range = np.maximum(med_shifts - q1_shifts, 1e-6)
+        north_range = np.maximum(q3_shifts - med_shifts, 1e-6)
+
+        max_k = int(np.ceil(shear)) + 1
+
+        for k in range(max_k):
+            r = nom_row - k
+            if r < 0 or r >= total_rows:
+                continue
+
+            kf = float(k)
+
+            # Ramp fraction: 0 at Q1/Q3 contacts, 1 at median peak
+            south_frac = np.clip((kf - q1_shifts) / south_range, 0, 1)
+            north_frac = np.clip(1.0 - (kf - med_shifts) / north_range, 0, 1)
+            below_med = kf <= med_shifts
+            frac = np.where(below_med, south_frac, north_frac)
+
+            # Soft sub-pixel edges at Q1 and Q3 boundaries
+            active_south = np.clip(kf - q1_shifts + 1, 0, 1)
+            active_north = np.clip(q3_shifts - kf + 1, 0, 1)
+            active_w = np.minimum(active_south, active_north)
+            active = active_w > 0
+
+            z_vals = (median_scores * frac * active_w).astype(np.float32)
+            new_z = np.where(active, z_vals, 0).astype(np.float32)
+            dem_ridges[r] = np.maximum(dem_ridges[r], new_z)
+            owns = new_z > _max_z_grid[r]
+            _max_z_grid[r] = np.maximum(_max_z_grid[r], new_z)
+            color_val = (median_scores * frac * active_w * summary_color_scale).astype(np.float32)
+            color_ridges[r] = np.where(
+                owns, color_val, color_ridges[r],
+            )
+
+    if has_summary:
+        # --- Group 1: single IQR summary ridge at north end of DEM ---
+        row = shear_pad
+        _write_iqr_ridge(row)
+        row += ridge_rows + gap_rows
+
+        # --- Gap + shear headroom for seasons ---
+        row += summary_gap_rows + shear_pad - gap_rows
+
+        # --- Group 2: all seasons (oldest → newest) ---
+        for i in range(n_seasons):
+            _write_ridge(row, season_matrix[i])
+            row += ridge_rows + gap_rows
+    else:
+        # Legacy layout: first_half + median + second_half
+        first_half = n_seasons // 2
+        row = shear_pad
 
         for i in range(first_half):
-            _write_ridge_hog(row, season_matrix[i], profile_season)
+            _write_ridge(row, season_matrix[i])
             row += ridge_rows + gap_rows
 
-        _write_ridge_hog(row, median_scores, profile_median, median_height_scale)
+        median_ridge_rows = ridge_rows * median_width_mult
+        _write_ridge(row, median_scores, median_height_scale)
         row += median_ridge_rows + gap_rows
 
         for i in range(first_half, n_seasons):
-            _write_ridge_hog(row, season_matrix[i], profile_season)
+            _write_ridge(row, season_matrix[i])
             row += ridge_rows + gap_rows
+
+    # Optional smoothing
+    if smooth_sigma is not None and smooth_sigma > 0:
+        from scipy.ndimage import gaussian_filter1d
+        dem_ridges = gaussian_filter1d(dem_ridges, sigma=smooth_sigma, axis=0)
+        color_ridges = gaussian_filter1d(color_ridges, sigma=smooth_sigma, axis=0)
 
     return dem_ridges, color_ridges
 
@@ -696,8 +909,8 @@ def plot_temporal(
     seasons = sorted(data["seasons"])
     n = len(seasons)
 
-    # Interpolate every season onto a 182-day common grid (day 0=Nov 1)
-    doy_grid = np.arange(0, 182)
+    # Interpolate every season onto a 243-day common grid (day 0=Oct 1)
+    doy_grid = np.arange(0, 243)
 
     cmap = cm.plasma
     colors = {s: cmap(i / max(1, n - 1)) for i, s in enumerate(seasons)}
@@ -733,11 +946,12 @@ def plot_temporal(
 
     # Month tick positions (non-leap reference year)
     month_info = [
-        (date(2023, 11, 1), "Nov"), (date(2023, 12, 1), "Dec"),
-        (date(2024, 1, 1), "Jan"),  (date(2024, 2, 1), "Feb"),
-        (date(2024, 3, 1), "Mar"),  (date(2024, 4, 1), "Apr"),
+        (date(2023, 10, 1), "Oct"), (date(2023, 11, 1), "Nov"),
+        (date(2023, 12, 1), "Dec"), (date(2024, 1, 1), "Jan"),
+        (date(2024, 2, 1), "Feb"),  (date(2024, 3, 1), "Mar"),
+        (date(2024, 4, 1), "Apr"),  (date(2024, 5, 1), "May"),
     ]
-    tick_pos = [_days_since_nov1(d) for d, _ in month_info]
+    tick_pos = [_days_since_oct1(d) for d, _ in month_info]
     tick_lab = [lbl for _, lbl in month_info]
 
     # ---- Figure ---------------------------------------------------------------
@@ -810,7 +1024,7 @@ def plot_temporal(
 
     ax4.set_xticks(tick_pos)
     ax4.set_xticklabels(tick_lab, fontsize=10)
-    ax4.set_xlim(0, 181)
+    ax4.set_xlim(0, 242)
 
     # ---- Colorbar ---------------------------------------------------------------
     sm = plt.cm.ScalarMappable(
