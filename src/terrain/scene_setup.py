@@ -300,21 +300,24 @@ def create_background_plane(
     if not meshes:
         raise ValueError("At least one mesh must be provided")
 
-    # Compute combined bounding box to find lowest Z point
+    # Compute combined bounding box to find lowest Z and XY center
+    all_xs = []
+    all_ys = []
     all_zs = []
-    center_z = 0
 
     for mesh in meshes:
         bbox = mesh.bound_box
         world_matrix = mesh.matrix_world
         for vertex in bbox:
             world_vertex = world_matrix @ Vector(vertex)
+            all_xs.append(world_vertex[0])
+            all_ys.append(world_vertex[1])
             all_zs.append(world_vertex[2])
-        # Also track center for positioning
-        center_z += (min([world_matrix @ Vector(v) for v in bbox], key=lambda x: x[2])[2])
 
     min_z = min(all_zs)
     plane_z = min_z - distance_below
+    mesh_center_x = (min(all_xs) + max(all_xs)) / 2
+    mesh_center_y = (min(all_ys) + max(all_ys)) / 2
 
     logger.debug(f"Mesh lowest Z: {min_z:.2f}, plane position Z: {plane_z:.2f}")
 
@@ -388,9 +391,9 @@ def create_background_plane(
     mesh_data.from_pydata(verts, [], faces)
     mesh_data.update()
 
-    # Position plane below mesh, centered on camera XY
-    cam_xy = (camera.location[0], camera.location[1])
-    plane_obj.location = (*cam_xy, plane_z)
+    # Position plane below mesh, centered on the mesh XY center
+    # (not camera XY, which may be far away for non-overhead cameras)
+    plane_obj.location = (mesh_center_x, mesh_center_y, plane_z)
 
     logger.debug(f"Plane positioned at: {plane_obj.location}")
 
@@ -1169,6 +1172,135 @@ def position_camera_relative(
             azimuth=sun_azimuth,
             elevation=sun_elevation,
         )
+
+    return camera
+
+
+# =============================================================================
+# MULTI-MESH PANEL LAYOUT
+# =============================================================================
+
+
+def layout_panel_positions(
+    n: int,
+    panel_width: float,
+    panel_depth: float,
+    spacing: float = 1.0,
+    origin: tuple[float, float] = (0.0, 0.0),
+    max_cols: int = 4,
+) -> list[tuple[float, float]]:
+    """Compute (x, y) positions for n panels in a grid layout.
+
+    Pure geometry function (no Blender calls). Returns positions suitable
+    for use with position_mesh_at().
+
+    Panels are laid out left-to-right, wrapping to a new row (negative Y)
+    when max_cols is exceeded.
+
+    Args:
+        n: Number of panels.
+        panel_width: Width of each panel along X axis (Blender units).
+        panel_depth: Depth of each panel along Y axis (Blender units).
+        spacing: Gap between panels (Blender units).
+        origin: (x, y) of the first panel center.
+        max_cols: Maximum columns before wrapping to next row.
+
+    Returns:
+        List of (x, y) tuples, one per panel.
+    """
+    from math import ceil
+
+    cols = min(n, max_cols)
+    positions = []
+    for i in range(n):
+        col = i % cols
+        row = i // cols
+        x = origin[0] + col * (panel_width + spacing)
+        y = origin[1] - row * (panel_depth + spacing)
+        positions.append((x, y))
+    return positions
+
+
+def position_mesh_at(
+    blender_object: "bpy.types.Object",
+    x: float,
+    y: float,
+) -> None:
+    """Move a Blender object to the given (x, y) position, preserving Z.
+
+    Args:
+        blender_object: The Blender object to reposition.
+        x: Target X position (Blender units).
+        y: Target Y position (Blender units).
+    """
+    blender_object.location.x = x
+    blender_object.location.y = y
+
+
+def frame_camera_to_objects(
+    objects: list["bpy.types.Object"],
+    camera: "bpy.types.Object | None" = None,
+    padding: float = 1.3,
+) -> "bpy.types.Object":
+    """Position an orthographic camera to frame all given objects from above.
+
+    Computes the bounding box of all objects, then places the camera
+    centered above the bounding box looking straight down with enough
+    ortho_scale to see everything (with padding).
+
+    Args:
+        objects: List of Blender mesh objects to frame.
+        camera: Camera object to position (default: scene active camera,
+                created if none exists).
+        padding: Multiplier on the ortho_scale for margin (default: 1.3).
+
+    Returns:
+        The camera object.
+    """
+    logger = logging.getLogger(__name__)
+
+    if not objects:
+        raise ValueError("No objects to frame")
+
+    # Find or create camera
+    if camera is None:
+        camera = bpy.context.scene.camera
+    if camera is None:
+        cam_data = bpy.data.cameras.new("PanelCamera")
+        camera = bpy.data.objects.new("PanelCamera", cam_data)
+        bpy.context.scene.collection.objects.link(camera)
+        bpy.context.scene.camera = camera
+
+    # Compute combined bounding box in world space
+    min_x = min_y = min_z = float("inf")
+    max_x = max_y = max_z = float("-inf")
+
+    for obj in objects:
+        for corner in obj.bound_box:
+            world_corner = obj.matrix_world @ Vector(corner)
+            min_x = min(min_x, world_corner.x)
+            min_y = min(min_y, world_corner.y)
+            min_z = min(min_z, world_corner.z)
+            max_x = max(max_x, world_corner.x)
+            max_y = max(max_y, world_corner.y)
+            max_z = max(max_z, world_corner.z)
+
+    # Center camera above bounding box
+    cx = (min_x + max_x) / 2
+    cy = (min_y + max_y) / 2
+    camera.location = (cx, cy, max_z + 10.0)
+    camera.rotation_euler = (0, 0, 0)  # Looking straight down
+
+    # Set orthographic
+    camera.data.type = "ORTHO"
+    extent_x = max_x - min_x
+    extent_y = max_y - min_y
+    camera.data.ortho_scale = max(extent_x, extent_y) * padding
+
+    logger.info(
+        "Panel camera: center=(%.1f, %.1f), ortho_scale=%.1f, framing %d objects",
+        cx, cy, camera.data.ortho_scale, len(objects),
+    )
 
     return camera
 
