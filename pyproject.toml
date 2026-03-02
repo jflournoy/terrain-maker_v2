@@ -86,6 +86,9 @@ addopts = [
     "--tb=short",
     "--strict-markers",
 ]
+markers = [
+    "benchmark: marks tests as performance benchmarks",
+]
 
 [tool.mypy]
 python_version = "3.11"

@@ -1,7 +1,8 @@
 """
 Tests for snow analysis module.
 
-TDD RED Phase: Writing failing tests to define requirements.
+Tests for existing SNODAS functions from src.snow.snodas, plus
+TDD RED phase tests for the planned SnowAnalysis class.
 """
 
 import pytest
@@ -12,137 +13,18 @@ import tempfile
 import gzip
 from datetime import datetime
 
-from src.snow.analysis import (
-    SnowAnalysis,
+from src.snow.snodas import (
     _read_snodas_header,
     _gunzip_snodas_file,
     _read_snodas_binary,
+    _load_snodas_data,
+    _load_processed_snodas,
 )
 
 
-class TestSnowAnalysisInit:
-    """Test SnowAnalysis initialization."""
-
-    def test_init_without_terrain(self):
-        """SnowAnalysis can be initialized without terrain."""
-        analyzer = SnowAnalysis()
-        assert analyzer.terrain is None
-        assert analyzer.snodas_root_dir is None
-        assert analyzer.cache_dir == Path("snow_analysis_cache")
-        assert analyzer.processed_files == {}
-        assert analyzer.stats is None
-        assert analyzer.metadata is None
-        assert analyzer.sledding_score is None
-
-    def test_init_with_custom_cache_dir(self):
-        """SnowAnalysis respects custom cache directory."""
-        analyzer = SnowAnalysis(cache_dir="custom_cache")
-        assert analyzer.cache_dir == Path("custom_cache")
-        assert analyzer.cache_dir.exists()
-
-    def test_init_with_snodas_root_dir(self, tmp_path):
-        """SnowAnalysis accepts snodas_root_dir."""
-        root_dir = tmp_path / "snodas_data"
-        root_dir.mkdir()
-        analyzer = SnowAnalysis(snodas_root_dir=str(root_dir))
-        assert analyzer.snodas_root_dir == root_dir
-
-    def test_set_terrain(self):
-        """set_terrain() updates the terrain reference."""
-        analyzer = SnowAnalysis()
-        mock_terrain = type("MockTerrain", (), {"dem_bounds": (0, 0, 1, 1)})()
-        analyzer.set_terrain(mock_terrain)
-        assert analyzer.terrain == mock_terrain
-
-
-class TestCalculateTPI:
-    """Test Topographic Position Index calculation."""
-
-    def test_tpi_flat_terrain_returns_zeros(self):
-        """TPI of perfectly flat terrain should be all zeros."""
-        analyzer = SnowAnalysis()
-        flat_dem = np.ones((10, 10)) * 100.0  # Flat at 100m elevation
-
-        tpi = analyzer.calculate_tpi(flat_dem, window_size=3)
-
-        # Flat terrain should have TPI ≈ 0 everywhere
-        assert tpi.shape == flat_dem.shape
-        np.testing.assert_allclose(tpi, 0.0, atol=1e-6)
-
-    def test_tpi_single_peak(self):
-        """TPI should be positive at a peak."""
-        analyzer = SnowAnalysis()
-        dem = np.zeros((5, 5))
-        dem[2, 2] = 10.0  # Single peak in center
-
-        tpi = analyzer.calculate_tpi(dem, window_size=3)
-
-        # Center pixel (peak) should have positive TPI
-        assert tpi[2, 2] > 0
-        # Surrounding pixels should have negative TPI
-        assert tpi[1, 2] < 0
-
-    def test_tpi_single_valley(self):
-        """TPI should be negative in a valley."""
-        analyzer = SnowAnalysis()
-        dem = np.ones((5, 5)) * 10.0
-        dem[2, 2] = 0.0  # Single valley in center
-
-        tpi = analyzer.calculate_tpi(dem, window_size=3)
-
-        # Center pixel (valley) should have negative TPI
-        assert tpi[2, 2] < 0
-
-    def test_tpi_custom_window_size(self):
-        """TPI calculation respects custom window_size."""
-        analyzer = SnowAnalysis()
-        dem = np.random.rand(20, 20) * 100
-
-        tpi_small = analyzer.calculate_tpi(dem, window_size=3)
-        tpi_large = analyzer.calculate_tpi(dem, window_size=7)
-
-        # Different window sizes should give different results
-        assert not np.allclose(tpi_small, tpi_large)
-
-
-class TestCalculateRoughness:
-    """Test terrain roughness calculation."""
-
-    def test_roughness_flat_terrain_is_zero(self):
-        """Roughness of flat terrain should be zero."""
-        analyzer = SnowAnalysis()
-        flat_dem = np.ones((10, 10)) * 100.0
-
-        roughness = analyzer.calculate_roughness(flat_dem, window_size=3)
-
-        assert roughness.shape == flat_dem.shape
-        np.testing.assert_allclose(roughness, 0.0, atol=1e-6)
-
-    def test_roughness_rough_terrain_is_positive(self):
-        """Roughness of variable terrain should be > 0."""
-        analyzer = SnowAnalysis()
-        # Create rough terrain with random elevation changes
-        rough_dem = np.random.rand(10, 10) * 100
-
-        roughness = analyzer.calculate_roughness(rough_dem, window_size=3)
-
-        # Should have some positive roughness values
-        assert np.mean(roughness) > 0
-        assert roughness.shape == rough_dem.shape
-
-    def test_roughness_increases_with_variability(self):
-        """More variable terrain should have higher roughness."""
-        analyzer = SnowAnalysis()
-        # Gentle slopes
-        gentle = np.tile(np.arange(10), (10, 1))
-        # Steep slopes
-        steep = gentle * 10
-
-        roughness_gentle = analyzer.calculate_roughness(gentle, window_size=3)
-        roughness_steep = analyzer.calculate_roughness(steep, window_size=3)
-
-        # Steeper terrain should be rougher
-        assert np.mean(roughness_steep) > np.mean(roughness_gentle)
+# =============================================================================
+# Tests for existing snodas.py functions
+# =============================================================================
 
 
 class TestGunzipSnodasFile:
@@ -348,62 +230,11 @@ class TestReadSnodasBinary:
         assert not result.mask[0, 3]
 
 
-class TestSleddingScore:
-    """Test sledding suitability score calculation."""
-
-    def test_sledding_score_requires_stats(self):
-        """calculate_sledding_score raises error without stats."""
-        analyzer = SnowAnalysis()
-
-        with pytest.raises(ValueError, match="No snow stats"):
-            analyzer.calculate_sledding_score()
-
-    def test_sledding_score_basic_calculation(self):
-        """calculate_sledding_score computes score from stats."""
-        analyzer = SnowAnalysis()
-
-        # Mock stats with known values
-        stats = {
-            "median_max_depth": np.ones((10, 10)) * 300,  # 300mm depth
-            "mean_snow_day_ratio": np.ones((10, 10)) * 0.5,  # 50% snow coverage
-            "interseason_cv": np.ones((10, 10)) * 0.1,  # Low variability
-            "mean_intraseason_cv": np.ones((10, 10)) * 0.1,
-        }
-        analyzer.stats = stats
-
-        score = analyzer.calculate_sledding_score(stats, min_depth_mm=100, min_coverage=0.3)
-
-        # Score should be between 0 and 1
-        assert score.shape == (10, 10)
-        assert np.all((score >= 0) & (score <= 1))
-        # With good conditions, score should be reasonably high
-        assert np.mean(score) > 0.5
-
-    def test_sledding_score_zero_for_no_snow(self):
-        """calculate_sledding_score gives low score with no snow."""
-        analyzer = SnowAnalysis()
-
-        stats = {
-            "median_max_depth": np.zeros((10, 10)),  # No snow
-            "mean_snow_day_ratio": np.zeros((10, 10)),
-            "interseason_cv": np.ones((10, 10)) * 0.5,
-            "mean_intraseason_cv": np.ones((10, 10)) * 0.5,
-        }
-        analyzer.stats = stats
-
-        score = analyzer.calculate_sledding_score(stats)
-
-        # Score should be very low
-        assert np.mean(score) < 0.3
-
-
 class TestLoadSnodasData:
     """Test _load_snodas_data function."""
 
     def test_load_snodas_data_returns_data_and_metadata(self, tmp_path):
         """_load_snodas_data returns both data array and metadata dict."""
-        from src.snow.analysis import _load_snodas_data
-
         # Create test header
         header_content = """Data units: meters
 Data slope: 0.001
@@ -438,8 +269,6 @@ Maximum y-axis coordinate: 45.5
 
     def test_load_snodas_data_uses_existing_uncompressed(self, tmp_path):
         """_load_snodas_data uses existing uncompressed files."""
-        from src.snow.analysis import _load_snodas_data
-
         # Create uncompressed header
         header_content = """Number of columns: 2
 Number of rows: 2
@@ -479,10 +308,7 @@ class TestLoadProcessedSnodas:
 
     def test_load_processed_snodas_reads_npz(self, tmp_path):
         """_load_processed_snodas reads .npz files correctly."""
-        from src.snow.analysis import SnowAnalysis
         from affine import Affine
-
-        analyzer = SnowAnalysis()
 
         # Create test .npz file
         test_data = np.random.rand(10, 10).astype(np.float32)
@@ -499,7 +325,7 @@ class TestLoadProcessedSnodas:
             no_data_value=np.float32(-9999),
         )
 
-        data, meta = analyzer._load_processed_snodas(npz_file)
+        data, meta = _load_processed_snodas(npz_file)
 
         assert data.shape == (10, 10)
         assert "transform" in meta
@@ -509,17 +335,13 @@ class TestLoadProcessedSnodas:
 
     def test_load_processed_snodas_masks_no_data(self, tmp_path):
         """_load_processed_snodas masks no_data values."""
-        from src.snow.analysis import SnowAnalysis
-
-        analyzer = SnowAnalysis()
-
         # Create data with no_data values
         test_data = np.array([[1.0, 2.0, -9999.0], [4.0, -9999.0, 6.0]], dtype=np.float32)
         npz_file = tmp_path / "test.npz"
 
         np.savez_compressed(npz_file, data=test_data, no_data_value=np.float32(-9999.0))
 
-        data, meta = analyzer._load_processed_snodas(npz_file)
+        data, meta = _load_processed_snodas(npz_file)
 
         # Should be masked array
         assert isinstance(data, ma.MaskedArray)
@@ -530,16 +352,12 @@ class TestLoadProcessedSnodas:
 
     def test_load_processed_snodas_handles_missing_fields(self, tmp_path):
         """_load_processed_snodas handles .npz with minimal fields."""
-        from src.snow.analysis import SnowAnalysis
-
-        analyzer = SnowAnalysis()
-
         # Create minimal .npz file
         test_data = np.random.rand(5, 5).astype(np.float32)
         npz_file = tmp_path / "test.npz"
         np.savez_compressed(npz_file, data=test_data)
 
-        data, meta = analyzer._load_processed_snodas(npz_file)
+        data, meta = _load_processed_snodas(npz_file)
 
         # Should still load data
         assert data.shape == (5, 5)
@@ -547,11 +365,211 @@ class TestLoadProcessedSnodas:
         assert isinstance(meta, dict)
 
 
+# =============================================================================
+# TDD RED Phase: Tests for planned SnowAnalysis class (not yet implemented)
+# =============================================================================
+
+
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
+class TestSnowAnalysisInit:
+    """Test SnowAnalysis initialization."""
+
+    def test_init_without_terrain(self):
+        """SnowAnalysis can be initialized without terrain."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        assert analyzer.terrain is None
+        assert analyzer.snodas_root_dir is None
+        assert analyzer.cache_dir == Path("snow_analysis_cache")
+        assert analyzer.processed_files == {}
+        assert analyzer.stats is None
+        assert analyzer.metadata is None
+        assert analyzer.sledding_score is None
+
+    def test_init_with_custom_cache_dir(self):
+        """SnowAnalysis respects custom cache directory."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis(cache_dir="custom_cache")
+        assert analyzer.cache_dir == Path("custom_cache")
+        assert analyzer.cache_dir.exists()
+
+    def test_init_with_snodas_root_dir(self, tmp_path):
+        """SnowAnalysis accepts snodas_root_dir."""
+        from src.snow.analysis import SnowAnalysis
+
+        root_dir = tmp_path / "snodas_data"
+        root_dir.mkdir()
+        analyzer = SnowAnalysis(snodas_root_dir=str(root_dir))
+        assert analyzer.snodas_root_dir == root_dir
+
+    def test_set_terrain(self):
+        """set_terrain() updates the terrain reference."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        mock_terrain = type("MockTerrain", (), {"dem_bounds": (0, 0, 1, 1)})()
+        analyzer.set_terrain(mock_terrain)
+        assert analyzer.terrain == mock_terrain
+
+
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
+class TestCalculateTPI:
+    """Test Topographic Position Index calculation."""
+
+    def test_tpi_flat_terrain_returns_zeros(self):
+        """TPI of perfectly flat terrain should be all zeros."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        flat_dem = np.ones((10, 10)) * 100.0
+
+        tpi = analyzer.calculate_tpi(flat_dem, window_size=3)
+
+        assert tpi.shape == flat_dem.shape
+        np.testing.assert_allclose(tpi, 0.0, atol=1e-6)
+
+    def test_tpi_single_peak(self):
+        """TPI should be positive at a peak."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        dem = np.zeros((5, 5))
+        dem[2, 2] = 10.0
+
+        tpi = analyzer.calculate_tpi(dem, window_size=3)
+
+        assert tpi[2, 2] > 0
+        assert tpi[1, 2] < 0
+
+    def test_tpi_single_valley(self):
+        """TPI should be negative in a valley."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        dem = np.ones((5, 5)) * 10.0
+        dem[2, 2] = 0.0
+
+        tpi = analyzer.calculate_tpi(dem, window_size=3)
+
+        assert tpi[2, 2] < 0
+
+    def test_tpi_custom_window_size(self):
+        """TPI calculation respects custom window_size."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        dem = np.random.rand(20, 20) * 100
+
+        tpi_small = analyzer.calculate_tpi(dem, window_size=3)
+        tpi_large = analyzer.calculate_tpi(dem, window_size=7)
+
+        assert not np.allclose(tpi_small, tpi_large)
+
+
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
+class TestCalculateRoughness:
+    """Test terrain roughness calculation."""
+
+    def test_roughness_flat_terrain_is_zero(self):
+        """Roughness of flat terrain should be zero."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        flat_dem = np.ones((10, 10)) * 100.0
+
+        roughness = analyzer.calculate_roughness(flat_dem, window_size=3)
+
+        assert roughness.shape == flat_dem.shape
+        np.testing.assert_allclose(roughness, 0.0, atol=1e-6)
+
+    def test_roughness_rough_terrain_is_positive(self):
+        """Roughness of variable terrain should be > 0."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        rough_dem = np.random.rand(10, 10) * 100
+
+        roughness = analyzer.calculate_roughness(rough_dem, window_size=3)
+
+        assert np.mean(roughness) > 0
+        assert roughness.shape == rough_dem.shape
+
+    def test_roughness_increases_with_variability(self):
+        """More variable terrain should have higher roughness."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+        gentle = np.tile(np.arange(10), (10, 1))
+        steep = gentle * 10
+
+        roughness_gentle = analyzer.calculate_roughness(gentle, window_size=3)
+        roughness_steep = analyzer.calculate_roughness(steep, window_size=3)
+
+        assert np.mean(roughness_steep) > np.mean(roughness_gentle)
+
+
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
+class TestSleddingScore:
+    """Test sledding suitability score calculation."""
+
+    def test_sledding_score_requires_stats(self):
+        """calculate_sledding_score raises error without stats."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+
+        with pytest.raises(ValueError, match="No snow stats"):
+            analyzer.calculate_sledding_score()
+
+    def test_sledding_score_basic_calculation(self):
+        """calculate_sledding_score computes score from stats."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+
+        stats = {
+            "median_max_depth": np.ones((10, 10)) * 300,
+            "mean_snow_day_ratio": np.ones((10, 10)) * 0.5,
+            "interseason_cv": np.ones((10, 10)) * 0.1,
+            "mean_intraseason_cv": np.ones((10, 10)) * 0.1,
+        }
+        analyzer.stats = stats
+
+        score = analyzer.calculate_sledding_score(stats, min_depth_mm=100, min_coverage=0.3)
+
+        assert score.shape == (10, 10)
+        assert np.all((score >= 0) & (score <= 1))
+        assert np.mean(score) > 0.5
+
+    def test_sledding_score_zero_for_no_snow(self):
+        """calculate_sledding_score gives low score with no snow."""
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
+
+        stats = {
+            "median_max_depth": np.zeros((10, 10)),
+            "mean_snow_day_ratio": np.zeros((10, 10)),
+            "interseason_cv": np.ones((10, 10)) * 0.5,
+            "mean_intraseason_cv": np.ones((10, 10)) * 0.5,
+        }
+        analyzer.stats = stats
+
+        score = analyzer.calculate_sledding_score(stats)
+
+        assert np.mean(score) < 0.3
+
+
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
 class TestProcessSnowDataWorkflow:
     """Test process_snow_data high-level workflow."""
 
     def test_process_snow_data_requires_terrain(self):
         """process_snow_data raises error without terrain."""
+        from src.snow.analysis import SnowAnalysis
+
         analyzer = SnowAnalysis()
 
         with pytest.raises(ValueError, match="No terrain provided"):
@@ -559,9 +577,10 @@ class TestProcessSnowDataWorkflow:
 
     def test_process_snow_data_requires_valid_snodas_dir(self, tmp_path):
         """process_snow_data raises error with invalid SNODAS directory."""
+        from src.snow.analysis import SnowAnalysis
+
         analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path / "nonexistent"))
 
-        # Mock terrain
         mock_terrain = type("MockTerrain", (), {"dem_bounds": (-120.0, 45.0, -119.0, 45.5)})()
         analyzer.set_terrain(mock_terrain)
 
@@ -569,11 +588,14 @@ class TestProcessSnowDataWorkflow:
             analyzer.process_snow_data()
 
 
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
 class TestBatchProcessSnodas:
-    """Test batch_process_snodas_data function."""
+    """Test batch_process_snodas_data on SnowAnalysis class."""
 
     def test_batch_process_returns_empty_without_files(self, tmp_path):
         """batch_process_snodas_data returns empty dict without files."""
+        from src.snow.analysis import SnowAnalysis
+
         analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path))
         extent = (-120.0, 45.0, -119.0, 45.5)
 
@@ -583,7 +605,9 @@ class TestBatchProcessSnodas:
 
     def test_batch_process_returns_empty_without_root_dir(self):
         """batch_process_snodas_data returns empty dict without root dir."""
-        analyzer = SnowAnalysis()  # No root dir
+        from src.snow.analysis import SnowAnalysis
+
+        analyzer = SnowAnalysis()
         extent = (-120.0, 45.0, -119.0, 45.5)
 
         result = analyzer.batch_process_snodas_data(extent)
@@ -591,11 +615,14 @@ class TestBatchProcessSnodas:
         assert result == {}
 
 
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
 class TestVisualization:
     """Test visualization functions."""
 
     def test_visualize_requires_data(self):
         """visualize_snow_data raises error without data."""
+        from src.snow.analysis import SnowAnalysis
+
         analyzer = SnowAnalysis()
 
         with pytest.raises((ValueError, AttributeError)):
@@ -605,38 +632,39 @@ class TestVisualization:
         """visualize_snow_data works with sledding_score data."""
         import matplotlib
 
-        matplotlib.use("Agg")  # Non-interactive backend for testing
+        matplotlib.use("Agg")
+        from src.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         analyzer.sledding_score = np.random.rand(10, 10)
 
-        # Should not raise exception (won't show plot in test)
         try:
             analyzer.visualize_snow_data(data_type="sledding_score")
         except Exception as e:
-            # plt.show() might fail in test environment, that's okay
             if "display" not in str(e).lower():
                 raise
 
 
+@pytest.mark.xfail(reason="SnowAnalysis class not yet implemented (TDD RED phase)")
 class TestStoreSnowStatsInTerrain:
     """Test _store_snow_stats_in_terrain function."""
 
     def test_store_stats_skips_without_terrain(self):
         """_store_snow_stats_in_terrain does nothing without terrain."""
+        from src.snow.analysis import SnowAnalysis
+
         analyzer = SnowAnalysis()
         stats = {"median_max_depth": np.ones((10, 10))}
         metadata = {"transform": None, "crs": "EPSG:4326"}
 
-        # Should not raise exception
         analyzer._store_snow_stats_in_terrain(stats, metadata)
         assert analyzer.terrain is None
 
     def test_store_stats_adds_arrays_to_terrain(self):
         """_store_snow_stats_in_terrain adds array stats to terrain."""
         from affine import Affine
+        from src.snow.analysis import SnowAnalysis
 
-        # Mock terrain with add_data_layer method
         added_layers = []
 
         class MockTerrain:
@@ -652,17 +680,17 @@ class TestStoreSnowStatsInTerrain:
         stats = {
             "median_max_depth": np.ones((10, 10)),
             "mean_snow_day_ratio": np.ones((10, 10)),
-            "some_scalar": 42,  # Should be skipped (not an array)
+            "some_scalar": 42,
         }
         metadata = {"transform": Affine.identity(), "crs": "EPSG:4326"}
 
         analyzer._store_snow_stats_in_terrain(stats, metadata)
 
-        # Should have added 2 array layers (not the scalar)
         assert len(added_layers) == 2
         assert "snodas_median_max_depth" in added_layers
         assert "snodas_mean_snow_day_ratio" in added_layers
 
 
 # 🔴 TDD RED PHASE COMPLETE - Round 2
-# Additional tests for coverage improvement
+# SnowAnalysis class tests marked as xfail until implementation.
+# SNODAS I/O function tests now point to existing src.snow.snodas module.
