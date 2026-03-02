@@ -87,6 +87,60 @@ except ImportError:
 
 
 # =============================================================================
+# Visualization Helpers
+# =============================================================================
+
+
+def _save_raster_panel(
+    data,
+    title,
+    output_path,
+    cmap="viridis",
+    vmin=None,
+    vmax=None,
+    cbar_label=None,
+    annotation=None,
+    figsize=(10, 8),
+    dpi=150,
+):
+    """Save a single raster panel as a PNG.
+
+    Standardized panel rendering used by save_slope_stat_panels() and
+    save_slope_penalty_panels() to avoid copy-pasting the same 10-line
+    imshow + colorbar + save block.
+
+    Args:
+        data: 2D numpy array to visualize.
+        title: Plot title (bold, 14pt).
+        output_path: Path to save the PNG.
+        cmap: Matplotlib colormap name.
+        vmin: Minimum value for color normalization.
+        vmax: Maximum value for color normalization.
+        cbar_label: Colorbar label. If None, auto-generates from data range.
+        annotation: Optional text annotation below the plot.
+        figsize: Figure size tuple.
+        dpi: Output resolution.
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(data, cmap=cmap, aspect="equal", interpolation="nearest",
+                   vmin=vmin, vmax=vmax)
+    ax.set_title(title, fontweight="bold", fontsize=14)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    if cbar_label:
+        cbar.set_label(cbar_label, rotation=270, labelpad=20)
+    if annotation:
+        ax.text(0.5, -0.15, annotation,
+                transform=ax.transAxes, ha='center', fontsize=10,
+                bbox=dict(boxstyle="round", facecolor="yellow", alpha=0.7))
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
+    plt.close()
+    logger.info(f"✓ Saved: {output_path}")
+
+
+# =============================================================================
 # Slope Statistics Caching
 # =============================================================================
 
@@ -531,6 +585,11 @@ def save_sledding_score_filtered(score: np.ndarray, output_path: Path, threshold
     logger.info(f"✓ Sledding score filtered map saved: {output_path}")
 
 
+def _range_label(data, unit="°"):
+    """Auto-generate a colorbar label showing the data range."""
+    return f"{np.nanmin(data):.1f}-{np.nanmax(data):.1f}{unit}"
+
+
 def save_slope_stat_panels(slope_stats, output_dir: Path):
     """
     Save individual slope statistics panels to separate PNG files.
@@ -543,91 +602,27 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Panel 1: Slope Mean
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.slope_mean, cmap="viridis", aspect="equal", interpolation="nearest")
-    ax.set_title("Slope Mean (°)", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.slope_mean):.1f}-{np.nanmax(slope_stats.slope_mean):.1f}°", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "mean.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'mean.png'}")
+    # Panels 1-6: standard raster panels
+    panels = [
+        (slope_stats.slope_mean, "Slope Mean (°)", "mean.png", "viridis", "°"),
+        (slope_stats.slope_max, "Slope Max (°) - Cliff Detection", "max.png", "inferno", "°"),
+        (slope_stats.slope_min, "Slope Min (°) - Flat Spots", "min.png", "cividis", "°"),
+        (slope_stats.slope_std, "Slope Std Dev (°) - Terrain Consistency", "std.png", "magma", "°"),
+        (slope_stats.slope_p95, "Slope P95 (°) - 95th Percentile", "p95.png", "plasma", "°"),
+        (slope_stats.roughness, "Roughness (m elev std)", "roughness.png", "inferno", "m"),
+    ]
+    for data, title, filename, cmap, unit in panels:
+        _save_raster_panel(
+            data, title, output_dir / filename,
+            cmap=cmap, cbar_label=_range_label(data, unit),
+        )
 
-    # Panel 2: Slope Max
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.slope_max, cmap="inferno", aspect="equal", interpolation="nearest")
-    ax.set_title("Slope Max (°) - Cliff Detection", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.slope_max):.1f}-{np.nanmax(slope_stats.slope_max):.1f}°", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "max.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'max.png'}")
-
-    # Panel 3: Slope Min
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.slope_min, cmap="cividis", aspect="equal", interpolation="nearest")
-    ax.set_title("Slope Min (°) - Flat Spots", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.slope_min):.1f}-{np.nanmax(slope_stats.slope_min):.1f}°", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "min.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'min.png'}")
-
-    # Panel 4: Slope Std Dev
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.slope_std, cmap="magma", aspect="equal", interpolation="nearest")
-    ax.set_title("Slope Std Dev (°) - Terrain Consistency", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.slope_std):.1f}-{np.nanmax(slope_stats.slope_std):.1f}°", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "std.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'std.png'}")
-
-    # Panel 5: Slope P95
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.slope_p95, cmap="plasma", aspect="equal", interpolation="nearest")
-    ax.set_title("Slope P95 (°) - 95th Percentile", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.slope_p95):.1f}-{np.nanmax(slope_stats.slope_p95):.1f}°", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "p95.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'p95.png'}")
-
-    # Panel 6: Roughness
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.roughness, cmap="inferno", aspect="equal", interpolation="nearest")
-    ax.set_title("Roughness (m elev std)", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label(f"{np.nanmin(slope_stats.roughness):.1f}-{np.nanmax(slope_stats.roughness):.1f}m", rotation=270, labelpad=20)
-    plt.tight_layout()
-    plt.savefig(output_dir / "roughness.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'roughness.png'}")
-
-    # Panel 7: Aspect (dominant slope direction)
+    # Panel 7: Aspect (custom rendering with twilight colormap + gray fade)
     from matplotlib.colors import Normalize
     fig, ax = plt.subplots(figsize=(10, 8))
     aspect_deg = slope_stats.dominant_aspect
 
     # Use twilight colormap with 180° offset: North (0°) = light, South (180°) = dark
-    # Add 180° to flip the coordinate system so North appears light and South appears dark
     norm = Normalize(vmin=0, vmax=360)
     aspect_colors = plt.cm.twilight(norm((aspect_deg + 180) % 360))
 
@@ -651,16 +646,12 @@ def save_slope_stat_panels(slope_stats, output_dir: Path):
     logger.info(f"✓ Saved: {output_dir / 'aspect.png'}")
 
     # Panel 8: Aspect Strength
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_stats.aspect_strength, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Aspect Strength (0=varied, 1=uniform)", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "aspect_strength.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'aspect_strength.png'}")
+    _save_raster_panel(
+        slope_stats.aspect_strength,
+        "Aspect Strength (0=varied, 1=uniform)",
+        output_dir / "aspect_strength.png",
+        cmap="viridis", vmin=0, vmax=1,
+    )
 
 
 def save_slope_penalty_panels(slope_stats, output_dir: Path):
@@ -704,87 +695,31 @@ def save_slope_penalty_panels(slope_stats, output_dir: Path):
     # Final slope score
     final_score = slope_score * cliff_penalty * consistency_penalty
     score_reduction = slope_score - final_score
-
-    # Panel 1: Base score
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(slope_score, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Base Slope Score", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "base_score.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'base_score.png'}")
-
-    # Panel 2: Cliff penalty
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(cliff_penalty, cmap="plasma", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Cliff Penalty (p95 > 25°)", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    cliff_pixels = np.sum(cliff_mask)
-    ax.text(0.5, -0.15, f"{cliff_pixels} pixels penalized",
-            transform=ax.transAxes, ha='center', fontsize=10,
-            bbox=dict(boxstyle="round", facecolor="yellow", alpha=0.7))
-    plt.tight_layout()
-    plt.savefig(output_dir / "cliff_penalty.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'cliff_penalty.png'}")
-
-    # Panel 3: Terrain consistency
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(consistency_penalty, cmap="plasma", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Terrain Consistency", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    rough_pixels = np.sum(rough_mask)
-    ax.text(0.5, -0.15, f"{rough_pixels} pixels with variation",
-            transform=ax.transAxes, ha='center', fontsize=10,
-            bbox=dict(boxstyle="round", facecolor="yellow", alpha=0.7))
-    plt.tight_layout()
-    plt.savefig(output_dir / "terrain_consistency.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'terrain_consistency.png'}")
-
-    # Panel 4: Combined penalty
     combined_penalty = cliff_penalty * consistency_penalty
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(combined_penalty, cmap="inferno", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Combined Penalties", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "combined_penalty.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'combined_penalty.png'}")
 
-    # Panel 5: Final score
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(final_score, cmap="viridis", aspect="equal", interpolation="nearest", vmin=0, vmax=1)
-    ax.set_title("Final Slope Score", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "final_score.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'final_score.png'}")
+    cliff_pixels = int(np.sum(cliff_mask))
+    rough_pixels = int(np.sum(rough_mask))
 
-    # Panel 6: Score reduction
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(score_reduction, cmap="magma", aspect="equal", interpolation="nearest", vmin=0)
-    ax.set_title("Score Reduction", fontweight="bold", fontsize=14)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
-    plt.savefig(output_dir / "score_reduction.png", dpi=150, bbox_inches="tight")
-    plt.close()
-    logger.info(f"✓ Saved: {output_dir / 'score_reduction.png'}")
+    panels = [
+        (slope_score, "Base Slope Score", "base_score.png", "viridis", None),
+        (cliff_penalty, "Cliff Penalty (p95 > 25°)", "cliff_penalty.png", "plasma",
+         f"{cliff_pixels} pixels penalized"),
+        (consistency_penalty, "Terrain Consistency", "terrain_consistency.png", "plasma",
+         f"{rough_pixels} pixels with variation"),
+        (combined_penalty, "Combined Penalties", "combined_penalty.png", "inferno", None),
+        (final_score, "Final Slope Score", "final_score.png", "viridis", None),
+    ]
+    for data, title, filename, cmap, annotation in panels:
+        _save_raster_panel(
+            data, title, output_dir / filename,
+            cmap=cmap, vmin=0, vmax=1, annotation=annotation,
+        )
+
+    # Score reduction has vmin=0 but no vmax
+    _save_raster_panel(
+        score_reduction, "Score Reduction", output_dir / "score_reduction.png",
+        cmap="magma", vmin=0,
+    )
 
 
 def save_score_component_panels(
