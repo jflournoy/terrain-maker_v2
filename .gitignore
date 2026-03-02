@@ -114,6 +114,8 @@ examples/output/flow_data/
 
 # Derived render artifacts (JPEGs in docs/images)
 docs/images/**/*.jpg
+# ...except gallery render jpgs in combined_render (these are the actual gallery images)
+!docs/images/combined_render/*.jpg
 
 # Large data files
 *.npz
