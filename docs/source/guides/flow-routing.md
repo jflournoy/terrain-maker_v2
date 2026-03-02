@@ -1221,85 +1221,85 @@ python examples/validate_flow_with_water_bodies.py --bigness full --data-source 
 
 **1. Original DEM**
 
-![Original DEM](../../../examples/output/flow_water_bodies_full_hydrolakes/01_dem_original.png)
+![Original DEM](../../../examples/output/01_dem_original.png)
 
 The raw Digital Elevation Model showing terrain elevation. Blue represents ocean/low areas, green/brown shows land elevation gradients.
 
 **2. Ocean Mask**
 
-![Ocean Mask](../../../examples/output/flow_water_bodies_full_hydrolakes/02_ocean_mask.png)
+![Ocean Mask](../../../examples/output/02_ocean_mask.png)
 
 Binary mask identifying ocean cells (yellow) vs land cells (purple). Ocean cells act as outlets for coastal drainage.
 
 **3. Water Bodies with Inlets/Outlets**
 
-![Water Bodies](../../../examples/output/flow_water_bodies_full_hydrolakes/03_water_bodies.png)
+![Water Bodies](../../../examples/output/03_water_bodies.png)
 
 Lakes and reservoirs from HydroLAKES database overlaid on the DEM. Red arrows indicate lake outlets (where water exits), green arrows show inlets (where streams enter lakes).
 
 **3b. Endorheic Basins**
 
-![Endorheic Basins](../../../examples/output/flow_water_bodies_full_hydrolakes/03b_endorheic_basins.png)
+![Endorheic Basins](../../../examples/output/03b_endorheic_basins.png)
 
 Automatically detected closed drainage basins that don't drain to the ocean. These are preserved during conditioning to maintain realistic topography.
 
 **4. Conditioned DEM**
 
-![Conditioned DEM](../../../examples/output/flow_water_bodies_full_hydrolakes/04_dem_conditioned.png)
+![Conditioned DEM](../../../examples/output/04_dem_conditioned.png)
 
 DEM after depression filling/breaching. Artificial sinks have been removed while preserving natural basins and water bodies.
 
 **5. Fill Depth**
 
-![Fill Depth](../../../examples/output/flow_water_bodies_full_hydrolakes/05_fill_depth.png)
+![Fill Depth](../../../examples/output/05_fill_depth.png)
 
 Amount of elevation modification during conditioning (log scale). Lighter colors indicate areas where depressions were filled.
 
 **6. D8 Flow Direction**
 
-![Flow Direction](../../../examples/output/flow_water_bodies_full_hydrolakes/06_flow_direction.png)
+![Flow Direction](../../../examples/output/06_flow_direction.png)
 
 D8 flow direction codes (1-128) showing which neighbor each cell drains to. Different colors represent the 8 possible flow directions.
 
 **7. Drainage Area**
 
-![Drainage Area](../../../examples/output/flow_water_bodies_full_hydrolakes/07_drainage_area.png)
+![Drainage Area](../../../examples/output/07_drainage_area.png)
 
 Upstream contributing area for each cell (log scale). Brighter areas have more upstream cells draining through them, revealing the stream network.
 
 **8. Stream Network with Lakes**
 
-![Stream Network with Lakes](../../../examples/output/flow_water_bodies_full_hydrolakes/08_stream_network_with_lakes.png)
+![Stream Network with Lakes](../../../examples/output/08_stream_network_with_lakes.png)
 
 Extracted stream network (top 5% drainage area) overlaid on elevation with lakes highlighted. Shows how streams connect through water bodies.
 
 **9. Precipitation**
 
-![Precipitation](../../../examples/output/flow_water_bodies_full_hydrolakes/09_precipitation.png)
+![Precipitation](../../../examples/output/09_precipitation.png)
 
 Input precipitation data (synthetic elevation-based or real WorldClim data when available). Used for rainfall-weighted accumulation.
 
 **10. Upstream Rainfall**
 
-![Upstream Rainfall](../../../examples/output/flow_water_bodies_full_hydrolakes/10_upstream_rainfall.png)
+![Upstream Rainfall](../../../examples/output/10_upstream_rainfall.png)
 
 Precipitation-weighted flow accumulation (log scale). Shows total upstream rainfall contributing to each cell.
 
 **10b. Discharge Potential (Log Scale)**
 
-![Discharge Potential Log](../../../examples/output/flow_water_bodies_full_hydrolakes/10b_discharge_potential_log.png)
+![Discharge Potential Log](../../../examples/output/10b_discharge_potential_log.png)
 
 Combined drainage area and rainfall metric showing potential water discharge. Highlights where the largest flows occur.
 
 **10c. Discharge Potential (Linear Scale)**
 
-![Discharge Potential Linear](../../../examples/output/flow_water_bodies_full_hydrolakes/10c_discharge_potential_linear.png)
+![Discharge Potential Linear](../../../examples/output/10c_discharge_potential_linear.png)
 
 Same discharge metric on linear scale, emphasizing absolute magnitude of major waterways.
 
 **11. Validation Summary**
 
-![Validation Summary](../../../examples/output/flow_water_bodies_full_hydrolakes/11_validation_summary.png)
+![Validation Summary](../../../examples/output/11_validation_summary.png)
 
 Summary of validation metrics: cycles (should be 0), mass balance (should be >95%), drainage violations, and statistics about water bodies and basins.
 
@@ -1343,6 +1343,4 @@ Summary of validation metrics: cycles (should be 0), mass balance (should be >95
 
 ## See Also
 
-- [flow-spec.md](../../../flow-spec.md) - Full algorithm specification
-- [FLOW_TESTING_GUIDE.md](../../../examples/FLOW_TESTING_GUIDE.md) - Testing procedures
 - [API: flow_accumulation](../api/flow_accumulation.rst) - Function reference
