@@ -15,13 +15,13 @@ class TestLoadXCSkiingComponents:
 
     def test_load_xc_skiing_components_imports(self):
         """Function should be importable from the example module."""
-        from examples.detroit_combined_render import load_xc_skiing_components
+        from examples.score_loaders import load_xc_skiing_components
 
         assert callable(load_xc_skiing_components)
 
     def test_load_components_from_npz(self, tmp_path):
         """Should load all 3 component arrays from .npz file."""
-        from examples.detroit_combined_render import load_xc_skiing_components
+        from examples.score_loaders import load_xc_skiing_components
 
         shape = (20, 20)
         depth = np.random.uniform(0, 1, shape).astype(np.float32)
@@ -50,14 +50,14 @@ class TestLoadXCSkiingComponents:
 
     def test_returns_none_if_no_file(self, tmp_path):
         """Should return None if .npz file doesn't exist."""
-        from examples.detroit_combined_render import load_xc_skiing_components
+        from examples.score_loaders import load_xc_skiing_components
 
         result = load_xc_skiing_components(tmp_path)
         assert result is None
 
     def test_returns_none_if_no_components(self, tmp_path):
         """Should return None if .npz has no component_ keys (old format)."""
-        from examples.detroit_combined_render import load_xc_skiing_components
+        from examples.score_loaders import load_xc_skiing_components
 
         score_path = tmp_path / "xc_skiing_scores.npz"
         np.savez_compressed(score_path, score=np.ones((10, 10)))
@@ -67,7 +67,7 @@ class TestLoadXCSkiingComponents:
 
     def test_partial_components_loads_available(self, tmp_path):
         """Should load whatever components are available."""
-        from examples.detroit_combined_render import load_xc_skiing_components
+        from examples.score_loaders import load_xc_skiing_components
 
         shape = (10, 10)
         score_path = tmp_path / "xc_skiing_scores.npz"

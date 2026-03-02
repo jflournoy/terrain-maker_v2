@@ -41,7 +41,6 @@ Usage:
 import sys
 import argparse
 import logging
-import json
 import gc
 from pathlib import Path
 from typing import Optional, Tuple
@@ -67,8 +66,14 @@ from src.terrain.core import (
     scale_elevation,
 )
 from src.terrain.blender_integration import apply_vertex_colors
-from src.terrain.data_loading import load_dem_files, load_score_grid
+from src.terrain.data_loading import load_dem_files
 from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
+from examples.score_loaders import (
+    load_sledding_scores,
+    load_xc_skiing_scores,
+    load_xc_skiing_parks,
+    generate_mock_scores,
+)
 from affine import Affine
 
 # Configure logging
@@ -102,91 +107,6 @@ logging.basicConfig(
 # Much safer for dual mesh rendering than full 1920x1080
 RENDER_WIDTH = 1920
 RENDER_HEIGHT = 1080
-
-# =============================================================================
-# LOADING OUTPUTS
-# =============================================================================
-
-def load_sledding_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
-    """Load sledding scores from detroit_snow_sledding.py output.
-
-    Uses load_score_grid() for standardized NPZ loading with transform metadata.
-
-    Returns:
-        Tuple of (score_array, transform_affine). Transform may be None if
-        file was saved without transform metadata (backward compatibility).
-    """
-    # Check possible locations in priority order
-    possible_paths = [
-        output_dir / "sledding" / "sledding_scores.npz",  # New location
-        output_dir / "sledding_scores.npz",  # Old flat structure
-        Path("examples/output/sledding_scores.npz"),  # Legacy hardcoded location
-    ]
-
-    for score_path in possible_paths:
-        if score_path.exists():
-            try:
-                score, score_transform = load_score_grid(
-                    score_path,
-                    data_keys=["score", "sledding_score", "data"]
-                )
-                logger.info(f"Loaded sledding scores from {score_path}")
-                if score_transform:
-                    logger.info(f"  Transform: origin=({score_transform.c:.4f}, {score_transform.f:.4f})")
-                return score, score_transform
-            except Exception as e:
-                logger.warning(f"Failed to load {score_path}: {e}")
-                continue
-
-    logger.warning("Sledding scores not found, will use mock data")
-    return None, None
-
-
-def load_xc_skiing_scores(output_dir: Path) -> Tuple[Optional[np.ndarray], Optional[Affine]]:
-    """Load XC skiing scores from detroit_xc_skiing.py output.
-
-    Uses load_score_grid() for standardized NPZ loading with transform metadata.
-
-    Returns:
-        Tuple of (score_array, transform_affine). Transform may be None if
-        file was saved without transform metadata (backward compatibility).
-    """
-    score_path = output_dir / "xc_skiing_scores.npz"
-    if score_path.exists():
-        try:
-            score, score_transform = load_score_grid(
-                score_path,
-                data_keys=["score", "xc_score", "data"]
-            )
-            logger.info(f"Loaded XC skiing scores from {score_path}")
-            if score_transform:
-                logger.info(f"  Transform: origin=({score_transform.c:.4f}, {score_transform.f:.4f})")
-            return score, score_transform
-        except Exception as e:
-            logger.warning(f"Failed to load {score_path}: {e}")
-
-    logger.warning("XC skiing scores not found, will use mock data")
-    return None, None
-
-
-def load_xc_skiing_parks(output_dir: Path) -> Optional[list[dict]]:
-    """Load scored parks from detroit_xc_skiing.py output."""
-    parks_path = output_dir / "xc_skiing_parks.json"
-    if parks_path.exists():
-        logger.info(f"Loading parks from {parks_path}")
-        with open(parks_path, 'r') as f:
-            return json.load(f)
-
-    logger.warning("Parks not found")
-    return None
-
-
-def generate_mock_scores(shape: Tuple[int, int]) -> np.ndarray:
-    """Generate mock score grid."""
-    np.random.seed(42)
-    score = np.random.uniform(0.3, 0.9, shape).astype(np.float32)
-    return score
-
 
 # =============================================================================
 # BLENDER RENDERING

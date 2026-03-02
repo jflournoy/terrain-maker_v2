@@ -23,32 +23,33 @@ class TestDualRenderLoadingFunctions:
     """Test data loading functions."""
 
     def test_load_sledding_scores_missing_file(self):
-        """Test that missing sledding scores returns None."""
-        # Import the function
+        """Test that missing sledding scores returns (None, None)."""
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import load_sledding_scores
+        from examples.score_loaders import load_sledding_scores
         from unittest.mock import patch
 
         # Use a temp directory that doesn't have the file, and mock the alternative paths
         with tempfile.TemporaryDirectory() as tmpdir:
             # Mock the pathlib.Path to avoid checking alternative paths
             with patch('pathlib.Path.exists', return_value=False):
-                result = load_sledding_scores(Path(tmpdir))
-                assert result is None
+                scores, transform = load_sledding_scores(Path(tmpdir))
+                assert scores is None
+                assert transform is None
 
     def test_load_xc_skiing_scores_missing_file(self):
-        """Test that missing XC skiing scores returns None."""
+        """Test that missing XC skiing scores returns (None, None)."""
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import load_xc_skiing_scores
+        from examples.score_loaders import load_xc_skiing_scores
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = load_xc_skiing_scores(Path(tmpdir))
-            assert result is None
+            scores, transform = load_xc_skiing_scores(Path(tmpdir))
+            assert scores is None
+            assert transform is None
 
     def test_load_xc_skiing_parks_missing_file(self):
         """Test that missing parks file returns None."""
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import load_xc_skiing_parks
+        from examples.score_loaders import load_xc_skiing_parks
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = load_xc_skiing_parks(Path(tmpdir))
@@ -57,7 +58,7 @@ class TestDualRenderLoadingFunctions:
     def test_generate_mock_scores(self):
         """Test mock score generation."""
         sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import generate_mock_scores
+        from examples.score_loaders import generate_mock_scores
 
         shape = (100, 100)
         scores = generate_mock_scores(shape)
