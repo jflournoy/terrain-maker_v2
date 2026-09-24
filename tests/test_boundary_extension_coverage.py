@@ -74,7 +74,7 @@ class TestBoundaryExtensionCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.2,
+            base_depth=0.2,
             two_tier=False,
         )
 
@@ -97,9 +97,9 @@ class TestBoundaryExtensionCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
         )
 
         # Two-tier returns (vertices, faces, colors)
@@ -182,9 +182,9 @@ class TestFractionalEdgeCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
             use_fractional_edges=True,  # Triggers smoothed coords path, skips bridge faces
             boundary_winding="clockwise",  # Match rectangle edge trace order
         )
@@ -211,9 +211,9 @@ class TestFractionalEdgeCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
             use_fractional_edges=True,  # Skips bridge faces
             boundary_winding="clockwise",
         )
@@ -242,9 +242,9 @@ class TestFractionalEdgeCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
             use_fractional_edges=True,  # Skips bridge faces
             boundary_winding="clockwise",
         )
@@ -341,9 +341,9 @@ class TestEdgeByEdgeCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
         )
 
         boundary_vertices, boundary_faces, _ = result
@@ -391,9 +391,9 @@ class TestEdgeByEdgeCoverage:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.5,
+            base_depth=0.5,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
             boundary_winding="clockwise",  # Matches trace order of labeled_boundary fixture
         )
 

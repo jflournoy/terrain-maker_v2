@@ -267,7 +267,7 @@ def get_color(color: str | Tuple[float, float, float]) -> Tuple[float, float, fl
 
     Examples:
         >>> get_color("clay")
-        (0.5, 0.48, 0.45)
+        (0.7, 0.25, 0.15)
 
         >>> get_color("azurite")  # Road color preset
         (0.04, 0.09, 0.16)
@@ -275,8 +275,8 @@ def get_color(color: str | Tuple[float, float, float]) -> Tuple[float, float, fl
         >>> get_color("GOLD")  # Case-insensitive
         (1.0, 0.766, 0.336)
 
-        >>> get_color("satin")  # Terrain material - returns clay gray
-        (0.5, 0.48, 0.45)
+        >>> get_color("satin")  # Terrain material - returns the clay color
+        (0.7, 0.25, 0.15)
 
         >>> get_color((0.6, 0.55, 0.5))  # Custom RGB
         (0.6, 0.55, 0.5)
@@ -286,9 +286,9 @@ def get_color(color: str | Tuple[float, float, float]) -> Tuple[float, float, fl
         if color_lower in ALL_COLORS:
             return ALL_COLORS[color_lower]
         # For terrain material presets without colors (satin, matte, etc.),
-        # return clay gray as neutral default
+        # return the clay color as a neutral default
         if color_lower in TERRAIN_MATERIALS:
-            return ALL_COLORS["clay"]  # (0.5, 0.48, 0.45)
+            return ALL_COLORS["clay"]
         raise ValueError(
             f"Unknown color preset: {color}. "
             f"Valid options: {get_all_colors_help()}"
