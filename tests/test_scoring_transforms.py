@@ -277,9 +277,12 @@ class TestTerrainConsistency:
         """One metric bad, one good = partial penalty."""
         from src.scoring.transforms import terrain_consistency
 
-        # Only roughness is bad
+        # Only roughness is bad: RMS of (1, 0) = 0.707, above soft_start=0.5,
+        # so the penalty falls linearly from 1 at 0.5 to 0 at 1.0
         result = terrain_consistency(roughness=30.0, slope_std=0.0)
-        assert 0.2 < result < 0.4  # RMS of (1, 0) = 0.707, so 1-0.707 ≈ 0.29
+        expected = 1.0 - (np.sqrt(0.5) - 0.5) / 0.5  # ≈ 0.586
+        assert result == pytest.approx(expected)
+        assert 0.0 < result < 1.0
 
     def test_custom_thresholds(self):
         """Should accept custom thresholds."""
@@ -291,8 +294,18 @@ class TestTerrainConsistency:
             roughness_threshold=100.0,
             slope_std_threshold=30.0,
         )
-        # 50/100 = 0.5, 15/30 = 0.5, RMS = 0.5, consistency = 0.5
-        assert result == pytest.approx(0.5, rel=0.01)
+        # 50/100 = 0.5, 15/30 = 0.5, RMS = 0.5: exactly at soft_start, no penalty
+        assert result == pytest.approx(1.0)
+
+        # Past soft_start the custom thresholds still scale the penalty:
+        # 80/100 = 0.8, 24/30 = 0.8, RMS = 0.8 -> 1 - (0.8 - 0.5) / 0.5 = 0.4
+        rougher = terrain_consistency(
+            roughness=80.0,
+            slope_std=24.0,
+            roughness_threshold=100.0,
+            slope_std_threshold=30.0,
+        )
+        assert rougher == pytest.approx(0.4)
 
     def test_works_with_numpy_arrays(self):
         """Should work with numpy arrays element-wise."""
