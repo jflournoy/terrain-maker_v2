@@ -78,7 +78,10 @@ CONFIGS = ["dem_only", "lakes_precip", "coarse_precip"]
 
 @pytest.mark.parametrize("config", CONFIGS)
 def test_both_copies_agree(config):
-    """flow_pipeline and flow_accumulation give identical results."""
+    """Both import paths (flow_pipeline, flow_accumulation) give identical results.
+
+    Written while they were separate copies; now guards the re-export.
+    """
     a = _run(flow_pipeline.compute_flow_with_basins, config)
     b = _run(flow_accumulation.compute_flow_with_basins, config)
 
