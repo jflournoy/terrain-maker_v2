@@ -58,6 +58,8 @@ def flow_artifacts(demo_output_dir):
     # Run demo in fast mode with real data
     demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
     dem_dir = PROJECT_ROOT / "data" / "san_diego_dem"
+    if not dem_dir.is_dir() or not any(dem_dir.iterdir()):
+        pytest.skip(f"San Diego DEM data not present in {dem_dir}")
 
     cmd = [
         sys.executable,
