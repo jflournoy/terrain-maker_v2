@@ -14,30 +14,7 @@ from scipy.spatial import cKDTree
 from scipy import ndimage
 
 # Try to import numba for JIT compilation
-try:
-    from numba import jit, prange
-    HAS_NUMBA = True
-except ImportError:
-    HAS_NUMBA = False
-    # Fallback decorator that does nothing
-    def jit(*args, **kwargs):
-        """No-op JIT decorator fallback when numba is not available.
-
-        When numba is not installed, this decorator simply returns the function
-        unchanged, allowing code to run without JIT compilation.
-
-        Args:
-            *args: Ignored positional arguments (for numba compatibility)
-            **kwargs: Ignored keyword arguments (for numba compatibility)
-
-        Returns:
-            Decorator function that returns the original function unchanged
-        """
-        def decorator(func):
-            """Inner decorator that returns the function unchanged."""
-            return func
-        return decorator
-    prange = range
+from src.terrain._numba_compat import NUMBA_AVAILABLE, jit, prange
 
 
 def find_boundary_points(valid_mask):
@@ -183,7 +160,7 @@ def generate_faces(height, width, coord_to_index, batch_size=10000):
     Returns:
         list: List of face tuples, where each tuple contains vertex indices
     """
-    if HAS_NUMBA:
+    if NUMBA_AVAILABLE:
         # Convert dict to 2D index grid for Numba
         index_grid = np.full((height, width), -1, dtype=np.int64)
         for (y, x), idx in coord_to_index.items():

@@ -29,19 +29,8 @@ except ImportError:
     PYSHEDS_AVAILABLE = False
     PyshedsGrid = None
 
-# Try to import numba for performance optimizations
-try:
-    from numba import jit, prange
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-    # Create no-op decorator if numba not available
-    def jit(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
-    # Mock prange as regular range
-    prange = range
+# Optional numba acceleration
+from src.terrain._numba_compat import NUMBA_AVAILABLE, jit, prange
 
 
 # ==============================================================================

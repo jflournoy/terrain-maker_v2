@@ -13,16 +13,7 @@ beautiful, gradually-tapered lines matching the diagnostic plot quality.
 
 import numpy as np
 
-try:
-    from numba import jit
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-    # Dummy decorator if numba not available
-    def jit(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
+from src.terrain._numba_compat import NUMBA_AVAILABLE, jit
 
 
 def _smooth_along_lines(metric_data, line_mask, sigma=2.0):
