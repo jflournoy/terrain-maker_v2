@@ -1371,3 +1371,34 @@ class TestDiagnosticsSlopeComputation:
         # Basic sanity check: slope should be non-negative and not all the same
         assert np.all(slope[~np.isnan(slope)] >= 0), "Slope should be non-negative"
         assert np.nanstd(slope) > 0.01, "Slope should have some variation"
+
+
+class TestReprojectAutoThreads:
+    """num_threads=0 means auto-detect and must not crash rasterio."""
+
+    @staticmethod
+    def _wgs84_grid():
+        from rasterio.transform import from_origin
+
+        data = np.arange(400, dtype=np.float32).reshape(20, 20)
+        transform = from_origin(-83.5, 42.5, 0.01, 0.01)
+        return data, transform
+
+    def test_cached_reproject_default_threads(self, tmp_path):
+        from src.terrain.transforms import cached_reproject
+
+        data, transform = self._wgs84_grid()
+        reproject_fn = cached_reproject(cache_dir=str(tmp_path))
+
+        out, _, crs = reproject_fn(data, transform)
+
+        assert crs == "EPSG:32617"
+        assert np.isfinite(out).any()
+
+    def test_reproject_raster_zero_threads(self):
+        from src.terrain.transforms import reproject_raster
+
+        data, transform = self._wgs84_grid()
+        out, _, _ = reproject_raster(num_threads=0)(data, transform)
+
+        assert np.isfinite(out).any()

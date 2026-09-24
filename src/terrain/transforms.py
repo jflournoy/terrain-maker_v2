@@ -6,6 +6,8 @@ downsampling, smoothing, flipping, and elevation scaling.
 """
 
 import logging
+import os
+
 import numpy as np
 from scipy.ndimage import zoom
 from scipy import ndimage
@@ -497,6 +499,11 @@ def scale_elevation(scale_factor=1.0, nodata_value=np.nan):
     return transform
 
 
+def _resolve_num_threads(num_threads: int) -> int:
+    """Map num_threads <= 0 ("auto") to the CPU count; rasterio needs an int."""
+    return num_threads if num_threads > 0 else (os.cpu_count() or 1)
+
+
 def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.nan, num_threads=4):
     """
     Generalized raster reprojection function
@@ -515,7 +522,8 @@ def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.
         logger = logging.getLogger(__name__)
         logger.info(f"Reprojecting raster from {src_crs} to {dst_crs}")
 
-        with rasterio.Env(GDAL_NUM_THREADS=str(num_threads)):
+        threads = _resolve_num_threads(num_threads)
+        with rasterio.Env(GDAL_NUM_THREADS=str(threads)):
             # Calculate transform and dimensions for destination CRS
             dst_transform, width, height = calculate_default_transform(
                 src_crs,
@@ -540,7 +548,7 @@ def reproject_raster(src_crs="EPSG:4326", dst_crs="EPSG:32617", nodata_value=np.
                 dst_crs=dst_crs,
                 resampling=Resampling.bilinear,
                 dst_nodata=nodata_value,
-                num_threads=num_threads if num_threads > 0 else None,
+                num_threads=threads,
                 warp_mem_limit=2048,  # Increased from 512MB to 2GB for better performance
             )
 
@@ -618,7 +626,8 @@ def cached_reproject(
         # Cache miss - compute reprojection
         logger.info(f"Cache miss - reprojecting {src_crs} → {dst_crs} (will cache result)")
 
-        with rasterio.Env(GDAL_NUM_THREADS=str(num_threads)):
+        threads = _resolve_num_threads(num_threads)
+        with rasterio.Env(GDAL_NUM_THREADS=str(threads)):
             # Calculate transform and dimensions for destination CRS
             dst_transform, width, height = calculate_default_transform(
                 src_crs,
@@ -643,7 +652,7 @@ def cached_reproject(
                 dst_crs=dst_crs,
                 resampling=Resampling.bilinear,
                 dst_nodata=nodata_value,
-                num_threads=num_threads if num_threads > 0 else None,
+                num_threads=threads,
                 warp_mem_limit=2048,  # Increased from 512MB to 2GB for better performance
             )
 
