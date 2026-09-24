@@ -3247,14 +3247,15 @@ class Terrain:
                 boundary_winding = "clockwise"
                 self.logger.info(f"Boundary winding direction: {boundary_winding} (rectangle edges always clockwise)")
             elif len(boundary_points) >= 3:
-                # Compute signed area to determine winding for morphological boundary
-                # Positive = counter-clockwise, Negative = clockwise
+                # Compute signed area to determine winding for morphological boundary.
+                # In image coordinates (y down), sum((x2-x1)*(y2+y1)) is negative for
+                # a clockwise loop, the same convention the rectangle branch uses.
                 signed_area = 0
                 for i in range(len(boundary_points)):
                     y1, x1 = boundary_points[i]
                     y2, x2 = boundary_points[(i + 1) % len(boundary_points)]
                     signed_area += (x2 - x1) * (y2 + y1)
-                boundary_winding = "counter-clockwise" if signed_area < 0 else "clockwise"
+                boundary_winding = "clockwise" if signed_area < 0 else "counter-clockwise"
                 self.logger.info(f"Boundary winding direction: {boundary_winding} (signed area: {signed_area:.2f})")
         else:
             boundary_points = boundary_coords
