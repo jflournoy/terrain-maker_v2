@@ -53,6 +53,7 @@ class TestPrecipitationDownloadAPI:
                 output_dir="test",
             )
 
+    @pytest.mark.network
     def test_download_precipitation_returns_path(self, tmp_path):
         """download_precipitation should return path to downloaded file."""
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -62,6 +63,7 @@ class TestPrecipitationDownloadAPI:
         assert isinstance(result, (str, Path)), "Should return path"
         assert Path(result).exists(), "Downloaded file should exist"
 
+    @pytest.mark.network
     def test_download_precipitation_creates_geotiff(self, tmp_path):
         """download_precipitation should create valid GeoTIFF file."""
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -78,6 +80,7 @@ class TestPrecipitationDownloadAPI:
             assert src.dtypes[0] in ["float32", "float64"], "Should be float type"
             assert src.crs is not None, "Should have CRS"
 
+    @pytest.mark.network
     def test_download_precipitation_respects_dataset_parameter(self, tmp_path):
         """download_precipitation should support different datasets."""
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -205,6 +208,7 @@ class TestDatasetListing:
 class TestPrecipitationIntegration:
     """Integration tests for complete workflow."""
 
+    @pytest.mark.network
     def test_download_and_validate_workflow(self, tmp_path):
         """Test complete download and validation workflow."""
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -226,6 +230,7 @@ class TestPrecipitationIntegration:
         assert np.all(valid_data >= 0), "Should be non-negative"
         assert np.all(valid_data <= 5000), "Should be reasonable"
 
+    @pytest.mark.network
     def test_multiple_downloads_use_cache(self, tmp_path):
         """Multiple downloads should use cached data."""
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -281,6 +286,7 @@ class TestRealPRISMDownload:
         except Exception:
             pytest.skip("Network unavailable or PRISM server unreachable")
 
+    @pytest.mark.network
     def test_download_real_prism_uses_web_service(self, tmp_path, monkeypatch):
         """download_real_prism_annual should use PRISM web service API."""
         from src.terrain.precipitation_downloader import download_real_prism_annual

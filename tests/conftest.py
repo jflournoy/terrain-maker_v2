@@ -1,5 +1,6 @@
 """Pytest configuration and fixtures for terrain-maker tests."""
 
+import functools
 import sys
 from pathlib import Path
 
@@ -42,3 +43,27 @@ def cache_dir(tmp_path):
 def project_root():
     """Get the project root directory."""
     return Path(__file__).parent.parent
+
+
+PRISM_URL = "https://ftp.prism.oregonstate.edu"
+
+
+@functools.lru_cache(maxsize=1)
+def _network_available() -> bool:
+    """Check once per session whether the PRISM data server is reachable."""
+    import requests
+
+    try:
+        requests.head(PRISM_URL, timeout=5)
+        return True
+    except requests.RequestException:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip tests marked `network` when external data servers are unreachable."""
+    network_items = [item for item in items if "network" in item.keywords]
+    if network_items and not _network_available():
+        skip = pytest.mark.skip(reason=f"network unavailable ({PRISM_URL} unreachable)")
+        for item in network_items:
+            item.add_marker(skip)
