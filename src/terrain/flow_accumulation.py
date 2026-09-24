@@ -29,19 +29,8 @@ except ImportError:
     PYSHEDS_AVAILABLE = False
     PyshedsGrid = None
 
-# Try to import numba for performance optimizations
-try:
-    from numba import jit, prange
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-    # Create no-op decorator if numba not available
-    def jit(*args, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
-    # Mock prange as regular range
-    prange = range
+# Optional numba acceleration
+from src.terrain._numba_compat import NUMBA_AVAILABLE, jit, prange
 
 
 # ==============================================================================
@@ -306,20 +295,21 @@ def compute_flow_with_basins(
     upscale_method: str = "auto",
     verbose: bool = True,
 ) -> Dict[str, any]:
-    """Compute flow using validated basin preservation pattern (array-based API).
-
-    This is the array-based entry point for flow computation with basin-aware
-    lake handling. Unlike ``flow_accumulation()`` which takes file paths,
-    this accepts numpy arrays directly.
+    """
+    Compute flow using validated basin preservation pattern.
 
     Steps:
     1. Detect ocean mask
     2. Detect endorheic basins (optional)
     3. Create conditioning mask (ocean + basins + selective lakes)
     4. Condition DEM with combined mask
-    5. Compute flow direction with DEM-based spillway lake routing
+    5. Compute flow direction with lake routing (if lakes provided)
     6. Compute drainage area
     7. Compute upstream rainfall (if precipitation provided)
+
+    **Basin-aware lake handling:**
+    - Lakes INSIDE preserved basins → pre-masked (act as drainage sinks)
+    - Lakes OUTSIDE basins → NOT masked (act as river connectors)
 
     Parameters
     ----------
@@ -328,22 +318,85 @@ def compute_flow_with_basins(
     dem_transform : Affine
         Geographic transform for DEM
     precipitation : np.ndarray, optional
-        Precipitation data (same shape as DEM)
+        Precipitation data (same shape as DEM). If None, upstream rainfall not computed.
+    precip_transform : Affine, optional
+        Geographic transform for precipitation (currently unused, assumed same as DEM)
     lake_mask : np.ndarray, optional
         Labeled mask of water bodies (0 = no lake, >0 = lake ID)
     lake_outlets : np.ndarray, optional
         Boolean mask of lake outlet cells
     detect_basins : bool, default=True
         Whether to detect and preserve endorheic basins
+    min_basin_size : int, default=5000
+        Minimum basin size in cells to preserve. When set to the default (5000),
+        uses adaptive scaling (4e-5 × total_cells) to handle different DEM sizes.
+        Set to a specific value to override adaptive scaling.
+    min_basin_depth : float, default=1.0
+        Minimum basin depth in meters to be considered endorheic
+    backend : str, default="spec"
+        Flow algorithm backend ('spec' or 'legacy')
+    coastal_elev_threshold : float, default=0.0
+        Max elevation for coastal outlets in meters (spec backend only)
+    edge_mode : str, default="all"
+        Boundary outlet strategy: 'all', 'local_minima', 'outward_slope', 'none'
+    max_breach_depth : float, default=25.0
+        Max vertical breach per cell in meters (spec backend only)
+    max_breach_length : int, default=150
+        Max breach path length in cells (spec backend only)
+    epsilon : float, default=1e-4
+        Min gradient in filled areas (spec backend only)
+    ocean_threshold : float, default=0.0
+        Elevation threshold for ocean detection
+    ocean_border_only : bool, default=True
+        Only detect ocean from border pixels
+    upscale_precip : bool, default=False
+        Whether to upscale precipitation data using ESRGAN before accumulation
+        at the integer DEM/precipitation ratio; non-integer ratios use cubic interpolation
+    upscale_factor : int, default=4
+        Upscaling factor for precipitation (2, 4, or 8)
+    upscale_method : str, default="auto"
+        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan", "bilateral", or "bicubic"
     verbose : bool, default=True
         Print progress messages
 
     Returns
     -------
     dict
-        Keys: 'flow_direction', 'drainage_area', 'dem_conditioned',
-        'breached_dem', 'ocean_mask', 'basin_mask', 'lake_inlets',
-        'upstream_rainfall', 'conditioning_mask'
+        Dictionary with keys:
+        - 'flow_direction': np.ndarray, D8 flow direction codes
+        - 'drainage_area': np.ndarray, drainage area in cells
+        - 'dem_conditioned': np.ndarray, depression-filled DEM
+        - 'ocean_mask': np.ndarray, boolean ocean mask
+        - 'basin_mask': np.ndarray or None, boolean endorheic basin mask
+        - 'lake_inlets': np.ndarray or None, boolean mask of lake inlet cells
+        - 'upstream_rainfall': np.ndarray or None, upstream rainfall (if precip provided)
+        - 'conditioning_mask': np.ndarray, combined mask used for DEM conditioning
+
+    Examples
+    --------
+    Basic usage without lakes:
+
+    >>> results = compute_flow_with_basins(dem, dem_transform)
+    >>> flow_dir = results['flow_direction']
+    >>> drainage = results['drainage_area']
+
+    With lakes and precipitation:
+
+    >>> results = compute_flow_with_basins(
+    ...     dem, dem_transform,
+    ...     precipitation=precip,
+    ...     lake_mask=lakes,
+    ...     lake_outlets=outlets,
+    ...     detect_basins=True
+    ... )
+    >>> upstream_rain = results['upstream_rainfall']
+
+    Notes
+    -----
+    This function uses the 'spec' backend by default, which provides:
+    - Breaching-based depression handling
+    - Configurable coastal outlet detection
+    - Endorheic basin preservation
     """
     from src.terrain.water_bodies import (
         identify_lake_inlets,

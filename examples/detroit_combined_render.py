@@ -3570,6 +3570,7 @@ Examples:
         logger.info(f"Setting up atmospheric fog (density={args.atmosphere_density})...")
         setup_world_atmosphere(
             density=args.atmosphere_density,
+            anisotropy=0.0,  # isotropic scattering, as this example has always used
         )
 
     # Create background plane if requested
