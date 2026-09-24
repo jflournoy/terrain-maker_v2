@@ -25,6 +25,22 @@ except ImportError:
         return decorator
 
 
+def _smooth_along_lines(metric_data, line_mask, sigma=2.0):
+    """Gaussian-smooth metric values among line pixels only.
+
+    Normalized convolution: G(metric * mask) / G(mask). Plain gaussian_filter
+    on the full grid would average streams with the surrounding zeros and
+    shrink their values (about 5x for 1px-wide lines at sigma=2).
+    """
+    from scipy.ndimage import gaussian_filter
+
+    numerator = gaussian_filter(np.where(line_mask, metric_data, 0).astype(np.float32), sigma)
+    denominator = gaussian_filter(line_mask.astype(np.float32), sigma)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        smoothed = numerator / denominator
+    return np.where(denominator > 0, smoothed, 0).astype(np.float32)
+
+
 def get_metric_data(metric_choice, drainage, rainfall, discharge):
     """Get metric data array based on user choice.
 
@@ -123,8 +139,9 @@ def expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_wi
     print(f"  Sparse expansion: {len(coords):,} stream pixels "
           f"({100 * len(coords) / line_mask.size:.2f}% of grid, after 3px expansion)")
 
-    # Smooth metric values to prevent color patches
-    smoothed_metric_grid = gaussian_filter(metric_data, sigma=2.0)
+    # Smooth metric values along the network to prevent color patches.
+    # Pixels added by the 3px dilation take their smoothed line neighbors' values.
+    smoothed_metric_grid = _smooth_along_lines(metric_data, line_mask, sigma=2.0)
     smoothed_values = smoothed_metric_grid[coords[:, 0], coords[:, 1]]
 
     # Compute widths
@@ -203,7 +220,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
 
     # Smooth metric values along stream network to prevent color patches
     # This ensures adjacent stream pixels have similar values for consistent coloring
-    smoothed_metric = gaussian_filter(metric_data, sigma=2.0)
+    smoothed_metric = _smooth_along_lines(metric_data, line_mask, sigma=2.0)
 
     val_min, val_max = line_values.min(), line_values.max()
 
@@ -349,7 +366,7 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
         return line_mask, metric_data.copy()
 
     # Smooth metric values along stream network to prevent color patches
-    smoothed_metric = gaussian_filter(metric_data, sigma=2.0)
+    smoothed_metric = _smooth_along_lines(metric_data, line_mask, sigma=2.0)
 
     val_min, val_max = line_values.min(), line_values.max()
 
