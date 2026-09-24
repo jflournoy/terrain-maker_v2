@@ -2579,6 +2579,14 @@ class Terrain:
             self.logger.error(f"Error computing colors: {str(e)}")
             raise
 
+        colors = np.asarray(colors)
+        if colors.ndim != 3 or colors.shape[-1] not in (3, 4):
+            raise ValueError(
+                "Color mapping must return an (H, W, 3) or (H, W, 4) array; "
+                f"got shape {colors.shape}. Wrap values in a colormap such as "
+                "elevation_colormap()."
+            )
+
         # Ensure RGBA
         if colors.shape[-1] == 3:
             # Create alpha channel with appropriate max value for the data type

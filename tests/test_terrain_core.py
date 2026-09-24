@@ -1344,6 +1344,16 @@ class TestTwoTierEdgeExtrusion:
 
 
 
+
+class TestColorMappingValidation:
+    def test_color_function_must_return_rgb_or_rgba(self):
+        """A colormap returning a plain value grid fails early with a clear message."""
+        terrain = Terrain(np.ones((10, 10), dtype=np.float32), Affine.identity())
+        terrain.set_color_mapping(lambda dem: dem, source_layers=["dem"])
+
+        with pytest.raises(ValueError, match=r"\(H, W, 3\) or \(H, W, 4\).*\(10, 10\)"):
+            terrain.compute_colors()
+
 class TestSkirtFaceNormals:
     """Boundary skirt faces must face outward, or backface culling hides them."""
 
