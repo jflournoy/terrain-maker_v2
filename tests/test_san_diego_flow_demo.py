@@ -389,47 +389,6 @@ class TestFlowParameterAlignment:
                'coastal_elev_threshold = -20' in demo_source, \
             "Demo should use coastal_elev_threshold=-20 for below-sea-level outlets"
 
-    def test_demo_uses_correct_basin_min_size(self):
-        """Demo should use min_basin_size=1000 (not 2500 or 5000)."""
-        demo_path = Path(__file__).parent.parent / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_path.read_text()
-
-        # Should NOT have min_basin_size=2500 or 5000
-        assert 'min_basin_size=2500' not in demo_source, \
-            "Demo should not use min_basin_size=2500 (old value)"
-        assert 'min_basin_size=5000' not in demo_source, \
-            "Demo should not use min_basin_size=5000 (old value)"
-
-        # Should have min_basin_size=1000
-        assert 'min_basin_size=1000' in demo_source or \
-               'min_basin_size = 1000' in demo_source, \
-            "Demo should use min_basin_size=1000"
-
-    def test_demo_detects_endorheic_basins(self):
-        """Demo should detect and preserve endorheic basins."""
-        demo_path = Path(__file__).parent.parent / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_path.read_text()
-
-        # Should import or use detect_endorheic_basins
-        assert 'detect_endorheic_basins' in demo_source, \
-            "Demo should use detect_endorheic_basins for basin preservation"
-
-    def test_demo_uses_basin_min_depth(self):
-        """Demo should use basin_min_depth parameter."""
-        demo_path = Path(__file__).parent.parent / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_path.read_text()
-
-        # Should set min_depth or basin_min_depth
-        min_depth_patterns = [
-            'min_depth=1',
-            'min_depth = 1',
-            'basin_min_depth=1',
-            'basin_min_depth = 1',
-        ]
-        found = any(p in demo_source for p in min_depth_patterns)
-        assert found, \
-            "Demo should use min_depth=1 for basin detection"
-
 
 class TestWaterBodyIntegrationOrder:
     """Tests ensuring water bodies are integrated BEFORE flow computation."""

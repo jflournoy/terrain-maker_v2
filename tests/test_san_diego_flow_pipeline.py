@@ -436,42 +436,47 @@ class TestTunedParameters:
         assert 'coastal_elev_threshold=-20' in demo_source, \
             "Demo should use coastal_elev_threshold=-20.0"
 
-    def test_basin_min_size_10000(self):
-        """Demo should use min_basin_size=10000 (NOT 1000!)."""
+    @staticmethod
+    def _default_args():
+        """Parse the demo's CLI with no arguments to get its effective defaults."""
+        import importlib.util
+
         demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
+        spec = importlib.util.spec_from_file_location("san_diego_flow_demo", demo_script)
+        demo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(demo)
+        return demo.build_parser().parse_args([])
 
-        # Should NOT have old value
-        assert 'min_basin_size=1000' not in demo_source or 'min_basin_size=10000' in demo_source, \
-            "Demo should NOT use old min_basin_size=1000"
+    def test_basin_detection_on_by_default(self):
+        """Endorheic basins (e.g. Salton Sea) are preserved unless disabled."""
+        assert self._default_args().no_detect_basins is False
 
-        # Should have new value
-        assert 'min_basin_size=10000' in demo_source, \
-            "Demo should use min_basin_size=10000"
+    def test_min_basin_size_adaptive_by_default(self):
+        """None lets flow_accumulation scale the threshold to the grid size."""
+        assert self._default_args().min_basin_size is None
 
-    def test_basin_min_depth_5_0(self):
-        """Demo should use min_basin_depth=5.0 (NOT 1.0!)."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
+    def test_min_basin_depth_default(self):
+        """Only depressions at least 5 m deep count as endorheic basins."""
+        assert self._default_args().min_basin_depth == 5.0
 
-        assert 'min_basin_depth=5.0' in demo_source or 'min_depth=5.0' in demo_source, \
-            "Demo should use min_basin_depth=5.0"
+    def test_breaching_off_by_default_with_bounded_limits(self):
+        """Breaching is opt-in (expensive); its limits apply only with --breach."""
+        args = self._default_args()
+        assert args.breach is False
+        assert args.max_breach_depth == 25.0
+        assert args.max_breach_length == 150
 
-    def test_max_breach_depth_100(self):
-        """Demo should use max_breach_depth=100.0 (NOT 50.0!)."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        assert 'max_breach_depth=100' in demo_source, \
-            "Demo should use max_breach_depth=100.0"
-
-    def test_max_breach_length_300(self):
-        """Demo should use max_breach_length=300 (NOT 100!)."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        assert 'max_breach_length=300' in demo_source, \
-            "Demo should use max_breach_length=300"
+    def test_cli_flow_parameters_reach_flow_accumulation(self):
+        """The tuned CLI values must be passed through, not shadowed by literals."""
+        demo_source = (PROJECT_ROOT / "examples" / "san_diego_flow_demo.py").read_text()
+        for wiring in (
+            "detect_basins=not args.no_detect_basins",
+            "min_basin_size=args.min_basin_size",
+            "min_basin_depth=args.min_basin_depth",
+            "max_breach_depth=args.max_breach_depth if args.breach",
+            "max_breach_length=args.max_breach_length if args.breach",
+        ):
+            assert wiring in demo_source, f"Demo should pass {wiring.split('=')[0]} from CLI"
 
 
 # ============================================================================
@@ -542,25 +547,15 @@ class TestFlowPipelineModule:
         assert border_outlets > 0, \
             "Should have some outlet cells (flow_dir=0) along borders"
 
-    def test_basin_mask_when_detect_basins_true(self):
-        """Basin detection should be enabled (detect_basins=True in demo)."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
+    def test_demo_passes_lakes_to_flow_accumulation(self):
+        """Lakes must reach flow_accumulation, which routes them and finds inlets."""
+        import inspect
+        from src.terrain.flow_accumulation import flow_accumulation
 
-        # Check detect_basins parameter or detect_endorheic_basins call
-        assert 'detect_basins=True' in demo_source or \
-               'detect_endorheic_basins' in demo_source, \
-            "Demo should detect endorheic basins"
-
-    def test_lake_inlets_identified(self):
-        """Lake inlet detection should be used."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        # Check if inlet identification is used (via flow_pipeline or directly)
-        assert 'identify_lake_inlets' in demo_source or \
-               'lake_inlets' in demo_source, \
-            "Demo should identify lake inlets"
+        demo_source = (PROJECT_ROOT / "examples" / "san_diego_flow_demo.py").read_text()
+        assert "lake_mask=lake_mask" in demo_source
+        assert "lake_outlets=lake_outlets" in demo_source
+        assert "identify_lake_inlets" in inspect.getsource(flow_accumulation)
 
     def test_conditioning_mask_combines_ocean_basins_lakes(self):
         """Conditioning mask should combine ocean + basins + lakes_in_basins."""

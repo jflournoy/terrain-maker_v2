@@ -100,7 +100,8 @@ def get_cmap_name(cmap_spec: str) -> str:
     return cmap_spec
 
 
-def main():
+def build_parser():
+    """Build the command-line parser (separate from main so defaults are testable)."""
     import argparse
 
     parser = argparse.ArgumentParser(description="San Diego Flow Accumulation Demo")
@@ -366,7 +367,11 @@ def main():
         action="store_true",
         help="Disable automatic endorheic basin detection and preservation (allows flow through Salton Sea, etc.)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     # Convert stream-top-percent to internal percentile representation
     # User provides "top 5%" as 5.0, we convert to 95th percentile internally
