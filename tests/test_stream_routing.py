@@ -272,9 +272,13 @@ class TestCascadingLakes:
 
         Layout (30×10 grid, slopes top→bottom):
         - Rows 0-7: upstream terrain
-        - Rows 8-11: Lake 1 (surface=60)
+        - Rows 8-11: Lake 1 (surface=67, the terrain level at its outflow row)
         - Rows 12-15: stream between lakes
-        - Rows 16-19: Lake 2 (surface=40)
+        - Rows 16-19: Lake 2 (surface=43, the terrain level at its outflow row)
+
+        Lake surfaces sit at their outflow level, as in a conditioned DEM.
+        A surface carved below the downstream terrain would be a pit that no
+        D8 routing can drain (the live pipeline fills/breaches pits first).
         - Rows 20-29: downstream terrain
 
         Returns (dem, lake_mask, outlet_mask, basin_mask)
@@ -287,11 +291,11 @@ class TestCascadingLakes:
 
         # Lake 1 (upper)
         lake_mask[8:12, 3:7] = 1
-        dem[lake_mask == 1] = 60.0
+        dem[lake_mask == 1] = 67.0
 
         # Lake 2 (lower)
         lake_mask[16:20, 3:7] = 2
-        dem[lake_mask == 2] = 40.0
+        dem[lake_mask == 2] = 43.0
 
         # Outlets at bottom edge of each lake
         outlet_mask = np.zeros((30, 10), dtype=bool)

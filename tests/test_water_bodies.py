@@ -821,11 +821,12 @@ class TestOutletDownstreamDirections:
 
         basin_mask = np.zeros((10, 10), dtype=bool)
 
-        # Without spillway: outlet stays terminal (no lower neighbor)
+        # Without spillway: the outlet still spills over the lowest rim
+        # neighbor, (6, 4) at equal elevation, rather than becoming a sink
         result_no_spill = compute_outlet_downstream_directions(
             flow_dir, lake_mask, outlet_mask, dem, basin_mask=basin_mask
         )
-        assert result_no_spill[5, 4] == 0, "Without spillway, should stay terminal"
+        assert result_no_spill[5, 4] == 64, "Without spillway, should spill to lowest rim"
 
         # With spillway: (5, 4) should connect via direction 64 (South → 6,4)
         spillways = {1: (5, 4, 64)}  # lake_id -> (row, col, direction)
