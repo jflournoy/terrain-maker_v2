@@ -888,13 +888,13 @@ class TestConfigureForTargetVertices:
         with pytest.raises(ValueError):
             terrain.configure_for_target_vertices(1.5)  # Not an integer
 
-    def test_configure_for_target_vertices_with_custom_order(self):
-        """configure_for_target_vertices should accept custom interpolation order."""
+    def test_configure_for_target_vertices_with_custom_method(self):
+        """configure_for_target_vertices should accept a custom resampling method."""
         dem_data = np.ones((100, 100), dtype=np.float32)
         transform = Affine.identity()
         terrain = Terrain(dem_data, transform)
 
-        zoom = terrain.configure_for_target_vertices(5000, order=1)
+        zoom = terrain.configure_for_target_vertices(5000, method="bilinear")
 
         assert isinstance(zoom, float)
         assert len(terrain.transforms) == 1
@@ -1315,7 +1315,7 @@ class TestTwoTierEdgeExtrusion:
         terrain.apply_transforms()
 
         # Should raise ValueError for invalid material
-        with pytest.raises(ValueError, match="Unknown base material"):
+        with pytest.raises(ValueError, match="Unknown color preset"):
             terrain.create_mesh(two_tier_edge=True, edge_base_material="invalid_material")
 
     def test_create_mesh_stores_two_tier_parameters(self):
@@ -1342,6 +1342,60 @@ class TestTwoTierEdgeExtrusion:
         assert terrain.model_params["edge_base_material"] == "gold"
         assert terrain.model_params["edge_blend_colors"] is False
 
+
+
+
+class TestColorMappingValidation:
+    def test_color_function_must_return_rgb_or_rgba(self):
+        """A colormap returning a plain value grid fails early with a clear message."""
+        terrain = Terrain(np.ones((10, 10), dtype=np.float32), Affine.identity())
+        terrain.set_color_mapping(lambda dem: dem, source_layers=["dem"])
+
+        with pytest.raises(ValueError, match=r"\(H, W, 3\) or \(H, W, 4\).*\(10, 10\)"):
+            terrain.compute_colors()
+
+class TestSkirtFaceNormals:
+    """Boundary skirt faces must face outward, or backface culling hides them."""
+
+    @staticmethod
+    def _outward_fraction(dem, **mesh_kwargs):
+        terrain = Terrain(dem, Affine(0.001, 0, -83.0, 0, -0.001, 42.5))
+        terrain.transforms.append(lambda data, trans: (data, trans, None))
+        terrain.apply_transforms()
+        mesh = terrain.create_mesh(boundary_extension=True, verbose=False, **mesh_kwargs).data
+
+        n_surface = int(np.isfinite(dem).sum())
+        center_xy = np.array([v.co[:2] for v in mesh.vertices]).mean(axis=0)
+        # Skirt faces are the ones that use vertices added after the surface grid
+        skirt = [p for p in mesh.polygons if max(p.vertices) >= n_surface]
+        outward = sum(
+            np.dot(p.normal[:2], np.array(p.center[:2]) - center_xy) > 0 for p in skirt
+        )
+        return outward / len(skirt)
+
+    @staticmethod
+    def _wavy_dem():
+        yy, xx = np.mgrid[0:30, 0:30]
+        return (100 + 5 * np.sin(xx / 5) + 3 * np.cos(yy / 4)).astype(np.float32)
+
+    def test_rectangle_edges_face_outward(self):
+        assert self._outward_fraction(self._wavy_dem()) > 0.95
+
+    def test_morphological_edges_face_outward(self):
+        fraction = self._outward_fraction(
+            self._wavy_dem(), use_rectangle_edges=False, use_fractional_edges=False
+        )
+        assert fraction > 0.95
+
+    def test_morphological_edges_irregular_boundary_face_outward(self):
+        dem = self._wavy_dem()
+        yy, xx = np.mgrid[0:30, 0:30]
+        dem[(yy - 15) ** 2 + (xx - 15) ** 2 > 13**2] = np.nan
+
+        fraction = self._outward_fraction(
+            dem, use_rectangle_edges=False, use_fractional_edges=False
+        )
+        assert fraction > 0.95
 
 def create_sample_geotiff(filepath: Path, data: np.ndarray, bounds: tuple) -> Path:
     """

@@ -75,6 +75,7 @@ class TestMemoryMonitor:
 
         monitor = MemoryMonitor(config)
         monitor.psutil = mock_psutil
+        monitor.enabled = True  # psutil is optional; the mock stands in for it
 
         # First check should execute
         monitor.check_memory(force=True)
@@ -94,6 +95,7 @@ class TestMemoryMonitor:
 
         monitor = MemoryMonitor(config)
         monitor.psutil = mock_psutil
+        monitor.enabled = True  # psutil is optional; the mock stands in for it
 
         with pytest.raises(MemoryLimitExceeded):
             monitor.check_memory(force=True)
@@ -108,6 +110,7 @@ class TestMemoryMonitor:
 
         monitor = MemoryMonitor(config)
         monitor.psutil = mock_psutil
+        monitor.enabled = True  # psutil is optional; the mock stands in for it
 
         with pytest.raises(MemoryLimitExceeded):
             monitor.check_memory(force=True)
@@ -176,6 +179,19 @@ class TestAggregation:
         tile_outputs = [0.5, 0.6]
         strategy = loader._determine_aggregation(tile_outputs)
         assert strategy == "mean"
+
+    def test_determine_aggregation_numpy_scalar(self):
+        """Numpy scalars (e.g. from arr.mean()) are averaged, not first-tile only."""
+        loader = GriddedDataLoader(MockTerrain())
+
+        assert loader._determine_aggregation([np.float64(0.5), np.float64(0.6)]) == "mean"
+
+    def test_determine_aggregation_dict_of_scalars(self):
+        """Per-tile summary dicts like {"mean": ..., "std": ...} are averaged."""
+        loader = GriddedDataLoader(MockTerrain())
+
+        outputs = [{"mean": np.float64(1.0)}, {"mean": np.float64(3.0)}]
+        assert loader._determine_aggregation(outputs) == "mean"
 
     def test_determine_aggregation_dict_with_arrays(self):
         """Test aggregation detection for dict of arrays."""
@@ -329,6 +345,35 @@ class TestOutputShapeDetection:
 
         shape = loader._get_output_shape(0.5)
         assert shape == ()
+
+
+class TestStepCacheRoundTrip:
+    """Cached step outputs must load back as the same type they were saved as."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            {"data": np.arange(6.0).reshape(2, 3)},
+            {"data": np.ones(3), "other": np.zeros(2)},
+            np.arange(4.0),
+            3.5,
+        ],
+        ids=["dict_with_data_key", "dict_two_keys", "bare_array", "scalar"],
+    )
+    def test_round_trip(self, tmp_path, value):
+        loader = GriddedDataLoader(MockTerrain())
+        cache_file = tmp_path / "step.npz"
+
+        loader._save_step_cache(cache_file, value)
+        loaded = loader._load_step_cache(cache_file)
+
+        assert type(loaded) is type(value)
+        if isinstance(value, dict):
+            assert loaded.keys() == value.keys()
+            for key in value:
+                np.testing.assert_array_equal(loaded[key], value[key])
+        else:
+            np.testing.assert_array_equal(loaded, value)
 
 
 class TestIntegration:

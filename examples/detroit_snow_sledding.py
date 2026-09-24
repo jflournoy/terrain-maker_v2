@@ -1070,12 +1070,10 @@ def render_3d_with_snow(terrain: Terrain, output_path: Path):
     # Apply transforms if not already applied
     if not terrain.data_layers["dem"].get("transformed", False):
         logger.info("Applying identity transforms to terrain for mesh creation")
-        # For mock data without real transforms, just mark the original data as transformed
-        terrain.data_layers["dem"]["transformed_data"] = terrain.data_layers["dem"]["data"]
-        # Use crs from metadata or default to EPSG:4326
-        terrain.data_layers["dem"]["transformed_crs"] = terrain.data_layers["dem"].get("crs", "EPSG:4326")
-        # Mark as transformed
-        terrain.data_layers["dem"]["transformed"] = True
+        # Mock data has no real transforms; an identity transform lets the library
+        # record the full transformed state (data, transform, CRS) that create_mesh needs
+        terrain.add_transform(lambda data, transform: (data, transform, None))
+        terrain.apply_transforms()
 
     # Compute colors if not already computed
     if terrain.vertex_colors is None:

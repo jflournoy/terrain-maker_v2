@@ -7,6 +7,8 @@ Expected: 35x speedup (79s → ~2s) vs single-pass approach
 RED Phase: Define expected behavior
 """
 
+import importlib.util
+
 import numpy as np
 import pytest
 from src.terrain.transforms import downsample_raster, downsample_raster_optimized
@@ -211,6 +213,10 @@ class TestOptimizedDownsampling:
         assert 0.05 < zoom_first < 0.5, "First pass zoom factor should be reasonable"
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("pytest_benchmark") is None,
+    reason="pytest-benchmark plugin not installed",
+)
 class TestTwoPassPerformance:
     """Benchmark two-pass vs single-pass (performance tests)."""
 

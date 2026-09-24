@@ -55,7 +55,7 @@ class TestDetroitSnowExample:
 
         # Run example with output directory
         result = subprocess.run(
-            [sys.executable, str(example_path), "--output-dir", str(self.output_dir), "--step", "dem"],
+            [sys.executable, str(example_path), "--output-dir", str(self.output_dir), "--mock-data", "--step", "dem"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -65,7 +65,7 @@ class TestDetroitSnowExample:
         assert result.returncode == 0, f"Example failed: {result.stderr}"
 
         # Check DEM visualization was created
-        dem_viz = self.output_dir / "detroit_dem.png"
+        dem_viz = self.output_dir / "01_raw" / "dem.png"
         assert dem_viz.exists(), "DEM visualization not created"
         assert dem_viz.stat().st_size > 0, "DEM visualization is empty"
 
@@ -84,6 +84,7 @@ class TestDetroitSnowExample:
                 str(example_path),
                 "--output-dir",
                 str(self.output_dir),
+                "--mock-data",
                 "--step",
                 "snow",
             ],
@@ -96,7 +97,7 @@ class TestDetroitSnowExample:
         assert result.returncode == 0, f"Example failed: {result.stderr}"
 
         # Check snow depth visualization was created
-        snow_viz = self.output_dir / "detroit_snow_depth.png"
+        snow_viz = self.output_dir / "01_raw" / "snow_depth.png"
         assert snow_viz.exists(), "Snow depth visualization not created"
         assert snow_viz.stat().st_size > 0, "Snow depth visualization is empty"
 
@@ -115,6 +116,7 @@ class TestDetroitSnowExample:
                 str(example_path),
                 "--output-dir",
                 str(self.output_dir),
+                "--mock-data",
                 "--step",
                 "score",
             ],
@@ -127,7 +129,7 @@ class TestDetroitSnowExample:
         assert result.returncode == 0, f"Example failed: {result.stderr}"
 
         # Check sledding score visualization was created
-        score_viz = self.output_dir / "detroit_sledding_score.png"
+        score_viz = self.output_dir / "05_final" / "sledding_score_linear.png"
         assert score_viz.exists(), "Sledding score visualization not created"
         assert score_viz.stat().st_size > 0, "Sledding score visualization is empty"
 
@@ -149,6 +151,7 @@ class TestDetroitSnowExample:
                 str(example_path),
                 "--output-dir",
                 str(self.output_dir),
+                "--mock-data",
                 "--step",
                 "render",
             ],
@@ -161,7 +164,7 @@ class TestDetroitSnowExample:
         assert result.returncode == 0, f"Example failed: {result.stderr}"
 
         # Check 3D render was created
-        render_output = self.output_dir / "detroit_snow_3d.png"
+        render_output = self.output_dir / "06_render" / "render_3d.png"
         assert render_output.exists(), "3D render not created"
         assert render_output.stat().st_size > 0, "3D render is empty"
 
@@ -180,6 +183,7 @@ class TestDetroitSnowExample:
                 str(example_path),
                 "--output-dir",
                 str(self.output_dir),
+                "--mock-data",
                 "--all-steps",
             ],
             capture_output=True,
@@ -192,9 +196,9 @@ class TestDetroitSnowExample:
 
         # Check all visualizations were created
         expected_outputs = [
-            "detroit_dem.png",
-            "detroit_snow_depth.png",
-            "detroit_sledding_score.png",
+            "01_raw/dem.png",
+            "01_raw/snow_depth.png",
+            "05_final/sledding_score_linear.png",
         ]
 
         for output_file in expected_outputs:
@@ -230,7 +234,7 @@ class TestDetroitSnowExample:
         assert result.returncode == 0, f"Example with mock data failed: {result.stderr}"
 
         # Check output was created
-        dem_viz = self.output_dir / "detroit_dem.png"
+        dem_viz = self.output_dir / "01_raw" / "dem.png"
         assert dem_viz.exists(), "DEM visualization not created with mock data"
 
     def test_example_help_message(self):

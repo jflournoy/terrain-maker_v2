@@ -352,6 +352,25 @@ def find_lake_spillways(
     return spillways
 
 
+def _lowest_spill_direction(flow_dir, lake_mask, dem, r, c, lake_id):
+    """D8 code to the lowest non-lake neighbor of (r, c) whose flow path does
+    not re-enter the lake, or 0 if none exists. Ignores the elevation of
+    (r, c) itself, since a filled lake spills over a rim at or above it."""
+    from src.terrain.flow_accumulation import D8_DIRECTIONS
+
+    rows, cols = flow_dir.shape
+    candidates = sorted(
+        (dem[r + dr, c + dc], code, r + dr, c + dc)
+        for (dr, dc), code in D8_DIRECTIONS.items()
+        if 0 <= r + dr < rows and 0 <= c + dc < cols
+        and not (lake_id > 0 and lake_mask[r + dr, c + dc] == lake_id)
+    )
+    for _elev, code, nr, nc in candidates:
+        if not _trace_flows_to_lake(flow_dir, lake_mask, nr, nc, lake_id):
+            return code
+    return 0
+
+
 def compute_outlet_downstream_directions(
     flow_dir: np.ndarray,
     lake_mask: np.ndarray,
@@ -466,6 +485,14 @@ def compute_outlet_downstream_directions(
                                 flow_dir, lake_mask, snr, snc, this_lake_id
                             )):
                         best_dir = spill_dir
+
+        # Last resort: a designated outlet of a non-endorheic lake must drain.
+        # With no strictly lower neighbor, the lake fills until it overflows,
+        # so spill to the lowest non-lake neighbor that doesn't loop back.
+        if best_dir == 0:
+            best_dir = _lowest_spill_direction(
+                flow_dir, lake_mask, dem, r, c, this_lake_id
+            )
 
         result[r, c] = best_dir
 

@@ -14,8 +14,8 @@ import tempfile
 class TestColorComputationShape:
     """Tests for color computation output shapes."""
 
-    def test_compute_multi_overlay_colors_returns_vertex_space(self):
-        """_compute_multi_overlay_colors should return vertex-space colors (N, 4)."""
+    def test_compute_multi_overlay_colors_returns_grid_space(self):
+        """_compute_multi_overlay_colors returns grid-space colors (H, W, 4)."""
         pytest.importorskip("bpy")
         import bpy
         from src.terrain.core import Terrain
@@ -56,15 +56,13 @@ class TestColorComputationShape:
         # Compute colors (now that mesh vertices exist)
         colors = terrain.compute_colors()
 
-        # Get valid vertices count
-        n_vertices = len(terrain.y_valid)
+        # Colors stay in grid space (H, W, 4); Blender integration maps them
+        # to vertices via each vertex's (y_valid, x_valid) grid position
+        assert colors.ndim == 3, f"Colors should be grid-space (H, W, C), got shape {colors.shape}"
+        assert colors.shape[2] == 4, f"Colors should be RGBA, got {colors.shape[2]} channels"
 
-        # Colors should be vertex-space (N, 3/4), not grid-space (H, W, 3/4)
-        assert colors.ndim == 2, f"Colors should be 2D vertex-space, got shape {colors.shape}"
-        assert colors.shape[1] in (3, 4), f"Colors should have 3 or 4 channels, got {colors.shape[1]}"
-        assert (
-            colors.shape[0] == n_vertices
-        ), f"Color count {colors.shape[0]} should match vertex count {n_vertices}"
+        vertex_colors = colors[terrain.y_valid, terrain.x_valid]
+        assert vertex_colors.shape == (len(terrain.y_valid), 4), "Every vertex needs a color"
 
         # Clean up
         if mesh_obj is not None:

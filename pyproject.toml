@@ -88,6 +88,7 @@ addopts = [
 ]
 markers = [
     "benchmark: marks tests as performance benchmarks",
+    "network: needs internet access to external data servers (auto-skipped when unreachable)",
 ]
 
 [tool.mypy]

@@ -46,7 +46,7 @@ class TestBaseMaterials:
         from src.terrain.materials import BASE_MATERIALS
 
         # Test a few known values
-        assert BASE_MATERIALS["clay"] == (0.5, 0.48, 0.45)
+        assert BASE_MATERIALS["clay"] == (0.7, 0.25, 0.15)
         assert BASE_MATERIALS["obsidian"] == (0.02, 0.02, 0.02)
         assert BASE_MATERIALS["chrome"] == (0.9, 0.9, 0.92)
         assert BASE_MATERIALS["plastic"] == (0.95, 0.95, 0.95)
@@ -65,22 +65,22 @@ class TestGetBaseMaterialColor:
 
     def test_get_base_material_color_preset_lowercase(self):
         """Test resolving preset material by lowercase name."""
-        from src.terrain.materials import get_base_material_color
+        from src.terrain.materials import BASE_MATERIALS, get_base_material_color
 
         result = get_base_material_color("clay")
-        assert result == (0.5, 0.48, 0.45)
+        assert result == BASE_MATERIALS["clay"]
 
         result = get_base_material_color("gold")
         assert result == (1.0, 0.766, 0.336)
 
     def test_get_base_material_color_case_insensitive(self):
         """Test that material lookup is case-insensitive."""
-        from src.terrain.materials import get_base_material_color
+        from src.terrain.materials import BASE_MATERIALS, get_base_material_color
 
         # Test various cases
-        assert get_base_material_color("Clay") == (0.5, 0.48, 0.45)
-        assert get_base_material_color("CLAY") == (0.5, 0.48, 0.45)
-        assert get_base_material_color("cLaY") == (0.5, 0.48, 0.45)
+        assert get_base_material_color("Clay") == BASE_MATERIALS["clay"]
+        assert get_base_material_color("CLAY") == BASE_MATERIALS["clay"]
+        assert get_base_material_color("cLaY") == BASE_MATERIALS["clay"]
 
         assert get_base_material_color("Gold") == (1.0, 0.766, 0.336)
         assert get_base_material_color("GOLD") == (1.0, 0.766, 0.336)

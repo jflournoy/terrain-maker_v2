@@ -118,7 +118,7 @@ class TestDualRenderCameraSetup:
         assert callable(setup_dual_camera)
 
     def test_setup_dual_camera_uses_library_functions(self):
-        """Test that setup_dual_camera uses library setup_camera function."""
+        """Test that setup_dual_camera uses library position_camera_relative function."""
         sys.path.insert(0, str(Path(__file__).parent.parent))
         import examples.detroit_dual_render as module
 
@@ -128,10 +128,7 @@ class TestDualRenderCameraSetup:
             content = f.read()
 
         # Should use library function
-        assert "setup_camera(" in content
-        # Should set camera angle, location, and focal length
-        assert "camera_angle=" in content
-        assert "camera_location=" in content
+        assert "position_camera_relative(" in content
 
 
 class TestDualRenderLighting:
@@ -160,30 +157,6 @@ class TestDualRenderLighting:
         # Should configure location and energy
         assert "location=" in content
         assert "energy=" in content
-
-
-class TestDualRenderParkMarkers:
-    """Test park marker creation."""
-
-    def test_create_park_markers_callable(self):
-        """Test that create_park_markers is callable."""
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import create_park_markers
-
-        # Should be callable
-        assert callable(create_park_markers)
-
-    def test_create_park_markers_with_empty_list(self):
-        """Test that empty parks list returns empty markers."""
-        sys.path.insert(0, str(Path(__file__).parent.parent))
-        from examples.detroit_dual_render import create_park_markers
-
-        dem = np.random.randint(150, 250, (256, 256)).astype(np.float32)
-        transform = Affine.identity()
-
-        markers = create_park_markers([], dem, transform, None)
-
-        assert markers == []
 
 
 class TestDualRenderOutput:

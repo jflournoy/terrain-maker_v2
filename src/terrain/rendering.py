@@ -208,6 +208,11 @@ def setup_render_settings(
     cycles.samples = samples
     cycles.preview_samples = preview_samples
     cycles.use_denoising = use_denoising
+    # OPTIX only exists on NVIDIA GPUs; fall back to the CPU denoiser elsewhere
+    available_denoisers = {item.identifier for item in cycles.bl_rna.properties["denoiser"].enum_items}
+    if denoiser not in available_denoisers:
+        logger.warning(f"Denoiser {denoiser} unavailable, falling back to OPENIMAGEDENOISE")
+        denoiser = "OPENIMAGEDENOISE"
     cycles.denoiser = denoiser
     cycles.use_adaptive_sampling = True
 

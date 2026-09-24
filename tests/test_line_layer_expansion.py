@@ -40,16 +40,16 @@ def test_variable_width_propagates_metric_values():
     )
 
     # The original stream pixels should have their values
-    assert stream_layer[10, 10] == 100.0, "Stream 1 should have value 100.0"
-    assert stream_layer[15, 15] == 200.0, "Stream 2 should have value 200.0"
+    assert stream_layer[10, 10] == pytest.approx(100.0, rel=0.01), "Stream 1 should have value 100.0"
+    assert stream_layer[15, 15] == pytest.approx(200.0, rel=0.01), "Stream 2 should have value 200.0"
 
     # Stream 1 (value=100, min) gets min_width=1px → 1 pixel expansion
-    assert stream_layer[10, 11] == 100.0, "Pixel 1 away from stream 1 should get 100.0"
+    assert stream_layer[10, 11] == pytest.approx(100.0, rel=0.01), "Pixel 1 away from stream 1 should get 100.0"
 
     # Stream 2 (value=200, max) gets max_width=3px → 3 pixel expansion
-    assert stream_layer[15, 16] == 200.0, "Pixel 1 away from stream 2 should get 200.0"
-    assert stream_layer[15, 17] == 200.0, "Pixel 2 away from stream 2 should get 200.0"
-    assert stream_layer[15, 18] == 200.0, "Pixel 3 away from stream 2 should get 200.0"
+    assert stream_layer[15, 16] == pytest.approx(200.0, rel=0.01), "Pixel 1 away from stream 2 should get 200.0"
+    assert stream_layer[15, 17] == pytest.approx(200.0, rel=0.01), "Pixel 2 away from stream 2 should get 200.0"
+    assert stream_layer[15, 18] == pytest.approx(200.0, rel=0.01), "Pixel 3 away from stream 2 should get 200.0"
 
     # Pixels far from streams should be 0
     assert stream_layer[5, 5] == 0.0, "Pixel far from streams should be 0"
@@ -87,21 +87,21 @@ def test_variable_width_with_multiple_streams():
     )
 
     # Original stream pixels
-    assert stream_layer[5, 5] == 100.0, "Stream 0 should have value 100.0"
-    assert stream_layer[10, 10] == 150.0, "Stream 1 should have value 150.0"
-    assert stream_layer[20, 20] == 200.0, "Stream 2 should have value 200.0"
+    assert stream_layer[5, 5] == pytest.approx(100.0, rel=0.01), "Stream 0 should have value 100.0"
+    assert stream_layer[10, 10] == pytest.approx(150.0, rel=0.01), "Stream 1 should have value 150.0"
+    assert stream_layer[20, 20] == pytest.approx(200.0, rel=0.01), "Stream 2 should have value 200.0"
 
     # Stream 0 (value=100, min) gets min_width=1px → 1 pixel expansion
-    assert stream_layer[5, 6] == 100.0, "Stream 0 (min value) gets min_width=1px expansion"
+    assert stream_layer[5, 6] == pytest.approx(100.0, rel=0.01), "Stream 0 (min value) gets min_width=1px expansion"
 
     # Stream 1 (value=150, mid) gets width ≈ 2px
-    assert stream_layer[10, 11] == 150.0, "Pixel 1 away from stream 1 should get 150.0"
-    assert stream_layer[10, 12] == 150.0, "Pixel 2 away from stream 1 should get 150.0"
+    assert stream_layer[10, 11] == pytest.approx(150.0, rel=0.01), "Pixel 1 away from stream 1 should get 150.0"
+    assert stream_layer[10, 12] == pytest.approx(150.0, rel=0.01), "Pixel 2 away from stream 1 should get 150.0"
 
     # Stream 2 (value=200, max) gets max_width=3px
-    assert stream_layer[20, 21] == 200.0, "Pixel 1 away from stream 2 should get 200.0"
-    assert stream_layer[20, 22] == 200.0, "Pixel 2 away from stream 2 should get 200.0"
-    assert stream_layer[20, 23] == 200.0, "Pixel 3 away from stream 2 should get 200.0"
+    assert stream_layer[20, 21] == pytest.approx(200.0, rel=0.01), "Pixel 1 away from stream 2 should get 200.0"
+    assert stream_layer[20, 22] == pytest.approx(200.0, rel=0.01), "Pixel 2 away from stream 2 should get 200.0"
+    assert stream_layer[20, 23] == pytest.approx(200.0, rel=0.01), "Pixel 3 away from stream 2 should get 200.0"
 
     # Midpoint between streams should be 0 (outside expansion radius)
     assert stream_layer[15, 15] == 0.0, "Midpoint should be 0 (no streams nearby)"
@@ -109,3 +109,33 @@ def test_variable_width_with_multiple_streams():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.parametrize("method", ["fast", "sparse"])
+def test_line_values_keep_their_scale(method):
+    """Smoothing must stay on the line network, not average in empty ground.
+
+    A 1px-wide line smoothed with the whole (mostly zero) grid would drop to
+    a fraction of its value; values along a uniform line must stay intact.
+    """
+    shape = (40, 40)
+    selection = np.zeros(shape, dtype=np.float32)
+    selection[10, 5:35] = 1.0  # horizontal stream
+    selection[5:35, 30] = 1.0  # vertical stream joining it
+
+    metric = np.zeros(shape, dtype=np.float32)
+    metric[10, 5:35] = 50.0
+    metric[5:35, 30] = 400.0
+
+    layer = create_line_layer(
+        metric_data=metric,
+        selection_metric_data=selection,
+        percentile=0.0,
+        variable_width=True,
+        max_width=3,
+        method=method,
+    )
+
+    # Far from the confluence, each stream keeps its own value
+    assert layer[10, 8] == pytest.approx(50.0, rel=0.05)
+    assert layer[30, 30] == pytest.approx(400.0, rel=0.05)

@@ -25,6 +25,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+# npz key for step outputs that are not dicts (arrays, scalars, other objects)
+_BARE_VALUE_KEY = "__bare_value__"
+
+
+def _is_scalar_number(value) -> bool:
+    """True for Python and numpy numeric scalars (not bool, not arrays)."""
+    return isinstance(value, (int, float, np.number)) and not isinstance(value, bool)
+
+
 class MemoryLimitExceeded(Exception):
     """Raised when memory usage exceeds configured limits."""
 
@@ -519,7 +528,8 @@ class GriddedDataLoader:
             step_name, func, kwargs, upstream_cache_key
         )
 
-        cache_file = self.cache_dir / f"{cache_name}_{step_name}_{step_cache_key[:16]}.npz"
+        # v2: bare values use _BARE_VALUE_KEY; v1 files were ambiguous for {"data": ...}
+        cache_file = self.cache_dir / f"{cache_name}_{step_name}_{step_cache_key[:16]}.v2.npz"
 
         # Try to load from cache
         if not force_reprocess and cache_file.exists():
@@ -772,17 +782,22 @@ class GriddedDataLoader:
         first_output = tile_outputs[0]
 
         if isinstance(first_output, dict):
-            # Check first array in dict
+            # Check first array in dict; a dict of scalars is per-tile statistics
             for v in first_output.values():
                 if isinstance(v, np.ndarray):
                     return "concatenate" if v.ndim >= 2 else "mean"
+            if first_output and all(_is_scalar_number(v) for v in first_output.values()):
+                return "mean"
             return "first"
 
         elif isinstance(first_output, np.ndarray):
             return "concatenate" if first_output.ndim >= 2 else "mean"
 
+        elif _is_scalar_number(first_output):
+            return "mean"
+
         else:
-            return "first"  # Non-array data
+            return "first"  # Non-array, non-numeric data
 
     def _concatenate_spatial(
         self,
@@ -967,11 +982,12 @@ class GriddedDataLoader:
                 # Save dict of arrays
                 np.savez_compressed(cache_file, **data)
             elif isinstance(data, np.ndarray):
-                # Save single array
-                np.savez_compressed(cache_file, data=data)
+                # Save single array under a reserved key, so it can't be
+                # confused with a dict that has a "data" key
+                np.savez_compressed(cache_file, **{_BARE_VALUE_KEY: data})
             else:
                 # Pickle for other types
-                np.savez_compressed(cache_file, data=np.array(data, dtype=object))
+                np.savez_compressed(cache_file, **{_BARE_VALUE_KEY: np.array(data, dtype=object)})
         except Exception as e:
             logger.warning(f"Failed to save cache: {e}")
 
@@ -979,9 +995,9 @@ class GriddedDataLoader:
         """Load step output from cache."""
         try:
             with np.load(cache_file, allow_pickle=True) as npz:
-                if len(npz.files) == 1 and "data" in npz.files:
+                if npz.files == [_BARE_VALUE_KEY]:
                     # Single array or pickled object
-                    data = npz["data"]
+                    data = npz[_BARE_VALUE_KEY]
                     return data.item() if data.dtype == object else data
                 else:
                     # Dict of arrays - need to extract object arrays back to Python types

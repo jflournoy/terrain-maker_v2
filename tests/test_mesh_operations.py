@@ -284,14 +284,14 @@ class TestBoundaryExtension:
         coord_to_index = {(0, 0): 0, (1, 0): 1, (1, 1): 2, (0, 1): 3}
 
         boundary_vertices, boundary_faces = create_boundary_extension(
-            positions, boundary_points, coord_to_index, base_depth=-0.5
+            positions, boundary_points, coord_to_index, base_depth=0.5
         )
 
         # Should create 4 bottom vertices (one per boundary point)
         assert boundary_vertices.shape == (4, 3)
 
-        # Bottom vertices should have base_depth as z-coordinate
-        assert all(v[2] == -0.5 for v in boundary_vertices)
+        # Flat base plane sits base_depth below the lowest surface point (z=1)
+        assert all(v[2] == 1 - 0.5 for v in boundary_vertices)
 
         # Should create 4 side faces (one per boundary segment)
         assert len(boundary_faces) == 4
@@ -309,16 +309,16 @@ class TestBoundaryExtension:
         coord_to_index = {(0, 0): 0, (0, 1): 1}
 
         boundary_vertices, boundary_faces = create_boundary_extension(
-            positions, boundary_points, coord_to_index, base_depth=-1.0
+            positions, boundary_points, coord_to_index, base_depth=1.0
         )
 
         # X,Y should match original positions, only Z changes
         assert np.allclose(boundary_vertices[0, :2], positions[0, :2])
         assert np.allclose(boundary_vertices[1, :2], positions[1, :2])
 
-        # Z should be base_depth
-        assert boundary_vertices[0, 2] == -1.0
-        assert boundary_vertices[1, 2] == -1.0
+        # Z should be base_depth below the lowest surface point (z=10)
+        assert boundary_vertices[0, 2] == 10.0 - 1.0
+        assert boundary_vertices[1, 2] == 10.0 - 1.0
 
     def test_create_boundary_extension_face_indices(self):
         """Test that side faces correctly reference top and bottom vertices."""
@@ -428,26 +428,25 @@ class TestTwoTierBoundaryExtension:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.4,
+            base_depth=0.4,
             two_tier=True,
-            mid_depth=-0.1,
+            mid_depth=0.1,
             base_material="clay",
         )
 
         # Should create 2*N vertices (N mid + N base)
         assert boundary_vertices.shape == (8, 3), "Should have 8 vertices (4 mid + 4 base)"
 
-        # Mid tier vertices (first 4): each at its position's Z + mid_depth
-        # positions Z values are [1, 2, 4, 3], mid_depth = -0.1
+        # Mid tier vertices (first 4): each mid_depth below its surface point
+        # positions Z values are [1, 2, 4, 3], mid_depth = 0.1
         # Expected: [0.9, 1.9, 3.9, 2.9]
         expected_mid_z = [0.9, 1.9, 3.9, 2.9]
         for i, v in enumerate(boundary_vertices[:4]):
             assert np.isclose(v[2], expected_mid_z[i]), f"Mid vertex {i} Z mismatch"
 
-        # Base tier vertices (last 4): all at FLAT base_depth (absolute Z)
-        # base_depth = -0.4, so all base vertices should be at -0.4
-        # (This creates a flat foundation regardless of surface elevation)
-        expected_base_z = -0.4
+        # Base tier vertices (last 4): one flat plane base_depth below the
+        # lowest surface point (min Z = 1), regardless of surface elevation
+        expected_base_z = 1 - 0.4
         for i, v in enumerate(boundary_vertices[4:]):
             assert np.isclose(v[2], expected_base_z), f"Base vertex {i} Z mismatch: got {v[2]}, expected {expected_base_z}"
 
@@ -463,17 +462,17 @@ class TestTwoTierBoundaryExtension:
             positions,
             boundary_points,
             coord_to_index,
-            base_depth=-0.8,
+            base_depth=0.8,
             two_tier=True,
             mid_depth=None,  # Should auto-calculate
             base_material="clay",
         )
 
-        # Mid depth auto-calculated as base_depth * 0.25 = -0.8 * 0.25 = -0.2
-        # Mid vertex: surface + mid_depth = 5 + (-0.2) = 4.8 (follows elevation)
-        # Base vertex: base_depth = -0.8 (flat absolute Z)
-        assert np.isclose(boundary_vertices[0, 2], 4.8), "Mid vertex should be at surface + mid_depth"
-        assert np.isclose(boundary_vertices[1, 2], -0.8), "Base vertex should be at flat base_depth"
+        # Mid depth auto-calculated as base_depth * 0.25 = 0.8 * 0.25 = 0.2
+        # Mid vertex: surface - mid_depth = 5 - 0.2 = 4.8 (follows elevation)
+        # Base vertex: min surface - base_depth = 5 - 0.8 = 4.2 (flat plane)
+        assert np.isclose(boundary_vertices[0, 2], 4.8), "Mid vertex should be mid_depth below surface"
+        assert np.isclose(boundary_vertices[1, 2], 4.2), "Base vertex should be base_depth below min surface"
 
     def test_two_tier_face_generation(self):
         """Test that two-tier mode creates upper and lower tier faces."""
@@ -531,7 +530,9 @@ class TestTwoTierBoundaryExtension:
         assert boundary_colors[:2].dtype == np.uint8, "Colors should be uint8"
 
         # Base vertices (last 2) should have clay color
-        clay_rgb = (0.5, 0.48, 0.45)
+        from src.terrain.materials import BASE_MATERIALS
+
+        clay_rgb = BASE_MATERIALS["clay"]
         expected_clay = (np.array(clay_rgb) * 255).astype(np.uint8)
         assert np.allclose(boundary_colors[2], expected_clay, atol=1), "Base colors should be clay"
         assert np.allclose(boundary_colors[3], expected_clay, atol=1), "Base colors should be clay"
@@ -556,7 +557,9 @@ class TestTwoTierBoundaryExtension:
         )
 
         # Both mid and base should use clay color when blending disabled
-        clay_rgb = (0.5, 0.48, 0.45)
+        from src.terrain.materials import BASE_MATERIALS
+
+        clay_rgb = BASE_MATERIALS["clay"]
         expected_clay = (np.array(clay_rgb) * 255).astype(np.uint8)
         assert np.allclose(boundary_colors[0], expected_clay, atol=1), "Mid should be clay when blending disabled"
         assert np.allclose(boundary_colors[1], expected_clay, atol=1), "Base should be clay"
@@ -646,7 +649,7 @@ class TestTwoTierBoundaryExtension:
 
         # Check error message
         error_msg = str(exc_info.value)
-        assert "Unknown base material" in error_msg, "Should mention unknown material"
+        assert "Unknown color preset" in error_msg, "Should mention unknown material"
         assert "invalid_material" in error_msg, "Should mention the invalid name"
 
 

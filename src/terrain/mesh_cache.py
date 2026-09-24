@@ -16,6 +16,8 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from src.terrain.cache import array_fingerprint
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,12 +75,8 @@ class MeshCache:
         param_str = f"{dem_hash}:"
         for key in sorted(mesh_params.keys()):
             value = mesh_params[key]
-            if isinstance(value, (np.ndarray, list)):
-                # For arrays, use shape and dtype
-                if isinstance(value, np.ndarray):
-                    param_str += f"{key}={value.shape}_{value.dtype}:"
-                else:
-                    param_str += f"{key}={len(value)}:"
+            if isinstance(value, np.ndarray):
+                param_str += f"{key}={array_fingerprint(value)}:"
             else:
                 param_str += f"{key}={value}:"
 

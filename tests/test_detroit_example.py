@@ -13,6 +13,7 @@ import pytest
 from pathlib import Path
 from affine import Affine
 from src.terrain.core import Terrain, load_dem_files, clear_scene
+from src.terrain.color_mapping import elevation_colormap
 
 # Check if Blender is available
 try:
@@ -174,7 +175,7 @@ class TestDetroitEndToEnd:
 
         terrain1.transforms.append(identity_transform)
         terrain1.apply_transforms()
-        terrain1.set_color_mapping(lambda x: x, source_layers=["dem"])
+        terrain1.set_color_mapping(elevation_colormap, source_layers=["dem"])
         mesh1 = terrain1.create_mesh()
         verts1 = len(mesh1.data.vertices)
         faces1 = len(mesh1.data.polygons)
@@ -183,7 +184,7 @@ class TestDetroitEndToEnd:
         terrain2 = Terrain(dem_data.copy(), transform)
         terrain2.transforms.append(identity_transform)
         terrain2.apply_transforms()
-        terrain2.set_color_mapping(lambda x: x, source_layers=["dem"])
+        terrain2.set_color_mapping(elevation_colormap, source_layers=["dem"])
         mesh2 = terrain2.create_mesh()
         verts2 = len(mesh2.data.vertices)
         faces2 = len(mesh2.data.polygons)

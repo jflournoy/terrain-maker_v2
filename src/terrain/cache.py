@@ -18,6 +18,16 @@ import time
 logger = logging.getLogger(__name__)
 
 
+def array_fingerprint(arr: np.ndarray) -> str:
+    """Deterministic, content-sensitive string for hashing a numpy array.
+
+    Uses SHA256 of the raw bytes rather than Python's built-in hash(), which is
+    salted per process and would make on-disk cache keys change every run.
+    """
+    digest = hashlib.sha256(np.ascontiguousarray(arr).tobytes()).hexdigest()
+    return f"ndarray:{arr.shape}:{arr.dtype}:{digest}"
+
+
 class DEMCache:
     """
     Manages caching of loaded and merged DEM data with hash validation.
@@ -361,7 +371,7 @@ class TransformCache:
                 Deterministic string representation of the value
             """
             if isinstance(v, np.ndarray):
-                return f"ndarray:{v.shape}:{v.dtype}:{hash(v.tobytes())}"
+                return array_fingerprint(v)
             return str(v)
 
         sorted_params = sorted(
@@ -652,7 +662,7 @@ class PipelineCache:
     def _serialize_value(self, v) -> str:
         """Serialize a value to a deterministic string representation."""
         if isinstance(v, np.ndarray):
-            return f"ndarray:{v.shape}:{v.dtype}:{hash(v.tobytes())}"
+            return array_fingerprint(v)
         if isinstance(v, Affine):
             return f"Affine:{v.a},{v.b},{v.c},{v.d},{v.e},{v.f}"
         if isinstance(v, Path):

@@ -11,6 +11,23 @@ from pathlib import Path
 pytest.importorskip("bpy")
 
 
+@pytest.fixture(autouse=True)
+def cheap_renders():
+    """Keep any real Cycles render these tests trigger to a few seconds.
+
+    The render tests call render_scene_to_file and only check settings, but the
+    call really renders; at production samples that takes minutes on CPU.
+    """
+    import bpy
+
+    cycles = bpy.context.scene.cycles
+    cycles.device = "CPU"
+    cycles.samples = 1
+    cycles.use_denoising = False
+    cycles.use_adaptive_sampling = False
+    cycles.max_bounces = 0
+
+
 class TestSetupRenderSettings:
     """Tests for setup_render_settings function."""
 
@@ -48,6 +65,15 @@ class TestSetupRenderSettings:
         setup_render_settings(use_denoising=True)
 
         assert bpy.context.scene.cycles.use_denoising is True
+
+    def test_setup_render_settings_unavailable_denoiser_falls_back(self):
+        """An unavailable denoiser (e.g. OPTIX without NVIDIA) should not crash."""
+        import bpy
+        from src.terrain.rendering import setup_render_settings
+
+        setup_render_settings(denoiser="NOT_A_DENOISER")
+
+        assert bpy.context.scene.cycles.denoiser == "OPENIMAGEDENOISE"
 
     def test_setup_render_settings_configures_preview_samples(self):
         """Test that preview samples are configured."""
