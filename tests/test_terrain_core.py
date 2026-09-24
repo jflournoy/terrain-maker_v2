@@ -888,13 +888,13 @@ class TestConfigureForTargetVertices:
         with pytest.raises(ValueError):
             terrain.configure_for_target_vertices(1.5)  # Not an integer
 
-    def test_configure_for_target_vertices_with_custom_order(self):
-        """configure_for_target_vertices should accept custom interpolation order."""
+    def test_configure_for_target_vertices_with_custom_method(self):
+        """configure_for_target_vertices should accept a custom resampling method."""
         dem_data = np.ones((100, 100), dtype=np.float32)
         transform = Affine.identity()
         terrain = Terrain(dem_data, transform)
 
-        zoom = terrain.configure_for_target_vertices(5000, order=1)
+        zoom = terrain.configure_for_target_vertices(5000, method="bilinear")
 
         assert isinstance(zoom, float)
         assert len(terrain.transforms) == 1
