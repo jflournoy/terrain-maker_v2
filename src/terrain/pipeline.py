@@ -549,28 +549,28 @@ class TerrainPipeline:
         - Which tasks would be computed vs cached
         """
         if task_name not in self._task_graph:
-            print(f"\nUnknown task: {task_name}")
-            print(f"Available tasks: {', '.join(self._task_graph.keys())}")
+            logger.info(f"\nUnknown task: {task_name}")
+            logger.info(f"Available tasks: {', '.join(self._task_graph.keys())}")
             return
 
-        print("\n" + "=" * 70)
-        print(f"Execution Plan for: {task_name}")
-        print("=" * 70 + "\n")
+        logger.info("\n" + "=" * 70)
+        logger.info(f"Execution Plan for: {task_name}")
+        logger.info("=" * 70 + "\n")
 
         task_info = self._task_graph[task_name]
-        print(f"Task: {task_name}")
-        print(f"Description: {task_info['description']}")
+        logger.info(f"Task: {task_name}")
+        logger.info(f"Description: {task_info['description']}")
 
         if task_info["depends_on"]:
-            print("\nDependencies:")
+            logger.info("\nDependencies:")
             for dep in task_info["depends_on"]:
-                print(f"  - {dep}")
+                logger.info(f"  - {dep}")
 
         # Show execution order
         order = self._compute_execution_order(task_name)
-        print("\nExecution order (topological):")
+        logger.info("\nExecution order (topological):")
         for i, task in enumerate(order, 1):
-            print(f"  {i}. {task}")
+            logger.info(f"  {i}. {task}")
 
     def _compute_execution_order(self, task_name: str) -> List[str]:
         """Topologically sort tasks by dependency."""
@@ -615,28 +615,28 @@ class TerrainPipeline:
         if views is None:
             views = ["north", "south", "east", "west", "above"]
 
-        print("\n" + "=" * 70)
-        print(f"Rendering {len(views)} views (mesh built once, reused for all)")
-        print("=" * 70 + "\n")
+        logger.info("\n" + "=" * 70)
+        logger.info(f"Rendering {len(views)} views (mesh built once, reused for all)")
+        logger.info("=" * 70 + "\n")
 
         results = {}
         for i, view in enumerate(views, 1):
-            print(f"\n[{i}/{len(views)}] Rendering {view} view...")
+            logger.info(f"\n[{i}/{len(views)}] Rendering {view} view...")
             self._log("\n[%d/%d] Rendering %s view...", i, len(views), view)
             try:
                 output = self.render_view(view=view)
                 if output:
                     results[view] = output
-                    print(f"      ✓ Added {view} to results: {output}")
+                    logger.info(f"      ✓ Added {view} to results: {output}")
                     self._log("      ✓ Added %s to results", view)
                 else:
-                    print(f"      ✗ render_view returned None for {view}")
+                    logger.warning(f"      ✗ render_view returned None for {view}")
                     self._log("      ✗ render_view returned None for %s", view, "warn")
             except (OSError, IOError, ValueError, RuntimeError) as e:
-                print(f"[✗] Failed to render {view}: {e}")
+                logger.error(f"[✗] Failed to render {view}: {e}")
                 self._log("[✗] Failed to render %s: %s", view, e, "warn")
             except Exception as e:
-                print(f"[✗] Unexpected error rendering {view}: {e}")
+                logger.error(f"[✗] Unexpected error rendering {view}: {e}")
                 self._log("[✗] Unexpected error rendering %s: %s", view, e, "error")
                 import traceback
                 traceback.print_exc()

@@ -22,6 +22,7 @@ Example:
     )
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +31,8 @@ from src.terrain.flow_accumulation import compute_flow_direction, compute_draina
 matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Colormap constants - all perceptually uniform, colorblind-friendly
 FLOW_COLORMAPS = {
@@ -161,7 +164,7 @@ def save_flow_plot(
     if pixel_perfect:
         # 1. Save RAW pixel-perfect version
         plt.imsave(output_path, rgb_image)
-        print(f"  Saved raw (pixel-perfect): {output_path.name} [{data.shape[0]}×{data.shape[1]} pixels]")
+        logger.info(f"  Saved raw (pixel-perfect): {output_path.name} [{data.shape[0]}×{data.shape[1]} pixels]")
 
         # 2. Save ANNOTATED thumbnail
         thumb_path = output_path.with_stem(output_path.stem + "_annotated")
@@ -184,7 +187,7 @@ def save_flow_plot(
         plt.tight_layout()
         plt.savefig(thumb_path, dpi=dpi, bbox_inches="tight")
         plt.close()
-        print(f"  Saved annotated thumbnail: {thumb_path.name}")
+        logger.info(f"  Saved annotated thumbnail: {thumb_path.name}")
     else:
         # Legacy mode: single matplotlib figure
         fig, ax = plt.subplots(figsize=figsize)
@@ -202,7 +205,7 @@ def save_flow_plot(
         plt.tight_layout()
         plt.savefig(output_path, dpi=dpi, bbox_inches="tight")
         plt.close()
-        print(f"  Saved: {output_path.name}")
+        logger.info(f"  Saved: {output_path.name}")
 
     return output_path
 
@@ -285,7 +288,7 @@ def plot_water_bodies(
 
     # 1. Save RAW pixel-perfect version
     plt.imsave(output_path, rgb_image)
-    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
+    logger.info(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
 
     # 2. Save ANNOTATED thumbnail with arrows
     thumb_path = output_path.with_stem(output_path.stem + "_annotated")
@@ -352,7 +355,7 @@ def plot_water_bodies(
     plt.tight_layout()
     plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+    logger.info(f"  Saved annotated thumbnail: {thumb_path.name}")
 
     return output_path
 
@@ -391,7 +394,7 @@ def plot_endorheic_basins(
 
     # 1. Save RAW pixel-perfect version
     plt.imsave(output_path, rgb_image)
-    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
+    logger.info(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels]")
 
     # 2. Save ANNOTATED thumbnail
     thumb_path = output_path.with_stem(output_path.stem + "_annotated")
@@ -414,7 +417,7 @@ def plot_endorheic_basins(
     plt.tight_layout()
     plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+    logger.info(f"  Saved annotated thumbnail: {thumb_path.name}")
 
     return output_path
 
@@ -669,7 +672,7 @@ def plot_stream_network(
 
     # 1. Save RAW pixel-perfect version
     plt.imsave(output_path, rgb_image)
-    print(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels, {stream_count:,} stream cells]")
+    logger.info(f"  Saved raw (pixel-perfect): {output_path.name} [{dem.shape[0]}×{dem.shape[1]} pixels, {stream_count:,} stream cells]")
 
     # 2. Save ANNOTATED thumbnail
     thumb_path = output_path.with_stem(output_path.stem + "_annotated")
@@ -692,7 +695,7 @@ def plot_stream_network(
     plt.tight_layout()
     plt.savefig(thumb_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+    logger.info(f"  Saved annotated thumbnail: {thumb_path.name}")
 
     return output_path
 
@@ -773,7 +776,7 @@ def plot_stream_overlay(
     # Extract stream mask using percentile threshold
     valid_threshold = stream_threshold_data[stream_threshold_data > 0]
     if len(valid_threshold) == 0:
-        print(f"  Warning: No valid stream data, skipping {output_path.name}")
+        logger.warning(f"  Warning: No valid stream data, skipping {output_path.name}")
         return output_path
     stream_threshold = np.percentile(valid_threshold, percentile)
     stream_mask = stream_threshold_data >= stream_threshold
@@ -847,7 +850,7 @@ def plot_stream_overlay(
             stream_mask = expanded_values > 0
             stream_plot = np.where(stream_mask, expanded_values, stream_plot)
 
-            print(f"    Variable width applied: {min_width}-{max_width}px with smooth tapering")
+            logger.info(f"    Variable width applied: {min_width}-{max_width}px with smooth tapering")
 
     # Get colormaps
     base_cmap_obj = plt.get_cmap(base_cmap)
@@ -903,7 +906,7 @@ def plot_stream_overlay(
     # 1. Save RAW pixel-perfect version
     plt.imsave(output_path, composite)
     stream_count = np.sum(stream_mask)
-    print(f"  Saved raw (pixel-perfect): {output_path.name} [{base_data.shape[0]}×{base_data.shape[1]} pixels, {stream_count:,} stream cells]")
+    logger.info(f"  Saved raw (pixel-perfect): {output_path.name} [{base_data.shape[0]}×{base_data.shape[1]} pixels, {stream_count:,} stream cells]")
 
     # 2. Save ANNOTATED thumbnail
     thumb_path = output_path.with_stem(output_path.stem + "_annotated")
@@ -942,7 +945,7 @@ def plot_stream_overlay(
     plt.tight_layout()
     plt.savefig(thumb_path, dpi=100, bbox_inches="tight")
     plt.close()
-    print(f"  Saved annotated thumbnail: {thumb_path.name}")
+    logger.info(f"  Saved annotated thumbnail: {thumb_path.name}")
 
     return output_path
 
@@ -1102,7 +1105,7 @@ def plot_validation_summary(
     output_path = Path(output_path)
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  Saved: {output_path.name}")
+    logger.info(f"  Saved: {output_path.name}")
     return output_path
 
 
@@ -1192,7 +1195,7 @@ def create_flow_diagnostics(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\nGenerating flow diagnostics in: {output_dir}")
+    logger.info(f"\nGenerating flow diagnostics in: {output_dir}")
 
     # 1. Original DEM
     plot_dem(dem, output_dir / "01_dem_original.png")
@@ -1294,7 +1297,7 @@ def create_flow_diagnostics(
         is_real_precip=is_real_precip,
     )
 
-    print(f"  Generated {14 if lake_mask is not None else 12} diagnostic images")
+    logger.info(f"  Generated {14 if lake_mask is not None else 12} diagnostic images")
     return output_dir
 
 
@@ -1323,8 +1326,8 @@ def vectorize_stream_network(stream_mask: np.ndarray, simplify_tolerance: float 
         from skan import Skeleton
         from skimage.morphology import skeletonize
     except ImportError:
-        print("WARNING: skan or scikit-image not available for stream vectorization")
-        print("  Install with: pip install skan scikit-image")
+        logger.warning("WARNING: skan or scikit-image not available for stream vectorization")
+        logger.info("  Install with: pip install skan scikit-image")
         return []
 
     if not np.any(stream_mask):
@@ -1443,25 +1446,25 @@ def plot_vectorized_streams(
     num_stream_pixels = np.sum(stream_mask)
 
     if num_stream_pixels == 0:
-        print(f"  Warning: No stream pixels, skipping {output_path.name}")
+        logger.warning(f"  Warning: No stream pixels, skipping {output_path.name}")
         return output_path
 
     # Extract polylines using topology-aware vectorization
-    print(f"  Vectorizing {num_stream_pixels:,} stream pixels...")
+    logger.info(f"  Vectorizing {num_stream_pixels:,} stream pixels...")
     polylines = vectorize_stream_network(stream_mask, simplify_tolerance=simplify_tolerance)
 
     if len(polylines) == 0:
-        print(f"  Warning: No polylines extracted, skipping {output_path.name}")
+        logger.warning(f"  Warning: No polylines extracted, skipping {output_path.name}")
         return output_path
 
     total_points = sum(len(p) for p in polylines)
-    print(f"  Extracted {len(polylines):,} stream segments ({total_points:,} total points)")
+    logger.info(f"  Extracted {len(polylines):,} stream segments ({total_points:,} total points)")
 
     # Render polylines with variable width to raster (1 data pixel = 1 image pixel)
     from skimage.draw import polygon as draw_polygon
     polyline_raster = np.zeros_like(stream_mask, dtype=np.uint8)
 
-    print(f"  Creating variable-width polygons (max width: {max_width:.1f}px)...")
+    logger.info(f"  Creating variable-width polygons (max width: {max_width:.1f}px)...")
     skipped = 0
     drawn = 0
 
@@ -1517,5 +1520,5 @@ def plot_vectorized_streams(
     img = Image.fromarray(polyline_raster, mode='L')
     img.save(output_path)
 
-    print(f"  ✓ Rasterized {drawn:,}/{len(polylines):,} polylines ({skipped:,} skipped) → {np.sum(polyline_raster > 0):,} pixels")
+    logger.info(f"  ✓ Rasterized {drawn:,}/{len(polylines):,} polylines ({skipped:,} skipped) → {np.sum(polyline_raster > 0):,} pixels")
     return output_path

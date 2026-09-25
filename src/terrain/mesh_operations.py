@@ -9,12 +9,15 @@ Performance optimizations:
 - Vectorized NumPy operations where possible
 """
 
+import logging
 import numpy as np
 from scipy.spatial import cKDTree
 from scipy import ndimage
 
 # Try to import numba for JIT compilation
 from src.terrain._numba_compat import NUMBA_AVAILABLE, jit, prange
+
+logger = logging.getLogger(__name__)
 
 
 def find_boundary_points(valid_mask):
@@ -465,14 +468,14 @@ def create_boundary_extension(
 
             # Report results
             original_shape = terrain.dem_shape
-            print(f"\n{'='*60}")
-            print(f"Transform-Aware Fractional Edge Sampling (Curved Boundary)")
-            print(f"{'='*60}")
-            print(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
-            print(f"Fractional edge vertices: {len(rect_boundary_fractional)}")
-            print(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
-            print(f"NOTE: Fractional coordinates preserve projection curvature")
-            print(f"{'='*60}\n")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Transform-Aware Fractional Edge Sampling (Curved Boundary)")
+            logger.info(f"{'='*60}")
+            logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+            logger.info(f"Fractional edge vertices: {len(rect_boundary_fractional)}")
+            logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+            logger.info(f"NOTE: Fractional coordinates preserve projection curvature")
+            logger.info(f"{'='*60}\n")
 
             # Use fractional edges directly - they'll be processed by bilinear interpolation
             # No need to filter through coord_to_index since these are fractional coords
@@ -489,13 +492,13 @@ def create_boundary_extension(
 
             # Report results
             original_shape = terrain.dem_shape
-            print(f"\n{'='*60}")
-            print(f"Transform-Aware Rectangle Edge Sampling (Integer)")
-            print(f"{'='*60}")
-            print(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
-            print(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
-            print(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
-            print(f"{'='*60}\n")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Transform-Aware Rectangle Edge Sampling (Integer)")
+            logger.info(f"{'='*60}")
+            logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+            logger.info(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
+            logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+            logger.info(f"{'='*60}\n")
         else:
             # FALLBACK: Legacy approach using transformed DEM shape
             if dem_shape is None:
@@ -503,19 +506,19 @@ def create_boundary_extension(
 
             # Run diagnostic to show why this doesn't work well
             diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
-            print(f"\n{'='*60}")
-            print(f"⚠️  Legacy Rectangle Edge Sampling (Transformed DEM)")
-            print(f"{'='*60}")
-            print(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
-            print(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
-            print(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
-            print(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
-            print(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
-            print(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
-            print(f"\nRecommendation: {diagnostic['recommendation']}")
-            print(f"Reason: {diagnostic['reason']}")
-            print(f"💡 Tip: Pass terrain= parameter for transform-aware sampling (~100% coverage)")
-            print(f"{'='*60}\n")
+            logger.info(f"\n{'='*60}")
+            logger.warning(f"⚠️  Legacy Rectangle Edge Sampling (Transformed DEM)")
+            logger.info(f"{'='*60}")
+            logger.info(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
+            logger.info(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
+            logger.info(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
+            logger.info(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
+            logger.info(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
+            logger.info(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
+            logger.info(f"\nRecommendation: {diagnostic['recommendation']}")
+            logger.info(f"Reason: {diagnostic['reason']}")
+            logger.info(f"💡 Tip: Pass terrain= parameter for transform-aware sampling (~100% coverage)")
+            logger.info(f"{'='*60}\n")
 
             rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing)
 
@@ -540,22 +543,22 @@ def create_boundary_extension(
             # which traces: top→right→bottom→left in a continuous loop
             # DON'T sort them - sorting with KD-tree nearest-neighbor breaks down on dense point clouds (82K+ points)
             # and can reduce the boundary from 82K points to just 10 points!
-            print(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
+            logger.info(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
 
             # CRITICAL: After coordinate transformation, the natural rectangle order is destroyed!
             # First deduplicate, then re-sort spatially to form a closed loop
-            print(f"  Deduplicating boundary points...")
+            logger.info(f"  Deduplicating boundary points...")
             rect_boundary_unique = deduplicate_boundary_points(rect_boundary_valid)
 
             # For dense boundaries, use angular sorting (faster and more robust)
             # For sparse boundaries, use nearest-neighbor
             if len(rect_boundary_unique) >= 100:
-                print(f"  Sorting {len(rect_boundary_unique)} points using angular method...")
+                logger.info(f"  Sorting {len(rect_boundary_unique)} points using angular method...")
                 boundary_points = sort_boundary_points_angular(rect_boundary_unique)
             else:
-                print(f"  Sorting {len(rect_boundary_unique)} points using nearest-neighbor...")
+                logger.info(f"  Sorting {len(rect_boundary_unique)} points using nearest-neighbor...")
                 boundary_points = sort_boundary_points(rect_boundary_unique)
-            print(f"  ✓ Boundary sorted into continuous path")
+            logger.info(f"  ✓ Boundary sorted into continuous path")
 
             # DEBUG: Check spatial distribution of boundary points
             boundary_array = np.array(boundary_points)
@@ -572,26 +575,26 @@ def create_boundary_extension(
             left_count = np.sum(boundary_array[:, 1] <= x_min + margin * x_range)
             right_count = np.sum(boundary_array[:, 1] >= x_max - margin * x_range)
 
-            print(f"  Boundary point distribution:")
-            print(f"    Top edge (north):    {top_count:6d} points")
-            print(f"    Bottom edge (south): {bottom_count:6d} points")
-            print(f"    Left edge (west):    {left_count:6d} points")
-            print(f"    Right edge (east):   {right_count:6d} points")
+            logger.info(f"  Boundary point distribution:")
+            logger.info(f"    Top edge (north):    {top_count:6d} points")
+            logger.info(f"    Bottom edge (south): {bottom_count:6d} points")
+            logger.info(f"    Left edge (west):    {left_count:6d} points")
+            logger.info(f"    Right edge (east):   {right_count:6d} points")
 
             # Check if distribution is severely uneven (any edge has < 5% of points)
             total_points = len(boundary_points)
             min_percent = min(top_count, bottom_count, left_count, right_count) / total_points * 100
             if min_percent < 5.0:
-                print(f"  ⚠️  Warning: Uneven distribution detected (min={min_percent:.1f}%)")
-                print(f"  Sparse edges may have lower visual quality")
+                logger.warning(f"  ⚠️  Warning: Uneven distribution detected (min={min_percent:.1f}%)")
+                logger.info(f"  Sparse edges may have lower visual quality")
         else:
             # Rectangle edges too sparse - keep morphological boundary
             boundary_points = original_morphological_boundary
-            print(f"✗ Rectangle-edge sampling: Too few valid vertices ({rect_count}), keeping morphological boundary ({original_count} vertices)")
+            logger.warning(f"✗ Rectangle-edge sampling: Too few valid vertices ({rect_count}), keeping morphological boundary ({original_count} vertices)")
             if terrain is None:
-                print(f"  Tip: Pass terrain= parameter for transform-aware sampling to avoid NaN margins")
+                logger.info(f"  Tip: Pass terrain= parameter for transform-aware sampling to avoid NaN margins")
             else:
-                print(f"  Tip: Check coordinate transformation - may be mapping outside valid mesh bounds")
+                logger.info(f"  Tip: Check coordinate transformation - may be mapping outside valid mesh bounds")
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points
@@ -931,11 +934,11 @@ def create_boundary_extension(
                 if distance > threshold:
                     # Skip this wrap-around edge - gap is too large relative to normal edge spacing
                     faces_skipped_distance += 1
-                    print(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
+                    logger.warning(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
                     continue
                 elif distance > median_edge_distance * 2.0:
                     # Warn but still create the face (gap is large but acceptable)
-                    print(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
+                    logger.info(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
 
             # Create quad connecting top boundary to bottom
             # Face winding must match boundary direction for correct normals
@@ -962,22 +965,22 @@ def create_boundary_extension(
             faces_created += 1
 
         # DEBUG: Print face generation statistics
-        print(f"\n{'='*60}")
-        print(f"Boundary Face Generation (Single-Tier)")
-        print(f"{'='*60}")
-        print(f"Boundary winding: {boundary_winding}")
-        print(f"Boundary vertices: {n_boundary}")
-        print(f"Boundary indices (valid): {n_boundary - sum(1 for idx in boundary_indices if idx is None)}")
-        print(f"Boundary indices (None): {sum(1 for idx in boundary_indices if idx is None)}")
-        print(f"Faces created: {faces_created}")
-        print(f"Faces skipped (None index): {faces_skipped_none}")
-        print(f"Faces skipped (distance check): {faces_skipped_distance}")
-        print(f"Total boundary faces: {len(boundary_faces)}")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Boundary Face Generation (Single-Tier)")
+        logger.info(f"{'='*60}")
+        logger.info(f"Boundary winding: {boundary_winding}")
+        logger.info(f"Boundary vertices: {n_boundary}")
+        logger.info(f"Boundary indices (valid): {n_boundary - sum(1 for idx in boundary_indices if idx is None)}")
+        logger.info(f"Boundary indices (None): {sum(1 for idx in boundary_indices if idx is None)}")
+        logger.info(f"Faces created: {faces_created}")
+        logger.info(f"Faces skipped (None index): {faces_skipped_none}")
+        logger.info(f"Faces skipped (distance check): {faces_skipped_distance}")
+        logger.info(f"Total boundary faces: {len(boundary_faces)}")
         expected_faces = n_boundary  # 1 face per boundary segment
         coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
-        print(f"Expected faces (ideal): {expected_faces}")
-        print(f"Coverage: {coverage:.1f}%")
-        print(f"{'='*60}\n")
+        logger.info(f"Expected faces (ideal): {expected_faces}")
+        logger.info(f"Coverage: {coverage:.1f}%")
+        logger.info(f"{'='*60}\n")
 
         return boundary_vertices, boundary_faces
 
@@ -1038,16 +1041,16 @@ def create_boundary_extension(
         if has_smoothed_coords and boundary_points:
             y_coords = [bp[0] for bp in boundary_points]
             x_coords = [bp[1] for bp in boundary_points]
-            print(f"\n[DIAG] Boundary coordinate ranges:")
-            print(f"  Y: min={min(y_coords):.2f}, max={max(y_coords):.2f}")
-            print(f"  X: min={min(x_coords):.2f}, max={max(x_coords):.2f}")
+            logger.info(f"\n[DIAG] Boundary coordinate ranges:")
+            logger.info(f"  Y: min={min(y_coords):.2f}, max={max(y_coords):.2f}")
+            logger.info(f"  X: min={min(x_coords):.2f}, max={max(x_coords):.2f}")
             # Get mesh bounds from coord_to_index
             if coord_to_index:
                 all_yx = list(coord_to_index.keys())
                 mesh_y = [yx[0] for yx in all_yx]
                 mesh_x = [yx[1] for yx in all_yx]
-                print(f"  Mesh Y: min={min(mesh_y)}, max={max(mesh_y)}")
-                print(f"  Mesh X: min={min(mesh_x)}, max={max(mesh_x)}")
+                logger.info(f"  Mesh Y: min={min(mesh_y)}, max={max(mesh_y)}")
+                logger.info(f"  Mesh X: min={min(mesh_x)}, max={max(mesh_x)}")
 
         # Track position samples for diagnostics
         position_samples = []
@@ -1151,56 +1154,56 @@ def create_boundary_extension(
         if has_smoothed_coords:
             total_boundary = interp_success + interp_fail_no_corners
             success_rate = interp_success / total_boundary * 100 if total_boundary > 0 else 0
-            print(f"\n[DIAG] Vertex interpolation summary:")
-            print(f"  Success: {interp_success}/{total_boundary} ({success_rate:.1f}%)")
-            print(f"  Failed (no corners): {interp_fail_no_corners}")
+            logger.info(f"\n[DIAG] Vertex interpolation summary:")
+            logger.info(f"  Success: {interp_success}/{total_boundary} ({success_rate:.1f}%)")
+            logger.info(f"  Failed (no corners): {interp_fail_no_corners}")
             if failed_coords:
-                print(f"  First failed coords (up to 20):")
+                logger.info(f"  First failed coords (up to 20):")
                 for y, x in failed_coords[:10]:
-                    print(f"    (y={y:.2f}, x={x:.2f})")
+                    logger.info(f"    (y={y:.2f}, x={x:.2f})")
                 if len(failed_coords) > 10:
-                    print(f"    ... and {len(failed_coords) - 10} more")
+                    logger.info(f"    ... and {len(failed_coords) - 10} more")
 
             # Print detailed missing corner info
             if hasattr(get_position_at_coords, 'missing_corner_samples') and get_position_at_coords.missing_corner_samples:
                 samples = get_position_at_coords.missing_corner_samples[:10]
-                print(f"\n[DIAG] Missing corner details (first {len(samples)}):")
+                logger.info(f"\n[DIAG] Missing corner details (first {len(samples)}):")
                 for s in samples:
-                    print(f"    coord=({s['y']:.2f}, {s['x']:.2f}) floor=({s['y_floor']}, {s['x_floor']}) "
+                    logger.info(f"    coord=({s['y']:.2f}, {s['x']:.2f}) floor=({s['y_floor']}, {s['x_floor']}) "
                           f"missing={s['missing']} had={s['n_corners']}/4 corners")
 
             # Print position interpolation samples to verify smoothness
             if position_samples:
                 frac_mode = use_fractional_edges and model_offset is not None
-                print(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
-                print(f"  Fractional edge mode: {'ENABLED' if frac_mode else 'DISABLED'}")
+                logger.info(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
+                logger.info(f"  Fractional edge mode: {'ENABLED' if frac_mode else 'DISABLED'}")
                 if frac_mode:
-                    print(f"  Surface tier: Bilinear interpolation (aligned with mesh, no gap)")
-                    print(f"  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)")
+                    logger.info(f"  Surface tier: Bilinear interpolation (aligned with mesh, no gap)")
+                    logger.info(f"  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)")
                 if frac_mode:
-                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'surface tier (bilinear)':>23} | {'z':>8}")
-                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*23}-+-{'-'*8}")
+                    logger.info(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'surface tier (bilinear)':>23} | {'z':>8}")
+                    logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*23}-+-{'-'*8}")
                     for s in position_samples[:20]:
-                        print(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                        logger.info(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
                               f"({s['x_out']:9.4f}, {s['y_out']:9.4f}) | {s['z_out']:8.4f}")
                 else:
-                    print(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}")
-                    print(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*10}-{'-'*10}-{'-'*8}")
+                    logger.info(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}")
+                    logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*10}-{'-'*10}-{'-'*8}")
                     for s in position_samples[:20]:
-                        print(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                        logger.info(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
                               f"{s['x_out']:10.5f} {s['y_out']:10.5f} {s['z_out']:8.4f}")
                 if len(position_samples) > 20:
-                    print(f"  ... ({len(position_samples) - 20} more samples)")
+                    logger.info(f"  ... ({len(position_samples) - 20} more samples)")
 
                 # Check for stair-stepping: are X,Y outputs changing smoothly?
                 x_outs = [s['x_out'] for s in position_samples]
                 y_outs = [s['y_out'] for s in position_samples]
                 x_diffs = [abs(x_outs[i+1] - x_outs[i]) for i in range(len(x_outs)-1)]
                 y_diffs = [abs(y_outs[i+1] - y_outs[i]) for i in range(len(y_outs)-1)]
-                print(f"\n  Output position deltas (smoothness check):")
-                print(f"    X: min={min(x_diffs) if x_diffs else 0:.6f}, max={max(x_diffs) if x_diffs else 0:.6f}, "
+                logger.info(f"\n  Output position deltas (smoothness check):")
+                logger.info(f"    X: min={min(x_diffs) if x_diffs else 0:.6f}, max={max(x_diffs) if x_diffs else 0:.6f}, "
                       f"mean={sum(x_diffs)/len(x_diffs) if x_diffs else 0:.6f}")
-                print(f"    Y: min={min(y_diffs) if y_diffs else 0:.6f}, max={max(y_diffs) if y_diffs else 0:.6f}, "
+                logger.info(f"    Y: min={min(y_diffs) if y_diffs else 0:.6f}, max={max(y_diffs) if y_diffs else 0:.6f}, "
                       f"mean={sum(y_diffs)/len(y_diffs) if y_diffs else 0:.6f}")
 
         # Stack vertices appropriately based on coordinate type
@@ -1267,11 +1270,11 @@ def create_boundary_extension(
                 if distance > threshold:
                     # Skip this wrap-around edge - gap is too large relative to normal edge spacing
                     faces_skipped_distance += 1
-                    print(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
+                    logger.warning(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
                     continue
                 elif distance > median_edge_distance * 2.0:
                     # Warn but still create the face (gap is large but acceptable)
-                    print(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
+                    logger.info(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
 
             # When using smoothed coordinates (but NOT fractional/Catmull-Rom), bridge original
             # mesh edge to new smooth boundary surface tier.
@@ -1360,32 +1363,32 @@ def create_boundary_extension(
             faces_created += 1
 
         # DEBUG: Print face generation statistics
-        print(f"\n{'='*60}")
-        print(f"Boundary Face Generation (Two-Tier)")
-        print(f"{'='*60}")
-        print(f"Boundary winding: {boundary_winding}")
-        print(f"Boundary vertices: {n_boundary}")
-        print(f"Surface indices (valid): {n_boundary - sum(1 for idx in surface_indices if idx is None)}")
-        print(f"Surface indices (None): {sum(1 for idx in surface_indices if idx is None)}")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Boundary Face Generation (Two-Tier)")
+        logger.info(f"{'='*60}")
+        logger.info(f"Boundary winding: {boundary_winding}")
+        logger.info(f"Boundary vertices: {n_boundary}")
+        logger.info(f"Surface indices (valid): {n_boundary - sum(1 for idx in surface_indices if idx is None)}")
+        logger.info(f"Surface indices (None): {sum(1 for idx in surface_indices if idx is None)}")
         if has_smoothed_coords:
-            print(f"Bridge faces created: {bridge_faces_created}")
-        print(f"Tier faces created: {faces_created}")
-        print(f"Faces skipped (None index): {faces_skipped_none}")
-        print(f"Faces skipped (distance check): {faces_skipped_distance}")
-        print(f"Total boundary faces: {len(boundary_faces)}")
+            logger.info(f"Bridge faces created: {bridge_faces_created}")
+        logger.info(f"Tier faces created: {faces_created}")
+        logger.info(f"Faces skipped (None index): {faces_skipped_none}")
+        logger.info(f"Faces skipped (distance check): {faces_skipped_distance}")
+        logger.info(f"Total boundary faces: {len(boundary_faces)}")
         expected_faces = n_boundary * 2  # 2 faces per boundary segment (upper + lower)
         coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
-        print(f"Expected faces (ideal): {expected_faces}")
-        print(f"Coverage: {coverage:.1f}%")
+        logger.info(f"Expected faces (ideal): {expected_faces}")
+        logger.info(f"Coverage: {coverage:.1f}%")
 
         # DEBUG: Sample a few face windings to verify correctness
         if len(boundary_faces) > 0:
-            print(f"\nSample face indices (first 3 faces):")
+            logger.info(f"\nSample face indices (first 3 faces):")
             for i in range(min(3, len(boundary_faces))):
                 face = boundary_faces[i]
-                print(f"  Face {i}: {face}")
+                logger.info(f"  Face {i}: {face}")
 
-        print(f"{'='*60}\n")
+        logger.info(f"{'='*60}\n")
 
         # Create colors (size depends on whether we created surface vertices)
         if has_smoothed_coords:
@@ -1574,7 +1577,7 @@ def deduplicate_boundary_points(boundary_coords):
 
     duplicates_removed = len(boundary_coords) - len(unique_points)
     if duplicates_removed > 0:
-        print(f"    Removed {duplicates_removed} duplicate points")
+        logger.info(f"    Removed {duplicates_removed} duplicate points")
 
     return unique_points
 
@@ -1634,7 +1637,7 @@ def sort_boundary_points_angular(boundary_coords):
     rotated_array = np.roll(sorted_array, -max_gap_idx - 1, axis=0)
 
     # Report the wrap-around gap (will be the max gap we just found)
-    print(f"  Angular sorting: max gap = {max_gap_distance:.2f} pixels (placed at wrap-around)")
+    logger.info(f"  Angular sorting: max gap = {max_gap_distance:.2f} pixels (placed at wrap-around)")
 
     # Convert back to list of tuples
     sorted_points = [tuple(pt) for pt in rotated_array]
@@ -1704,7 +1707,7 @@ def sort_boundary_points(boundary_coords):
             # DEBUG: Report incomplete sorting
             missing = n_points - len(ordered)
             if missing > n_points * 0.01:  # More than 1% points missing
-                print(f"  ⚠️  Warning: Boundary sorting incomplete - {missing}/{n_points} points not connected")
+                logger.warning(f"  ⚠️  Warning: Boundary sorting incomplete - {missing}/{n_points} points not connected")
             break
 
         ordered.append(next_point)

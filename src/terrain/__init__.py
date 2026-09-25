@@ -8,6 +8,10 @@ Core functionality:
 - Advanced visualization features (slopes, drive-time curves, legends)
 """
 
+from ._logging import install_default_handler
+
+install_default_handler()
+
 from .core import Terrain
 from .pipeline import TerrainPipeline
 from .gridded_data import (
