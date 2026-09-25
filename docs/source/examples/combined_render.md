@@ -56,8 +56,8 @@ uv run python examples/detroit_combined_render.py \
 Blend two score layers with proximity masking:
 
 ```python
-from src.terrain.core import Terrain
-from src.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.color_mapping import elevation_colormap
 
 # Base layer: sledding scores (everywhere)
 # Overlay: XC skiing scores (near parks only)

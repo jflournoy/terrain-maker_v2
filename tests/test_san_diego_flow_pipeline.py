@@ -29,8 +29,8 @@ import sys
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.terrain.flow_accumulation import compute_discharge_potential
-from src.terrain.core import Terrain
+from terrain_maker.terrain.flow_accumulation import compute_discharge_potential
+from terrain_maker.terrain.core import Terrain
 
 
 # ============================================================================
@@ -86,7 +86,7 @@ def flow_artifacts(demo_output_dir):
     }
 
     # Load DEM
-    from src.terrain.data_loading import load_dem_files
+    from terrain_maker.terrain.data_loading import load_dem_files
     artifacts["dem"], artifacts["dem_transform"] = load_dem_files(dem_dir)
 
     # Load flow outputs
@@ -517,7 +517,7 @@ class TestFlowPipelineModule:
 
     def test_compute_flow_with_basins_exists(self):
         """flow_accumulation module should export compute_flow_with_basins."""
-        from src.terrain import flow_accumulation
+        from terrain_maker.terrain import flow_accumulation
         assert hasattr(flow_accumulation, 'compute_flow_with_basins'), \
             "flow_accumulation should export compute_flow_with_basins"
 
@@ -529,7 +529,7 @@ class TestFlowPipelineModule:
         demo_source = demo_script.read_text()
 
         # Check that flow_accumulation is imported
-        assert 'from src.terrain.flow_accumulation import' in demo_source or \
+        assert 'from terrain_maker.terrain.flow_accumulation import' in demo_source or \
                'flow_accumulation' in demo_source, \
             "Demo should use flow_accumulation module"
 
@@ -550,7 +550,7 @@ class TestFlowPipelineModule:
     def test_demo_passes_lakes_to_flow_accumulation(self):
         """Lakes must reach flow_accumulation, which routes them and finds inlets."""
         import inspect
-        from src.terrain import flow_accumulation as fa
+        from terrain_maker.terrain import flow_accumulation as fa
 
         demo_source = (PROJECT_ROOT / "examples" / "san_diego_flow_demo.py").read_text()
         assert "lake_mask=lake_mask" in demo_source

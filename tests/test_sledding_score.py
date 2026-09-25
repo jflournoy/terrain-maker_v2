@@ -9,7 +9,7 @@ sledding score computation.
 import numpy as np
 import pytest
 
-from src.terrain.scoring import (
+from terrain_maker.terrain.scoring import (
     trapezoid_score,
     sledding_deal_breakers,
     coverage_diminishing_returns,

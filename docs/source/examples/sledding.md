@@ -67,10 +67,10 @@ The final sledding score combines all components.
 ## The Code
 
 ```python
-from src.terrain.core import Terrain
-from src.terrain.scoring import compute_sledding_score
-from src.terrain.data_loading import load_snodas_data
-from src.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.scoring import compute_sledding_score
+from terrain_maker.terrain.data_loading import load_snodas_data
+from terrain_maker.terrain.color_mapping import elevation_colormap
 
 # 1. Load terrain and snow data
 terrain = Terrain(dem_data, transform)
@@ -107,7 +107,7 @@ terrain.set_color_mapping(
 | Function | Purpose |
 |----------|---------|
 | {func}`~terrain.core.Terrain.add_data_layer` | Add georeferenced data with auto-reprojection |
-| {func}`~src.terrain.scoring.compute_sledding_score` | Compute sledding suitability |
+| {func}`~terrain_maker.terrain.scoring.compute_sledding_score` | Compute sledding suitability |
 | {func}`~terrain.data_loading.load_snodas_data` | Load SNODAS snow grids |
 | {func}`~terrain.transforms.smooth_score_data` | Reduce blockiness in low-res data |
 
@@ -143,4 +143,4 @@ score = compute_sledding_score(
 
 - {doc}`elevation` - Basic terrain rendering
 - {doc}`combined_render` - Dual-colormap visualization
-- {func}`~src.terrain.scoring.compute_sledding_score` - Score calculation details
+- {func}`~terrain_maker.terrain.scoring.compute_sledding_score` - Score calculation details

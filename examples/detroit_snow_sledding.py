@@ -41,10 +41,10 @@ import rasterio
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import Terrain
-from src.terrain.data_loading import load_dem_files
-from src.terrain.gridded_data import downsample_for_viz
-from src.snow import load_snodas_stats
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.gridded_data import downsample_for_viz
+from terrain_maker.snow import load_snodas_stats
 
 # Configure logging with both console and file output
 LOG_FILE = Path(__file__).parent / "detroit_snow_sledding.log"
@@ -75,8 +75,8 @@ logging.basicConfig(
     handlers=[file_handler]
 )
 
-# Note: downsample_for_viz imported from src.terrain.gridded_data
-# Note: load_snodas_stats imported from src.snow
+# Note: downsample_for_viz imported from terrain_maker.terrain.gridded_data
+# Note: load_snodas_stats imported from terrain_maker.snow
 
 try:
     import bpy
@@ -218,7 +218,7 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
 
     # Compute slope statistics
     logger.info("Computing slope statistics from DEM (tiled processing)...")
-    from src.snow.slope_statistics import compute_tiled_slope_statistics
+    from terrain_maker.snow.slope_statistics import compute_tiled_slope_statistics
 
     slope_stats = compute_tiled_slope_statistics(
         dem=dem,
@@ -253,7 +253,7 @@ def compute_cached_slope_statistics(dem, dem_transform, dem_crs, target_shape, t
 # Visualization Helpers
 # =============================================================================
 
-# Note: load_snodas_stats imported from src.snow
+# Note: load_snodas_stats imported from terrain_maker.snow
 
 
 def visualize_dem(dem: np.ndarray, output_path: Path):
@@ -662,7 +662,7 @@ def save_slope_penalty_panels(slope_stats, output_dir: Path):
         slope_stats: SlopeStatistics object
         output_dir: Directory to save individual panel PNG files
     """
-    from src.scoring import trapezoidal, dealbreaker, terrain_consistency
+    from terrain_maker.scoring import trapezoidal, dealbreaker, terrain_consistency
 
     logger.info(f"Saving individual slope penalty panels to {output_dir}")
 
@@ -746,7 +746,7 @@ def save_score_component_panels(
         output_dir: Directory to save individual panel PNG files
         scorer: Unused (kept for API compatibility)
     """
-    from src.terrain.scoring import (
+    from terrain_maker.terrain.scoring import (
         trapezoid_score,
         sledding_deal_breakers,
         coverage_diminishing_returns,
@@ -1056,7 +1056,7 @@ def render_3d_with_snow(terrain: Terrain, output_path: Path):
     logger.info(f"Creating 3D render with snow overlay: {output_path}")
 
     # pylint: disable=import-outside-toplevel
-    from src.terrain.core import (
+    from terrain_maker.terrain.core import (
         clear_scene,
         position_camera_relative,
         setup_light,
@@ -1221,7 +1221,7 @@ def run_step_score(output_dir: Path, dem: np.ndarray, snow_stats: dict, transfor
     terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
 
     # Import improved scoring system
-    from src.scoring.configs.sledding import compute_improved_sledding_score
+    from terrain_maker.scoring.configs.sledding import compute_improved_sledding_score
 
     # Calculate slope statistics from DEM (with caching)
     target_shape = snow_stats["median_max_depth"].shape
@@ -1409,7 +1409,7 @@ def run_step_render(output_dir: Path, terrain: Terrain):
         return
 
     # Set color mapping to blend sledding score
-    from src.terrain.core import elevation_colormap
+    from terrain_maker.terrain.core import elevation_colormap
 
     def blend_elevation_and_sledding(dem_data, sledding_score_data):
         """Blend elevation colors with sledding score."""

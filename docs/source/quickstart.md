@@ -24,10 +24,10 @@ pip install -e ".[blender]"
 ## Your First Terrain
 
 ```python
-from src.terrain.core import Terrain
-from src.terrain.transforms import reproject_raster, flip_raster
-from src.terrain.scene_setup import position_camera_relative
-from src.terrain.rendering import render_scene_to_file
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.transforms import reproject_raster, flip_raster
+from terrain_maker.terrain.scene_setup import position_camera_relative
+from terrain_maker.terrain.rendering import render_scene_to_file
 import numpy as np
 
 # Create mock elevation data

@@ -26,7 +26,7 @@ try:
 except ImportError:
     print("💡 Tip: Install python-dotenv to use .env files: pip install python-dotenv")
 
-from src.terrain.dem_downloader import (
+from terrain_maker.terrain.dem_downloader import (
     download_dem_by_bbox,
     display_bbox_on_map,
     calculate_required_srtm_tiles,

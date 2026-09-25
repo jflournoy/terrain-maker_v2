@@ -11,7 +11,7 @@ Migrated from legacy helpers.py with improvements.
 Slope Calculation
 -----------------
 
-.. autofunction:: src.terrain.advanced_viz.horn_slope
+.. autofunction:: terrain_maker.terrain.advanced_viz.horn_slope
 
    Calculate slope using Horn's method with GPU acceleration.
 
@@ -23,7 +23,7 @@ Slope Calculation
 
    Example::
 
-       from src.terrain.advanced_viz import horn_slope
+       from terrain_maker.terrain.advanced_viz import horn_slope
 
        # Calculate slopes
        slopes = horn_slope(dem_data)
@@ -44,7 +44,7 @@ Slope Calculation
 3D Legends
 ----------
 
-.. autofunction:: src.terrain.advanced_viz.create_values_legend
+.. autofunction:: terrain_maker.terrain.advanced_viz.create_values_legend
 
    Create 3D legend bar in Blender scene.
 
@@ -53,7 +53,7 @@ Slope Calculation
 
    Example::
 
-       from src.terrain.advanced_viz import create_values_legend
+       from terrain_maker.terrain.advanced_viz import create_values_legend
 
        # Create legend for elevation
        legend_obj, labels = create_values_legend(

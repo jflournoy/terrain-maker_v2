@@ -11,7 +11,7 @@ simple cell-count accumulation.
 API Reference
 -------------
 
-.. automodule:: src.terrain.precipitation_downloader
+.. automodule:: terrain_maker.terrain.precipitation_downloader
    :members:
    :undoc-members:
    :show-inheritance:

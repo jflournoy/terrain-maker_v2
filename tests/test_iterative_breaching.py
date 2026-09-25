@@ -18,7 +18,7 @@ Without iterative refinement, only C succeeds and B, A are filled instead of bre
 import pytest
 import numpy as np
 
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     breach_depressions_constrained,
     _identify_sinks,
     identify_outlets,

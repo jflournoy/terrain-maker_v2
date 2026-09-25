@@ -23,7 +23,7 @@ try:
 except ImportError:
     print("💡 Tip: Install python-dotenv to use .env files")
 
-from src.terrain.dem_downloader import download_dem_by_bbox, display_bbox_on_map
+from terrain_maker.terrain.dem_downloader import download_dem_by_bbox, display_bbox_on_map
 
 
 def main():

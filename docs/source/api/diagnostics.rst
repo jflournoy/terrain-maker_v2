@@ -12,7 +12,7 @@ All functions generate multi-panel matplotlib figures saved to disk.
 Wavelet Denoising Diagnostics
 ------------------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_wavelet_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_wavelet_diagnostics
 
    Generate diagnostic plots showing wavelet denoising effects.
 
@@ -25,7 +25,7 @@ Wavelet Denoising Diagnostics
 
    Example::
 
-       from src.terrain.diagnostics import plot_wavelet_diagnostics
+       from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
        plot_wavelet_diagnostics(
            original=dem_before,
@@ -35,18 +35,18 @@ Wavelet Denoising Diagnostics
            cmap='terrain'
        )
 
-.. autofunction:: src.terrain.diagnostics.plot_wavelet_coefficients
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_wavelet_coefficients
 
    Visualize wavelet decomposition coefficients.
 
-.. autofunction:: src.terrain.diagnostics.generate_full_wavelet_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_full_wavelet_diagnostics
 
    Generate comprehensive wavelet diagnostic report.
 
 Adaptive Smoothing Diagnostics
 -------------------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_adaptive_smooth_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_adaptive_smooth_diagnostics
 
    Generate diagnostic plots for slope-adaptive smoothing.
 
@@ -60,7 +60,7 @@ Adaptive Smoothing Diagnostics
 
    Example::
 
-       from src.terrain.diagnostics import plot_adaptive_smooth_diagnostics
+       from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_diagnostics
 
        plot_adaptive_smooth_diagnostics(
            original=dem_before,
@@ -70,18 +70,18 @@ Adaptive Smoothing Diagnostics
            slope_threshold=2.0
        )
 
-.. autofunction:: src.terrain.diagnostics.plot_adaptive_smooth_histogram
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_adaptive_smooth_histogram
 
    Histogram showing slope distribution and smoothing threshold.
 
-.. autofunction:: src.terrain.diagnostics.generate_full_adaptive_smooth_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_full_adaptive_smooth_diagnostics
 
    Generate comprehensive adaptive smoothing diagnostic report.
 
 Bump Removal Diagnostics
 -------------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_bump_removal_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_bump_removal_diagnostics
 
    Visualize morphological bump removal effects.
 
@@ -94,7 +94,7 @@ Bump Removal Diagnostics
 
    Example::
 
-       from src.terrain.diagnostics import plot_bump_removal_diagnostics
+       from terrain_maker.terrain.diagnostics import plot_bump_removal_diagnostics
 
        plot_bump_removal_diagnostics(
            original=dem_before,
@@ -103,14 +103,14 @@ Bump Removal Diagnostics
            kernel_size=5
        )
 
-.. autofunction:: src.terrain.diagnostics.generate_bump_removal_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_bump_removal_diagnostics
 
    Generate comprehensive bump removal diagnostic report.
 
 Upscaling Diagnostics
 ----------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_upscale_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_upscale_diagnostics
 
    Visualize AI super-resolution upscaling results.
 
@@ -123,7 +123,7 @@ Upscaling Diagnostics
 
    Example::
 
-       from src.terrain.diagnostics import plot_upscale_diagnostics
+       from terrain_maker.terrain.diagnostics import plot_upscale_diagnostics
 
        plot_upscale_diagnostics(
            low_res=score_input,
@@ -132,14 +132,14 @@ Upscaling Diagnostics
            scale_factor=4
        )
 
-.. autofunction:: src.terrain.diagnostics.generate_upscale_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_upscale_diagnostics
 
    Generate comprehensive upscaling diagnostic report.
 
 Road Elevation Diagnostics
 ---------------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_road_elevation_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_road_elevation_diagnostics
 
    Visualize DEM smoothing effects along roads.
 
@@ -152,7 +152,7 @@ Road Elevation Diagnostics
 
    Example::
 
-       from src.terrain.diagnostics import plot_road_elevation_diagnostics
+       from terrain_maker.terrain.diagnostics import plot_road_elevation_diagnostics
 
        plot_road_elevation_diagnostics(
            original_dem=dem_before,
@@ -161,18 +161,18 @@ Road Elevation Diagnostics
            output_path='diagnostics/road_elevation.png'
        )
 
-.. autofunction:: src.terrain.diagnostics.generate_road_elevation_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_road_elevation_diagnostics
 
    Generate comprehensive road elevation diagnostic report.
 
-.. autofunction:: src.terrain.diagnostics.plot_road_vertex_z_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_road_vertex_z_diagnostics
 
    Visualize vertex-level road elevation changes.
 
 Pipeline Visualization
 ----------------------
 
-.. autofunction:: src.terrain.diagnostics.plot_processing_pipeline
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_processing_pipeline
 
    Visualize multi-stage processing pipeline.
 
@@ -180,7 +180,7 @@ Pipeline Visualization
 
    Example::
 
-       from src.terrain.diagnostics import plot_processing_pipeline
+       from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
        plot_processing_pipeline(
            stages=[
@@ -195,7 +195,7 @@ Pipeline Visualization
 Histogram Generation
 --------------------
 
-.. autofunction:: src.terrain.diagnostics.generate_rgb_histogram
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_rgb_histogram
 
    Generate RGB channel histograms for rendered images.
 
@@ -203,14 +203,14 @@ Histogram Generation
 
    Example::
 
-       from src.terrain.diagnostics import generate_rgb_histogram
+       from terrain_maker.terrain.diagnostics import generate_rgb_histogram
 
        generate_rgb_histogram(
            image_path='render_output.png',
            output_path='diagnostics/rgb_histogram.png'
        )
 
-.. autofunction:: src.terrain.diagnostics.generate_luminance_histogram
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_luminance_histogram
 
    Generate grayscale luminance histogram.
 
@@ -218,7 +218,7 @@ Histogram Generation
 
    Example::
 
-       from src.terrain.diagnostics import generate_luminance_histogram
+       from terrain_maker.terrain.diagnostics import generate_luminance_histogram
 
        generate_luminance_histogram(
            image_path='render_output.png',
@@ -232,7 +232,7 @@ Usage Patterns
 
 ::
 
-    from src.terrain.diagnostics import plot_wavelet_diagnostics
+    from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
     # Apply transform
     denoised = wavelet_denoise_dem(dem, wavelet='db4')
@@ -248,7 +248,7 @@ Usage Patterns
 
 ::
 
-    from src.terrain.diagnostics import plot_processing_pipeline
+    from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
     stages = []
     stages.append(('Original', dem))
@@ -272,7 +272,7 @@ Usage Patterns
 
 ::
 
-    from src.terrain.diagnostics import generate_full_wavelet_diagnostics
+    from terrain_maker.terrain.diagnostics import generate_full_wavelet_diagnostics
 
     # Comprehensive diagnostic report (multiple plots)
     generate_full_wavelet_diagnostics(

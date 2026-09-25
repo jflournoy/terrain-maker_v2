@@ -157,7 +157,7 @@ def generate_markdown_docs(extractor: DocstringExtractor, module_name: str) -> s
 
 def scan_python_modules() -> List[Tuple[str, Path]]:
     """Scan for Python modules to document."""
-    src_path = Path('src/terrain')
+    src_path = Path('src/terrain_maker/terrain')
     modules = []
 
     if src_path.exists():
@@ -176,7 +176,7 @@ def generate_all_docs() -> None:
     modules = scan_python_modules()
 
     if not modules:
-        print('  ⚠️  No Python modules found in src/terrain/')
+        print('  ⚠️  No Python modules found in src/terrain_maker/terrain/')
         return
 
     doc_sections = []

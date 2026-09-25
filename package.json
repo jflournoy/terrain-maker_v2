@@ -92,7 +92,7 @@
     "stats:project": "echo \"JS Files: $(npm run maintain:files --silent) | Commits: $(git rev-list --count HEAD 2>/dev/null || echo '0') | Branch: $(git branch --show-current)\"",
     "// Python": "=== Python terrain-maker commands ===",
     "py:test": "uv run pytest tests/ -v",
-    "py:test:cov": "uv run pytest tests/ --cov=src --cov-report=html --cov-report=term",
+    "py:test:cov": "uv run pytest tests/ --cov=terrain_maker --cov-report=html --cov-report=term",
     "py:lint": "uv run pylint src/",
     "py:format": "uv run black src/ tests/ examples/",
     "py:format:check": "uv run black --check src/ tests/ examples/",

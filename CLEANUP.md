@@ -22,7 +22,7 @@ This document tracks code cleanup opportunities for more aggressive refactoring.
 - **Decision needed**:
   - [ ] Create example demonstrating GPU acceleration
   - [ ] Deprecate if no plans to promote
-- **Location**: [src/terrain/advanced_viz.py:26](src/terrain/advanced_viz.py#L26)
+- **Location**: [src/terrain_maker/terrain/advanced_viz.py:26](src/terrain_maker/terrain/advanced_viz.py#L26)
 
 #### 2. `visualize_dem()` in core.py
 - **Status**: Terrain class method, never used in examples
@@ -31,7 +31,7 @@ This document tracks code cleanup opportunities for more aggressive refactoring.
 - **Decision needed**:
   - [ ] Create example or document as debugging utility
   - [ ] Remove if not part of public API
-- **Location**: [src/terrain/core.py:1094](src/terrain/core.py#L1094)
+- **Location**: [src/terrain_maker/terrain/core.py:1094](src/terrain_maker/terrain/core.py#L1094)
 
 ### Debug-Only Utilities
 

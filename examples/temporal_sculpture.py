@@ -27,8 +27,8 @@ import numpy as np
 from mathutils import Vector
 from rasterio.transform import from_origin
 
-from src.terrain.core import Terrain, scale_elevation
-from src.terrain.scene_setup import position_mesh_at
+from terrain_maker.terrain.core import Terrain, scale_elevation
+from terrain_maker.terrain.scene_setup import position_mesh_at
 
 logger = logging.getLogger(__name__)
 

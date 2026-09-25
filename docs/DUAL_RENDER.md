@@ -80,13 +80,13 @@ def load_scores(output_dir: Path):
 ### Creating Terrain with Scores
 
 ```python
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     reproject_raster,
     flip_raster,
     scale_elevation,
 )
-from src.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.color_mapping import elevation_colormap
 
 def create_terrain_with_score(name, score_grid, dem, transform, dem_crs="EPSG:4326"):
     """Create a terrain mesh colored by suitability score."""
@@ -170,7 +170,7 @@ def create_park_markers(parks, terrain, mesh_obj):
 
 ```python
 from math import radians
-from src.terrain.core import setup_light
+from terrain_maker.terrain.core import setup_light
 
 def setup_sunset_lighting():
     """Create warm sunset lighting with cool fill."""

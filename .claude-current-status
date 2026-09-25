@@ -74,7 +74,7 @@ else:
 **Solution:** Split into 6 separate plot files with numbered prefixes
 
 **Changes:**
-1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+1. [src/terrain_maker/terrain/visualization/line_layers.py](src/terrain_maker/terrain/visualization/line_layers.py):
    - Added `sparse=False` parameter to `create_line_layer()` signature
    - Added documentation for sparse parameter
    - Pass `sparse` through to `expand_lines_variable_width()`
@@ -133,7 +133,7 @@ if pixels_in_millions > 10:
 **Impact:** Prevents hang on large flow grids while maintaining tapering quality
 
 **Files:**
-- [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py) - Both fast and slow algorithms
+- [src/terrain_maker/terrain/visualization/line_layers.py](src/terrain_maker/terrain/visualization/line_layers.py) - Both fast and slow algorithms
 
 ---
 
@@ -162,7 +162,7 @@ expanded_values = metric_data[nearest_line_pixel]
 ```
 
 **Changes:**
-1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+1. [src/terrain_maker/terrain/visualization/line_layers.py](src/terrain_maker/terrain/visualization/line_layers.py):
    - Added `expand_lines_variable_width_fast()` - O(N log N) distance-transform approach
    - Updated `expand_lines_variable_width()` - Added `fast=True` parameter (default)
    - Kept slow algorithm for comparison (`fast=False`)
@@ -204,7 +204,7 @@ Grid Size    Max Width    Fast (s)     Slow (s)     Speedup
 **Solution:** Extract smooth expansion from diagnostics, use for both
 
 **Changes:**
-1. [src/terrain/visualization/line_layers.py](src/terrain/visualization/line_layers.py):
+1. [src/terrain_maker/terrain/visualization/line_layers.py](src/terrain_maker/terrain/visualization/line_layers.py):
    - Replaced sharp expansion with smooth gaussian algorithm
    - Uses maximum_filter + gaussian_filter for beautiful tapering
    - Value propagation built-in
@@ -227,7 +227,7 @@ Grid Size    Max Width    Fast (s)     Slow (s)     Speedup
 - Threshold=0.0 with `>= 0.0` matched ALL pixels (including zeros)
 - Should only match pixels > 0 (stream pixels only)
 
-**Root Cause:** [src/terrain/core.py:2905](src/terrain/core.py#L2905)
+**Root Cause:** [src/terrain_maker/terrain/core.py:2905](src/terrain_maker/terrain/core.py#L2905)
 ```python
 # BEFORE (buggy)
 overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
@@ -239,7 +239,7 @@ overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
    - Expected: 3 overlay pixels
    - Got: 100 pixels (all pixels matched threshold >= 0.0)
 
-2. 🟢 GREEN: Fixed [src/terrain/core.py:2905-2911](src/terrain/core.py#L2905)
+2. 🟢 GREEN: Fixed [src/terrain_maker/terrain/core.py:2905-2911](src/terrain_maker/terrain/core.py#L2905)
    ```python
    # AFTER (fixed)
    if threshold == 0.0:

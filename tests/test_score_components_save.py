@@ -16,7 +16,7 @@ class TestXCSkiingComponentsInNpz:
 
     def test_get_component_scores_returns_all_xc_components(self):
         """get_component_scores returns all 3 XC skiing components as arrays."""
-        from src.scoring.configs import (
+        from terrain_maker.scoring.configs import (
             DEFAULT_XC_SKIING_SCORER,
             xc_skiing_compute_derived_inputs,
         )
@@ -48,7 +48,7 @@ class TestXCSkiingComponentsInNpz:
 
     def test_save_and_load_component_scores_roundtrip(self, tmp_path):
         """Component scores survive save/load via np.savez_compressed."""
-        from src.scoring.configs import (
+        from terrain_maker.scoring.configs import (
             DEFAULT_XC_SKIING_SCORER,
             xc_skiing_compute_derived_inputs,
         )

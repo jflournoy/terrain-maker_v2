@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     _resolve_flats,
     _fill_depressions,
     compute_flow_direction,

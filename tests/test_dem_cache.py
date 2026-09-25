@@ -10,7 +10,7 @@ import tempfile
 import shutil
 from pathlib import Path
 import numpy as np
-from src.terrain.cache import DEMCache
+from terrain_maker.terrain.cache import DEMCache
 from rasterio import Affine
 
 

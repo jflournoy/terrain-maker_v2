@@ -20,7 +20,7 @@ class TestSRTMDownloader:
         When downloading DEM data, the downloader should automatically create
         the output directory structure.
         """
-        from src.terrain.dem_downloader import download_dem_by_bbox
+        from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
 
         output_dir = tmp_path / "dem_data" / "downloads"
         bbox = (42.0, -83.5, 42.5, -83.0)  # Detroit area
@@ -29,7 +29,7 @@ class TestSRTMDownloader:
         assert not output_dir.exists()
 
         # Download should create it (mocked, won't actually download)
-        with patch('src.terrain.dem_downloader._download_srtm_tile') as mock_download:
+        with patch('terrain_maker.terrain.dem_downloader._download_srtm_tile') as mock_download:
             mock_download.return_value = True
 
             result = download_dem_by_bbox(
@@ -51,12 +51,12 @@ class TestSRTMDownloader:
         The function should return a list of Path objects pointing to the
         downloaded HGT files.
         """
-        from src.terrain.dem_downloader import download_dem_by_bbox
+        from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
 
         output_dir = tmp_path / "dem_data"
         bbox = (42.0, -83.0, 42.5, -82.5)  # Small bbox covering ~2 tiles
 
-        with patch('src.terrain.dem_downloader._download_srtm_tile') as mock_download:
+        with patch('terrain_maker.terrain.dem_downloader._download_srtm_tile') as mock_download:
             # Simulate successful downloads
             mock_download.return_value = True
 
@@ -81,7 +81,7 @@ class TestSRTMDownloader:
         SRTM tiles are 1°×1° and named like N42W083.hgt (north 42°, west 83°).
         For a bounding box, we need to determine all tiles that intersect it.
         """
-        from src.terrain.dem_downloader import calculate_required_srtm_tiles
+        from terrain_maker.terrain.dem_downloader import calculate_required_srtm_tiles
 
         # Detroit area: should need tiles N42W084 and N42W083
         bbox = (42.0, -83.5, 42.5, -83.0)
@@ -105,12 +105,12 @@ class TestSRTMDownloader:
 
         Users should be able to specify "Detroit, MI" instead of coordinates.
         """
-        from src.terrain.dem_downloader import download_dem_by_place_name
+        from terrain_maker.terrain.dem_downloader import download_dem_by_place_name
 
         output_dir = tmp_path / "dem_data"
 
-        with patch('src.terrain.dem_downloader._geocode_place_name') as mock_geocode:
-            with patch('src.terrain.dem_downloader.download_dem_by_bbox') as mock_download:
+        with patch('terrain_maker.terrain.dem_downloader._geocode_place_name') as mock_geocode:
+            with patch('terrain_maker.terrain.dem_downloader.download_dem_by_bbox') as mock_download:
                 # Mock geocoding to return a bbox
                 mock_geocode.return_value = (42.0, -83.5, 42.5, -83.0)
                 mock_download.return_value = []
@@ -141,7 +141,7 @@ class TestSRTMDownloader:
         - N42W084.hgt = tile from 42°N-43°N, 84°W-83°W
         - S01E036.hgt = tile from 1°S-0°, 36°E-37°E
         """
-        from src.terrain.dem_downloader import get_srtm_tile_name
+        from terrain_maker.terrain.dem_downloader import get_srtm_tile_name
 
         # Detroit: north of equator, west of prime meridian
         assert get_srtm_tile_name(42.3, -83.0) == "N42W083"
@@ -171,7 +171,7 @@ class TestSRTMDownloadHTTP:
 
         SRTM tiles are downloaded via the NASADEM library.
         """
-        from src.terrain.dem_downloader import _download_srtm_tile
+        from terrain_maker.terrain.dem_downloader import _download_srtm_tile
 
         output_dir = tmp_path / "downloads"
         output_dir.mkdir()
@@ -184,7 +184,7 @@ class TestSRTMDownloadHTTP:
         """
         Test that downloaded SRTM data is saved as .hgt file.
         """
-        from src.terrain.dem_downloader import _download_srtm_tile
+        from terrain_maker.terrain.dem_downloader import _download_srtm_tile
 
         output_dir = tmp_path / "downloads"
         output_dir.mkdir()
@@ -198,7 +198,7 @@ class TestSRTMDownloadHTTP:
 
         Some areas may not have SRTM coverage (oceans, poles).
         """
-        from src.terrain.dem_downloader import _download_srtm_tile
+        from terrain_maker.terrain.dem_downloader import _download_srtm_tile
 
         output_dir = tmp_path / "downloads"
         output_dir.mkdir()
@@ -212,7 +212,7 @@ class TestSRTMDownloadHTTP:
 
         This saves bandwidth and time when resuming downloads.
         """
-        from src.terrain.dem_downloader import _download_srtm_tile
+        from terrain_maker.terrain.dem_downloader import _download_srtm_tile
 
         output_dir = tmp_path / "downloads"
         output_dir.mkdir()
@@ -221,7 +221,7 @@ class TestSRTMDownloadHTTP:
         existing_file = output_dir / "N42W084.hgt"
         existing_file.write_bytes(b'\x00' * 1000)
 
-        with patch('src.terrain.dem_downloader.requests.Session') as mock_session:
+        with patch('terrain_maker.terrain.dem_downloader.requests.Session') as mock_session:
             result = _download_srtm_tile(
                 "N42W084",
                 output_dir,
@@ -244,7 +244,7 @@ class TestBBoxVisualization:
         This helps users visualize and refine their bounding box selection.
         Should create an HTML file with folium/leaflet map.
         """
-        from src.terrain.dem_downloader import display_bbox_on_map
+        from terrain_maker.terrain.dem_downloader import display_bbox_on_map
 
         bbox = (42.0, -83.5, 42.5, -83.0)
         output_file = tmp_path / "bbox_map.html"

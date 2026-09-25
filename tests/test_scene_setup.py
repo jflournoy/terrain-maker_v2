@@ -17,14 +17,14 @@ class TestClearScene:
 
     def test_clear_scene_imports(self):
         """Test that clear_scene can be imported."""
-        from src.terrain.scene_setup import clear_scene
+        from terrain_maker.terrain.scene_setup import clear_scene
 
         assert callable(clear_scene)
 
     def test_clear_scene_removes_objects(self):
         """Test that clear_scene removes all objects."""
         import bpy
-        from src.terrain.scene_setup import clear_scene
+        from terrain_maker.terrain.scene_setup import clear_scene
 
         # Add some test objects
         bpy.ops.mesh.primitive_cube_add()
@@ -44,14 +44,14 @@ class TestSetupCamera:
 
     def test_setup_camera_imports(self):
         """Test that setup_camera can be imported."""
-        from src.terrain.scene_setup import setup_camera
+        from terrain_maker.terrain.scene_setup import setup_camera
 
         assert callable(setup_camera)
 
     def test_setup_camera_perspective(self):
         """Test creating a perspective camera."""
         import bpy
-        from src.terrain.scene_setup import setup_camera
+        from terrain_maker.terrain.scene_setup import setup_camera
 
         # Clear scene first
         for obj in list(bpy.data.objects):
@@ -68,7 +68,7 @@ class TestSetupCamera:
     def test_setup_camera_orthographic(self):
         """Test creating an orthographic camera."""
         import bpy
-        from src.terrain.scene_setup import setup_camera
+        from terrain_maker.terrain.scene_setup import setup_camera
 
         # Clear scene
         for obj in list(bpy.data.objects):
@@ -83,7 +83,7 @@ class TestSetupCamera:
 
     def test_setup_camera_invalid_type_raises(self):
         """Test that invalid camera type raises ValueError."""
-        from src.terrain.scene_setup import setup_camera
+        from terrain_maker.terrain.scene_setup import setup_camera
 
         with pytest.raises(ValueError):
             setup_camera(
@@ -96,14 +96,14 @@ class TestSetupLight:
 
     def test_setup_light_imports(self):
         """Test that setup_light can be imported."""
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         assert callable(setup_light)
 
     def test_setup_light_creates_sun(self):
         """Test that setup_light creates a sun light."""
         import bpy
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         # Clear lights
         for obj in list(bpy.data.objects):
@@ -124,14 +124,14 @@ class TestSetupCameraAndLight:
 
     def test_setup_camera_and_light_imports(self):
         """Test that setup_camera_and_light can be imported."""
-        from src.terrain.scene_setup import setup_camera_and_light
+        from terrain_maker.terrain.scene_setup import setup_camera_and_light
 
         assert callable(setup_camera_and_light)
 
     def test_setup_camera_and_light_creates_both(self):
         """Test that both camera and light are created."""
         import bpy
-        from src.terrain.scene_setup import setup_camera_and_light
+        from terrain_maker.terrain.scene_setup import setup_camera_and_light
 
         # Clear scene
         for obj in list(bpy.data.objects):
@@ -152,14 +152,14 @@ class TestPositionCameraRelative:
 
     def test_position_camera_relative_imports(self):
         """Test that position_camera_relative can be imported."""
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         assert callable(position_camera_relative)
 
     def test_position_camera_relative_south(self):
         """Test positioning camera south of mesh."""
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         # Clear scene and create a simple mesh
         for obj in list(bpy.data.objects):
@@ -178,7 +178,7 @@ class TestPositionCameraRelative:
     def test_position_camera_relative_above(self):
         """Test positioning camera above mesh."""
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         # Clear and create mesh
         for obj in list(bpy.data.objects):
@@ -195,7 +195,7 @@ class TestPositionCameraRelative:
     def test_position_camera_relative_invalid_direction_raises(self):
         """Test that invalid direction raises ValueError."""
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         # Create test mesh
         for obj in list(bpy.data.objects):
@@ -214,7 +214,7 @@ class TestPositionCameraRelative:
         through the function chain and applied to the camera object.
         """
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         # Clear and create mesh
         for obj in list(bpy.data.objects):
@@ -247,7 +247,7 @@ class TestPositionCameraRelative:
         Regression test: Catches bugs where ortho_scale is passed to wrong parameter.
         """
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         # Clear and create mesh
         for obj in list(bpy.data.objects):
@@ -293,7 +293,7 @@ class TestSunPosition:
     def test_setup_light_accepts_azimuth_elevation(self):
         """Test that setup_light accepts azimuth and elevation parameters."""
         import bpy
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         # Clear lights
         for obj in list(bpy.data.objects):
@@ -310,7 +310,7 @@ class TestSunPosition:
         """Test sun from south (azimuth=180) at 45 degrees elevation."""
         import bpy
         from math import radians, sin, cos
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         for obj in list(bpy.data.objects):
             if obj.type == "LIGHT":
@@ -335,7 +335,7 @@ class TestSunPosition:
         """Test sun from east (azimuth=90) at 30 degrees elevation."""
         import bpy
         import mathutils
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         for obj in list(bpy.data.objects):
             if obj.type == "LIGHT":
@@ -356,7 +356,7 @@ class TestSunPosition:
         """Test sun directly overhead (elevation=90)."""
         import bpy
         import mathutils
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         for obj in list(bpy.data.objects):
             if obj.type == "LIGHT":
@@ -378,7 +378,7 @@ class TestSunPosition:
         """Test sun from north (azimuth=0) at low angle (10 degrees)."""
         import bpy
         import mathutils
-        from src.terrain.scene_setup import setup_light
+        from terrain_maker.terrain.scene_setup import setup_light
 
         for obj in list(bpy.data.objects):
             if obj.type == "LIGHT":
@@ -399,7 +399,7 @@ class TestSunPosition:
     def test_position_camera_relative_accepts_sun_azimuth_elevation(self):
         """Test that position_camera_relative accepts sun_azimuth and sun_elevation."""
         import bpy
-        from src.terrain.scene_setup import position_camera_relative
+        from terrain_maker.terrain.scene_setup import position_camera_relative
 
         for obj in list(bpy.data.objects):
             bpy.data.objects.remove(obj)
@@ -429,13 +429,13 @@ class TestLayoutPanelPositions:
 
     def test_layout_panel_positions_imports(self):
         """Test that layout_panel_positions can be imported."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         assert callable(layout_panel_positions)
 
     def test_single_panel_at_origin(self):
         """Single panel should be placed at origin."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         positions = layout_panel_positions(n=1, panel_width=10.0, panel_depth=8.0)
         assert len(positions) == 1
@@ -443,7 +443,7 @@ class TestLayoutPanelPositions:
 
     def test_three_panels_row(self):
         """Three panels should be in a single row, evenly spaced."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         positions = layout_panel_positions(
             n=3, panel_width=10.0, panel_depth=8.0, spacing=2.0
@@ -457,7 +457,7 @@ class TestLayoutPanelPositions:
 
     def test_wraps_to_second_row(self):
         """Six panels with max_cols=3 should wrap into 2 rows."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         positions = layout_panel_positions(
             n=6, panel_width=10.0, panel_depth=8.0, spacing=2.0, max_cols=3
@@ -474,7 +474,7 @@ class TestLayoutPanelPositions:
 
     def test_custom_origin(self):
         """Origin offset should propagate to all positions."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         positions = layout_panel_positions(
             n=2, panel_width=10.0, panel_depth=8.0, spacing=2.0,
@@ -487,7 +487,7 @@ class TestLayoutPanelPositions:
 
     def test_four_panels_no_wrap(self):
         """Four panels with default max_cols=4 should stay in one row."""
-        from src.terrain.scene_setup import layout_panel_positions
+        from terrain_maker.terrain.scene_setup import layout_panel_positions
 
         positions = layout_panel_positions(
             n=4, panel_width=5.0, panel_depth=5.0, spacing=1.0
@@ -502,14 +502,14 @@ class TestPositionMeshAt:
 
     def test_position_mesh_at_imports(self):
         """Test that position_mesh_at can be imported."""
-        from src.terrain.scene_setup import position_mesh_at
+        from terrain_maker.terrain.scene_setup import position_mesh_at
 
         assert callable(position_mesh_at)
 
     def test_position_mesh_at_moves_object(self):
         """Test that position_mesh_at sets X and Y location."""
         import bpy
-        from src.terrain.scene_setup import position_mesh_at
+        from terrain_maker.terrain.scene_setup import position_mesh_at
 
         # Create test object
         for obj in list(bpy.data.objects):
@@ -530,14 +530,14 @@ class TestFrameCameraToObjects:
 
     def test_frame_camera_to_objects_imports(self):
         """Test that frame_camera_to_objects can be imported."""
-        from src.terrain.scene_setup import frame_camera_to_objects
+        from terrain_maker.terrain.scene_setup import frame_camera_to_objects
 
         assert callable(frame_camera_to_objects)
 
     def test_frame_camera_creates_ortho_looking_down(self):
         """Camera should be orthographic and positioned above objects."""
         import bpy
-        from src.terrain.scene_setup import frame_camera_to_objects
+        from terrain_maker.terrain.scene_setup import frame_camera_to_objects
 
         # Clear scene
         for obj in list(bpy.data.objects):
@@ -562,7 +562,7 @@ class TestFrameCameraToObjects:
     def test_frame_camera_centers_between_objects(self):
         """Camera X,Y should be centered between objects."""
         import bpy
-        from src.terrain.scene_setup import frame_camera_to_objects
+        from terrain_maker.terrain.scene_setup import frame_camera_to_objects
 
         for obj in list(bpy.data.objects):
             bpy.data.objects.remove(obj)
@@ -585,14 +585,14 @@ class TestSetupWorldAtmosphere:
 
     def test_setup_world_atmosphere_imports(self):
         """Test that setup_world_atmosphere can be imported."""
-        from src.terrain.scene_setup import setup_world_atmosphere
+        from terrain_maker.terrain.scene_setup import setup_world_atmosphere
 
         assert callable(setup_world_atmosphere)
 
     def test_setup_world_atmosphere_creates_world(self):
         """Test that world atmosphere is created."""
         import bpy
-        from src.terrain.scene_setup import setup_world_atmosphere
+        from terrain_maker.terrain.scene_setup import setup_world_atmosphere
 
         world = setup_world_atmosphere(density=0.05, anisotropy=0.1)
 
@@ -603,7 +603,7 @@ class TestSetupWorldAtmosphere:
 
     def test_setup_world_atmosphere_default_params(self):
         """Test world atmosphere with default parameters."""
-        from src.terrain.scene_setup import setup_world_atmosphere
+        from terrain_maker.terrain.scene_setup import setup_world_atmosphere
 
         world = setup_world_atmosphere()
 

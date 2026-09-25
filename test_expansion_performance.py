@@ -6,7 +6,7 @@ slow O(max_width × N) iterative dilation algorithm.
 
 import numpy as np
 import time
-from src.terrain.visualization.line_layers import expand_lines_variable_width
+from terrain_maker.terrain.visualization.line_layers import expand_lines_variable_width
 
 
 def benchmark_expansion(grid_size, max_width, num_streams=10):

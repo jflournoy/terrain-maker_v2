@@ -13,7 +13,7 @@ All functions accept numpy arrays and return numpy arrays for easy integration.
 Slope Calculation
 -----------------
 
-.. autofunction:: src.terrain.gpu_ops.gpu_horn_slope
+.. autofunction:: terrain_maker.terrain.gpu_ops.gpu_horn_slope
 
    Calculate slope magnitude using Horn's method with GPU acceleration.
 
@@ -30,7 +30,7 @@ Slope Calculation
 
    Example::
 
-       from src.terrain.gpu_ops import gpu_horn_slope
+       from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
        # Calculate slopes (auto-detects GPU)
        slopes = gpu_horn_slope(dem_data)
@@ -43,7 +43,7 @@ Slope Calculation
 Filtering Operations
 --------------------
 
-.. autofunction:: src.terrain.gpu_ops.gpu_gaussian_blur
+.. autofunction:: terrain_maker.terrain.gpu_ops.gpu_gaussian_blur
 
    GPU-accelerated Gaussian blur using separable convolution.
 
@@ -54,12 +54,12 @@ Filtering Operations
 
    Example::
 
-       from src.terrain.gpu_ops import gpu_gaussian_blur
+       from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
        # Smooth DEM with sigma=2.0
        smoothed = gpu_gaussian_blur(dem_data, sigma=2.0)
 
-.. autofunction:: src.terrain.gpu_ops.gpu_median_filter
+.. autofunction:: terrain_maker.terrain.gpu_ops.gpu_median_filter
 
    GPU-accelerated median filter for noise removal.
 
@@ -70,12 +70,12 @@ Filtering Operations
 
    Example::
 
-       from src.terrain.gpu_ops import gpu_median_filter
+       from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
        # Remove salt-and-pepper noise
        cleaned = gpu_median_filter(dem_data, kernel_size=3)
 
-.. autofunction:: src.terrain.gpu_ops.gpu_max_filter
+.. autofunction:: terrain_maker.terrain.gpu_ops.gpu_max_filter
 
    GPU-accelerated maximum filter (morphological dilation).
 
@@ -86,12 +86,12 @@ Filtering Operations
 
    Example::
 
-       from src.terrain.gpu_ops import gpu_max_filter
+       from terrain_maker.terrain.gpu_ops import gpu_max_filter
 
        # Morphological dilation
        dilated = gpu_max_filter(dem_data, kernel_size=5)
 
-.. autofunction:: src.terrain.gpu_ops.gpu_min_filter
+.. autofunction:: terrain_maker.terrain.gpu_ops.gpu_min_filter
 
    GPU-accelerated minimum filter (morphological erosion).
 
@@ -102,7 +102,7 @@ Filtering Operations
 
    Example::
 
-       from src.terrain.gpu_ops import gpu_min_filter
+       from terrain_maker.terrain.gpu_ops import gpu_min_filter
 
        # Morphological erosion
        eroded = gpu_min_filter(dem_data, kernel_size=5)
@@ -110,7 +110,7 @@ Filtering Operations
 Device Management
 -----------------
 
-.. autofunction:: src.terrain.gpu_ops._get_device
+.. autofunction:: terrain_maker.terrain.gpu_ops._get_device
 
    Get best available device (CUDA > CPU).
 
@@ -118,7 +118,7 @@ Device Management
 
    Example::
 
-       from src.terrain.gpu_ops import _get_device
+       from terrain_maker.terrain.gpu_ops import _get_device
 
        device = _get_device()
        print(f"Using device: {device}")  # "cuda" or "cpu"
@@ -161,8 +161,8 @@ Integration Example
 
 Integrate GPU ops into terrain pipeline::
 
-    from src.terrain.gpu_ops import gpu_horn_slope, gpu_gaussian_blur
-    from src.terrain.transforms import slope_adaptive_smooth
+    from terrain_maker.terrain.gpu_ops import gpu_horn_slope, gpu_gaussian_blur
+    from terrain_maker.terrain.transforms import slope_adaptive_smooth
 
     # Load DEM
     dem = load_dem_files('data/hgt')

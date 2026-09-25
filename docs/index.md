@@ -33,7 +33,7 @@ A Python library for:
 The library includes a complete example that demonstrates all key features:
 
 ```python
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain, load_dem_files,
     downsample_raster
 )
@@ -95,7 +95,7 @@ mesh = terrain.create_mesh()
 ### Blender Rendering
 
 ```python
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     clear_scene, setup_camera_and_light,
     setup_render_settings, create_background_plane
 )

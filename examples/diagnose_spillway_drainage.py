@@ -25,14 +25,14 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 from matplotlib.colors import LogNorm, Normalize
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
     find_lake_spillways,
     create_lake_flow_routing,
     compute_outlet_downstream_directions,
 )
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     D8_OFFSETS,
     D8_DIRECTIONS,
     compute_drainage_area,

@@ -6,18 +6,18 @@ Functions for loading geographic data from various sources.
 DEM Loading
 -----------
 
-.. autofunction:: src.terrain.data_loading.load_filtered_hgt_files
+.. autofunction:: terrain_maker.terrain.data_loading.load_filtered_hgt_files
 
    Load SRTM HGT files with latitude filtering.
 
-.. autofunction:: src.terrain.data_loading.save_score_grid
+.. autofunction:: terrain_maker.terrain.data_loading.save_score_grid
 
-.. autofunction:: src.terrain.data_loading.find_score_file
+.. autofunction:: terrain_maker.terrain.data_loading.find_score_file
 
 Score Data
 ----------
 
-.. autofunction:: src.terrain.scoring.compute_sledding_score
+.. autofunction:: terrain_maker.terrain.scoring.compute_sledding_score
 
    Used in :doc:`../examples/sledding`.
 
@@ -33,32 +33,32 @@ Score Data
 Roads
 -----
 
-.. autofunction:: src.terrain.roads.get_roads_tiled
+.. autofunction:: terrain_maker.terrain.roads.get_roads_tiled
 
    Fetch roads from OpenStreetMap via Overpass API.
 
-.. autofunction:: src.terrain.roads.add_roads_layer
+.. autofunction:: terrain_maker.terrain.roads.add_roads_layer
 
    Add roads as a terrain data layer.
    Used in :doc:`../examples/combined_render`.
 
-.. autofunction:: src.terrain.roads.rasterize_roads_to_layer
+.. autofunction:: terrain_maker.terrain.roads.rasterize_roads_to_layer
 
-.. autofunction:: src.terrain.roads.smooth_road_vertices
+.. autofunction:: terrain_maker.terrain.roads.smooth_road_vertices
 
-.. autofunction:: src.terrain.roads.offset_road_vertices
+.. autofunction:: terrain_maker.terrain.roads.offset_road_vertices
 
-.. autofunction:: src.terrain.roads.smooth_road_mask
+.. autofunction:: terrain_maker.terrain.roads.smooth_road_mask
 
    Anti-alias road edges.
 
 Diagnostics
 -----------
 
-.. autofunction:: src.terrain.diagnostics.generate_rgb_histogram
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_rgb_histogram
 
-.. autofunction:: src.terrain.diagnostics.generate_luminance_histogram
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_luminance_histogram
 
-.. autofunction:: src.terrain.diagnostics.plot_wavelet_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.plot_wavelet_diagnostics
 
-.. autofunction:: src.terrain.diagnostics.generate_upscale_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_upscale_diagnostics

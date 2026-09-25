@@ -1,7 +1,7 @@
 """
 Tests for snow analysis module.
 
-Tests for existing SNODAS functions from src.snow.snodas, plus
+Tests for existing SNODAS functions from terrain_maker.snow.snodas, plus
 TDD RED phase tests for the planned SnowAnalysis class.
 """
 
@@ -13,7 +13,7 @@ import tempfile
 import gzip
 from datetime import datetime
 
-from src.snow.snodas import (
+from terrain_maker.snow.snodas import (
     _read_snodas_header,
     _gunzip_snodas_file,
     _read_snodas_binary,
@@ -376,7 +376,7 @@ class TestSnowAnalysisInit:
 
     def test_init_without_terrain(self):
         """SnowAnalysis can be initialized without terrain."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         assert analyzer.terrain is None
@@ -389,7 +389,7 @@ class TestSnowAnalysisInit:
 
     def test_init_with_custom_cache_dir(self):
         """SnowAnalysis respects custom cache directory."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis(cache_dir="custom_cache")
         assert analyzer.cache_dir == Path("custom_cache")
@@ -397,7 +397,7 @@ class TestSnowAnalysisInit:
 
     def test_init_with_snodas_root_dir(self, tmp_path):
         """SnowAnalysis accepts snodas_root_dir."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         root_dir = tmp_path / "snodas_data"
         root_dir.mkdir()
@@ -406,7 +406,7 @@ class TestSnowAnalysisInit:
 
     def test_set_terrain(self):
         """set_terrain() updates the terrain reference."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         mock_terrain = type("MockTerrain", (), {"dem_bounds": (0, 0, 1, 1)})()
@@ -420,7 +420,7 @@ class TestCalculateTPI:
 
     def test_tpi_flat_terrain_returns_zeros(self):
         """TPI of perfectly flat terrain should be all zeros."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         flat_dem = np.ones((10, 10)) * 100.0
@@ -432,7 +432,7 @@ class TestCalculateTPI:
 
     def test_tpi_single_peak(self):
         """TPI should be positive at a peak."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         dem = np.zeros((5, 5))
@@ -445,7 +445,7 @@ class TestCalculateTPI:
 
     def test_tpi_single_valley(self):
         """TPI should be negative in a valley."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         dem = np.ones((5, 5)) * 10.0
@@ -457,7 +457,7 @@ class TestCalculateTPI:
 
     def test_tpi_custom_window_size(self):
         """TPI calculation respects custom window_size."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         dem = np.random.rand(20, 20) * 100
@@ -474,7 +474,7 @@ class TestCalculateRoughness:
 
     def test_roughness_flat_terrain_is_zero(self):
         """Roughness of flat terrain should be zero."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         flat_dem = np.ones((10, 10)) * 100.0
@@ -486,7 +486,7 @@ class TestCalculateRoughness:
 
     def test_roughness_rough_terrain_is_positive(self):
         """Roughness of variable terrain should be > 0."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         rough_dem = np.random.rand(10, 10) * 100
@@ -498,7 +498,7 @@ class TestCalculateRoughness:
 
     def test_roughness_increases_with_variability(self):
         """More variable terrain should have higher roughness."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         gentle = np.tile(np.arange(10), (10, 1))
@@ -516,7 +516,7 @@ class TestSleddingScore:
 
     def test_sledding_score_requires_stats(self):
         """calculate_sledding_score raises error without stats."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
 
@@ -525,7 +525,7 @@ class TestSleddingScore:
 
     def test_sledding_score_basic_calculation(self):
         """calculate_sledding_score computes score from stats."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
 
@@ -545,7 +545,7 @@ class TestSleddingScore:
 
     def test_sledding_score_zero_for_no_snow(self):
         """calculate_sledding_score gives low score with no snow."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
 
@@ -568,7 +568,7 @@ class TestProcessSnowDataWorkflow:
 
     def test_process_snow_data_requires_terrain(self):
         """process_snow_data raises error without terrain."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
 
@@ -577,7 +577,7 @@ class TestProcessSnowDataWorkflow:
 
     def test_process_snow_data_requires_valid_snodas_dir(self, tmp_path):
         """process_snow_data raises error with invalid SNODAS directory."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path / "nonexistent"))
 
@@ -594,7 +594,7 @@ class TestBatchProcessSnodas:
 
     def test_batch_process_returns_empty_without_files(self, tmp_path):
         """batch_process_snodas_data returns empty dict without files."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis(snodas_root_dir=str(tmp_path))
         extent = (-120.0, 45.0, -119.0, 45.5)
@@ -605,7 +605,7 @@ class TestBatchProcessSnodas:
 
     def test_batch_process_returns_empty_without_root_dir(self):
         """batch_process_snodas_data returns empty dict without root dir."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         extent = (-120.0, 45.0, -119.0, 45.5)
@@ -621,7 +621,7 @@ class TestVisualization:
 
     def test_visualize_requires_data(self):
         """visualize_snow_data raises error without data."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
 
@@ -633,7 +633,7 @@ class TestVisualization:
         import matplotlib
 
         matplotlib.use("Agg")
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         analyzer.sledding_score = np.random.rand(10, 10)
@@ -651,7 +651,7 @@ class TestStoreSnowStatsInTerrain:
 
     def test_store_stats_skips_without_terrain(self):
         """_store_snow_stats_in_terrain does nothing without terrain."""
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         analyzer = SnowAnalysis()
         stats = {"median_max_depth": np.ones((10, 10))}
@@ -663,7 +663,7 @@ class TestStoreSnowStatsInTerrain:
     def test_store_stats_adds_arrays_to_terrain(self):
         """_store_snow_stats_in_terrain adds array stats to terrain."""
         from affine import Affine
-        from src.snow.analysis import SnowAnalysis
+        from terrain_maker.snow.analysis import SnowAnalysis
 
         added_layers = []
 
@@ -693,4 +693,4 @@ class TestStoreSnowStatsInTerrain:
 
 # 🔴 TDD RED PHASE COMPLETE - Round 2
 # SnowAnalysis class tests marked as xfail until implementation.
-# SNODAS I/O function tests now point to existing src.snow.snodas module.
+# SNODAS I/O function tests now point to existing terrain_maker.snow.snodas module.

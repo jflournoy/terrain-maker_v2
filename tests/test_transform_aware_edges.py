@@ -15,8 +15,8 @@ class TestTransformAwareRectangleEdges:
 
     def test_coordinate_mapping_simple_downsample(self):
         """Test coordinate mapping with simple downsample transform."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
 
         # Create simple 100×100 DEM (original)
         original_dem = np.random.rand(100, 100) * 100 + 100  # Elevation 100-200
@@ -57,8 +57,8 @@ class TestTransformAwareRectangleEdges:
 
     def test_coordinate_mapping_with_reprojection(self):
         """Test coordinate mapping with reprojection and downsample."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
 
         # Create 50×50 DEM in WGS84
         original_dem = np.random.rand(50, 50) * 100 + 100
@@ -100,11 +100,11 @@ class TestTransformAwareRectangleEdges:
 
     def test_edge_coverage_comparison(self):
         """Test that transform-aware approach handles NaN margins correctly."""
-        from src.terrain.mesh_operations import (
+        from terrain_maker.terrain.mesh_operations import (
             generate_transform_aware_rectangle_edges,
             diagnose_rectangle_edge_coverage,
         )
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         # Simulate real scenario: large original DEM downsampled to smaller mesh
         original_dem = np.ones((200, 200)) * 150  # 200×200 original
@@ -155,7 +155,7 @@ class TestTransformAwareRectangleEdges:
 
     def test_terrain_object_required(self):
         """Test that terrain object is required (not None)."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
 
         # Try calling without terrain object
         with pytest.raises((TypeError, AttributeError, ValueError)):
@@ -167,8 +167,8 @@ class TestTransformAwareRectangleEdges:
 
     def test_missing_transform_data(self):
         """Test graceful handling when terrain lacks transformed_transform."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
 
         # Create minimal Terrain without transformed data
         dem_data = np.ones((10, 10)) * 100
@@ -189,8 +189,8 @@ class TestTransformAwareRectangleEdges:
 
     def test_edge_pixels_in_coord_to_index_only(self):
         """Test that returned pixels are only those in coord_to_index (valid vertices)."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
 
         # Create simple scenario
         original_dem = np.ones((30, 30)) * 100
@@ -239,8 +239,8 @@ class TestTransformAwareIntegration:
 
     def test_create_boundary_extension_accepts_terrain_parameter(self):
         """Test that create_boundary_extension accepts terrain= parameter."""
-        from src.terrain.mesh_operations import create_boundary_extension
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.core import Terrain
 
         # Create minimal test data
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
@@ -277,7 +277,7 @@ class TestTransformAwareIntegration:
 
     def test_backwards_compatibility_with_dem_shape(self):
         """Test that legacy dem_shape parameter still works."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         boundary_points = [(0, 0), (0, 1), (1, 1), (1, 0)]
@@ -309,11 +309,11 @@ class TestFractionalEdges:
         the curved boundary from the non-linear Transverse Mercator projection
         while integer edges snap to grid points and lose this curvature.
         """
-        from src.terrain.mesh_operations import (
+        from terrain_maker.terrain.mesh_operations import (
             generate_transform_aware_rectangle_edges,
             generate_transform_aware_rectangle_edges_fractional,
         )
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         # Create DEM in WGS84 (Detroit area - 2 degrees wide)
         original_dem = np.random.rand(100, 100) * 100 + 100
@@ -375,8 +375,8 @@ class TestFractionalEdges:
 
     def test_fractional_edges_returns_float_coordinates(self):
         """Test that fractional edge function returns float coordinates."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges_fractional
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges_fractional
+        from terrain_maker.terrain.core import Terrain
 
         # Create simple DEM
         original_dem = np.random.rand(50, 50) * 100 + 100
@@ -409,8 +409,8 @@ class TestFractionalEdges:
 
     def test_fractional_edges_with_reprojection_shows_curvature(self):
         """Test that CRS reprojection creates non-integer coordinates (curvature effect)."""
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges_fractional
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges_fractional
+        from terrain_maker.terrain.core import Terrain
 
         # Create DEM in WGS84
         original_dem = np.random.rand(100, 100) * 100 + 100
@@ -450,8 +450,8 @@ class TestFractionalEdges:
 
     def test_create_boundary_extension_with_fractional_edges(self):
         """Test that create_boundary_extension works with use_fractional_edges=True."""
-        from src.terrain.mesh_operations import create_boundary_extension
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.core import Terrain
 
         # Create test mesh data - 10x10 grid
         positions = np.zeros((100, 3), dtype=float)

@@ -9,14 +9,14 @@ Water is characterized by near-zero slope, while terrain typically has higher sl
 Water Detection
 ---------------
 
-.. autofunction:: src.terrain.water.identify_water_by_slope
+.. autofunction:: terrain_maker.terrain.water.identify_water_by_slope
 
    Identify water bodies by detecting flat areas in DEM.
    Used in :doc:`../examples/combined_render` for lake/river detection.
 
    Example::
 
-       from src.terrain.water import identify_water_by_slope
+       from terrain_maker.terrain.water import identify_water_by_slope
 
        # Detect water in DEM
        water_mask = identify_water_by_slope(
@@ -48,10 +48,10 @@ Water Detection
 Internal Functions
 ------------------
 
-.. autofunction:: src.terrain.water._calculate_slope
+.. autofunction:: terrain_maker.terrain.water._calculate_slope
 
    Calculate slope magnitude using Sobel operators (Horn's method).
 
-.. autofunction:: src.terrain.water._smooth_water_mask
+.. autofunction:: terrain_maker.terrain.water._smooth_water_mask
 
    Apply morphological operations to smooth water mask.

@@ -17,8 +17,8 @@ from matplotlib.colors import LogNorm
 # Add source to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.terrain.data_loading import load_dem_files
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     detect_ocean_mask,

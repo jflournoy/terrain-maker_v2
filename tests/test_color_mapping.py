@@ -13,13 +13,13 @@ class TestElevationColormap:
 
     def test_elevation_colormap_imports(self):
         """Test that elevation_colormap can be imported."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         assert callable(elevation_colormap)
 
     def test_elevation_colormap_basic(self):
         """Test basic elevation color mapping."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         # Simple elevation data
         dem_data = np.array([[0.0, 50.0], [100.0, 150.0]])
@@ -32,7 +32,7 @@ class TestElevationColormap:
 
     def test_elevation_colormap_handles_nan(self):
         """Test that NaN values are handled."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         # DEM with NaN
         dem_data = np.array([[0.0, np.nan], [50.0, 100.0]])
@@ -47,7 +47,7 @@ class TestElevationColormap:
 
     def test_elevation_colormap_uses_min_max(self):
         """Test that custom min/max are respected."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         dem_data = np.array([[0.0, 100.0]])
 
@@ -60,7 +60,7 @@ class TestElevationColormap:
 
     def test_elevation_colormap_different_cmaps(self):
         """Test that different colormaps produce different results."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         dem_data = np.array([[0.0, 50.0, 100.0]])
 
@@ -76,13 +76,13 @@ class TestSlopeColormap:
 
     def test_slope_colormap_imports(self):
         """Test that slope_colormap can be imported."""
-        from src.terrain.color_mapping import slope_colormap
+        from terrain_maker.terrain.color_mapping import slope_colormap
 
         assert callable(slope_colormap)
 
     def test_slope_colormap_basic(self):
         """Test basic slope color mapping."""
-        from src.terrain.color_mapping import slope_colormap
+        from terrain_maker.terrain.color_mapping import slope_colormap
 
         # Simple slope data in degrees
         slopes = np.array([[0.0, 15.0], [30.0, 45.0]])
@@ -96,7 +96,7 @@ class TestSlopeColormap:
 
     def test_slope_colormap_handles_nan(self):
         """Test that NaN slope values are handled."""
-        from src.terrain.color_mapping import slope_colormap
+        from terrain_maker.terrain.color_mapping import slope_colormap
 
         slopes = np.array([[0.0, np.nan], [15.0, 30.0]])
 
@@ -110,7 +110,7 @@ class TestSlopeColormap:
 
     def test_slope_colormap_uses_min_max(self):
         """Test that custom slope min/max are respected."""
-        from src.terrain.color_mapping import slope_colormap
+        from terrain_maker.terrain.color_mapping import slope_colormap
 
         slopes = np.array([[0.0, 30.0]])
 
@@ -122,7 +122,7 @@ class TestSlopeColormap:
 
     def test_slope_colormap_valid_areas_opaque(self):
         """Test that valid slope areas have full opacity."""
-        from src.terrain.color_mapping import slope_colormap
+        from terrain_maker.terrain.color_mapping import slope_colormap
 
         slopes = np.array([[0.0, 15.0, 30.0]])
 
@@ -146,7 +146,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_cmap_imports(self):
         """boreal_mako_cmap should be importable."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
         assert boreal_mako_cmap is not None
 
@@ -160,7 +160,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_works_with_elevation_colormap(self):
         """boreal_mako should work with elevation_colormap function."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         scores = np.array([[0.0, 0.5], [0.75, 1.0]])
         colors = elevation_colormap(scores, cmap_name="boreal_mako")
@@ -170,7 +170,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_low_end_is_green(self):
         """Low end of boreal_mako should be green (boreal forest)."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
         # Sample at position 0.1 (should be green)
         rgb = boreal_mako_cmap(0.1)[:3]
@@ -182,7 +182,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_mid_is_blue(self):
         """Mid range of boreal_mako should be blue (mako blue)."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
         # Sample at position 0.45 (should be blue)
         rgb = boreal_mako_cmap(0.45)[:3]
@@ -193,7 +193,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_high_end_is_pale(self):
         """High end of boreal_mako should be pale mint (high luminance)."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
         # Sample at position 0.95 (should be pale)
         rgb = boreal_mako_cmap(0.95)[:3]
@@ -205,7 +205,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_perceptually_uniform(self):
         """boreal_mako should have generally increasing L* with purple ribbon dip."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
         # Sample L* at various positions
@@ -230,7 +230,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_purple_ribbon(self):
         """Purple ribbon should be present at position 0.6."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
         # Sample at position 0.6 (purple ribbon)
         rgb_purple = boreal_mako_cmap(0.6)[:3]
@@ -251,7 +251,7 @@ class TestBorealMakoColormap:
 
     def test_boreal_mako_cyan_to_white_transition(self):
         """Cyan to white transition should show increasing L*."""
-        from src.terrain.color_mapping import boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap
         from skimage import color
 
         # Sample cyan zone
@@ -272,7 +272,7 @@ class TestColormapCompressionFormula:
 
     def test_compression_formula_preserves_high_end(self):
         """High-end (white/pale) colors should be visible even with high transition points."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         # When transition is at 0.70, we should still see pale (light) colors at score 1.0
         # The formula should be:
@@ -325,7 +325,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_imports(self):
         """boreal_mako_print_cmap should be importable."""
-        from src.terrain.color_mapping import boreal_mako_print_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_print_cmap
 
         assert boreal_mako_print_cmap is not None
 
@@ -339,7 +339,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_works_with_elevation_colormap(self):
         """boreal_mako_print should work with elevation_colormap function."""
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         scores = np.array([[0.0, 0.5], [0.75, 1.0]])
         colors = elevation_colormap(scores, cmap_name="boreal_mako_print")
@@ -349,7 +349,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_preserves_green_low_end(self):
         """Low end should still read as green (boreal forest)."""
-        from src.terrain.color_mapping import boreal_mako_print_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_print_cmap
 
         rgb = boreal_mako_print_cmap(0.1)[:3]
         assert rgb[1] > rgb[0], "Green should be > Red at low end"
@@ -357,7 +357,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_preserves_pale_high_end(self):
         """High end should still be pale (high luminance)."""
-        from src.terrain.color_mapping import boreal_mako_print_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_print_cmap
 
         rgb = boreal_mako_print_cmap(0.95)[:3]
         assert rgb[0] > 0.6, f"Red should be high at pale end, got {rgb[0]:.3f}"
@@ -366,7 +366,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_monotonic_luminance(self):
         """Print cmap should have generally increasing L* (like the source)."""
-        from src.terrain.color_mapping import boreal_mako_print_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_print_cmap
         from skimage import color
 
         positions = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9]
@@ -384,7 +384,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_cmap_lower_chroma_than_source(self):
         """Print cmap should have equal or lower chroma than boreal_mako."""
-        from src.terrain.color_mapping import boreal_mako_cmap, boreal_mako_print_cmap
+        from terrain_maker.terrain.color_mapping import boreal_mako_cmap, boreal_mako_print_cmap
         from skimage import color
 
         positions = np.linspace(0, 1, 20)
@@ -404,7 +404,7 @@ class TestBorealMakoPrintColormap:
 
     def test_print_colors_within_cmyk_gamut(self):
         """All print cmap colors should be within the CMYK gamut boundary."""
-        from src.terrain.color_mapping import (
+        from terrain_maker.terrain.color_mapping import (
             boreal_mako_print_cmap, _srgb_to_lab, _cmyk_max_chroma,
         )
 
@@ -427,7 +427,7 @@ class TestColorSpaceConversions:
 
     def test_lab_roundtrip_white(self):
         """White should survive Lab round-trip."""
-        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+        from terrain_maker.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
 
         L, a, b = _srgb_to_lab(1.0, 1.0, 1.0)
         r, g, b_out = _lab_to_srgb(L, a, b)
@@ -438,7 +438,7 @@ class TestColorSpaceConversions:
 
     def test_lab_roundtrip_black(self):
         """Black should survive Lab round-trip."""
-        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+        from terrain_maker.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
 
         L, a, b = _srgb_to_lab(0.0, 0.0, 0.0)
         r, g, b_out = _lab_to_srgb(L, a, b)
@@ -449,7 +449,7 @@ class TestColorSpaceConversions:
 
     def test_lab_roundtrip_midtones(self):
         """Several midtone colors should survive Lab round-trip."""
-        from src.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
+        from terrain_maker.terrain.color_mapping import _srgb_to_lab, _lab_to_srgb
 
         test_colors = [
             (0.5, 0.5, 0.5),   # mid gray
@@ -471,7 +471,7 @@ class TestColorSpaceConversions:
 
     def test_white_has_L100(self):
         """White sRGB should have L* close to 100."""
-        from src.terrain.color_mapping import _srgb_to_lab
+        from terrain_maker.terrain.color_mapping import _srgb_to_lab
 
         L, a, b = _srgb_to_lab(1.0, 1.0, 1.0)
         assert abs(L - 100) < 0.5, f"White L* should be ~100, got {L}"
@@ -480,7 +480,7 @@ class TestColorSpaceConversions:
 
     def test_black_has_L0(self):
         """Black sRGB should have L* close to 0."""
-        from src.terrain.color_mapping import _srgb_to_lab
+        from terrain_maker.terrain.color_mapping import _srgb_to_lab
 
         L, a, b = _srgb_to_lab(0.0, 0.0, 0.0)
         assert abs(L) < 0.5, f"Black L* should be ~0, got {L}"
@@ -495,14 +495,14 @@ class TestMakePrintSafeCmap:
 
     def test_importable(self):
         """make_print_safe_cmap should be importable from color_mapping."""
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         assert callable(make_print_safe_cmap)
 
     def test_accepts_cmap_object(self):
         """Should accept a matplotlib colormap object."""
         import matplotlib
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         viridis = matplotlib.colormaps.get_cmap("viridis")
         result = make_print_safe_cmap(viridis)
@@ -513,7 +513,7 @@ class TestMakePrintSafeCmap:
 
     def test_accepts_cmap_name_string(self):
         """Should accept a colormap name string."""
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         result = make_print_safe_cmap("plasma")
 
@@ -522,7 +522,7 @@ class TestMakePrintSafeCmap:
 
     def test_custom_output_name(self):
         """Should use custom name when provided."""
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         result = make_print_safe_cmap("viridis", name="my_safe_viridis")
         assert result.name == "my_safe_viridis"
@@ -530,14 +530,14 @@ class TestMakePrintSafeCmap:
     def test_returns_linear_segmented_colormap(self):
         """Should return a LinearSegmentedColormap."""
         from matplotlib.colors import LinearSegmentedColormap
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         result = make_print_safe_cmap("inferno")
         assert isinstance(result, LinearSegmentedColormap)
 
     def test_output_colors_within_cmyk_gamut(self):
         """All output colors should be within the CMYK gamut boundary."""
-        from src.terrain.color_mapping import (
+        from terrain_maker.terrain.color_mapping import (
             make_print_safe_cmap, _srgb_to_lab, _cmyk_max_chroma,
         )
 
@@ -558,7 +558,7 @@ class TestMakePrintSafeCmap:
         """Print-safe version of a saturated cmap should have lower chroma."""
         import matplotlib
         from skimage import color
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         source = matplotlib.colormaps.get_cmap("viridis")
         safe = make_print_safe_cmap(source)
@@ -586,7 +586,7 @@ class TestMakePrintSafeCmap:
         """Print-safe variant should preserve L* (lightness) closely."""
         import matplotlib
         from skimage import color
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         source = matplotlib.colormaps.get_cmap("plasma")
         safe = make_print_safe_cmap(source)
@@ -605,7 +605,7 @@ class TestMakePrintSafeCmap:
 
     def test_works_with_boreal_mako(self):
         """Should work with the custom boreal_mako colormap."""
-        from src.terrain.color_mapping import make_print_safe_cmap, boreal_mako_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap, boreal_mako_cmap
 
         result = make_print_safe_cmap(boreal_mako_cmap)
         assert result.name == "boreal_mako_print"
@@ -619,7 +619,7 @@ class TestMakePrintSafeCmap:
     def test_safety_margin_parameter(self):
         """Lower safety_margin should produce more aggressive compression."""
         from skimage import color
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         safe_default = make_print_safe_cmap("viridis", safety_margin=0.85)
         safe_aggressive = make_print_safe_cmap("viridis", safety_margin=0.60)
@@ -645,7 +645,7 @@ class TestMakePrintSafeCmap:
 
     def test_n_samples_parameter(self):
         """Different n_samples should still produce a valid colormap."""
-        from src.terrain.color_mapping import make_print_safe_cmap
+        from terrain_maker.terrain.color_mapping import make_print_safe_cmap
 
         result_16 = make_print_safe_cmap("viridis", n_samples=16)
         result_128 = make_print_safe_cmap("viridis", n_samples=128)

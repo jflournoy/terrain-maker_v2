@@ -21,13 +21,13 @@ class TestPipelineCacheBasics:
 
     def test_pipeline_cache_can_be_imported(self):
         """Test that PipelineCache can be imported."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         assert PipelineCache is not None
 
     def test_pipeline_cache_init_creates_directory(self):
         """Test that PipelineCache creates cache directory."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "pipeline_cache"
@@ -38,7 +38,7 @@ class TestPipelineCacheBasics:
 
     def test_pipeline_cache_disabled_mode(self):
         """Test that disabled cache doesn't create directory or cache."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "should_not_exist"
@@ -53,7 +53,7 @@ class TestTargetDefinition:
 
     def test_define_target_with_no_dependencies(self):
         """Test defining a root target (no upstream dependencies)."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -69,7 +69,7 @@ class TestTargetDefinition:
 
     def test_define_target_with_dependencies(self):
         """Test defining a target that depends on another."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -89,7 +89,7 @@ class TestTargetDefinition:
 
     def test_define_target_with_multiple_dependencies(self):
         """Test target with multiple upstream dependencies."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -111,7 +111,7 @@ class TestCacheKeyComputation:
 
     def test_cache_key_deterministic(self):
         """Test that same params produce same cache key."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -127,7 +127,7 @@ class TestCacheKeyComputation:
 
     def test_cache_key_changes_with_params(self):
         """Test that different params produce different keys."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -143,7 +143,7 @@ class TestCacheKeyComputation:
 
     def test_cache_key_incorporates_upstream_keys(self):
         """CRITICAL: Cache key must incorporate ALL upstream keys."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -166,7 +166,7 @@ class TestCacheKeyComputation:
 
     def test_cache_key_handles_file_mtimes(self):
         """Test that file modification times are incorporated into keys."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -197,7 +197,7 @@ class TestCacheHitMiss:
 
     def test_cache_miss_on_first_run(self):
         """Test that first run is always a cache miss."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -209,7 +209,7 @@ class TestCacheHitMiss:
 
     def test_cache_hit_after_save(self):
         """Test that saved data can be retrieved."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -227,7 +227,7 @@ class TestCacheHitMiss:
 
     def test_cache_miss_after_param_change(self):
         """Test that changing params causes cache miss."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -245,7 +245,7 @@ class TestCacheHitMiss:
 
     def test_cache_miss_when_upstream_changes(self):
         """CRITICAL: Upstream changes must cause downstream cache miss."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -276,7 +276,7 @@ class TestCacheWithMetadata:
 
     def test_save_and_load_with_transform(self):
         """Test saving/loading numpy array with Affine transform."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
         from rasterio import Affine
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -299,7 +299,7 @@ class TestCacheWithMetadata:
 
     def test_save_multiple_arrays(self):
         """Test saving multiple arrays for one target."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -328,7 +328,7 @@ class TestCacheDisabledMode:
 
     def test_disabled_cache_never_saves(self):
         """Test that disabled cache doesn't save anything."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir, enabled=False)
@@ -343,7 +343,7 @@ class TestCacheDisabledMode:
 
     def test_disabled_cache_no_files_created(self):
         """Test that disabled cache creates no cache files."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "cache"
@@ -362,7 +362,7 @@ class TestDeepDependencyChain:
 
     def test_deep_chain_invalidation(self):
         """Test that changes propagate through deep chains."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -389,7 +389,7 @@ class TestDeepDependencyChain:
 
     def test_diamond_dependency(self):
         """Test diamond dependency pattern: A -> B,C -> D."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -421,7 +421,7 @@ class TestCacheCleanup:
 
     def test_clear_target(self):
         """Test clearing a specific target's cache."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -440,7 +440,7 @@ class TestCacheCleanup:
 
     def test_clear_all(self):
         """Test clearing entire cache."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -462,7 +462,7 @@ class TestRealisticTerrainScenarios:
 
     def test_terrain_pipeline_cache_workflow(self):
         """Test a realistic terrain rendering pipeline with caching."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -516,7 +516,7 @@ class TestRealisticTerrainScenarios:
 
     def test_colormap_change_invalidates_mesh(self):
         """Test that changing colormap invalidates downstream mesh cache."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -547,7 +547,7 @@ class TestRealisticTerrainScenarios:
 
     def test_render_settings_dont_invalidate_mesh(self):
         """Test that render-only settings don't invalidate upstream caches."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -578,7 +578,7 @@ class TestRealisticTerrainScenarios:
 
     def test_height_scale_invalidates_mesh_only(self):
         """Test that height scale change invalidates mesh but not colors."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -610,7 +610,7 @@ class TestRealisticTerrainScenarios:
 
     def test_road_toggle_invalidates_downstream(self):
         """Test that enabling/disabling roads invalidates mesh."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -651,7 +651,7 @@ class TestEdgeCases:
 
     def test_get_cached_undefined_target(self):
         """Test getting cache for undefined target returns None."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -661,7 +661,7 @@ class TestEdgeCases:
 
     def test_circular_dependency_detection(self):
         """Test that circular dependencies are detected."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -675,7 +675,7 @@ class TestEdgeCases:
 
     def test_numpy_array_params(self):
         """Test that numpy arrays in params are handled correctly."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)
@@ -689,7 +689,7 @@ class TestEdgeCases:
 
     def test_empty_params(self):
         """Test target with empty params."""
-        from src.terrain.cache import PipelineCache
+        from terrain_maker.terrain.cache import PipelineCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = PipelineCache(cache_dir=tmpdir)

@@ -7,7 +7,7 @@ from unittest import mock
 
 def test_fallback_without_numba():
     with mock.patch.dict(sys.modules, {"numba": None}):
-        import src.terrain._numba_compat as compat
+        import terrain_maker.terrain._numba_compat as compat
 
         compat = importlib.reload(compat)
         try:

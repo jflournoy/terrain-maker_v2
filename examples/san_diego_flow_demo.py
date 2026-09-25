@@ -47,9 +47,9 @@ try:
 except ImportError:
     pass
 
-from src.terrain.dem_downloader import download_dem_by_bbox
-from src.terrain.data_loading import load_dem_files
-from src.terrain.core import (
+from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.core import (
     Terrain,
     clear_scene,
     position_camera_relative,
@@ -59,9 +59,9 @@ from src.terrain.core import (
     flip_raster,
     scale_elevation,
 )
-from src.terrain.scene_setup import create_background_plane, setup_hdri_lighting
-from src.terrain.materials import apply_colormap_material
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.scene_setup import create_background_plane, setup_hdri_lighting
+from terrain_maker.terrain.materials import apply_colormap_material
+from terrain_maker.terrain.flow_accumulation import (
     flow_accumulation,
     compute_flow_direction,
     compute_drainage_area,
@@ -70,19 +70,19 @@ from src.terrain.flow_accumulation import (
     condition_dem,
     detect_ocean_mask,
 )
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     download_water_bodies,
     rasterize_lakes_to_mask,
     identify_outlet_cells,
 )
-from src.terrain.precipitation_downloader import download_precipitation
-from src.terrain.color_mapping import elevation_colormap
-from src.terrain.visualization.flow_diagnostics import (
+from terrain_maker.terrain.precipitation_downloader import download_precipitation
+from terrain_maker.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.visualization.flow_diagnostics import (
     create_flow_diagnostics,
     plot_stream_overlay,
     plot_vectorized_streams,
 )
-from src.terrain.visualization.line_layers import (
+from terrain_maker.terrain.visualization.line_layers import (
     get_metric_data,
     create_line_layer,
 )

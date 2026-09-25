@@ -17,14 +17,14 @@ class TestBlenderMeshCreation:
 
     def test_create_blender_mesh_imports(self):
         """Test that create_blender_mesh can be imported."""
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         assert callable(create_blender_mesh)
 
     def test_create_blender_mesh_basic(self):
         """Test basic Blender mesh creation from vertices and faces."""
         import bpy
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         # Simple triangle
         vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=float)
@@ -48,7 +48,7 @@ class TestBlenderMeshCreation:
     def test_create_blender_mesh_with_colors(self):
         """Test mesh creation with vertex colors."""
         import bpy
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=float)
         faces = [(0, 1, 2)]
@@ -73,7 +73,7 @@ class TestBlenderMeshCreation:
     def test_create_blender_mesh_returns_object(self):
         """Test that function returns bpy Object."""
         import bpy
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         vertices = np.array([[0, 0, 0]], dtype=float)
         faces = []

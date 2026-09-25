@@ -14,7 +14,7 @@ from unittest import mock
 from pathlib import Path
 import tempfile
 
-from src.terrain.gridded_data import (
+from terrain_maker.terrain.gridded_data import (
     GriddedDataLoader,
     TiledDataConfig,
     TileSpecGridded,

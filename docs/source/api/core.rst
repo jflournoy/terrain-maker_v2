@@ -6,7 +6,7 @@ The core module provides the main :class:`Terrain` class and essential functions
 Terrain Class
 -------------
 
-.. autoclass:: src.terrain.core.Terrain
+.. autoclass:: terrain_maker.terrain.core.Terrain
    :members:
    :undoc-members:
    :inherited-members:
@@ -16,7 +16,7 @@ Terrain Class
 
    Basic usage::
 
-       from src.terrain.core import Terrain, load_dem_files
+       from terrain_maker.terrain.core import Terrain, load_dem_files
 
        dem, transform = load_dem_files('path/to/tiles')
        terrain = Terrain(dem, transform)
@@ -28,9 +28,9 @@ Terrain Class
 Loading Functions
 -----------------
 
-.. autofunction:: src.terrain.core.load_dem_files
+.. autofunction:: terrain_maker.terrain.core.load_dem_files
 
-.. autofunction:: src.terrain.data_loading.load_filtered_hgt_files
+.. autofunction:: terrain_maker.terrain.data_loading.load_filtered_hgt_files
 
    Example::
 
@@ -42,16 +42,16 @@ Loading Functions
 Color Mapping
 -------------
 
-See :meth:`~src.terrain.core.Terrain.set_color_mapping` for single colormap usage.
+See :meth:`~terrain_maker.terrain.core.Terrain.set_color_mapping` for single colormap usage.
 
-See :meth:`~src.terrain.core.Terrain.set_blended_color_mapping` for dual-colormap visualization,
+See :meth:`~terrain_maker.terrain.core.Terrain.set_blended_color_mapping` for dual-colormap visualization,
 used in :doc:`../examples/combined_render`.
 
 Data Layers
 -----------
 
-See :meth:`~src.terrain.core.Terrain.add_data_layer` for adding georeferenced data layers,
+See :meth:`~terrain_maker.terrain.core.Terrain.add_data_layer` for adding georeferenced data layers,
 used in :doc:`../examples/sledding` for adding snow data.
 
-See :meth:`~src.terrain.core.Terrain.compute_proximity_mask` for creating proximity zones,
+See :meth:`~terrain_maker.terrain.core.Terrain.compute_proximity_mask` for creating proximity zones,
 used in :doc:`../examples/combined_render` for park proximity zones.

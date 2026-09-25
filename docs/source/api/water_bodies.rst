@@ -21,13 +21,13 @@ See :doc:`../guides/flow-routing` for detailed information on water body routing
 Data Download
 -------------
 
-.. autofunction:: src.terrain.water_bodies.download_water_bodies
+.. autofunction:: terrain_maker.terrain.water_bodies.download_water_bodies
 
    Main download function that dispatches to NHD or HydroLAKES.
 
    Example::
 
-       from src.terrain.water_bodies import download_water_bodies
+       from terrain_maker.terrain.water_bodies import download_water_bodies
 
        geojson_path = download_water_bodies(
            bbox=(32.5, -117.5, 33.5, -116.5),  # south, west, north, east
@@ -36,25 +36,25 @@ Data Download
            min_area_km2=0.01,
        )
 
-.. autofunction:: src.terrain.water_bodies.download_nhd_water_bodies
+.. autofunction:: terrain_maker.terrain.water_bodies.download_nhd_water_bodies
 
    Download from National Hydrography Dataset (US only).
 
-.. autofunction:: src.terrain.water_bodies.download_hydrolakes
+.. autofunction:: terrain_maker.terrain.water_bodies.download_hydrolakes
 
    Download from HydroLAKES global database.
 
 Rasterization
 -------------
 
-.. autofunction:: src.terrain.water_bodies.rasterize_lakes_to_mask
+.. autofunction:: terrain_maker.terrain.water_bodies.rasterize_lakes_to_mask
 
    Convert GeoJSON lake polygons to a labeled raster mask.
 
    Example::
 
        import json
-       from src.terrain.water_bodies import rasterize_lakes_to_mask
+       from terrain_maker.terrain.water_bodies import rasterize_lakes_to_mask
 
        with open("lakes.geojson") as f:
            lakes_geojson = json.load(f)
@@ -69,21 +69,21 @@ Rasterization
 Outlet and Inlet Detection
 --------------------------
 
-.. autofunction:: src.terrain.water_bodies.identify_outlet_cells
+.. autofunction:: terrain_maker.terrain.water_bodies.identify_outlet_cells
 
    Identify outlet pixels from geographic outlet coordinates.
 
-.. autofunction:: src.terrain.water_bodies.identify_lake_outlets_from_nhd
+.. autofunction:: terrain_maker.terrain.water_bodies.identify_lake_outlets_from_nhd
 
    Extract outlet coordinates from NHD flowline data.
 
-.. autofunction:: src.terrain.water_bodies.identify_lake_inlets
+.. autofunction:: terrain_maker.terrain.water_bodies.identify_lake_inlets
 
    Find cells where streams flow INTO lakes.
 
    Example::
 
-       from src.terrain.water_bodies import identify_lake_inlets
+       from terrain_maker.terrain.water_bodies import identify_lake_inlets
 
        inlets_dict = identify_lake_inlets(
            lake_mask,
@@ -95,13 +95,13 @@ Outlet and Inlet Detection
 Flow Routing
 ------------
 
-.. autofunction:: src.terrain.water_bodies.create_lake_flow_routing
+.. autofunction:: terrain_maker.terrain.water_bodies.create_lake_flow_routing
 
    Create D8 flow directions for lake interiors using BFS from outlets.
 
    Example::
 
-       from src.terrain.water_bodies import create_lake_flow_routing
+       from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
        lake_flow = create_lake_flow_routing(
            lake_mask,
@@ -118,14 +118,14 @@ Usage with Flow Accumulation
 
 Complete workflow integrating water bodies with flow routing::
 
-    from src.terrain.flow_accumulation import (
+    from terrain_maker.terrain.flow_accumulation import (
         condition_dem_spec,
         compute_flow_direction,
         compute_drainage_area,
         detect_ocean_mask,
         detect_endorheic_basins,
     )
-    from src.terrain.water_bodies import (
+    from terrain_maker.terrain.water_bodies import (
         download_water_bodies,
         rasterize_lakes_to_mask,
         identify_outlet_cells,
@@ -184,5 +184,5 @@ See Also
 --------
 
 - :doc:`../guides/flow-routing` - Comprehensive guide including water body handling
-- :mod:`src.terrain.flow_accumulation` - Core flow routing functions
-- :mod:`src.terrain.water` - Water detection from slope analysis
+- :mod:`terrain_maker.terrain.flow_accumulation` - Core flow routing functions
+- :mod:`terrain_maker.terrain.water` - Water detection from slope analysis

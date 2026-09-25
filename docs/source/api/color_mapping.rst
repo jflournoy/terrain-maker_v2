@@ -19,7 +19,7 @@ Custom Colormaps
 
    Example::
 
-       from src.terrain.color_mapping import elevation_colormap
+       from terrain_maker.terrain.color_mapping import elevation_colormap
 
        colors = elevation_colormap(
            dem_data,
@@ -37,7 +37,7 @@ Custom Colormaps
 
    Access via the global ``boreal_mako_cmap`` variable::
 
-       from src.terrain.color_mapping import boreal_mako_cmap
+       from terrain_maker.terrain.color_mapping import boreal_mako_cmap
 
        # Use directly with matplotlib
        import matplotlib.pyplot as plt
@@ -46,7 +46,7 @@ Custom Colormaps
        # Or use by name
        colors = elevation_colormap(data, cmap_name='boreal_mako')
 
-.. autofunction:: src.terrain.color_mapping._build_boreal_mako_cmap
+.. autofunction:: terrain_maker.terrain.color_mapping._build_boreal_mako_cmap
 
    Build boreal_mako colormap with configurable purple ribbon position.
 
@@ -58,7 +58,7 @@ Custom Colormaps
 
    Example::
 
-       from src.terrain.color_mapping import _build_boreal_mako_cmap
+       from terrain_maker.terrain.color_mapping import _build_boreal_mako_cmap
 
        # Custom purple position
        custom_cmap = _build_boreal_mako_cmap(purple_position=0.7)
@@ -66,13 +66,13 @@ Custom Colormaps
 Color Mapping Functions
 ------------------------
 
-.. autofunction:: src.terrain.color_mapping.elevation_colormap
+.. autofunction:: terrain_maker.terrain.color_mapping.elevation_colormap
 
    Map elevation or score data to RGB colors using matplotlib colormaps.
 
    Example::
 
-       from src.terrain.color_mapping import elevation_colormap
+       from terrain_maker.terrain.color_mapping import elevation_colormap
 
        # Basic usage
        colors = elevation_colormap(dem_data, cmap_name='viridis')
@@ -94,13 +94,13 @@ Color Mapping Functions
    - Standard matplotlib: viridis, plasma, inferno, magma, cividis, terrain, gist_earth, turbo
    - Custom: michigan, boreal_mako
 
-.. autofunction:: src.terrain.color_mapping.slope_colormap
+.. autofunction:: terrain_maker.terrain.color_mapping.slope_colormap
 
    Map slope data to RGB colors.
 
    Example::
 
-       from src.terrain.color_mapping import slope_colormap
+       from terrain_maker.terrain.color_mapping import slope_colormap
 
        # Calculate slopes (example)
        dy, dx = np.gradient(dem_data)

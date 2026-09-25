@@ -13,7 +13,7 @@ transforms, mesh creation) can be cached and reused across different camera angl
 TerrainPipeline
 ---------------
 
-.. autoclass:: src.terrain.pipeline.TerrainPipeline
+.. autoclass:: terrain_maker.terrain.pipeline.TerrainPipeline
    :members:
    :undoc-members:
 
@@ -36,7 +36,7 @@ TerrainPipeline
 
    Example::
 
-       from src.terrain.pipeline import TerrainPipeline
+       from terrain_maker.terrain.pipeline import TerrainPipeline
 
        # Create pipeline
        pipeline = TerrainPipeline(
@@ -88,7 +88,7 @@ TerrainPipeline
 TaskState
 ---------
 
-.. autoclass:: src.terrain.pipeline.TaskState
+.. autoclass:: terrain_maker.terrain.pipeline.TaskState
    :members:
    :undoc-members:
 

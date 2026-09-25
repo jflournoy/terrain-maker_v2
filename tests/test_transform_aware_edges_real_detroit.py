@@ -51,9 +51,9 @@ class TestTransformAwareEdgesRealDetroit:
 
     def test_real_detroit_wgs84_to_utm_reprojection(self, detroit_synthetic_dem):
         """Test full Detroit pipeline: WGS84 → UTM reprojection + flip + downsample."""
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
 
         dem, transform = detroit_synthetic_dem
 
@@ -121,8 +121,8 @@ class TestTransformAwareEdgesRealDetroit:
 
     def test_real_detroit_mesh_creation_with_boundary_extension(self, detroit_synthetic_dem):
         """Test that real Detroit transforms work with boundary extension."""
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
 
         dem, transform = detroit_synthetic_dem
 
@@ -180,8 +180,8 @@ class TestTransformAwareEdgesRealDetroit:
         WGS84 to UTM reprojection at Michigan latitude causes ~16% linear distortion:
         - 200×200 WGS84 pixels → ~232×174 UTM pixels
         """
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
 
         dem, transform = detroit_synthetic_dem
         original_shape = dem.shape
@@ -216,9 +216,9 @@ class TestTransformAwareEdgesRealDetroit:
         Legacy approach (sampling from downsampled grid) fails with NaN margins.
         Transform-aware approach (sampling from original) succeeds even with large downsampling.
         """
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
-        from src.terrain.mesh_operations import (
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.mesh_operations import (
             generate_transform_aware_rectangle_edges,
             diagnose_rectangle_edge_coverage,
         )
@@ -277,9 +277,9 @@ class TestTransformAwareEdgesRealDetroit:
 
     def test_real_detroit_dense_boundary_sampling(self, detroit_synthetic_dem):
         """Verify dense boundary sampling (0.33 pixels) for smooth extrusion."""
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
-        from src.terrain.mesh_operations import generate_transform_aware_rectangle_edges
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.mesh_operations import generate_transform_aware_rectangle_edges
 
         dem, transform = detroit_synthetic_dem
 
@@ -319,8 +319,8 @@ class TestTransformAwareEdgesRealDetroit:
 
     def test_real_detroit_coordinate_transformation_chain(self, detroit_synthetic_dem):
         """Verify the complete coordinate transformation chain: WGS84 → UTM → Blender."""
-        from src.terrain.core import Terrain
-        from src.terrain.transforms import cached_reproject, flip_raster
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.transforms import cached_reproject, flip_raster
 
         dem, transform = detroit_synthetic_dem
 

@@ -16,8 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EMIT = """
 import numpy as np
 from rasterio import Affine
-from src.terrain.core import Terrain
-from src.terrain.visualization.line_layers import expand_lines_variable_width_sparse
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.visualization.line_layers import expand_lines_variable_width_sparse
 Terrain(np.ones((5, 5), dtype=np.float32), Affine.identity())
 mask = np.zeros((20, 20), dtype=bool)
 mask[10, 5:15] = True
@@ -48,6 +48,6 @@ def test_messages_not_duplicated_with_basic_config():
         "logging.basicConfig(level=logging.INFO, format='APP %(name)s: %(message)s')\n"
     )
     assert output.count("Initializing Terrain...") == 1
-    assert "APP src.terrain.core: Initializing Terrain..." in output
+    assert "APP terrain_maker.terrain.core: Initializing Terrain..." in output
     assert output.count("Sparse expansion:") == 1
-    assert "APP src.terrain.visualization.line_layers: " in output
+    assert "APP terrain_maker.terrain.visualization.line_layers: " in output

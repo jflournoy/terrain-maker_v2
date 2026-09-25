@@ -14,7 +14,7 @@ The automated SRTM downloader is a work in progress. Here are current options fo
 6. Use with terrain-maker:
 
 ```python
-from src.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.data_loading import load_dem_files
 
 # Load your downloaded GeoTIFF
 dem, transform = load_dem_files("path/to/downloaded_data", pattern="*.tif")
@@ -31,7 +31,7 @@ dem, transform = load_dem_files("path/to/downloaded_data", pattern="*.tif")
 7. Use with terrain-maker:
 
 ```python
-from src.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.data_loading import load_dem_files
 
 # Load HGT files
 dem, transform = load_dem_files("data/srtm_tiles", pattern="*.hgt")
@@ -69,8 +69,8 @@ For San Diego County, you need these tiles:
 Download from OpenTopography or NASA Earthdata, then:
 
 ```python
-from src.terrain.core import Terrain
-from src.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.data_loading import load_dem_files
 
 # Load the downloaded tiles
 dem, transform = load_dem_files("data/san_diego_srtm")

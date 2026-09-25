@@ -10,7 +10,7 @@ import rasterio
 from rasterio import Affine
 from pathlib import Path
 import tempfile
-from src.terrain.core import load_dem_files, Terrain, scale_elevation, elevation_colormap
+from terrain_maker.terrain.core import load_dem_files, Terrain, scale_elevation, elevation_colormap
 
 # Check if Blender is available
 try:
@@ -906,7 +906,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_defaults_to_perspective(self):
         """setup_camera_and_light should default to perspective camera."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
             camera_angle=(0, 0, 0), camera_location=(0, 0, 0), scale=10.0, focal_length=50
@@ -916,7 +916,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_accepts_camera_type_perspective(self):
         """setup_camera_and_light should accept camera_type='PERSP'."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
             camera_angle=(0, 0, 0),
@@ -931,7 +931,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_accepts_camera_type_ortho(self):
         """setup_camera_and_light should accept camera_type='ORTHO' for orthographic."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
             camera_angle=(0, 0, 0), camera_location=(0, 0, 0), scale=20.0, camera_type="ORTHO"
@@ -942,7 +942,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_ortho_ignores_focal_length(self):
         """setup_camera_and_light with ORTHO should ignore focal_length parameter."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
             camera_angle=(0, 0, 0),
@@ -957,7 +957,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_invalid_camera_type_raises_error(self):
         """setup_camera_and_light should raise ValueError for invalid camera_type."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         with pytest.raises(ValueError, match="camera_type must be 'PERSP' or 'ORTHO'"):
             setup_camera_and_light(
@@ -966,7 +966,7 @@ class TestCameraSetup:
 
     def test_setup_camera_and_light_perspective_uses_focal_length(self):
         """setup_camera_and_light with perspective should apply focal_length correctly."""
-        from src.terrain.core import setup_camera_and_light
+        from terrain_maker.terrain.core import setup_camera_and_light
 
         camera, light = setup_camera_and_light(
             camera_angle=(0, 0, 0),

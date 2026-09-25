@@ -10,7 +10,7 @@ operations (``foreach_set``, ``foreach_get``) for ~100x faster vertex manipulati
 Vertex Colors
 -------------
 
-.. autofunction:: src.terrain.blender_integration.apply_vertex_colors
+.. autofunction:: terrain_maker.terrain.blender_integration.apply_vertex_colors
 
    Apply colors to mesh vertices with automatic grid-to-vertex mapping.
    Used in :doc:`../examples/combined_render`.
@@ -33,7 +33,7 @@ Vertex Colors
 
    Example::
 
-       from src.terrain.blender_integration import apply_vertex_colors
+       from terrain_maker.terrain.blender_integration import apply_vertex_colors
 
        # Vertex-space colors (simple)
        apply_vertex_colors(mesh_obj, vertex_colors)
@@ -55,7 +55,7 @@ Vertex Colors
            n_surface_vertices=len(terrain.y_valid)
        )
 
-.. autofunction:: src.terrain.blender_integration.apply_ring_colors
+.. autofunction:: terrain_maker.terrain.blender_integration.apply_ring_colors
 
    Apply solid color to ring/boundary vertices.
 
@@ -70,7 +70,7 @@ Vertex Colors
            ring_color=(0.5, 0.48, 0.45)  # Clay
        )
 
-.. autofunction:: src.terrain.blender_integration.apply_road_mask
+.. autofunction:: terrain_maker.terrain.blender_integration.apply_road_mask
 
    Apply road mask to color road vertices.
 
@@ -87,7 +87,7 @@ Vertex Colors
 Vertex Positions
 ----------------
 
-.. autofunction:: src.terrain.blender_integration.apply_vertex_positions
+.. autofunction:: terrain_maker.terrain.blender_integration.apply_vertex_positions
 
    Update mesh vertex positions in place.
 
@@ -104,12 +104,12 @@ Vertex Positions
 Mesh Creation
 -------------
 
-.. autofunction:: src.terrain.blender_integration.create_blender_mesh
+.. autofunction:: terrain_maker.terrain.blender_integration.create_blender_mesh
 
    Create Blender mesh object from vertices and faces.
 
    Low-level mesh creation. Most users should use
-   :meth:`~src.terrain.core.Terrain.create_mesh` instead.
+   :meth:`~terrain_maker.terrain.core.Terrain.create_mesh` instead.
 
    Example::
 

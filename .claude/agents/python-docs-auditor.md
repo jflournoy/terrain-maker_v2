@@ -201,14 +201,14 @@ Create `.claude/agents/reports/python-docs-audit-[date].md`:
 ## Critical Issues (Missing Documentation)
 
 ### Undocumented Functions
-1. **Module**: `src/terrain/core.py`
+1. **Module**: `src/terrain_maker/terrain/core.py`
    **Function**: `Terrain.__init__()`
    **Type**: Class constructor
    **Issue**: No docstring
    **Impact**: Users cannot understand initialization requirements
    **Action**: Add comprehensive docstring with Parameters and Returns
 
-2. **Module**: `src/terrain/core.py`
+2. **Module**: `src/terrain_maker/terrain/core.py`
    **Function**: `load_dem_files()`
    **Type**: Public API function
    **Issue**: No docstring
@@ -228,8 +228,8 @@ Create `.claude/agents/reports/python-docs-audit-[date].md`:
 ### By Module
 | Module | Functions | Documented | Score |
 |--------|-----------|------------|-------|
-| src/terrain/core.py | 35 | 20 | 57/100 |
-| src/utils/helpers.py | 5 | 4 | 80/100 |
+| src/terrain_maker/terrain/core.py | 35 | 20 | 57/100 |
+| src/terrain_maker/utils/helpers.py | 5 | 4 | 80/100 |
 
 ## Parameter Documentation Issues
 
@@ -237,18 +237,18 @@ Create `.claude/agents/reports/python-docs-audit-[date].md`:
 1. **Function**: `create_mesh()`
    **Issue**: Parameter `boundary_extension` documented but constraint missing
    **Recommendation**: Add note about boolean requirement and behavior difference
-   **Location**: src/terrain/core.py:XXX
+   **Location**: src/terrain_maker/terrain/core.py:XXX
 
 2. **Function**: `reproject_raster()`
    **Issue**: `src_crs` and `dst_crs` documented but format not specified
    **Recommendation**: Clarify EPSG format with example (e.g., 'EPSG:4326')
-   **Location**: src/terrain/core.py:XXX
+   **Location**: src/terrain_maker/terrain/core.py:XXX
 
 ### Type Documentation Gaps
 1. **Function**: `add_data_layer()`
    **Issue**: `data` parameter - array shape not documented
    **Recommendation**: Specify "np.ndarray, shape (height, width)" in docstring
-   **Location**: src/terrain/core.py:XXX
+   **Location**: src/terrain_maker/terrain/core.py:XXX
 
 ## Return Value Documentation
 
@@ -256,7 +256,7 @@ Create `.claude/agents/reports/python-docs-audit-[date].md`:
 1. **Function**: `load_dem_files()`
    **Issue**: Returns documented but array structure not explained
    **Recommendation**: Document return as "(np.ndarray, Affine) tuple with DEM data and transform"
-   **Location**: src/terrain/core.py:XXX
+   **Location**: src/terrain_maker/terrain/core.py:XXX
 
 ### Missing Return Type Documentation
 1. **Function**: `apply_transforms()`

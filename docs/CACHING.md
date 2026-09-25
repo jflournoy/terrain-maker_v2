@@ -10,7 +10,7 @@ Terrain Maker uses a **two-tier internal caching system** to optimize performanc
 ### DEMCache
 Caches loaded and merged DEM (Digital Elevation Model) data to avoid reloading from disk.
 
-**Location:** `src/terrain/cache.py`
+**Location:** `src/terrain_maker/terrain/cache.py`
 
 **How it works:**
 - Uses SHA256 hashing of source file metadata (paths + modification times)
@@ -19,7 +19,7 @@ Caches loaded and merged DEM (Digital Elevation Model) data to avoid reloading f
 
 **Example:**
 ```python
-from src.terrain.cache import DEMCache
+from terrain_maker.terrain.cache import DEMCache
 from pathlib import Path
 
 cache = DEMCache(cache_dir=Path(".dem_cache"), enabled=True)
@@ -50,7 +50,7 @@ else:
 ### MeshCache
 Caches generated 3D mesh files to avoid recomputing Blender meshes.
 
-**Location:** `src/terrain/mesh_cache.py`
+**Location:** `src/terrain_maker/terrain/mesh_cache.py`
 
 **How it works:**
 - Uses SHA256 hashing of DEM hash + mesh parameters
@@ -66,7 +66,7 @@ Caches generated 3D mesh files to avoid recomputing Blender meshes.
 ### GriddedDataLoader
 Generic loader for external gridded datasets (SNODAS, temperature, precipitation, etc.) with pipeline-based caching.
 
-**Location:** `src/terrain/gridded_data.py` (class: `GriddedDataLoader`)
+**Location:** `src/terrain_maker/terrain/gridded_data.py` (class: `GriddedDataLoader`)
 
 **How it works:**
 - User defines processing pipeline as sequence of (name, function, kwargs) tuples
@@ -77,7 +77,7 @@ Generic loader for external gridded datasets (SNODAS, temperature, precipitation
 **Pipeline Caching Example:**
 
 ```python
-from src.terrain.gridded_data import GriddedDataLoader
+from terrain_maker.terrain.gridded_data import GriddedDataLoader
 
 # Define processing steps
 def load_data(source, extent, target_shape):
@@ -211,8 +211,8 @@ rm -rf .gridded_data_cache
 ## Further Reading
 
 - **Cache implementations:**
-  - `src/terrain/cache.py` - DEMCache for DEM caching
-  - `src/terrain/mesh_cache.py` - MeshCache for 3D mesh caching
-  - `src/terrain/gridded_data.py` - GriddedDataLoader with pipeline caching
+  - `src/terrain_maker/terrain/cache.py` - DEMCache for DEM caching
+  - `src/terrain_maker/terrain/mesh_cache.py` - MeshCache for 3D mesh caching
+  - `src/terrain_maker/terrain/gridded_data.py` - GriddedDataLoader with pipeline caching
 
 - **Example usage:** See `examples/detroit_snow_sledding.py` for a real-world example using GriddedDataLoader for SNODAS snow data processing

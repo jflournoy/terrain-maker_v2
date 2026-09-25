@@ -8,7 +8,7 @@ Works for any linear features: streams, roads, trails, power lines, etc.
 import numpy as np
 import pytest
 
-from src.terrain.visualization.line_layers import (
+from terrain_maker.terrain.visualization.line_layers import (
     get_metric_data,
     create_line_layer,
     expand_lines_variable_width,

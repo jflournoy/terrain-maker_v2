@@ -15,7 +15,7 @@ import argparse
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
-from src.terrain.flow_accumulation import flow_accumulation
+from terrain_maker.terrain.flow_accumulation import flow_accumulation
 
 
 def plot_drainage_comparison(results, output_dir):

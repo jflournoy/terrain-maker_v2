@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 from pathlib import Path
 
-from src.terrain.visualization.bounds_pipeline import (
+from terrain_maker.terrain.visualization.bounds_pipeline import (
     TransformationPipeline,
     EdgeTransformer,
     SimpleAffine,

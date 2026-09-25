@@ -10,7 +10,7 @@ import tempfile
 import shutil
 from pathlib import Path
 import numpy as np
-from src.terrain.mesh_cache import MeshCache
+from terrain_maker.terrain.mesh_cache import MeshCache
 
 
 class TestMeshCacheHashComputation(unittest.TestCase):

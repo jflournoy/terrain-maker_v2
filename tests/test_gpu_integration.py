@@ -14,8 +14,8 @@ class TestWaterSlopeIntegration:
 
     def test_calculate_slope_uses_gpu_backend(self):
         """Water module's _calculate_slope should use GPU backend."""
-        from src.terrain.water import _calculate_slope
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.water import _calculate_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         # Create test DEM
         dem = np.random.rand(100, 100).astype(np.float32) * 1000
@@ -28,7 +28,7 @@ class TestWaterSlopeIntegration:
 
     def test_identify_water_by_slope_still_works(self):
         """Water detection should still work after GPU integration."""
-        from src.terrain.water import identify_water_by_slope
+        from terrain_maker.terrain.water import identify_water_by_slope
 
         # Create DEM with flat water-like region
         dem = np.random.rand(100, 100).astype(np.float32) * 100
@@ -42,7 +42,7 @@ class TestWaterSlopeIntegration:
 
     def test_water_slope_handles_nan(self):
         """Water slope calculation should handle NaN after GPU integration."""
-        from src.terrain.water import _calculate_slope
+        from terrain_maker.terrain.water import _calculate_slope
 
         dem = np.random.rand(50, 50).astype(np.float32) * 1000
         dem[20:25, 20:25] = np.nan
@@ -60,8 +60,8 @@ class TestAdvancedVizSlopeIntegration:
 
     def test_horn_slope_uses_gpu_backend(self):
         """advanced_viz.horn_slope should use GPU backend."""
-        from src.terrain.advanced_viz import horn_slope
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.advanced_viz import horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         dem = np.random.rand(100, 100).astype(np.float32) * 1000
 
@@ -73,7 +73,7 @@ class TestAdvancedVizSlopeIntegration:
 
     def test_horn_slope_exported_from_terrain(self):
         """horn_slope should be importable from terrain package."""
-        from src.terrain import horn_slope
+        from terrain_maker.terrain import horn_slope
 
         assert callable(horn_slope)
 
@@ -88,7 +88,7 @@ class TestRoadGaussianIntegration:
 
     def test_smooth_road_mask_uses_gpu(self):
         """Road mask smoothing should use GPU Gaussian blur."""
-        from src.terrain.roads import smooth_road_mask
+        from terrain_maker.terrain.roads import smooth_road_mask
 
         # Create binary road mask
         mask = np.zeros((100, 100), dtype=np.float32)
@@ -105,8 +105,8 @@ class TestRoadGaussianIntegration:
 
     def test_smooth_road_mask_matches_gpu(self):
         """Road mask smoothing should match GPU Gaussian blur results."""
-        from src.terrain.roads import smooth_road_mask
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.roads import smooth_road_mask
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         mask = np.zeros((100, 100), dtype=np.float32)
         mask[45:55, 20:80] = 1.0
@@ -133,7 +133,7 @@ class TestTransformsGpuIntegration:
 
     def test_despeckle_scores_removes_noise(self):
         """despeckle_scores should remove isolated speckles via median filter."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         # Create score data with isolated speckles
         np.random.seed(42)
@@ -152,7 +152,7 @@ class TestTransformsGpuIntegration:
 
     def test_smooth_score_data_preserves_edges(self):
         """smooth_score_data should preserve edges (bilateral filter)."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Create score data with sharp edge
         score = np.zeros((100, 100), dtype=np.float32)

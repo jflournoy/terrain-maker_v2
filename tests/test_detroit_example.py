@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 from pathlib import Path
 from affine import Affine
-from src.terrain.core import Terrain, load_dem_files, clear_scene
-from src.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain, load_dem_files, clear_scene
+from terrain_maker.terrain.color_mapping import elevation_colormap
 
 # Check if Blender is available
 try:

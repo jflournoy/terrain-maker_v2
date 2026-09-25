@@ -59,7 +59,7 @@ DEFAULT_OUTPUT = ROOT / "docs" / "images" / "xc_skiing" / "temporal_analysis.png
 # Winter season months (October = 10 through May = 5)
 SEASON_MONTHS = frozenset({10, 11, 12, 1, 2, 3, 4, 5})
 
-# Trapezoidal depth score thresholds (mm) – from src/scoring/configs/xc_skiing.py
+# Trapezoidal depth score thresholds (mm) – from src/terrain_maker/scoring/configs/xc_skiing.py
 RAMP_LOW = 50      # minimum usable depth
 SWEET_LOW = 100    # ideal range starts
 SWEET_HIGH = 400   # ideal range ends

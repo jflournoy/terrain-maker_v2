@@ -53,7 +53,7 @@ class TestTraceFlowsToLake:
 
     def test_path_reaching_terminal_returns_false(self):
         """Flow path that ends at terminal cell (flow_dir=0) is safe."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
         # Path: (5,5) → South(64) → (6,5) → South(64) → (7,5) → terminal
@@ -69,7 +69,7 @@ class TestTraceFlowsToLake:
 
     def test_path_reentering_lake_returns_true(self):
         """Flow path that re-enters the source lake is a cycle."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
         # Path: (5,5) → West(16) → (5,4) → North(4) → (4,4) = lake cell!
@@ -85,7 +85,7 @@ class TestTraceFlowsToLake:
 
     def test_path_leaving_grid_returns_false(self):
         """Flow path that exits the grid boundary is safe."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
         # Start at edge, flow off-grid
@@ -99,7 +99,7 @@ class TestTraceFlowsToLake:
 
     def test_path_entering_different_lake_returns_false(self):
         """Flow path entering a DIFFERENT lake (not source) is not a cycle."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
         # Path: (5,5) → South → (6,5) → South → (7,5) which is lake 2
@@ -116,7 +116,7 @@ class TestTraceFlowsToLake:
 
     def test_max_steps_limit_returns_false(self):
         """If max_steps reached without re-entering lake, assume safe."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         # Create a long looping path that never re-enters the lake
         # but also never terminates (cycles among non-lake cells)
@@ -135,7 +135,7 @@ class TestTraceFlowsToLake:
 
     def test_immediate_lake_reentry_in_one_step(self):
         """Cell that flows directly back into the lake in one step."""
-        from src.terrain.water_bodies import _trace_flows_to_lake
+        from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
         flow_dir[5, 6] = 16  # West → (5,5) which is lake
@@ -159,7 +159,7 @@ class TestIdentifyLakeInlets:
 
     def test_finds_inlets_on_uphill_boundary(self):
         """Boundary cells adjacent to lower terrain are inlets."""
-        from src.terrain.water_bodies import identify_lake_inlets
+        from terrain_maker.terrain.water_bodies import identify_lake_inlets
 
         # Terrain slopes down toward lake from the north
         dem = np.zeros((10, 10))
@@ -183,7 +183,7 @@ class TestIdentifyLakeInlets:
 
     def test_excludes_outlet_cells(self):
         """Cells marked as outlets should not be identified as inlets."""
-        from src.terrain.water_bodies import identify_lake_inlets
+        from terrain_maker.terrain.water_bodies import identify_lake_inlets
 
         dem = np.zeros((10, 10))
         for r in range(10):
@@ -211,7 +211,7 @@ class TestIdentifyLakeInlets:
         In a bowl, all neighbors are HIGHER, so no inlets should be found...
         unless the tolerance catches some.
         """
-        from src.terrain.water_bodies import identify_lake_inlets
+        from terrain_maker.terrain.water_bodies import identify_lake_inlets
 
         # Bowl: elevation increases away from center
         dem = np.zeros((15, 15))
@@ -237,7 +237,7 @@ class TestIdentifyLakeInlets:
 
     def test_multiple_lakes_get_separate_inlets(self):
         """Each lake should have its own inlet list."""
-        from src.terrain.water_bodies import identify_lake_inlets
+        from terrain_maker.terrain.water_bodies import identify_lake_inlets
 
         dem = np.zeros((20, 20))
         for r in range(20):
@@ -308,11 +308,11 @@ class TestCascadingLakes:
 
     def test_both_outlets_get_downstream_directions(self):
         """Both lake outlets should connect to downstream terrain."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem, lake_mask, outlet_mask, basin_mask = self._make_cascading_lakes()
 
@@ -330,11 +330,11 @@ class TestCascadingLakes:
 
     def test_no_cycles_in_cascading_network(self):
         """The full flow network with cascading lakes must be acyclic."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )
@@ -358,11 +358,11 @@ class TestCascadingLakes:
 
         Lake 2 receives drainage from Lake 1 + inter-lake terrain + its own area.
         """
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )
@@ -389,11 +389,11 @@ class TestCascadingLakes:
 
     def test_rainfall_accumulates_through_lake_chain(self):
         """Upstream rainfall should propagate through both lakes."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_upstream_rainfall,
         )
@@ -423,11 +423,11 @@ class TestCascadingLakes:
 
     def test_flow_path_connects_lake1_to_lake2(self):
         """Tracing flow from Lake 1 outlet should eventually reach Lake 2."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem, lake_mask, outlet_mask, basin_mask = self._make_cascading_lakes()
 
@@ -466,8 +466,8 @@ class TestAdjacentLakes:
 
     def test_adjacent_lakes_have_independent_routing(self):
         """Two lakes sharing a boundary should route independently."""
-        from src.terrain.water_bodies import create_lake_flow_routing
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem = np.zeros((15, 15))
         for r in range(15):
@@ -506,7 +506,7 @@ class TestAdjacentLakes:
 
     def test_adjacent_lakes_no_cross_contamination(self):
         """Flow from Lake 1 cells should only reach Lake 1's outlet, not Lake 2's."""
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
         dem = np.zeros((15, 15))
         for r in range(15):
@@ -548,12 +548,12 @@ class TestSpillwayOutletIntegration:
 
     def test_spillway_detected_then_used_as_outlet(self):
         """End-to-end: spillway detection → outlet routing → drainage."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             find_lake_spillways,
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )
@@ -616,11 +616,11 @@ class TestFlowNetworkIntegrity:
         """Every cell in the flow network should eventually reach a terminal
         cell (flow_dir=0) or the grid boundary. No infinite loops.
         """
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         # Random-ish terrain with a lake
         np.random.seed(42)
@@ -666,11 +666,11 @@ class TestFlowNetworkIntegrity:
         """Cell immediately downstream of any outlet should have higher
         drainage than the outlet itself (it receives the outlet's flow).
         """
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )

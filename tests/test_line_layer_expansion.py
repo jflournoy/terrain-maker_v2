@@ -7,7 +7,7 @@ not from their own location (which is often 0).
 
 import numpy as np
 import pytest
-from src.terrain.visualization.line_layers import create_line_layer
+from terrain_maker.terrain.visualization.line_layers import create_line_layer
 
 
 def test_variable_width_propagates_metric_values():

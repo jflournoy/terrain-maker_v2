@@ -19,7 +19,7 @@ Usage Examples
 
 Download by bounding box::
 
-    from src.terrain.dem_downloader import download_dem_by_bbox
+    from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
 
     bbox = (42.0, -83.5, 42.5, -83.0)  # Detroit area
     files = download_dem_by_bbox(
@@ -29,7 +29,7 @@ Download by bounding box::
 
 Download by place name::
 
-    from src.terrain.dem_downloader import download_dem_by_place_name
+    from terrain_maker.terrain.dem_downloader import download_dem_by_place_name
 
     files = download_dem_by_place_name(
         place_name="Detroit, MI",
@@ -39,7 +39,7 @@ Download by place name::
 API Reference
 -------------
 
-.. automodule:: src.terrain.dem_downloader
+.. automodule:: terrain_maker.terrain.dem_downloader
    :members:
    :undoc-members:
    :show-inheritance:

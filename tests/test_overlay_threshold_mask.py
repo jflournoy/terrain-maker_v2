@@ -8,7 +8,7 @@ includes pixels with value=0 when using >= comparison.
 import numpy as np
 import pytest
 from rasterio.transform import Affine
-from src.terrain import Terrain
+from terrain_maker.terrain import Terrain
 
 
 def test_overlay_threshold_zero_excludes_zero_pixels():

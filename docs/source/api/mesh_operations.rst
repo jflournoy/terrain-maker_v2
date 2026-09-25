@@ -11,7 +11,7 @@ Optimized with Numba JIT compilation for performance-critical loops.
 Core Mesh Generation
 ---------------------
 
-.. autofunction:: src.terrain.mesh_operations.generate_vertex_positions
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_vertex_positions
 
    Generate 3D vertex positions from DEM data.
 
@@ -19,7 +19,7 @@ Core Mesh Generation
 
    Example::
 
-       from src.terrain.mesh_operations import generate_vertex_positions
+       from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
        vertices = generate_vertex_positions(
            dem_data,
@@ -28,7 +28,7 @@ Core Mesh Generation
            height_scale=30.0
        )
 
-.. autofunction:: src.terrain.mesh_operations.generate_faces
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_faces
 
    Generate triangle faces for mesh with batch processing.
 
@@ -36,7 +36,7 @@ Core Mesh Generation
 
    Example::
 
-       from src.terrain.mesh_operations import generate_faces
+       from terrain_maker.terrain.mesh_operations import generate_faces
 
        faces = generate_faces(
            height=dem.shape[0],
@@ -45,7 +45,7 @@ Core Mesh Generation
            batch_size=10000
        )
 
-.. autofunction:: src.terrain.mesh_operations._generate_faces_numba
+.. autofunction:: terrain_maker.terrain.mesh_operations._generate_faces_numba
 
    Numba-accelerated face generation (internal).
 
@@ -54,7 +54,7 @@ Core Mesh Generation
 Boundary Detection
 ------------------
 
-.. autofunction:: src.terrain.mesh_operations.find_boundary_points
+.. autofunction:: terrain_maker.terrain.mesh_operations.find_boundary_points
 
    Find boundary points using morphological operations.
 
@@ -62,7 +62,7 @@ Boundary Detection
 
    Example::
 
-       from src.terrain.mesh_operations import find_boundary_points
+       from terrain_maker.terrain.mesh_operations import find_boundary_points
 
        valid_mask = ~np.isnan(dem_data)
        boundary = find_boundary_points(valid_mask)
@@ -71,7 +71,7 @@ Boundary Detection
 Boundary Extension
 ------------------
 
-.. autofunction:: src.terrain.mesh_operations.create_boundary_extension
+.. autofunction:: terrain_maker.terrain.mesh_operations.create_boundary_extension
 
    Create two-tier edge extrusion for terrain mesh.
 
@@ -84,7 +84,7 @@ Boundary Extension
 
    Example::
 
-       from src.terrain.mesh_operations import create_boundary_extension
+       from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
        # Basic two-tier edge
        edge_data = create_boundary_extension(
@@ -118,7 +118,7 @@ Boundary Extension
 Catmull-Rom Curve Fitting
 --------------------------
 
-.. autofunction:: src.terrain.mesh_operations.catmull_rom_curve
+.. autofunction:: terrain_maker.terrain.mesh_operations.catmull_rom_curve
 
    Evaluate Catmull-Rom spline at parameter t.
 
@@ -128,7 +128,7 @@ Catmull-Rom Curve Fitting
    - C¹ continuous (smooth first derivative)
    - Local control (changing p1/p2 only affects nearby curve)
 
-.. autofunction:: src.terrain.mesh_operations.fit_catmull_rom_boundary_curve
+.. autofunction:: terrain_maker.terrain.mesh_operations.fit_catmull_rom_boundary_curve
 
    Fit smooth Catmull-Rom curve through boundary points.
 
@@ -136,7 +136,7 @@ Catmull-Rom Curve Fitting
 
    Example::
 
-       from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+       from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
        # Smooth boundary with 20 points per segment
        smooth_boundary = fit_catmull_rom_boundary_curve(
@@ -148,46 +148,46 @@ Catmull-Rom Curve Fitting
 Boundary Processing
 -------------------
 
-.. autofunction:: src.terrain.mesh_operations.smooth_boundary_points
+.. autofunction:: terrain_maker.terrain.mesh_operations.smooth_boundary_points
 
    Apply moving average smoothing to boundary.
 
-.. autofunction:: src.terrain.mesh_operations.deduplicate_boundary_points
+.. autofunction:: terrain_maker.terrain.mesh_operations.deduplicate_boundary_points
 
    Remove duplicate consecutive points.
 
-.. autofunction:: src.terrain.mesh_operations.sort_boundary_points_angular
+.. autofunction:: terrain_maker.terrain.mesh_operations.sort_boundary_points_angular
 
    Sort boundary points by angular position (for closed loops).
 
-.. autofunction:: src.terrain.mesh_operations.sort_boundary_points
+.. autofunction:: terrain_maker.terrain.mesh_operations.sort_boundary_points
 
    Sort boundary points for ordered traversal.
 
 Rectangle Edge Generation
 --------------------------
 
-.. autofunction:: src.terrain.mesh_operations.generate_rectangle_edge_pixels
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_rectangle_edge_pixels
 
    Generate edge pixels using rectangle sampling (fast alternative to morphological).
 
    **Performance:** ~150x faster than morphological edge detection.
 
-.. autofunction:: src.terrain.mesh_operations.generate_rectangle_edge_vertices
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_rectangle_edge_vertices
 
    Generate edge vertices from rectangle edge pixels.
 
-.. autofunction:: src.terrain.mesh_operations.generate_transform_aware_rectangle_edges
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_transform_aware_rectangle_edges
 
    Generate rectangle edges with geographic transform awareness.
 
-.. autofunction:: src.terrain.mesh_operations.generate_transform_aware_rectangle_edges_fractional
+.. autofunction:: terrain_maker.terrain.mesh_operations.generate_transform_aware_rectangle_edges_fractional
 
    Generate fractional rectangle edges preserving projection curvature.
 
    **Fractional edges:** Preserve subtle curves from WGS84→UTM transformation.
 
-.. autofunction:: src.terrain.mesh_operations.diagnose_rectangle_edge_coverage
+.. autofunction:: terrain_maker.terrain.mesh_operations.diagnose_rectangle_edge_coverage
 
    Diagnostic function to analyze rectangle edge coverage.
 

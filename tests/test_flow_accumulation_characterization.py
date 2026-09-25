@@ -13,7 +13,7 @@ import pytest
 import rasterio
 from rasterio import Affine
 
-from src.terrain.flow_accumulation import flow_accumulation
+from terrain_maker.terrain.flow_accumulation import flow_accumulation
 from tests.test_flow_with_basins_characterization import TRANSFORM, _landscape
 
 

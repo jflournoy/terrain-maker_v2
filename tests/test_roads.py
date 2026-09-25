@@ -26,7 +26,7 @@ import sys
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.roads import (
+from terrain_maker.terrain.roads import (
     # Road fetching (OSM API)
     build_overpass_query,
     _compute_bbox_hash as compute_bbox_hash,
@@ -183,7 +183,7 @@ class TestCaching:
 
     def test_cache_save_and_load(self, temp_cache_dir, sample_bbox, sample_geojson):
         """Test saving and loading cache."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             # Save cache
             cache_road_data(sample_bbox, sample_geojson)
 
@@ -203,13 +203,13 @@ class TestCaching:
 
     def test_cache_load_nonexistent(self, temp_cache_dir, sample_bbox):
         """Test loading nonexistent cache returns None."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             result = load_cached_roads(sample_bbox)
             assert result is None
 
     def test_cache_expiration(self, temp_cache_dir, sample_bbox, sample_geojson):
         """Test that expired cache is not loaded."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             # Save cache
             cache_road_data(sample_bbox, sample_geojson)
 
@@ -233,7 +233,7 @@ class TestCaching:
 
     def test_cache_metadata_content(self, temp_cache_dir, sample_bbox, sample_geojson):
         """Test that metadata contains correct information."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             cache_road_data(sample_bbox, sample_geojson)
 
             bbox_hash = compute_bbox_hash(sample_bbox)
@@ -425,12 +425,12 @@ class TestMockDataFallback:
 
     def test_get_roads_with_cache(self, sample_bbox, sample_geojson, temp_cache_dir):
         """Test get_roads function uses cache."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             # Pre-populate cache
             cache_road_data(sample_bbox, sample_geojson)
 
             # Call get_roads - should use cache, not fetch API
-            with patch('src.terrain.roads._fetch_roads_from_osm') as mock_fetch:
+            with patch('terrain_maker.terrain.roads._fetch_roads_from_osm') as mock_fetch:
                 result = get_roads(sample_bbox)
 
                 # fetch_roads_from_osm should not be called
@@ -440,12 +440,12 @@ class TestMockDataFallback:
 
     def test_get_roads_force_refresh(self, sample_bbox, sample_geojson, temp_cache_dir):
         """Test force_refresh bypasses cache."""
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
             # Pre-populate cache
             cache_road_data(sample_bbox, sample_geojson)
 
             # Call with force_refresh=True
-            with patch('src.terrain.roads._fetch_roads_from_osm', return_value=sample_geojson) as mock_fetch:
+            with patch('terrain_maker.terrain.roads._fetch_roads_from_osm', return_value=sample_geojson) as mock_fetch:
                 result = get_roads(sample_bbox, force_refresh=True)
 
                 # Should call fetch despite cache existing
@@ -463,7 +463,7 @@ class TestAPIIntegration:
 
     def test_fetch_handles_timeout(self, sample_bbox):
         """Test that timeout errors are handled gracefully."""
-        with patch('src.terrain.roads.requests.post') as mock_post:
+        with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             import requests
             mock_post.side_effect = requests.exceptions.Timeout()
 
@@ -472,7 +472,7 @@ class TestAPIIntegration:
 
     def test_fetch_handles_http_error(self, sample_bbox):
         """Test that HTTP errors are handled gracefully."""
-        with patch('src.terrain.roads.requests.post') as mock_post:
+        with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.status_code = 500
             mock_response.raise_for_status.side_effect = Exception("500 Server Error")
@@ -483,7 +483,7 @@ class TestAPIIntegration:
 
     def test_fetch_handles_rate_limit(self, sample_bbox):
         """Test that rate limiting (429) is handled."""
-        with patch('src.terrain.roads.requests.post') as mock_post:
+        with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.status_code = 429
             mock_response.raise_for_status.side_effect = Exception("429 Too Many Requests")
@@ -494,7 +494,7 @@ class TestAPIIntegration:
 
     def test_fetch_handles_empty_result(self, sample_bbox):
         """Test handling of empty API response."""
-        with patch('src.terrain.roads.requests.post') as mock_post:
+        with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.json.return_value = {"elements": []}
             mock_post.return_value = mock_response
@@ -524,7 +524,7 @@ class TestAPIIntegration:
             ]
         }
 
-        with patch('src.terrain.roads.requests.post') as mock_post:
+        with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.json.return_value = osm_response
             mock_post.return_value = mock_response
@@ -572,19 +572,19 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_imports(self):
         """Test that get_roads_tiled can be imported."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         assert callable(get_roads_tiled)
 
     def test_get_roads_tiled_small_bbox_no_tiling(self, sample_geojson, temp_cache_dir):
         """Small bbox (< tile_size) should not tile, single fetch."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         # Small bbox (0.25° x 0.7°) - less than tile_size of 2.0°
         small_bbox = (42.25, -83.5, 42.5, -82.8)
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
                 result = get_roads_tiled(small_bbox, tile_size=2.0)
 
                 # Should call get_roads exactly once (no tiling needed)
@@ -594,13 +594,13 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_large_bbox_tiles(self, sample_geojson, temp_cache_dir):
         """Large bbox should be split into multiple tiles."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         # Large bbox (5° x 10°) - larger than tile_size of 2.0°
         large_bbox = (40.0, -89.0, 45.0, -79.0)  # 5° lat x 10° lon
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
                 result = get_roads_tiled(large_bbox, tile_size=2.0)
 
                 # Should call get_roads multiple times (3 lat tiles x 5 lon tiles = 15 tiles)
@@ -609,7 +609,7 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_merges_results(self, temp_cache_dir):
         """Features from all tiles should be merged into single FeatureCollection."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         # Create two different GeoJSON responses for different tiles
         tile1_features = {
@@ -624,8 +624,8 @@ class TestGetRoadsTiled:
         # Large bbox that spans 2 tiles
         large_bbox = (40.0, -85.0, 42.0, -81.0)  # 2° lat x 4° lon = 1x2 tiles
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', side_effect=[tile1_features, tile2_features]):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', side_effect=[tile1_features, tile2_features]):
                 result = get_roads_tiled(large_bbox, tile_size=2.0)
 
                 # Result should contain features from both tiles
@@ -635,7 +635,7 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_retry_on_failure(self, sample_geojson, temp_cache_dir):
         """Failed tiles should be retried."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         # First call fails, second succeeds (retry)
         call_count = [0]
@@ -647,8 +647,8 @@ class TestGetRoadsTiled:
 
         small_bbox = (42.0, -83.0, 42.5, -82.5)  # Small, single tile
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', side_effect=side_effect_fn):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', side_effect=side_effect_fn):
                 result = get_roads_tiled(small_bbox, retry_count=1, retry_delay=0.01)
 
                 # Should have retried and gotten data
@@ -656,13 +656,13 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_handles_all_failures(self, temp_cache_dir):
         """Returns empty collection if all tiles fail after retry."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         empty_result = {"type": "FeatureCollection", "features": []}
         small_bbox = (42.0, -83.0, 42.5, -82.5)
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', return_value=empty_result):
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', return_value=empty_result):
                 result = get_roads_tiled(small_bbox, retry_count=1, retry_delay=0.01)
 
                 # Should return empty collection, not None
@@ -672,13 +672,13 @@ class TestGetRoadsTiled:
 
     def test_get_roads_tiled_passes_road_types(self, sample_geojson, temp_cache_dir):
         """Road types parameter should be passed to get_roads."""
-        from src.terrain.roads import get_roads_tiled
+        from terrain_maker.terrain.roads import get_roads_tiled
 
         small_bbox = (42.0, -83.0, 42.5, -82.5)
         road_types = ["motorway", "trunk"]
 
-        with patch('src.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
-            with patch('src.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
+        with patch('terrain_maker.terrain.roads._get_cache_dir', return_value=temp_cache_dir):
+            with patch('terrain_maker.terrain.roads.get_roads', return_value=sample_geojson) as mock_get_roads:
                 get_roads_tiled(small_bbox, road_types=road_types)
 
                 # Check that road_types was passed
@@ -696,12 +696,12 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_exists(self):
         """Test that smooth_road_vertices function can be imported."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
         assert callable(smooth_road_vertices)
 
     def test_smooth_road_vertices_returns_array(self):
         """Test that function returns numpy array of same shape."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         # Simple 3x3 grid of vertices
         vertices = np.array([
@@ -734,7 +734,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_only_modifies_road_vertices(self):
         """Test that non-road vertices are unchanged."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         vertices = np.array([
             [0, 0, 100.0],  # Not on road
@@ -754,7 +754,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_smooths_z_values(self):
         """Test that road vertex Z values are actually smoothed."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         # Road with a spike in the middle
         vertices = np.array([
@@ -776,7 +776,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_handles_nan(self):
         """Test that NaN values are handled properly."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],
@@ -797,7 +797,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_preserves_xy(self):
         """Test that X and Y coordinates are never modified."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         vertices = np.array([
             [0.5, 1.5, 10.0],
@@ -817,7 +817,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_with_zero_radius(self):
         """Test that radius=0 returns vertices unchanged."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],
@@ -836,7 +836,7 @@ class TestSmoothRoadVertices:
 
     def test_smooth_road_vertices_with_boundary_extension(self):
         """Test that boundary extension vertices (more vertices than y_valid entries) are handled."""
-        from src.terrain.roads import smooth_road_vertices
+        from terrain_maker.terrain.roads import smooth_road_vertices
 
         # 5 vertices total, but only 3 have grid mappings (simulates boundary extension)
         vertices = np.array([
@@ -869,12 +869,12 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_exists(self):
         """Test that offset_road_vertices function can be imported."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
         assert callable(offset_road_vertices)
 
     def test_offset_road_vertices_returns_array(self):
         """Test that function returns numpy array of same shape."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],
@@ -893,7 +893,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_raises_roads(self):
         """Test that positive offset raises road vertices."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],  # Not on road
@@ -912,7 +912,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_lowers_roads(self):
         """Test that negative offset lowers road vertices."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],  # Not on road
@@ -931,7 +931,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_only_modifies_roads(self):
         """Test that non-road vertices are unchanged."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 100.0],  # Not on road
@@ -951,7 +951,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_preserves_xy(self):
         """Test that X and Y coordinates are never modified."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0.5, 1.5, 10.0],
@@ -971,7 +971,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_zero_offset(self):
         """Test that offset=0 returns vertices unchanged."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],
@@ -989,7 +989,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_with_boundary_extension(self):
         """Test that boundary extension vertices (more vertices than y_valid entries) are handled."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         # 5 vertices total, but only 3 have grid mappings
         vertices = np.array([
@@ -1018,7 +1018,7 @@ class TestOffsetRoadVertices:
 
     def test_offset_road_vertices_multiple_road_segments(self):
         """Test offsetting works with multiple separate road segments."""
-        from src.terrain.roads import offset_road_vertices
+        from terrain_maker.terrain.roads import offset_road_vertices
 
         vertices = np.array([
             [0, 0, 10.0],  # Road 1

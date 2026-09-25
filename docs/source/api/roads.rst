@@ -15,7 +15,7 @@ Quick Start
 
 Simple API for adding roads to terrain::
 
-    from src.terrain.roads import add_roads_layer
+    from terrain_maker.terrain.roads import add_roads_layer
     from examples.detroit_roads import get_roads
 
     # Get roads from OpenStreetMap
@@ -36,17 +36,17 @@ See :doc:`../examples/combined_render` for full example.
 Core Functions
 --------------
 
-.. autofunction:: src.terrain.roads.add_roads_layer
+.. autofunction:: terrain_maker.terrain.roads.add_roads_layer
 
    High-level function to rasterize and add roads as a data layer.
    Used in :doc:`../examples/combined_render`.
 
-.. autofunction:: src.terrain.roads.rasterize_roads_to_layer
+.. autofunction:: terrain_maker.terrain.roads.rasterize_roads_to_layer
 
    Rasterize road geometries to a grid with proper geographic transform.
 
    Returns road grid and Affine transform in WGS84 (EPSG:4326).
-   Use with :meth:`~src.terrain.core.Terrain.add_data_layer` to add to terrain.
+   Use with :meth:`~terrain_maker.terrain.core.Terrain.add_data_layer` to add to terrain.
 
    Example::
 
@@ -66,7 +66,7 @@ Core Functions
 Vertex Smoothing
 ----------------
 
-.. autofunction:: src.terrain.roads.smooth_road_vertices
+.. autofunction:: terrain_maker.terrain.roads.smooth_road_vertices
 
    Smooth road elevations to eliminate sudden height changes.
    Used in :doc:`../examples/combined_render`.
@@ -79,7 +79,7 @@ Vertex Smoothing
            iterations=2
        )
 
-.. autofunction:: src.terrain.roads.offset_road_vertices
+.. autofunction:: terrain_maker.terrain.roads.offset_road_vertices
 
    Lower road vertices to create embankment effect.
 
@@ -93,14 +93,14 @@ Vertex Smoothing
 DEM Smoothing
 -------------
 
-.. autofunction:: src.terrain.roads.smooth_dem_along_roads
+.. autofunction:: terrain_maker.terrain.roads.smooth_dem_along_roads
 
    Smooth DEM elevation data along roads before mesh creation.
 
 Mask Operations
 ---------------
 
-.. autofunction:: src.terrain.roads.smooth_road_mask
+.. autofunction:: terrain_maker.terrain.roads.smooth_road_mask
 
    Smooth road mask to avoid harsh transitions.
 
@@ -115,10 +115,10 @@ Mask Operations
 Colormaps
 ---------
 
-.. autofunction:: src.terrain.roads.road_colormap
+.. autofunction:: terrain_maker.terrain.roads.road_colormap
 
    Map roads to distinctive marker color for shader detection.
 
-.. autofunction:: src.terrain.roads.get_viridis_colormap
+.. autofunction:: terrain_maker.terrain.roads.get_viridis_colormap
 
    Get viridis colormap for road visualization.

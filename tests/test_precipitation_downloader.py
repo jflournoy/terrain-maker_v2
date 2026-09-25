@@ -17,7 +17,7 @@ from pathlib import Path
 import tempfile
 
 # Import the precipitation downloader functions (don't exist yet - RED phase)
-from src.terrain.precipitation_downloader import (
+from terrain_maker.terrain.precipitation_downloader import (
     download_precipitation,
     get_prism_annual_precip,
     validate_precipitation_alignment,
@@ -250,7 +250,7 @@ class TestRealPRISMDownload:
 
     def test_download_real_prism_requires_network(self, tmp_path):
         """download_real_prism_annual should handle network connectivity."""
-        from src.terrain.precipitation_downloader import download_real_prism_annual
+        from terrain_maker.terrain.precipitation_downloader import download_real_prism_annual
 
         bbox = (32.5, -117.6, 33.5, -116.0)
 
@@ -264,7 +264,7 @@ class TestRealPRISMDownload:
 
     def test_download_real_prism_returns_valid_data(self, tmp_path):
         """download_real_prism_annual should return valid precipitation data."""
-        from src.terrain.precipitation_downloader import download_real_prism_annual
+        from terrain_maker.terrain.precipitation_downloader import download_real_prism_annual
 
         bbox = (32.5, -117.6, 33.5, -116.0)
 
@@ -289,7 +289,7 @@ class TestRealPRISMDownload:
     @pytest.mark.network
     def test_download_real_prism_uses_web_service(self, tmp_path, monkeypatch):
         """download_real_prism_annual should use PRISM web service API."""
-        from src.terrain.precipitation_downloader import download_real_prism_annual
+        from terrain_maker.terrain.precipitation_downloader import download_real_prism_annual
         from unittest.mock import Mock
         import zipfile
         import io
@@ -345,7 +345,7 @@ class TestRealPRISMDownload:
 
     def test_download_real_prism_handles_http_errors(self, tmp_path, monkeypatch):
         """download_real_prism_annual should handle HTTP errors gracefully."""
-        from src.terrain.precipitation_downloader import download_real_prism_annual
+        from terrain_maker.terrain.precipitation_downloader import download_real_prism_annual
         from unittest.mock import Mock
 
         # Mock HTTP 404 error
@@ -366,7 +366,7 @@ class TestRealPRISMDownload:
 
     def test_get_prism_annual_precip_can_use_real_data(self, tmp_path, monkeypatch):
         """get_prism_annual_precip should support real data download via parameter."""
-        from src.terrain.precipitation_downloader import get_prism_annual_precip
+        from terrain_maker.terrain.precipitation_downloader import get_prism_annual_precip
         from rasterio.transform import from_bounds
 
         bbox = (32.5, -117.6, 33.5, -116.0)
@@ -380,7 +380,7 @@ class TestRealPRISMDownload:
             calls.append((bbox, output_dir))
             return (mock_data, mock_transform)
 
-        import src.terrain.precipitation_downloader as precip_module
+        import terrain_maker.terrain.precipitation_downloader as precip_module
         monkeypatch.setattr(precip_module, "download_real_prism_annual", mock_real_download)
 
         # Call with use_real_data flag
@@ -395,7 +395,7 @@ class TestRealPRISMDownload:
 
     def test_download_real_prism_bbox_coverage(self, tmp_path):
         """download_real_prism_annual should cover the requested bbox."""
-        from src.terrain.precipitation_downloader import download_real_prism_annual
+        from terrain_maker.terrain.precipitation_downloader import download_real_prism_annual
         from rasterio import Affine
 
         bbox = (32.5, -117.6, 33.5, -116.0)

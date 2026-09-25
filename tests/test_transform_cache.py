@@ -15,13 +15,13 @@ class TestTransformCacheBasics:
 
     def test_transform_cache_can_be_imported(self):
         """Test that TransformCache can be imported."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         assert TransformCache is not None
 
     def test_transform_cache_init_creates_directory(self):
         """Test that TransformCache creates cache directory."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "transform_cache"
@@ -32,7 +32,7 @@ class TestTransformCacheBasics:
 
     def test_transform_cache_disabled_skips_directory(self):
         """Test that disabled cache skips directory creation."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "should_not_exist"
@@ -47,7 +47,7 @@ class TestTransformCacheHashing:
 
     def test_compute_transform_hash_basic(self):
         """Test computing hash from transform parameters."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -70,7 +70,7 @@ class TestTransformCacheHashing:
 
     def test_compute_transform_hash_different_params(self):
         """Test that different params produce different hashes."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -90,7 +90,7 @@ class TestTransformCacheHashing:
 
     def test_compute_transform_hash_different_upstream(self):
         """Test that different upstream hash produces different result."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -110,7 +110,7 @@ class TestTransformCacheHashing:
 
     def test_compute_transform_hash_handles_numpy_params(self):
         """Test that numpy arrays in params are handled correctly."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -130,7 +130,7 @@ class TestTransformCacheSaveLoad:
 
     def test_save_transform_creates_file(self):
         """Test that save_transform creates cache file."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -146,7 +146,7 @@ class TestTransformCacheSaveLoad:
 
     def test_load_transform_returns_data(self):
         """Test that load_transform returns saved data."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -162,7 +162,7 @@ class TestTransformCacheSaveLoad:
 
     def test_load_transform_cache_miss_returns_none(self):
         """Test that load_transform returns None on cache miss."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -173,7 +173,7 @@ class TestTransformCacheSaveLoad:
 
     def test_save_transform_with_metadata(self):
         """Test saving transform with additional metadata."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -194,7 +194,7 @@ class TestTransformCacheSaveLoad:
 
     def test_disabled_cache_returns_none(self):
         """Test that disabled cache always returns None."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir, enabled=False)
@@ -212,7 +212,7 @@ class TestTransformCacheDependencyChain:
 
     def test_register_dependency_chain(self):
         """Test registering a chain of dependent transforms."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -228,7 +228,7 @@ class TestTransformCacheDependencyChain:
 
     def test_get_full_cache_key(self):
         """Test computing full cache key from dependency chain."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -257,7 +257,7 @@ class TestTransformCacheDependencyChain:
 
     def test_invalidate_downstream(self):
         """Test that changing upstream invalidates downstream caches."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -284,7 +284,7 @@ class TestTransformCacheIntegration:
 
     def test_cache_terrain_transform_pipeline(self):
         """Test caching a realistic terrain transform pipeline."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)
@@ -326,7 +326,7 @@ class TestTransformCacheIntegration:
 
     def test_cache_hit_on_second_run(self):
         """Test that second run with same params gets cache hit."""
-        from src.terrain.cache import TransformCache
+        from terrain_maker.terrain.cache import TransformCache
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cache = TransformCache(cache_dir=tmpdir)

@@ -21,7 +21,7 @@ import matplotlib.patches as patches
 from pathlib import Path
 import logging
 
-from src.terrain.visualization.bounds_pipeline import (
+from terrain_maker.terrain.visualization.bounds_pipeline import (
     TransformationPipeline,
     EdgeTransformer,
     SimpleAffine,

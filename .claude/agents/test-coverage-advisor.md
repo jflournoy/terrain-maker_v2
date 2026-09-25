@@ -147,7 +147,7 @@ Create `.claude/agents/reports/test-coverage-analysis-[date].md`:
    - Invalid payment data
 
 ### Medium Priority
-1. **File**: `src/utils/formatter.js`
+1. **File**: `src/terrain_maker/utils/formatter.js`
    **Functions**: 5 utility functions untested
    **Risk**: Used throughout app, data formatting
    **Recommended**: Unit tests for each function
@@ -166,7 +166,7 @@ Create `.claude/agents/reports/test-coverage-analysis-[date].md`:
 |-----------|-------|--------|----------|
 | src/auth/ | 8 | 2 | HIGH |
 | src/api/ | 12 | 7 | MEDIUM |
-| src/utils/ | 15 | 11 | LOW |
+| src/terrain_maker/utils/ | 15 | 11 | LOW |
 
 ## Recommended Test Files to Create
 

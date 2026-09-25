@@ -125,7 +125,7 @@ class TestProjectionBasics:
 
     def test_cube_at_origin_projects_to_center(self, clear_scene):
         """Cube at origin with camera on -Z axis should project to screen center."""
-        from src.terrain.scene_setup import compute_mesh_screen_bbox
+        from terrain_maker.terrain.scene_setup import compute_mesh_screen_bbox
 
         # Create 1x1 cube at origin
         cube = create_test_cube(size=1.0, location=(0, 0, 0))
@@ -142,7 +142,7 @@ class TestProjectionBasics:
 
     def test_offset_cube_projects_off_center(self, clear_scene):
         """Cube offset in +X world appears LEFT on screen (Blender coordinate system)."""
-        from src.terrain.scene_setup import compute_mesh_screen_bbox
+        from terrain_maker.terrain.scene_setup import compute_mesh_screen_bbox
 
         # Cube offset 3 units in +X direction (world coords)
         cube = create_test_cube(size=1.0, location=(3, 0, 0))
@@ -164,7 +164,7 @@ class TestProjectionBasics:
 
     def test_cube_above_projects_above_center(self, clear_scene):
         """Cube offset upward should project above screen center."""
-        from src.terrain.scene_setup import compute_mesh_screen_bbox
+        from terrain_maker.terrain.scene_setup import compute_mesh_screen_bbox
 
         # Cube offset 3 units up (+Y in Blender)
         cube = create_test_cube(size=1.0, location=(0, 0, 3))
@@ -181,7 +181,7 @@ class TestProjectionBasics:
 
     def test_bbox_size_scales_with_distance(self, clear_scene):
         """Farther objects should appear smaller in screen space."""
-        from src.terrain.scene_setup import compute_mesh_screen_bbox
+        from terrain_maker.terrain.scene_setup import compute_mesh_screen_bbox
 
         cube = create_test_cube(size=2.0, location=(0, 0, 0))
 
