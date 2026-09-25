@@ -5,12 +5,96 @@ from __future__ import annotations
 
 import numpy as np
 import logging
+
+from pyproj import Transformer
+from rasterio.transform import rowcol
+from scipy.spatial import KDTree
 from typing import Optional
-
-
 
 # Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
+
+
+def _drop_nan_points(lons, lats, logger):
+    """Validate matching shapes and drop points with a NaN coordinate."""
+    lons, lats = np.asarray(lons), np.asarray(lats)
+    if lons.shape != lats.shape:
+        raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
+    valid = ~(np.isnan(lons) | np.isnan(lats))
+    if not np.all(valid):
+        logger.warning(
+            f"Filtering out {np.sum(~valid)} points with NaN coordinates "
+            f"({np.sum(valid)} valid points remaining)"
+        )
+        lons, lats = lons[valid], lats[valid]
+    return lons, lats
+
+
+def _keep_points(points, inside, logger):
+    """Rows of points where inside is True, warning about the ones dropped."""
+    if not np.all(inside):
+        logger.warning(
+            f"Filtering out {np.sum(~inside)} points outside DEM bounds "
+            f"({np.sum(inside)} valid points remaining)"
+        )
+    return points[inside]
+
+
+def _pixel_points(
+    lons, lats, shape, transform, dem_crs, input_crs, logger, require_transform=False
+):
+    """(row, col) of the valid points inside a grid, and the pixel size in meters.
+
+    Without a transform (only allowed if not require_transform), points are taken as
+    normalized [0, 1] grid coordinates with 30 m pixels, a mode used by tests.
+    """
+    lons, lats = _drop_nan_points(lons, lats, logger)
+    if len(lons) == 0:
+        logger.warning("No valid points remaining after filtering NaN coordinates")
+        return np.empty((0, 2), dtype=int), None
+
+    if transform is None:
+        if require_transform:
+            raise ValueError("No transform found for transformed DEM layer.")
+        rows = (lats * shape[0]).astype(int)
+        cols = (lons * shape[1]).astype(int)
+        pixel_size_meters = 30.0
+    else:
+        if input_crs != dem_crs:
+            logger.debug(f"  Reprojecting {len(lons)} points from {input_crs} to {dem_crs}")
+            transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
+            lons, lats = transformer.transform(lons, lats)
+        rows, cols = (np.asarray(v) for v in rowcol(transform, lons, lats))
+        # Assumes a metric CRS (e.g. UTM) after transformation
+        pixel_size_meters = abs(transform.a)
+
+    inside = (rows >= 0) & (rows < shape[0]) & (cols >= 0) & (cols < shape[1])
+    return _keep_points(np.column_stack([rows, cols]), inside, logger), pixel_size_meters
+
+
+def _cluster_centroids(points, eps, logger):
+    """Merge points within eps of each other (DBSCAN chains) into their centroids."""
+    from sklearn.cluster import DBSCAN
+
+    labels = DBSCAN(eps=eps, min_samples=1).fit_predict(points)
+    n_clusters = labels.max() + 1
+    logger.info(f"  Clustered {len(points)} points into {n_clusters} zones")
+    return np.array([points[labels == i].mean(axis=0) for i in range(n_clusters)])
+
+
+def _nearest_point_distance_grid(points, shape):
+    """Distance in pixels from every grid cell to the nearest of points (row, col)."""
+    rows, cols = np.indices(shape)
+    grid = np.column_stack([rows.ravel(), cols.ravel()])
+    distances, _ = KDTree(points).query(grid, k=1)
+    return distances.reshape(shape)
+
+
+def _log_coverage(mask, unit, logger):
+    logger.info(
+        f"  Proximity mask: {np.sum(mask)}/{mask.size} {unit} "
+        f"({100.0 * np.sum(mask) / mask.size:.1f}%) in zones"
+    )
 
 
 class TerrainProximityMixin:
@@ -60,126 +144,47 @@ class TerrainProximityMixin:
             ... )
             >>> # mask is True for vertices within 1km of park clusters
         """
-        from scipy.spatial import KDTree
-
-        # Check prerequisites
         if not hasattr(self, "vertices") or self.vertices is None:
             raise RuntimeError(
                 "create_mesh() must be called before compute_proximity_mask(). "
                 "Mesh vertices are needed for proximity calculations."
             )
+        no_points = np.zeros(len(self.vertices), dtype=bool)
 
-        # Validate inputs
-        lons = np.asarray(lons)
-        lats = np.asarray(lats)
-        if lons.shape != lats.shape:
-            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
-
-        # Filter out NaN coordinates (missing park locations, etc.)
-        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
-        if not np.all(valid_mask):
-            num_invalid = np.sum(~valid_mask)
-            self.logger.warning(
-                f"Filtering out {num_invalid} points with NaN coordinates "
-                f"({len(lons) - num_invalid} valid points remaining)"
-            )
-            lons = lons[valid_mask]
-            lats = lats[valid_mask]
-
-        # Handle edge case: no valid points
+        lons, lats = _drop_nan_points(lons, lats, self.logger)
         if len(lons) == 0:
             self.logger.warning("No valid points remaining after filtering NaN coordinates")
-            return np.zeros(len(self.vertices), dtype=bool)
+            return no_points
 
-        # Convert geographic coords to mesh space (x, y only, ignore z)
         xs, ys, _ = self.geo_to_mesh_coords(lons, lats, input_crs=input_crs)
-        point_coords = np.column_stack([xs, ys])
-
-        # Filter out points that ended up with NaN mesh coordinates (outside DEM bounds)
-        mesh_valid_mask = ~(np.isnan(point_coords[:, 0]) | np.isnan(point_coords[:, 1]))
-        if not np.all(mesh_valid_mask):
-            num_invalid = np.sum(~mesh_valid_mask)
-            self.logger.warning(
-                f"Filtering out {num_invalid} points outside DEM bounds "
-                f"({np.sum(mesh_valid_mask)} valid points remaining)"
-            )
-            point_coords = point_coords[mesh_valid_mask]
-
-        # Handle edge case: no valid points after mesh coordinate conversion
-        if len(point_coords) == 0:
+        points = np.column_stack([xs, ys])
+        inside = ~(np.isnan(points[:, 0]) | np.isnan(points[:, 1]))  # NaN = outside the DEM
+        points = _keep_points(points, inside, self.logger)
+        if len(points) == 0:
             self.logger.warning("No points within DEM bounds for proximity mask")
-            return np.zeros(len(self.vertices), dtype=bool)
+            return no_points
+        self.logger.info(f"Computing proximity mask for {len(points)} points...")
 
-        self.logger.info(f"Computing proximity mask for {len(point_coords)} points...")
-
-        # Get pixel size from transformed DEM for metric conversions
-        dem_info = self.data_layers.get("dem", {})
-        transformed_transform = dem_info.get("transformed_transform")
-        if transformed_transform is None:
+        transform = self.data_layers.get("dem", {}).get("transformed_transform")
+        if transform is None:
             raise ValueError("Transformed DEM transform not found")
-
-        # Pixel size in meters (assumes metric CRS like UTM after transformation)
-        pixel_size_meters = abs(transformed_transform.a)
-        scale_factor = self.model_params["scale_factor"]
-
-        # Calculate meters per mesh unit
-        # 1 mesh unit = scale_factor pixels = scale_factor * pixel_size_meters
-        meters_per_mesh_unit = scale_factor * pixel_size_meters
-
+        # 1 mesh unit = scale_factor pixels (assumes a metric CRS after transformation)
+        pixel_size_meters = abs(transform.a)
+        meters_per_mesh_unit = self.model_params["scale_factor"] * pixel_size_meters
         self.logger.debug(
             f"  Pixel size: {pixel_size_meters:.2f}m, "
-            f"Scale factor: {scale_factor}, "
             f"Meters per mesh unit: {meters_per_mesh_unit:.2f}m"
         )
 
-        # Cluster nearby points using DBSCAN
         if cluster_threshold_meters is not None:
-            from sklearn.cluster import DBSCAN
-
-            # Convert cluster threshold from meters to mesh units
-            cluster_threshold_mesh = cluster_threshold_meters / meters_per_mesh_unit
-
-            self.logger.info(
-                f"  Clustering points with threshold {cluster_threshold_meters}m "
-                f"({cluster_threshold_mesh:.3f} mesh units)..."
+            points = _cluster_centroids(
+                points, cluster_threshold_meters / meters_per_mesh_unit, self.logger
             )
 
-            clustering = DBSCAN(eps=cluster_threshold_mesh, min_samples=1)
-            labels = clustering.fit_predict(point_coords)
-            num_clusters = labels.max() + 1
-
-            # Use cluster centroids instead of individual points
-            point_coords = np.array(
-                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
-            )
-
-            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
-
-        # Build KDTree for efficient spatial queries
-        tree = KDTree(point_coords)
-
-        # Get mesh vertex positions (just x, y for 2D distance)
-        # vertices includes boundary vertices if boundary_extension=True
-        mesh_verts_2d = self.vertices[:, :2]
-
-        # Convert radius from meters to mesh units
-        radius_mesh = radius_meters / meters_per_mesh_unit
-
-        self.logger.info(
-            f"  Querying vertices within {radius_meters}m ({radius_mesh:.3f} mesh units) "
-            f"of {len(point_coords)} point(s)..."
-        )
-
-        # Query: which vertices are within radius of ANY point?
-        distances, _ = tree.query(mesh_verts_2d, k=1)
-        mask = distances <= radius_mesh
-
-        num_in_zone = np.sum(mask)
-        pct_in_zone = 100.0 * num_in_zone / len(mask)
-        self.logger.info(
-            f"  Proximity mask: {num_in_zone}/{len(mask)} vertices ({pct_in_zone:.1f}%) in zones"
-        )
-
+        # Includes boundary (skirt) vertices when boundary_extension=True
+        distances, _ = KDTree(points).query(self.vertices[:, :2], k=1)
+        mask = distances <= radius_meters / meters_per_mesh_unit
+        _log_coverage(mask, "vertices", self.logger)
         return mask
 
     def compute_proximity_mask_grid(
@@ -225,143 +230,36 @@ class TerrainProximityMixin:
             ... )
             >>> # Use mask in color computations, then create mesh once
         """
-        from scipy.spatial import KDTree
-        from pyproj import Transformer
-
-        # Check prerequisites
         dem_info = self.data_layers.get("dem", {})
         if not dem_info.get("transformed", False):
             raise ValueError(
                 "DEM layer must be transformed before compute_proximity_mask_grid(). "
                 "Call apply_transforms() first."
             )
-
-        # Validate inputs
-        lons = np.asarray(lons)
-        lats = np.asarray(lats)
-        if lons.shape != lats.shape:
-            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
-
-        # Filter out NaN coordinates
-        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
-        if not np.all(valid_mask):
-            num_invalid = np.sum(~valid_mask)
-            self.logger.warning(
-                f"Filtering out {num_invalid} points with NaN coordinates "
-                f"({len(lons) - num_invalid} valid points remaining)"
-            )
-            lons = lons[valid_mask]
-            lats = lats[valid_mask]
-
-        # Handle edge case: no valid points
         dem_data = dem_info["transformed_data"]
-        if len(lons) == 0:
-            self.logger.warning("No valid points remaining after filtering NaN coordinates")
-            return np.zeros(dem_data.shape, dtype=bool)
 
-        # Get transformed DEM properties
-        transform = dem_info.get("transformed_transform")
-        dem_crs = dem_info.get("transformed_crs", "EPSG:4326")
-
-        if transform is None:
-            raise ValueError("No transform found for transformed DEM layer.")
-
-        # Reproject coordinates if input CRS differs from DEM CRS
-        if input_crs != dem_crs:
-            self.logger.debug(f"  Reprojecting {len(lons)} points from {input_crs} to {dem_crs}")
-            transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
-            lons, lats = transformer.transform(lons, lats)
-
-        # Convert geographic coords to pixel coordinates
-        from rasterio.transform import rowcol
-
-        rows = []
-        cols = []
-        for lon, lat in zip(lons, lats):
-            row, col = rowcol(transform, lon, lat)
-            rows.append(row)
-            cols.append(col)
-
-        rows = np.array(rows)
-        cols = np.array(cols)
-
-        # Filter out points outside DEM bounds
-        height, width = dem_data.shape
-        valid_bounds = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
-        if not np.all(valid_bounds):
-            num_invalid = np.sum(~valid_bounds)
-            self.logger.warning(
-                f"Filtering out {num_invalid} points outside DEM bounds "
-                f"({np.sum(valid_bounds)} valid points remaining)"
-            )
-            rows = rows[valid_bounds]
-            cols = cols[valid_bounds]
-
-        # Handle edge case: no valid points after filtering
-        if len(rows) == 0:
+        points, pixel_size_meters = _pixel_points(
+            lons,
+            lats,
+            dem_data.shape,
+            dem_info.get("transformed_transform"),
+            dem_info.get("transformed_crs", "EPSG:4326"),
+            input_crs,
+            self.logger,
+            require_transform=True,
+        )
+        if len(points) == 0:
             self.logger.warning("No points within DEM bounds for proximity mask")
             return np.zeros(dem_data.shape, dtype=bool)
+        self.logger.info(f"Computing grid-based proximity mask for {len(points)} points...")
 
-        self.logger.info(f"Computing grid-based proximity mask for {len(rows)} points...")
-
-        # Get pixel size in meters (assumes metric CRS like UTM after transformation)
-        pixel_size_meters = abs(transform.a)
-
-        # Convert radius from meters to pixels
-        radius_pixels = radius_meters / pixel_size_meters
-
-        # Stack point coordinates
-        point_coords = np.column_stack([rows, cols])
-
-        # Cluster nearby points using DBSCAN
         if cluster_threshold_meters is not None:
-            from sklearn.cluster import DBSCAN
-
-            # Convert cluster threshold from meters to pixels
-            cluster_threshold_pixels = cluster_threshold_meters / pixel_size_meters
-
-            self.logger.info(
-                f"  Clustering points with threshold {cluster_threshold_meters}m "
-                f"({cluster_threshold_pixels:.3f} pixels)..."
+            points = _cluster_centroids(
+                points, cluster_threshold_meters / pixel_size_meters, self.logger
             )
-
-            clustering = DBSCAN(eps=cluster_threshold_pixels, min_samples=1)
-            labels = clustering.fit_predict(point_coords)
-            num_clusters = labels.max() + 1
-
-            # Use cluster centroids instead of individual points
-            point_coords = np.array(
-                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
-            )
-
-            self.logger.info(f"  Clustered {len(lons)} points into {num_clusters} zones")
-
-        # Build KDTree for efficient spatial queries
-        tree = KDTree(point_coords)
-
-        # Create grid of all pixel coordinates
-        row_indices, col_indices = np.indices(dem_data.shape)
-        grid_coords = np.column_stack([row_indices.ravel(), col_indices.ravel()])
-
-        # Query: which pixels are within radius of ANY point?
-        self.logger.info(
-            f"  Querying {len(grid_coords)} pixels within {radius_meters}m "
-            f"({radius_pixels:.3f} pixels) of {len(point_coords)} point(s)..."
-        )
-
-        distances, _ = tree.query(grid_coords, k=1)
-        mask_flat = distances <= radius_pixels
-
-        # Reshape to grid
-        mask = mask_flat.reshape(dem_data.shape)
-
-        num_in_zone = np.sum(mask)
-        total_pixels = mask.size
-        pct_in_zone = 100.0 * num_in_zone / total_pixels
-        self.logger.info(
-            f"  Proximity mask: {num_in_zone}/{total_pixels} pixels ({pct_in_zone:.1f}%) in zones"
-        )
-
+        distances = _nearest_point_distance_grid(points, dem_data.shape)
+        mask = distances <= radius_meters / pixel_size_meters
+        _log_coverage(mask, "pixels", self.logger)
         return mask
 
     def compute_ring_mask_grid(
@@ -408,10 +306,6 @@ class TerrainProximityMixin:
             ...     outer_radius_meters=2000,
             ... )
         """
-        from scipy.spatial import KDTree
-        from pyproj import Transformer
-
-        # Validate radii
         if inner_radius_meters < 0:
             raise ValueError(f"inner_radius_meters must be >= 0, got {inner_radius_meters}")
         if outer_radius_meters < 0:
@@ -422,137 +316,42 @@ class TerrainProximityMixin:
                 f"outer_radius_meters ({outer_radius_meters})"
             )
 
-        # Check prerequisites
         dem_info = self.data_layers.get("dem", {})
-        if not dem_info.get("transformed", False):
-            # For tests with mock terrain, check for _transformed_dem attribute
-            if hasattr(self, "_transformed_dem") and self._transformed_dem is not None:
-                dem_data = self._transformed_dem
-                transform = getattr(self, "_transformed_transform", None)
-                dem_crs = getattr(self, "_transformed_crs", "EPSG:4326")
-            else:
-                raise ValueError(
-                    "DEM layer must be transformed before compute_ring_mask_grid(). "
-                    "Call apply_transforms() first."
-                )
-        else:
+        if dem_info.get("transformed", False):
             dem_data = dem_info["transformed_data"]
             transform = dem_info.get("transformed_transform")
             dem_crs = dem_info.get("transformed_crs", "EPSG:4326")
-
-        # Validate inputs
-        lons = np.asarray(lons)
-        lats = np.asarray(lats)
-        if lons.shape != lats.shape:
-            raise ValueError(f"lons and lats must have same shape. Got {lons.shape} and {lats.shape}")
-
-        # Handle edge case: no points
-        if len(lons) == 0:
-            self.logger.debug("No points provided for ring mask - returning empty mask")
-            return np.zeros(dem_data.shape, dtype=bool)
-
-        # Filter out NaN coordinates
-        valid_mask = ~(np.isnan(lons) | np.isnan(lats))
-        if not np.all(valid_mask):
-            num_invalid = np.sum(~valid_mask)
-            self.logger.warning(
-                f"Filtering out {num_invalid} points with NaN coordinates"
-            )
-            lons = lons[valid_mask]
-            lats = lats[valid_mask]
-
-        if len(lons) == 0:
-            return np.zeros(dem_data.shape, dtype=bool)
-
-        # If no transform, use simple grid coordinates (for testing)
-        if transform is None:
-            # Assume coordinates are already in grid space (0-1 normalized)
-            height, width = dem_data.shape
-            rows = (lats * height).astype(int)
-            cols = (lons * width).astype(int)
-            pixel_size_meters = 30.0  # Assume 30m pixels for testing
+        elif getattr(self, "_transformed_dem", None) is not None:
+            # Lightweight stand-in used by tests
+            dem_data = self._transformed_dem
+            transform = getattr(self, "_transformed_transform", None)
+            dem_crs = getattr(self, "_transformed_crs", "EPSG:4326")
         else:
-            # Reproject coordinates if input CRS differs from DEM CRS
-            if input_crs != dem_crs:
-                self.logger.debug(f"  Reprojecting points from {input_crs} to {dem_crs}")
-                transformer = Transformer.from_crs(input_crs, dem_crs, always_xy=True)
-                lons, lats = transformer.transform(lons, lats)
-
-            # Convert geographic coords to pixel coordinates
-            from rasterio.transform import rowcol
-
-            rows = []
-            cols = []
-            for lon, lat in zip(lons, lats):
-                row, col = rowcol(transform, lon, lat)
-                rows.append(row)
-                cols.append(col)
-
-            rows = np.array(rows)
-            cols = np.array(cols)
-
-            # Get pixel size in meters
-            pixel_size_meters = abs(transform.a)
-
-        # Filter out points outside DEM bounds
-        height, width = dem_data.shape
-        valid_bounds = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
-        if not np.all(valid_bounds):
-            rows = rows[valid_bounds]
-            cols = cols[valid_bounds]
-
-        if len(rows) == 0:
-            return np.zeros(dem_data.shape, dtype=bool)
-
-        self.logger.info(f"Computing ring mask for {len(rows)} points...")
-
-        # Convert radii from meters to pixels
-        inner_radius_pixels = inner_radius_meters / pixel_size_meters
-        outer_radius_pixels = outer_radius_meters / pixel_size_meters
-
-        # Stack point coordinates
-        point_coords = np.column_stack([rows, cols])
-
-        # Cluster nearby points using DBSCAN if requested
-        if cluster_threshold_meters is not None:
-            from sklearn.cluster import DBSCAN
-
-            cluster_threshold_pixels = cluster_threshold_meters / pixel_size_meters
-            clustering = DBSCAN(eps=cluster_threshold_pixels, min_samples=1)
-            labels = clustering.fit_predict(point_coords)
-            num_clusters = labels.max() + 1
-
-            # Use cluster centroids
-            point_coords = np.array(
-                [point_coords[labels == i].mean(axis=0) for i in range(num_clusters)]
+            raise ValueError(
+                "DEM layer must be transformed before compute_ring_mask_grid(). "
+                "Call apply_transforms() first."
             )
-            self.logger.info(f"  Clustered into {num_clusters} zones")
 
-        # Build KDTree for efficient spatial queries
-        tree = KDTree(point_coords)
+        points, pixel_size_meters = _pixel_points(
+            lons, lats, dem_data.shape, transform, dem_crs, input_crs, self.logger
+        )
+        if len(points) == 0:
+            return np.zeros(dem_data.shape, dtype=bool)
+        self.logger.info(f"Computing ring mask for {len(points)} points...")
 
-        # Create grid of all pixel coordinates
-        row_indices, col_indices = np.indices(dem_data.shape)
-        grid_coords = np.column_stack([row_indices.ravel(), col_indices.ravel()])
-
-        # Query distances to nearest point
-        distances, _ = tree.query(grid_coords, k=1)
-
-        # Create ring mask: within outer but outside inner
-        # Use strict inequality for inner so inner_radius=0 gives filled circle
-        outer_mask = distances <= outer_radius_pixels
-        inner_mask = distances < inner_radius_pixels  # Strictly less than
-        ring_mask_flat = outer_mask & ~inner_mask
-
-        # Reshape to grid
-        ring_mask = ring_mask_flat.reshape(dem_data.shape)
-
-        num_in_ring = np.sum(ring_mask)
+        if cluster_threshold_meters is not None:
+            points = _cluster_centroids(
+                points, cluster_threshold_meters / pixel_size_meters, self.logger
+            )
+        distances = _nearest_point_distance_grid(points, dem_data.shape)
+        # Strict inequality on the inner edge so inner_radius=0 gives a filled circle
+        ring_mask = (distances <= outer_radius_meters / pixel_size_meters) & ~(
+            distances < inner_radius_meters / pixel_size_meters
+        )
         self.logger.info(
-            f"  Ring mask: {num_in_ring} pixels "
+            f"  Ring mask: {np.sum(ring_mask)} pixels "
             f"(ring width: {outer_radius_meters - inner_radius_meters}m)"
         )
-
         return ring_mask
 
     def apply_ring_color(
@@ -575,17 +374,11 @@ class TerrainProximityMixin:
         """
         if not hasattr(self, "colors") or self.colors is None:
             raise ValueError("Colors must be computed before applying ring color")
-
         if not hasattr(self, "y_valid") or not hasattr(self, "x_valid"):
             raise ValueError("Vertex coordinates (y_valid, x_valid) must be set")
 
-        # Apply ring color to vertices within the mask
-        for i, (y, x) in enumerate(zip(self.y_valid, self.x_valid)):
-            # Clamp to valid indices
-            y_idx = int(np.clip(y, 0, ring_mask.shape[0] - 1))
-            x_idx = int(np.clip(x, 0, ring_mask.shape[1] - 1))
-
-            if ring_mask[y_idx, x_idx]:
-                self.colors[i, 0] = ring_color[0]
-                self.colors[i, 1] = ring_color[1]
-                self.colors[i, 2] = ring_color[2]
+        ys = np.clip(self.y_valid, 0, ring_mask.shape[0] - 1).astype(int)
+        xs = np.clip(self.x_valid, 0, ring_mask.shape[1] - 1).astype(int)
+        in_ring = np.nonzero(ring_mask[ys, xs])[0]
+        for channel in range(3):
+            self.colors[in_ring, channel] = ring_color[channel]
