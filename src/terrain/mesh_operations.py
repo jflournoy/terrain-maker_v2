@@ -665,6 +665,50 @@ def _make_position_lookup(positions, coord_to_index):
     return get_position_at_coords
 
 
+def _skirt_quad(top_a, top_b, bottom_a, bottom_b, clockwise):
+    """Quad face between two tiers along boundary segment a -> b, wound for outward normals.
+
+    Clockwise boundaries need the reversed vertex order to keep normals facing out.
+    """
+    if clockwise:
+        return (top_a, bottom_a, bottom_b, top_b)
+    return (top_a, top_b, bottom_b, bottom_a)
+
+
+def _wraparound_gap_too_large(boundary_points):
+    """True when the last -> first closing segment is far longer than normal edge spacing.
+
+    Rectangle edges are angle-sorted, so a huge closing gap would draw a diagonal
+    face across the mesh. Logs the decision either way.
+    """
+    n_boundary = len(boundary_points)
+    y_last, x_last = boundary_points[n_boundary - 1]
+    y_first, x_first = boundary_points[0]
+    distance = np.sqrt((y_last - y_first) ** 2 + (x_last - x_first) ** 2)
+
+    # "Normal" spacing: median of up to 100 consecutive segment lengths
+    sample_distances = []
+    for j in range(min(100, n_boundary - 1)):
+        y_curr, x_curr = boundary_points[j]
+        y_next, x_next = boundary_points[j + 1]
+        sample_distances.append(np.sqrt((y_next - y_curr) ** 2 + (x_next - x_curr) ** 2))
+    median_edge_distance = np.median(sample_distances)
+
+    threshold = max(median_edge_distance * 10.0, 50.0)
+    if distance > threshold:
+        logger.warning(
+            f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} "
+            f"(median edge = {median_edge_distance:.2f})"
+        )
+        return True
+    if distance > median_edge_distance * 2.0:
+        logger.info(
+            f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels "
+            f"({distance/median_edge_distance:.1f}x median, closing loop)"
+        )
+    return False
+
+
 @dataclass
 class _SkirtInputs:
     """Resolved boundary and options shared by the single- and two-tier skirt builders."""
@@ -697,6 +741,7 @@ def _build_single_tier_skirt(inputs: _SkirtInputs):
     has_smoothed_coords = inputs.has_smoothed_coords
     base_depth = inputs.base_depth
     boundary_winding = inputs.boundary_winding
+    clockwise = boundary_winding == "clockwise"
     use_catmull_rom = inputs.use_catmull_rom
     use_fractional_edges = inputs.use_fractional_edges
     use_rectangle_edges = inputs.use_rectangle_edges
@@ -741,9 +786,7 @@ def _build_single_tier_skirt(inputs: _SkirtInputs):
 
         n_existing = len(positions)
         surface_boundary_indices = list(range(n_existing, n_existing + n_boundary))
-        base_boundary_indices = list(
-            range(n_existing + n_boundary, n_existing + 2 * n_boundary)
-        )
+        base_boundary_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
 
         # Create faces
         boundary_faces = []
@@ -838,63 +881,26 @@ def _build_single_tier_skirt(inputs: _SkirtInputs):
             faces_skipped_none += 1
             continue
 
-        # Check if this is the wrap-around edge (last → first vertex)
-        # For rectangle edges with angular sorting, check if gap is reasonable
-        if i == n_boundary - 1 and use_rectangle_edges:
-            # Get positions of last and first boundary points
-            y_last, x_last = boundary_points[i]
-            y_first, x_first = boundary_points[0]
-
-            # Calculate wrap-around distance
-            distance = np.sqrt((y_last - y_first)**2 + (x_last - x_first)**2)
-
-            # Calculate median edge distance for comparison
-            # Sample distances between consecutive boundary points to establish "normal" edge spacing
-            sample_size = min(100, n_boundary - 1)
-            sample_distances = []
-            for j in range(sample_size):
-                y_curr, x_curr = boundary_points[j]
-                y_next, x_next = boundary_points[j + 1]
-                d = np.sqrt((y_next - y_curr)**2 + (x_next - x_curr)**2)
-                sample_distances.append(d)
-
-            median_edge_distance = np.median(sample_distances)
-
-            # Allow wrap-around only if it's within 10x the median edge distance
-            # This prevents diagonal artifacts across the mesh
-            threshold = max(median_edge_distance * 10.0, 50.0)
-
-            if distance > threshold:
-                # Skip this wrap-around edge - gap is too large relative to normal edge spacing
-                faces_skipped_distance += 1
-                logger.warning(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
-                continue
-            elif distance > median_edge_distance * 2.0:
-                # Warn but still create the face (gap is large but acceptable)
-                logger.info(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
+        # Closing segment of angle-sorted rectangle edges can span the mesh
+        if (
+            i == n_boundary - 1
+            and use_rectangle_edges
+            and _wraparound_gap_too_large(boundary_points)
+        ):
+            faces_skipped_distance += 1
+            continue
 
         # Create quad connecting top boundary to bottom
         # Face winding must match boundary direction for correct normals
-        if boundary_winding == "clockwise":
-            # Clockwise boundary: reverse face winding for outward normals
-            boundary_faces.append(
-                (
-                    boundary_indices[i],
-                    base_indices[i],
-                    base_indices[next_i],
-                    boundary_indices[next_i],
-                )
+        boundary_faces.append(
+            _skirt_quad(
+                boundary_indices[i],
+                boundary_indices[next_i],
+                base_indices[i],
+                base_indices[next_i],
+                clockwise,
             )
-        else:
-            # Counter-clockwise boundary: standard winding
-            boundary_faces.append(
-                (
-                    boundary_indices[i],
-                    boundary_indices[next_i],
-                    base_indices[next_i],
-                    base_indices[i],
-                )
-            )
+        )
         faces_created += 1
 
     # DEBUG: Print face generation statistics
@@ -903,7 +909,9 @@ def _build_single_tier_skirt(inputs: _SkirtInputs):
     logger.info(f"{'='*60}")
     logger.info(f"Boundary winding: {boundary_winding}")
     logger.info(f"Boundary vertices: {n_boundary}")
-    logger.info(f"Boundary indices (valid): {n_boundary - sum(1 for idx in boundary_indices if idx is None)}")
+    logger.info(
+        f"Boundary indices (valid): {n_boundary - sum(1 for idx in boundary_indices if idx is None)}"
+    )
     logger.info(f"Boundary indices (None): {sum(1 for idx in boundary_indices if idx is None)}")
     logger.info(f"Faces created: {faces_created}")
     logger.info(f"Faces skipped (None index): {faces_skipped_none}")
@@ -918,40 +926,341 @@ def _build_single_tier_skirt(inputs: _SkirtInputs):
     return boundary_vertices, boundary_faces
 
 
-def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_edge_colors, surface_colors):
-    """Skirt with a mid tier that follows the surface and a flat colored base tier.
+def _interpolated_surface_color(y, x, coord_to_index, surface_colors, allow_partial):
+    """Bilinear color from the four mesh vertices around (y, x), or None.
 
-    Returns (boundary_vertices, boundary_faces, boundary_colors).
+    With allow_partial, fewer than four corners fall back to their mean color.
     """
-    from src.terrain.materials import get_base_material_color
+    y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
+    corners = {}
+    for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
+        idx = coord_to_index.get((y_floor + dy, x_floor + dx))
+        if idx is not None:
+            corners[(dy, dx)] = surface_colors[idx, :3]
 
-    positions = inputs.positions
+    if len(corners) == 4:
+        fy, fx = y - y_floor, x - x_floor
+        c0 = corners[(0, 0)].astype(float) * (1 - fx) + corners[(0, 1)].astype(float) * fx
+        c1 = corners[(1, 0)].astype(float) * (1 - fx) + corners[(1, 1)].astype(float) * fx
+        return (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
+    if allow_partial and corners:
+        return np.mean(np.array(list(corners.values()), dtype=float), axis=0).astype(np.uint8)
+    return None
+
+
+def _z_along_original_boundary(y, x, coords, z_values):
+    """Z for a smoothed boundary point, interpolated along the nearest original boundary segment.
+
+    Smoother than bilinear surface interpolation for Catmull-Rom curves. Returns None when
+    the segment has a missing endpoint Z or zero length.
+    """
+    closest_idx = np.argmin(np.sqrt((coords[:, 0] - y) ** 2 + (coords[:, 1] - x) ** 2))
+    next_idx = (closest_idx + 1) % len(coords)
+    z1, z2 = z_values[closest_idx], z_values[next_idx]
+    if z1 is None or z2 is None:
+        return None
+
+    orig_y1, orig_x1 = coords[closest_idx]
+    orig_y2, orig_x2 = coords[next_idx]
+    seg_dist = np.sqrt((orig_y2 - orig_y1) ** 2 + (orig_x2 - orig_x1) ** 2)
+    if seg_dist <= 0:
+        return None
+    point_dist = np.sqrt((y - orig_y1) ** 2 + (x - orig_x1) ** 2)
+    t = np.clip(point_dist / seg_dist, 0, 1)
+    return z1 * (1 - t) + z2 * t
+
+
+def _two_tier_colors(inputs: _SkirtInputs, base_color_rgb, blend_edge_colors, surface_colors):
+    """Per-vertex skirt colors: surface color on the upper tiers, base material on the base.
+
+    Tiers are surface + mid + base with smoothed coordinates, otherwise mid + base.
+    The surface color is blended from the mesh when requested, else the base color.
+    """
+    has_smoothed_coords = inputs.has_smoothed_coords
+    n_boundary = len(inputs.boundary_points)
     boundary_points = inputs.boundary_points
+    coord_to_index = inputs.coord_to_index
+    n_tiers = 3 if has_smoothed_coords else 2
+    boundary_colors = np.zeros((n_tiers * n_boundary, 3), dtype=np.uint8)
+    base_color_uint8 = (np.array(base_color_rgb) * 255).astype(np.uint8)
+    blend = blend_edge_colors and surface_colors is not None
+
+    for i, (y, x) in enumerate(boundary_points):
+        surface_color = None
+        if blend and has_smoothed_coords:
+            surface_color = _interpolated_surface_color(
+                y, x, coord_to_index, surface_colors, allow_partial=False
+            )
+        elif blend:
+            # Integer coords: direct lookup, else interpolate (rectangle edges after downsampling)
+            original_idx = coord_to_index.get((int(y), int(x)))
+            if original_idx is not None:
+                surface_color = surface_colors[original_idx, :3]
+            else:
+                surface_color = _interpolated_surface_color(
+                    y, x, coord_to_index, surface_colors, allow_partial=True
+                )
+        if surface_color is None:
+            surface_color = base_color_uint8
+
+        # Every tier but the base carries the surface color
+        for tier in range(n_tiers - 1):
+            boundary_colors[i + tier * n_boundary, :3] = surface_color
+        boundary_colors[i + (n_tiers - 1) * n_boundary, :3] = base_color_uint8
+
+    return boundary_colors
+
+
+def _log_two_tier_face_stats(
+    boundary_winding,
+    n_boundary,
+    surface_indices,
+    has_smoothed_coords,
+    bridge_faces_created,
+    faces_created,
+    faces_skipped_none,
+    faces_skipped_distance,
+    boundary_faces,
+):
+    """Log face-generation statistics for the two-tier skirt."""
+    # DEBUG: Print face generation statistics
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Boundary Face Generation (Two-Tier)")
+    logger.info(f"{'='*60}")
+    logger.info(f"Boundary winding: {boundary_winding}")
+    logger.info(f"Boundary vertices: {n_boundary}")
+    logger.info(
+        f"Surface indices (valid): {n_boundary - sum(1 for idx in surface_indices if idx is None)}"
+    )
+    logger.info(f"Surface indices (None): {sum(1 for idx in surface_indices if idx is None)}")
+    if has_smoothed_coords:
+        logger.info(f"Bridge faces created: {bridge_faces_created}")
+    logger.info(f"Tier faces created: {faces_created}")
+    logger.info(f"Faces skipped (None index): {faces_skipped_none}")
+    logger.info(f"Faces skipped (distance check): {faces_skipped_distance}")
+    logger.info(f"Total boundary faces: {len(boundary_faces)}")
+    expected_faces = n_boundary * 2  # 2 faces per boundary segment (upper + lower)
+    coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
+    logger.info(f"Expected faces (ideal): {expected_faces}")
+    logger.info(f"Coverage: {coverage:.1f}%")
+
+    # DEBUG: Sample a few face windings to verify correctness
+    if len(boundary_faces) > 0:
+        logger.info(f"\nSample face indices (first 3 faces):")
+        for i in range(min(3, len(boundary_faces))):
+            face = boundary_faces[i]
+            logger.info(f"  Face {i}: {face}")
+
+    logger.info(f"{'='*60}\n")
+
+
+def _log_interpolation_diagnostics(
+    has_smoothed_coords,
+    failed_coords,
+    position_samples,
+    interp_success,
+    interp_fail_no_corners,
+    get_position_at_coords,
+    use_fractional_edges,
+    model_offset,
+):
+    """Log how many smoothed boundary points interpolated and sample the resulting positions."""
+    # DEBUG: Print interpolation summary
+    if has_smoothed_coords:
+        total_boundary = interp_success + interp_fail_no_corners
+        success_rate = interp_success / total_boundary * 100 if total_boundary > 0 else 0
+        logger.info(f"\n[DIAG] Vertex interpolation summary:")
+        logger.info(f"  Success: {interp_success}/{total_boundary} ({success_rate:.1f}%)")
+        logger.info(f"  Failed (no corners): {interp_fail_no_corners}")
+        if failed_coords:
+            logger.info(f"  First failed coords (up to 20):")
+            for y, x in failed_coords[:10]:
+                logger.info(f"    (y={y:.2f}, x={x:.2f})")
+            if len(failed_coords) > 10:
+                logger.info(f"    ... and {len(failed_coords) - 10} more")
+
+        # Print detailed missing corner info
+        if (
+            hasattr(get_position_at_coords, "missing_corner_samples")
+            and get_position_at_coords.missing_corner_samples
+        ):
+            samples = get_position_at_coords.missing_corner_samples[:10]
+            logger.info(f"\n[DIAG] Missing corner details (first {len(samples)}):")
+            for s in samples:
+                logger.info(
+                    f"    coord=({s['y']:.2f}, {s['x']:.2f}) floor=({s['y_floor']}, {s['x_floor']}) "
+                    f"missing={s['missing']} had={s['n_corners']}/4 corners"
+                )
+
+        # Print position interpolation samples to verify smoothness
+        if position_samples:
+            frac_mode = use_fractional_edges and model_offset is not None
+            logger.info(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
+            logger.info(f"  Fractional edge mode: {'ENABLED' if frac_mode else 'DISABLED'}")
+            if frac_mode:
+                logger.info(f"  Surface tier: Bilinear interpolation (aligned with mesh, no gap)")
+                logger.info(f"  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)")
+            if frac_mode:
+                logger.info(
+                    f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'surface tier (bilinear)':>23} | {'z':>8}"
+                )
+                logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*23}-+-{'-'*8}")
+                for s in position_samples[:20]:
+                    logger.info(
+                        f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                        f"({s['x_out']:9.4f}, {s['y_out']:9.4f}) | {s['z_out']:8.4f}"
+                    )
+            else:
+                logger.info(
+                    f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}"
+                )
+                logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*10}-{'-'*10}-{'-'*8}")
+                for s in position_samples[:20]:
+                    logger.info(
+                        f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
+                        f"{s['x_out']:10.5f} {s['y_out']:10.5f} {s['z_out']:8.4f}"
+                    )
+            if len(position_samples) > 20:
+                logger.info(f"  ... ({len(position_samples) - 20} more samples)")
+
+            # Check for stair-stepping: are X,Y outputs changing smoothly?
+            x_outs = [s["x_out"] for s in position_samples]
+            y_outs = [s["y_out"] for s in position_samples]
+            x_diffs = [abs(x_outs[i + 1] - x_outs[i]) for i in range(len(x_outs) - 1)]
+            y_diffs = [abs(y_outs[i + 1] - y_outs[i]) for i in range(len(y_outs) - 1)]
+            logger.info(f"\n  Output position deltas (smoothness check):")
+            logger.info(
+                f"    X: min={min(x_diffs) if x_diffs else 0:.6f}, max={max(x_diffs) if x_diffs else 0:.6f}, "
+                f"mean={sum(x_diffs)/len(x_diffs) if x_diffs else 0:.6f}"
+            )
+            logger.info(
+                f"    Y: min={min(y_diffs) if y_diffs else 0:.6f}, max={max(y_diffs) if y_diffs else 0:.6f}, "
+                f"mean={sum(y_diffs)/len(y_diffs) if y_diffs else 0:.6f}"
+            )
+
+
+def _two_tier_faces(
+    inputs: _SkirtInputs, surface_indices, valid_boundary_vertex, mid_indices, base_indices
+):
+    """Quad faces for the skirt: optional bridge from the stair-step mesh edge, then surface -> mid -> base."""
+    n_boundary = len(inputs.boundary_points)
+    use_rectangle_edges = inputs.use_rectangle_edges
+    has_smoothed_coords = inputs.has_smoothed_coords
+    boundary_points = inputs.boundary_points
+    clockwise = inputs.boundary_winding == "clockwise"
+    use_fractional_edges = inputs.use_fractional_edges
+    use_catmull_rom = inputs.use_catmull_rom
+    coord_to_index = inputs.coord_to_index
+    boundary_winding = inputs.boundary_winding
+    boundary_faces = []
+
+    # DEBUG: Track face generation statistics
+    faces_created = 0
+    faces_skipped_none = 0
+    faces_skipped_distance = 0
+    bridge_faces_created = 0
+
+    for i in range(n_boundary):
+        # Skip if surface index is None (integer coords) or vertex wasn't initialized (smoothed coords)
+        if surface_indices[i] is None or not valid_boundary_vertex[i]:
+            faces_skipped_none += 1
+            continue
+
+        next_i = (i + 1) % n_boundary
+        if surface_indices[next_i] is None or not valid_boundary_vertex[next_i]:
+            faces_skipped_none += 1
+            continue
+
+        # Closing segment of angle-sorted rectangle edges can span the mesh
+        if (
+            i == n_boundary - 1
+            and use_rectangle_edges
+            and _wraparound_gap_too_large(boundary_points)
+        ):
+            faces_skipped_distance += 1
+            continue
+
+        # When using smoothed coordinates (but NOT fractional/Catmull-Rom), bridge original
+        # mesh edge to new smooth boundary surface tier.
+        # Skip for fractional edges: surface tier already aligned with mesh (no gap)
+        # Skip for Catmull-Rom: creates too many interpolated points
+        if has_smoothed_coords and not (use_fractional_edges or use_catmull_rom):
+            # Find nearest original boundary vertices to this smoothed segment
+            # by rounding the smoothed coordinates
+            orig_i_y, orig_i_x = int(np.round(boundary_points[i][0])), int(
+                np.round(boundary_points[i][1])
+            )
+            orig_next_y, orig_next_x = int(np.round(boundary_points[next_i][0])), int(
+                np.round(boundary_points[next_i][1])
+            )
+
+            orig_i = coord_to_index.get((orig_i_y, orig_i_x))
+            orig_next = coord_to_index.get((orig_next_y, orig_next_x))
+
+            if orig_i is not None and orig_next is not None:
+                # Bridge face: original boundary → new smooth surface tier
+                # This connects the stair-step to the smooth curve
+                # Face winding must match boundary direction
+                boundary_faces.append(
+                    _skirt_quad(
+                        orig_i, orig_next, surface_indices[i], surface_indices[next_i], clockwise
+                    )
+                )
+                bridge_faces_created += 1
+
+        # Upper tier: surface → mid
+        # Face winding must match boundary direction for correct normals
+        boundary_faces.append(
+            _skirt_quad(
+                surface_indices[i],
+                surface_indices[next_i],
+                mid_indices[i],
+                mid_indices[next_i],
+                clockwise,
+            )
+        )
+        faces_created += 1
+
+        # Lower tier: mid → base
+        boundary_faces.append(
+            _skirt_quad(
+                mid_indices[i],
+                mid_indices[next_i],
+                base_indices[i],
+                base_indices[next_i],
+                clockwise,
+            )
+        )
+        faces_created += 1
+
+    _log_two_tier_face_stats(
+        boundary_winding=boundary_winding,
+        n_boundary=n_boundary,
+        surface_indices=surface_indices,
+        has_smoothed_coords=has_smoothed_coords,
+        bridge_faces_created=bridge_faces_created,
+        faces_created=faces_created,
+        faces_skipped_none=faces_skipped_none,
+        faces_skipped_distance=faces_skipped_distance,
+        boundary_faces=boundary_faces,
+    )
+    return boundary_faces
+
+
+def _two_tier_vertices(inputs: _SkirtInputs, mid_depth):
+    """Surface (smoothed coords only), mid and base tier vertices, plus which boundary points resolved."""
+    has_smoothed_coords = inputs.has_smoothed_coords
     original_boundary_points = inputs.original_boundary_points
     coord_to_index = inputs.coord_to_index
-    get_position_at_coords = inputs.get_position_at_coords
-    has_smoothed_coords = inputs.has_smoothed_coords
-    base_depth = inputs.base_depth
-    boundary_winding = inputs.boundary_winding
-    use_catmull_rom = inputs.use_catmull_rom
+    positions = inputs.positions
+    n_boundary = len(inputs.boundary_points)
+    boundary_points = inputs.boundary_points
     use_fractional_edges = inputs.use_fractional_edges
-    use_rectangle_edges = inputs.use_rectangle_edges
-    scale_factor = inputs.scale_factor
+    base_depth = inputs.base_depth
+    get_position_at_coords = inputs.get_position_at_coords
+    use_catmull_rom = inputs.use_catmull_rom
     model_offset = inputs.model_offset
-    n_boundary = len(boundary_points)
-
-    # ===== TWO-TIER MODE =====
-
-    # Auto-calculate mid_depth if not provided
-    # mid_depth is a positive offset below surface (e.g., 0.05)
-    # base_depth is positive offset below min surface (e.g., 0.2)
-    # Default: shallow tier at 25% of base depth distance
-    if mid_depth is None:
-        mid_depth = base_depth * 0.25
-
-    # Resolve material to RGB
-    base_color_rgb = get_base_material_color(base_material)
-
+    scale_factor = inputs.scale_factor
     # When using smoothed coordinates, extract original boundary Z values for smooth interpolation
     # Also pre-compute original boundary coordinates as numpy array for fast distance calculations
     original_boundary_z_values = None
@@ -989,7 +1298,6 @@ def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_
     # DEBUG: Track interpolation failures by edge region
     interp_success = 0
     interp_fail_no_corners = 0
-    interp_fail_fallback = 0
     failed_coords = []
 
     # Analyze boundary coordinate ranges
@@ -1028,28 +1336,16 @@ def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_
 
             # Improve Z value: use smooth interpolation along boundary curve
             # instead of spatial bilinear interpolation
-            if use_catmull_rom and original_boundary_z_values and original_boundary_coords_array is not None:
-                # OPTIMIZATION: Use vectorized numpy to find nearest original boundary point
-                # instead of Python loop (O(N) → O(1) for distance computation)
-                dists = np.sqrt((original_boundary_coords_array[:, 0] - y)**2 +
-                               (original_boundary_coords_array[:, 1] - x)**2)
-                closest_idx = np.argmin(dists)
-
-                # Interpolate Z between this point and next
-                next_idx = (closest_idx + 1) % len(original_boundary_points)
-                z1 = original_boundary_z_values[closest_idx]
-                z2 = original_boundary_z_values[next_idx]
-
-                if z1 is not None and z2 is not None:
-                    # Distance-based interpolation within the segment
-                    orig_y1, orig_x1 = original_boundary_coords_array[closest_idx]
-                    orig_y2, orig_x2 = original_boundary_coords_array[next_idx]
-
-                    seg_dist = np.sqrt((orig_y2 - orig_y1)**2 + (orig_x2 - orig_x1)**2)
-                    if seg_dist > 0:
-                        point_dist = np.sqrt((y - orig_y1)**2 + (x - orig_x1)**2)
-                        t = np.clip(point_dist / seg_dist, 0, 1)
-                        pos[2] = z1 * (1 - t) + z2 * t
+            if (
+                use_catmull_rom
+                and original_boundary_z_values
+                and original_boundary_coords_array is not None
+            ):
+                z = _z_along_original_boundary(
+                    y, x, original_boundary_coords_array, original_boundary_z_values
+                )
+                if z is not None:
+                    pos[2] = z
 
             # For fractional edges: DON'T adjust surface tier X,Y
             # Keep surface vertices aligned with mesh boundary (from bilinear interpolation)
@@ -1059,16 +1355,18 @@ def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_
             # Sample positions for diagnostic output
             # Surface tier uses bilinear interpolation (aligned with mesh)
             if len(position_samples) < 80:
-                position_samples.append({
-                    'i': i,
-                    'y_in': y,
-                    'x_in': x,
-                    'bilinear_x': bilinear_x,
-                    'bilinear_y': bilinear_y,
-                    'x_out': pos[0],  # Surface tier (snapped to mesh)
-                    'y_out': pos[1],
-                    'z_out': pos[2],
-                })
+                position_samples.append(
+                    {
+                        "i": i,
+                        "y_in": y,
+                        "x_in": x,
+                        "bilinear_x": bilinear_x,
+                        "bilinear_y": bilinear_y,
+                        "x_out": pos[0],  # Surface tier (snapped to mesh)
+                        "y_out": pos[1],
+                        "z_out": pos[2],
+                    }
+                )
 
             # Store the surface position
             surface_vertices[i] = pos.copy()
@@ -1105,61 +1403,48 @@ def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_
 
         base_vertices[i] = pos_base
 
-    # DEBUG: Print interpolation summary
-    if has_smoothed_coords:
-        total_boundary = interp_success + interp_fail_no_corners
-        success_rate = interp_success / total_boundary * 100 if total_boundary > 0 else 0
-        logger.info(f"\n[DIAG] Vertex interpolation summary:")
-        logger.info(f"  Success: {interp_success}/{total_boundary} ({success_rate:.1f}%)")
-        logger.info(f"  Failed (no corners): {interp_fail_no_corners}")
-        if failed_coords:
-            logger.info(f"  First failed coords (up to 20):")
-            for y, x in failed_coords[:10]:
-                logger.info(f"    (y={y:.2f}, x={x:.2f})")
-            if len(failed_coords) > 10:
-                logger.info(f"    ... and {len(failed_coords) - 10} more")
+    _log_interpolation_diagnostics(
+        has_smoothed_coords=has_smoothed_coords,
+        failed_coords=failed_coords,
+        position_samples=position_samples,
+        interp_success=interp_success,
+        interp_fail_no_corners=interp_fail_no_corners,
+        get_position_at_coords=get_position_at_coords,
+        use_fractional_edges=use_fractional_edges,
+        model_offset=model_offset,
+    )
+    return base_vertices, mid_vertices, surface_vertices, valid_boundary_vertex
 
-        # Print detailed missing corner info
-        if hasattr(get_position_at_coords, 'missing_corner_samples') and get_position_at_coords.missing_corner_samples:
-            samples = get_position_at_coords.missing_corner_samples[:10]
-            logger.info(f"\n[DIAG] Missing corner details (first {len(samples)}):")
-            for s in samples:
-                logger.info(f"    coord=({s['y']:.2f}, {s['x']:.2f}) floor=({s['y_floor']}, {s['x_floor']}) "
-                      f"missing={s['missing']} had={s['n_corners']}/4 corners")
 
-        # Print position interpolation samples to verify smoothness
-        if position_samples:
-            frac_mode = use_fractional_edges and model_offset is not None
-            logger.info(f"\n[DIAG] Position interpolation samples (first {len(position_samples)}):")
-            logger.info(f"  Fractional edge mode: {'ENABLED' if frac_mode else 'DISABLED'}")
-            if frac_mode:
-                logger.info(f"  Surface tier: Bilinear interpolation (aligned with mesh, no gap)")
-                logger.info(f"  Mid/Base tiers: Fractional X,Y coords (smooth curved edge)")
-            if frac_mode:
-                logger.info(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'surface tier (bilinear)':>23} | {'z':>8}")
-                logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*23}-+-{'-'*8}")
-                for s in position_samples[:20]:
-                    logger.info(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
-                          f"({s['x_out']:9.4f}, {s['y_out']:9.4f}) | {s['z_out']:8.4f}")
-            else:
-                logger.info(f"  {'i':>4} | {'y_in':>8} {'x_in':>8} | {'x_out':>10} {'y_out':>10} {'z_out':>8}")
-                logger.info(f"  {'-'*4}-+-{'-'*8}-{'-'*8}-+-{'-'*10}-{'-'*10}-{'-'*8}")
-                for s in position_samples[:20]:
-                    logger.info(f"  {s['i']:4d} | {s['y_in']:8.3f} {s['x_in']:8.3f} | "
-                          f"{s['x_out']:10.5f} {s['y_out']:10.5f} {s['z_out']:8.4f}")
-            if len(position_samples) > 20:
-                logger.info(f"  ... ({len(position_samples) - 20} more samples)")
+def _build_two_tier_skirt(
+    inputs: _SkirtInputs, mid_depth, base_material, blend_edge_colors, surface_colors
+):
+    """Skirt with a mid tier that follows the surface and a flat colored base tier.
 
-            # Check for stair-stepping: are X,Y outputs changing smoothly?
-            x_outs = [s['x_out'] for s in position_samples]
-            y_outs = [s['y_out'] for s in position_samples]
-            x_diffs = [abs(x_outs[i+1] - x_outs[i]) for i in range(len(x_outs)-1)]
-            y_diffs = [abs(y_outs[i+1] - y_outs[i]) for i in range(len(y_outs)-1)]
-            logger.info(f"\n  Output position deltas (smoothness check):")
-            logger.info(f"    X: min={min(x_diffs) if x_diffs else 0:.6f}, max={max(x_diffs) if x_diffs else 0:.6f}, "
-                  f"mean={sum(x_diffs)/len(x_diffs) if x_diffs else 0:.6f}")
-            logger.info(f"    Y: min={min(y_diffs) if y_diffs else 0:.6f}, max={max(y_diffs) if y_diffs else 0:.6f}, "
-                  f"mean={sum(y_diffs)/len(y_diffs) if y_diffs else 0:.6f}")
+    Returns (boundary_vertices, boundary_faces, boundary_colors).
+    """
+    from src.terrain.materials import get_base_material_color
+
+    positions = inputs.positions
+    boundary_points = inputs.boundary_points
+    coord_to_index = inputs.coord_to_index
+    has_smoothed_coords = inputs.has_smoothed_coords
+    base_depth = inputs.base_depth
+    n_boundary = len(boundary_points)
+
+    # Auto-calculate mid_depth if not provided
+    # mid_depth is a positive offset below surface (e.g., 0.05)
+    # base_depth is positive offset below min surface (e.g., 0.2)
+    # Default: shallow tier at 25% of base depth distance
+    if mid_depth is None:
+        mid_depth = base_depth * 0.25
+
+    # Resolve material to RGB
+    base_color_rgb = get_base_material_color(base_material)
+
+    base_vertices, mid_vertices, surface_vertices, valid_boundary_vertex = _two_tier_vertices(
+        inputs, mid_depth=mid_depth
+    )
 
     # Stack vertices appropriately based on coordinate type
     n_existing = len(positions)
@@ -1177,259 +1462,20 @@ def _build_two_tier_skirt(inputs: _SkirtInputs, mid_depth, base_material, blend_
         mid_indices = list(range(n_existing, n_existing + n_boundary))
         base_indices = list(range(n_existing + n_boundary, n_existing + 2 * n_boundary))
 
-    boundary_faces = []
+    boundary_faces = _two_tier_faces(
+        inputs,
+        surface_indices=surface_indices,
+        valid_boundary_vertex=valid_boundary_vertex,
+        mid_indices=mid_indices,
+        base_indices=base_indices,
+    )
 
-    # DEBUG: Track face generation statistics
-    faces_created = 0
-    faces_skipped_none = 0
-    faces_skipped_distance = 0
-    bridge_faces_created = 0
-
-    for i in range(n_boundary):
-        # Skip if surface index is None (integer coords) or vertex wasn't initialized (smoothed coords)
-        if surface_indices[i] is None or not valid_boundary_vertex[i]:
-            faces_skipped_none += 1
-            continue
-
-        next_i = (i + 1) % n_boundary
-        if surface_indices[next_i] is None or not valid_boundary_vertex[next_i]:
-            faces_skipped_none += 1
-            continue
-
-        # Check if this is the wrap-around edge (last → first vertex)
-        # For rectangle edges with angular sorting, check if gap is reasonable
-        if i == n_boundary - 1 and use_rectangle_edges:
-            # Get positions of last and first boundary points
-            y_last, x_last = boundary_points[i]
-            y_first, x_first = boundary_points[0]
-
-            # Calculate wrap-around distance
-            distance = np.sqrt((y_last - y_first)**2 + (x_last - x_first)**2)
-
-            # Calculate median edge distance for comparison
-            # Sample distances between consecutive boundary points to establish "normal" edge spacing
-            sample_size = min(100, n_boundary - 1)
-            sample_distances = []
-            for j in range(sample_size):
-                y_curr, x_curr = boundary_points[j]
-                y_next, x_next = boundary_points[j + 1]
-                d = np.sqrt((y_next - y_curr)**2 + (x_next - x_curr)**2)
-                sample_distances.append(d)
-
-            median_edge_distance = np.median(sample_distances)
-
-            # Allow wrap-around only if it's within 10x the median edge distance
-            # This prevents diagonal artifacts across the mesh
-            threshold = max(median_edge_distance * 10.0, 50.0)
-
-            if distance > threshold:
-                # Skip this wrap-around edge - gap is too large relative to normal edge spacing
-                faces_skipped_distance += 1
-                logger.warning(f"  ⚠️  Wrap-around face skipped: distance = {distance:.2f} > {threshold:.1f} (median edge = {median_edge_distance:.2f})")
-                continue
-            elif distance > median_edge_distance * 2.0:
-                # Warn but still create the face (gap is large but acceptable)
-                logger.info(f"  ℹ️  Wrap-around face: distance = {distance:.2f} pixels ({distance/median_edge_distance:.1f}x median, closing loop)")
-
-        # When using smoothed coordinates (but NOT fractional/Catmull-Rom), bridge original
-        # mesh edge to new smooth boundary surface tier.
-        # Skip for fractional edges: surface tier already aligned with mesh (no gap)
-        # Skip for Catmull-Rom: creates too many interpolated points
-        if has_smoothed_coords and not (use_fractional_edges or use_catmull_rom):
-            # Find nearest original boundary vertices to this smoothed segment
-            # by rounding the smoothed coordinates
-            orig_i_y, orig_i_x = int(np.round(boundary_points[i][0])), int(np.round(boundary_points[i][1]))
-            orig_next_y, orig_next_x = int(np.round(boundary_points[next_i][0])), int(np.round(boundary_points[next_i][1]))
-
-            orig_i = coord_to_index.get((orig_i_y, orig_i_x))
-            orig_next = coord_to_index.get((orig_next_y, orig_next_x))
-
-            if orig_i is not None and orig_next is not None:
-                # Bridge face: original boundary → new smooth surface tier
-                # This connects the stair-step to the smooth curve
-                # Face winding must match boundary direction
-                if boundary_winding == "clockwise":
-                    # Clockwise boundary: reverse face winding
-                    boundary_faces.append(
-                        (
-                            orig_i,
-                            surface_indices[i],
-                            surface_indices[next_i],
-                            orig_next,
-                        )
-                    )
-                else:
-                    # Counter-clockwise boundary: standard winding
-                    boundary_faces.append(
-                        (
-                            orig_i,
-                            orig_next,
-                            surface_indices[next_i],
-                            surface_indices[i],
-                        )
-                    )
-                bridge_faces_created += 1
-
-        # Upper tier: surface → mid
-        # Face winding must match boundary direction for correct normals
-        if boundary_winding == "clockwise":
-            # Clockwise boundary: reverse face winding for outward normals
-            boundary_faces.append(
-                (
-                    surface_indices[i],
-                    mid_indices[i],
-                    mid_indices[next_i],
-                    surface_indices[next_i],
-                )
-            )
-        else:
-            # Counter-clockwise boundary: standard winding
-            boundary_faces.append(
-                (
-                    surface_indices[i],
-                    surface_indices[next_i],
-                    mid_indices[next_i],
-                    mid_indices[i],
-                )
-            )
-        faces_created += 1
-
-        # Lower tier: mid → base
-        if boundary_winding == "clockwise":
-            # Clockwise boundary: reverse face winding for outward normals
-            boundary_faces.append(
-                (
-                    mid_indices[i],
-                    base_indices[i],
-                    base_indices[next_i],
-                    mid_indices[next_i],
-                )
-            )
-        else:
-            # Counter-clockwise boundary: standard winding
-            boundary_faces.append(
-                (
-                    mid_indices[i],
-                    mid_indices[next_i],
-                    base_indices[next_i],
-                    base_indices[i],
-                )
-            )
-        faces_created += 1
-
-    # DEBUG: Print face generation statistics
-    logger.info(f"\n{'='*60}")
-    logger.info(f"Boundary Face Generation (Two-Tier)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Boundary winding: {boundary_winding}")
-    logger.info(f"Boundary vertices: {n_boundary}")
-    logger.info(f"Surface indices (valid): {n_boundary - sum(1 for idx in surface_indices if idx is None)}")
-    logger.info(f"Surface indices (None): {sum(1 for idx in surface_indices if idx is None)}")
-    if has_smoothed_coords:
-        logger.info(f"Bridge faces created: {bridge_faces_created}")
-    logger.info(f"Tier faces created: {faces_created}")
-    logger.info(f"Faces skipped (None index): {faces_skipped_none}")
-    logger.info(f"Faces skipped (distance check): {faces_skipped_distance}")
-    logger.info(f"Total boundary faces: {len(boundary_faces)}")
-    expected_faces = n_boundary * 2  # 2 faces per boundary segment (upper + lower)
-    coverage = faces_created / expected_faces * 100 if expected_faces > 0 else 0
-    logger.info(f"Expected faces (ideal): {expected_faces}")
-    logger.info(f"Coverage: {coverage:.1f}%")
-
-    # DEBUG: Sample a few face windings to verify correctness
-    if len(boundary_faces) > 0:
-        logger.info(f"\nSample face indices (first 3 faces):")
-        for i in range(min(3, len(boundary_faces))):
-            face = boundary_faces[i]
-            logger.info(f"  Face {i}: {face}")
-
-    logger.info(f"{'='*60}\n")
-
-    # Create colors (size depends on whether we created surface vertices)
-    if has_smoothed_coords:
-        # When using smoothed coordinates: surface + mid + base = 3 tiers
-        boundary_colors = np.zeros((3 * n_boundary, 3), dtype=np.uint8)
-    else:
-        # When using integer coordinates: mid + base = 2 tiers
-        boundary_colors = np.zeros((2 * n_boundary, 3), dtype=np.uint8)
-
-    base_color_uint8 = (np.array(base_color_rgb) * 255).astype(np.uint8)
-
-    for i, (y, x) in enumerate(boundary_points):
-        # Get surface color by interpolating from nearby vertices
-        surface_color = None
-        if blend_edge_colors and surface_colors is not None:
-            if has_smoothed_coords:
-                # For smoothed coordinates, interpolate color from corners
-                y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
-                color_corners = {}
-                for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
-                    yy, xx = y_floor + dy, x_floor + dx
-                    idx = coord_to_index.get((yy, xx))
-                    if idx is not None:
-                        color_corners[(dy, dx)] = surface_colors[idx, :3]
-
-                if len(color_corners) == 4:
-                    # Bilinear interpolation of color
-                    fy = y - y_floor
-                    fx = x - x_floor
-                    c00 = color_corners[(0, 0)].astype(float)
-                    c01 = color_corners[(0, 1)].astype(float)
-                    c10 = color_corners[(1, 0)].astype(float)
-                    c11 = color_corners[(1, 1)].astype(float)
-                    c0 = c00 * (1 - fx) + c01 * fx
-                    c1 = c10 * (1 - fx) + c11 * fx
-                    surface_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
-            else:
-                # For integer coordinates, try direct lookup first
-                y_int, x_int = int(y), int(x)
-                original_idx = coord_to_index.get((y_int, x_int))
-                if original_idx is not None:
-                    surface_color = surface_colors[original_idx, :3]
-                else:
-                    # Direct lookup failed - interpolate from nearby valid pixels
-                    # This happens with rectangle-edge sampling after downsampling
-                    y_floor, x_floor = int(np.floor(y)), int(np.floor(x))
-                    color_corners = {}
-                    for dy, dx in [(0, 0), (0, 1), (1, 0), (1, 1)]:
-                        yy, xx = y_floor + dy, x_floor + dx
-                        idx = coord_to_index.get((yy, xx))
-                        if idx is not None:
-                            color_corners[(dy, dx)] = surface_colors[idx, :3]
-
-                    if len(color_corners) >= 1:
-                        # Bilinear interpolation if we have all 4 corners
-                        if len(color_corners) == 4:
-                            fy = y - y_floor
-                            fx = x - x_floor
-                            c00 = color_corners[(0, 0)].astype(float)
-                            c01 = color_corners[(0, 1)].astype(float)
-                            c10 = color_corners[(1, 0)].astype(float)
-                            c11 = color_corners[(1, 1)].astype(float)
-                            c0 = c00 * (1 - fx) + c01 * fx
-                            c1 = c10 * (1 - fx) + c11 * fx
-                            surface_color = (c0 * (1 - fy) + c1 * fy).astype(np.uint8)
-                        else:
-                            # Fallback: average available corners
-                            colors_array = np.array(list(color_corners.values()), dtype=float)
-                            surface_color = np.mean(colors_array, axis=0).astype(np.uint8)
-
-        if surface_color is None:
-            # Use base material color as fallback
-            surface_color = base_color_uint8
-
-        # Assign colors based on tier structure
-        if has_smoothed_coords:
-            # Three-tier structure: surface + mid + base
-            # Surface tier uses mesh colors, mid/base use edge material or blended
-            boundary_colors[i, :3] = surface_color                           # Surface tier
-            boundary_colors[i + n_boundary, :3] = surface_color             # Mid tier (same as surface)
-            boundary_colors[i + 2 * n_boundary, :3] = base_color_uint8     # Base tier (uniform color)
-        else:
-            # Two-tier structure: mid + base
-            boundary_colors[i, :3] = surface_color             # Mid tier
-            boundary_colors[i + n_boundary, :3] = base_color_uint8  # Base tier
-
+    boundary_colors = _two_tier_colors(
+        inputs,
+        base_color_rgb=base_color_rgb,
+        blend_edge_colors=blend_edge_colors,
+        surface_colors=surface_colors,
+    )
     return boundary_vertices, boundary_faces, boundary_colors
 
 
