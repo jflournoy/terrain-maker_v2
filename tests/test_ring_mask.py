@@ -301,3 +301,40 @@ class TestRingMaskParameters:
                 inner_radius_meters=-100,
                 outer_radius_meters=500,
             )
+
+
+class TestApplyRingColorRealTerrain:
+    """apply_ring_color on colors as compute_colors actually stores them: (H, W, 4) uint8."""
+
+    def _terrain(self):
+        from rasterio import Affine
+
+        from terrain_maker.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.core import Terrain
+
+        yy, xx = np.mgrid[0:30, 0:40]
+        dem = (100 + 5 * np.sin(xx / 5) + 2 * np.cos(yy / 3)).astype(np.float32)
+        terrain = Terrain(dem, Affine(30, 0, 320000, 0, -30, 4700000), dem_crs="EPSG:32617")
+        terrain.transforms.append(lambda data, trans: (data, trans, None))
+        terrain.apply_transforms()
+        terrain.set_color_mapping(elevation_colormap, source_layers=["dem"])
+        terrain.compute_colors()
+        terrain.y_valid, terrain.x_valid = np.nonzero(~np.isnan(dem))
+        return terrain
+
+    def test_colors_ring_pixels_in_0_255_scale_and_leaves_others(self):
+        terrain = self._terrain()
+        assert terrain.colors.shape == (30, 40, 4) and terrain.colors.dtype == np.uint8
+        before = terrain.colors.copy()
+        ring_mask = np.zeros((30, 40), dtype=bool)
+        ring_mask[10:13, 5:35] = True
+
+        terrain.apply_ring_color(ring_mask, ring_color=(0.1, 0.5, 0.9))
+
+        np.testing.assert_array_equal(
+            terrain.colors[ring_mask, :3], [[26, 128, 230]] * ring_mask.sum()
+        )
+        np.testing.assert_array_equal(
+            terrain.colors[ring_mask, 3], before[ring_mask, 3]
+        )  # alpha kept
+        np.testing.assert_array_equal(terrain.colors[~ring_mask], before[~ring_mask])
