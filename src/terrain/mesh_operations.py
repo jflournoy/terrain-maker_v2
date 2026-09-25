@@ -351,6 +351,158 @@ def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop
     return filtered_curve
 
 
+def _select_rectangle_boundary(
+    boundary_points, coord_to_index, terrain, dem_shape, use_fractional_edges, edge_sample_spacing
+):
+    """Replace the morphological boundary with rectangle-edge samples when they cover it well.
+
+    Samples the DEM rectangle edges (fractional or integer, transform-aware when
+    ``terrain`` is given, else from ``dem_shape``). Keeps the morphological
+    boundary if the rectangle samples are too sparse.
+    """
+    original_morphological_boundary = boundary_points
+
+    # NEW: Use fractional coordinates to preserve projection curvature
+    if use_fractional_edges and terrain is not None:
+        # Fractional edge sampling - preserves curved boundary from projection
+        rect_boundary_fractional = generate_transform_aware_rectangle_edges_fractional(
+            terrain,
+            edge_sample_spacing
+        )
+
+        # Report results
+        original_shape = terrain.dem_shape
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Transform-Aware Fractional Edge Sampling (Curved Boundary)")
+        logger.info(f"{'='*60}")
+        logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+        logger.info(f"Fractional edge vertices: {len(rect_boundary_fractional)}")
+        logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+        logger.info(f"NOTE: Fractional coordinates preserve projection curvature")
+        logger.info(f"{'='*60}\n")
+
+        # Use fractional edges directly - they'll be processed by bilinear interpolation
+        # No need to filter through coord_to_index since these are fractional coords
+        rect_boundary_valid = rect_boundary_fractional
+
+    # Use transform-aware INTEGER approach if terrain provided but not fractional
+    elif terrain is not None:
+        # Transform-aware rectangle-edge sampling (avoids NaN margins)
+        rect_boundary_valid = generate_transform_aware_rectangle_edges(
+            terrain,
+            coord_to_index,
+            edge_sample_spacing
+        )
+
+        # Report results
+        original_shape = terrain.dem_shape
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Transform-Aware Rectangle Edge Sampling (Integer)")
+        logger.info(f"{'='*60}")
+        logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
+        logger.info(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
+        logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
+        logger.info(f"{'='*60}\n")
+    else:
+        # FALLBACK: Legacy approach using transformed DEM shape
+        if dem_shape is None:
+            raise ValueError("Either terrain or dem_shape required when use_rectangle_edges=True")
+
+        # Run diagnostic to show why this doesn't work well
+        diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
+        logger.info(f"\n{'='*60}")
+        logger.warning(f"⚠️  Legacy Rectangle Edge Sampling (Transformed DEM)")
+        logger.info(f"{'='*60}")
+        logger.info(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
+        logger.info(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
+        logger.info(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
+        logger.info(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
+        logger.info(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
+        logger.info(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
+        logger.info(f"\nRecommendation: {diagnostic['recommendation']}")
+        logger.info(f"Reason: {diagnostic['reason']}")
+        logger.info(f"💡 Tip: Pass terrain= parameter for transform-aware sampling (~100% coverage)")
+        logger.info(f"{'='*60}\n")
+
+        rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing)
+
+        # Filter to only include pixels that are actually valid mesh vertices
+        # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
+        rect_boundary_valid = [
+            (y, x) for y, x in rect_edge_pixels
+        if (int(y), int(x)) in coord_to_index
+    ]
+
+    # Use rectangle edges only if they produce a reasonable boundary
+    # If too few valid points, stick with the original morphological boundary
+    original_count = len(original_morphological_boundary)
+    rect_count = len(rect_boundary_valid)
+
+    # Heuristic: Need at least 80% of morphological boundary vertices, or at least 100 vertices
+    min_required = max(100, int(0.8 * original_count))
+
+    if rect_count >= min_required:
+        # Rectangle edges produced good boundary - use it
+        # IMPORTANT: For rectangle edges, the points are ALREADY in order from generate_rectangle_edge_pixels()
+        # which traces: top→right→bottom→left in a continuous loop
+        # DON'T sort them - sorting with KD-tree nearest-neighbor breaks down on dense point clouds (82K+ points)
+        # and can reduce the boundary from 82K points to just 10 points!
+        logger.info(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
+
+        # CRITICAL: After coordinate transformation, the natural rectangle order is destroyed!
+        # First deduplicate, then re-sort spatially to form a closed loop
+        logger.info(f"  Deduplicating boundary points...")
+        rect_boundary_unique = deduplicate_boundary_points(rect_boundary_valid)
+
+        # For dense boundaries, use angular sorting (faster and more robust)
+        # For sparse boundaries, use nearest-neighbor
+        if len(rect_boundary_unique) >= 100:
+            logger.info(f"  Sorting {len(rect_boundary_unique)} points using angular method...")
+            boundary_points = sort_boundary_points_angular(rect_boundary_unique)
+        else:
+            logger.info(f"  Sorting {len(rect_boundary_unique)} points using nearest-neighbor...")
+            boundary_points = sort_boundary_points(rect_boundary_unique)
+        logger.info(f"  ✓ Boundary sorted into continuous path")
+
+        # DEBUG: Check spatial distribution of boundary points
+        boundary_array = np.array(boundary_points)
+        y_min, y_max = boundary_array[:, 0].min(), boundary_array[:, 0].max()
+        x_min, x_max = boundary_array[:, 1].min(), boundary_array[:, 1].max()
+
+        # Count points on each edge (with 5% margin)
+        y_range = y_max - y_min
+        x_range = x_max - x_min
+        margin = 0.05
+
+        top_count = np.sum(boundary_array[:, 0] <= y_min + margin * y_range)
+        bottom_count = np.sum(boundary_array[:, 0] >= y_max - margin * y_range)
+        left_count = np.sum(boundary_array[:, 1] <= x_min + margin * x_range)
+        right_count = np.sum(boundary_array[:, 1] >= x_max - margin * x_range)
+
+        logger.info(f"  Boundary point distribution:")
+        logger.info(f"    Top edge (north):    {top_count:6d} points")
+        logger.info(f"    Bottom edge (south): {bottom_count:6d} points")
+        logger.info(f"    Left edge (west):    {left_count:6d} points")
+        logger.info(f"    Right edge (east):   {right_count:6d} points")
+
+        # Check if distribution is severely uneven (any edge has < 5% of points)
+        total_points = len(boundary_points)
+        min_percent = min(top_count, bottom_count, left_count, right_count) / total_points * 100
+        if min_percent < 5.0:
+            logger.warning(f"  ⚠️  Warning: Uneven distribution detected (min={min_percent:.1f}%)")
+            logger.info(f"  Sparse edges may have lower visual quality")
+    else:
+        # Rectangle edges too sparse - keep morphological boundary
+        boundary_points = original_morphological_boundary
+        logger.warning(f"✗ Rectangle-edge sampling: Too few valid vertices ({rect_count}), keeping morphological boundary ({original_count} vertices)")
+        if terrain is None:
+            logger.info(f"  Tip: Pass terrain= parameter for transform-aware sampling to avoid NaN margins")
+        else:
+            logger.info(f"  Tip: Check coordinate transformation - may be mapping outside valid mesh bounds")
+
+    return boundary_points
+
+
 def create_boundary_extension(
     positions,
     boundary_points,
@@ -453,148 +605,11 @@ def create_boundary_extension(
     from src.terrain.materials import get_base_material_color
     from scipy.interpolate import RegularGridInterpolator
 
-    # Generate rectangle edge pixels if requested
-    # Keep original morphological boundary_points as fallback
-    original_morphological_boundary = boundary_points
-
+    # Use rectangle-edge sampling if requested (falls back to the morphological boundary)
     if use_rectangle_edges:
-        # NEW: Use fractional coordinates to preserve projection curvature
-        if use_fractional_edges and terrain is not None:
-            # Fractional edge sampling - preserves curved boundary from projection
-            rect_boundary_fractional = generate_transform_aware_rectangle_edges_fractional(
-                terrain,
-                edge_sample_spacing
-            )
-
-            # Report results
-            original_shape = terrain.dem_shape
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Transform-Aware Fractional Edge Sampling (Curved Boundary)")
-            logger.info(f"{'='*60}")
-            logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
-            logger.info(f"Fractional edge vertices: {len(rect_boundary_fractional)}")
-            logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
-            logger.info(f"NOTE: Fractional coordinates preserve projection curvature")
-            logger.info(f"{'='*60}\n")
-
-            # Use fractional edges directly - they'll be processed by bilinear interpolation
-            # No need to filter through coord_to_index since these are fractional coords
-            rect_boundary_valid = rect_boundary_fractional
-
-        # Use transform-aware INTEGER approach if terrain provided but not fractional
-        elif terrain is not None:
-            # Transform-aware rectangle-edge sampling (avoids NaN margins)
-            rect_boundary_valid = generate_transform_aware_rectangle_edges(
-                terrain,
-                coord_to_index,
-                edge_sample_spacing
-            )
-
-            # Report results
-            original_shape = terrain.dem_shape
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Transform-Aware Rectangle Edge Sampling (Integer)")
-            logger.info(f"{'='*60}")
-            logger.info(f"Original DEM: {original_shape[0]}×{original_shape[1]} (sampling source)")
-            logger.info(f"Edge pixels mapped to final mesh: {len(rect_boundary_valid)}")
-            logger.info(f"Edge sample spacing: {edge_sample_spacing:.1f} pixels")
-            logger.info(f"{'='*60}\n")
-        else:
-            # FALLBACK: Legacy approach using transformed DEM shape
-            if dem_shape is None:
-                raise ValueError("Either terrain or dem_shape required when use_rectangle_edges=True")
-
-            # Run diagnostic to show why this doesn't work well
-            diagnostic = diagnose_rectangle_edge_coverage(dem_shape, coord_to_index)
-            logger.info(f"\n{'='*60}")
-            logger.warning(f"⚠️  Legacy Rectangle Edge Sampling (Transformed DEM)")
-            logger.info(f"{'='*60}")
-            logger.info(f"DEM shape: {diagnostic['dem_shape'][0]}×{diagnostic['dem_shape'][1]}")
-            logger.info(f"Edge coverage: {diagnostic['coverage_percent']:.1f}% ({diagnostic['valid_edge_pixels']}/{diagnostic['total_edge_pixels']} pixels)")
-            logger.info(f"  Top edge:    {diagnostic['edge_validity']['top']['valid']:4d}/{diagnostic['edge_validity']['top']['total']:4d} valid ({diagnostic['edge_validity']['top']['valid']/max(1,diagnostic['edge_validity']['top']['total'])*100:.1f}%)")
-            logger.info(f"  Right edge:  {diagnostic['edge_validity']['right']['valid']:4d}/{diagnostic['edge_validity']['right']['total']:4d} valid ({diagnostic['edge_validity']['right']['valid']/max(1,diagnostic['edge_validity']['right']['total'])*100:.1f}%)")
-            logger.info(f"  Bottom edge: {diagnostic['edge_validity']['bottom']['valid']:4d}/{diagnostic['edge_validity']['bottom']['total']:4d} valid ({diagnostic['edge_validity']['bottom']['valid']/max(1,diagnostic['edge_validity']['bottom']['total'])*100:.1f}%)")
-            logger.info(f"  Left edge:   {diagnostic['edge_validity']['left']['valid']:4d}/{diagnostic['edge_validity']['left']['total']:4d} valid ({diagnostic['edge_validity']['left']['valid']/max(1,diagnostic['edge_validity']['left']['total'])*100:.1f}%)")
-            logger.info(f"\nRecommendation: {diagnostic['recommendation']}")
-            logger.info(f"Reason: {diagnostic['reason']}")
-            logger.info(f"💡 Tip: Pass terrain= parameter for transform-aware sampling (~100% coverage)")
-            logger.info(f"{'='*60}\n")
-
-            rect_edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing)
-
-            # Filter to only include pixels that are actually valid mesh vertices
-            # Many rectangle edge pixels might be NaN or outside valid_mask, causing lookup failures
-            rect_boundary_valid = [
-                (y, x) for y, x in rect_edge_pixels
-            if (int(y), int(x)) in coord_to_index
-        ]
-
-        # Use rectangle edges only if they produce a reasonable boundary
-        # If too few valid points, stick with the original morphological boundary
-        original_count = len(original_morphological_boundary)
-        rect_count = len(rect_boundary_valid)
-
-        # Heuristic: Need at least 80% of morphological boundary vertices, or at least 100 vertices
-        min_required = max(100, int(0.8 * original_count))
-
-        if rect_count >= min_required:
-            # Rectangle edges produced good boundary - use it
-            # IMPORTANT: For rectangle edges, the points are ALREADY in order from generate_rectangle_edge_pixels()
-            # which traces: top→right→bottom→left in a continuous loop
-            # DON'T sort them - sorting with KD-tree nearest-neighbor breaks down on dense point clouds (82K+ points)
-            # and can reduce the boundary from 82K points to just 10 points!
-            logger.info(f"✓ Rectangle-edge sampling: Using {rect_count} boundary vertices (morphological had {original_count})")
-
-            # CRITICAL: After coordinate transformation, the natural rectangle order is destroyed!
-            # First deduplicate, then re-sort spatially to form a closed loop
-            logger.info(f"  Deduplicating boundary points...")
-            rect_boundary_unique = deduplicate_boundary_points(rect_boundary_valid)
-
-            # For dense boundaries, use angular sorting (faster and more robust)
-            # For sparse boundaries, use nearest-neighbor
-            if len(rect_boundary_unique) >= 100:
-                logger.info(f"  Sorting {len(rect_boundary_unique)} points using angular method...")
-                boundary_points = sort_boundary_points_angular(rect_boundary_unique)
-            else:
-                logger.info(f"  Sorting {len(rect_boundary_unique)} points using nearest-neighbor...")
-                boundary_points = sort_boundary_points(rect_boundary_unique)
-            logger.info(f"  ✓ Boundary sorted into continuous path")
-
-            # DEBUG: Check spatial distribution of boundary points
-            boundary_array = np.array(boundary_points)
-            y_min, y_max = boundary_array[:, 0].min(), boundary_array[:, 0].max()
-            x_min, x_max = boundary_array[:, 1].min(), boundary_array[:, 1].max()
-
-            # Count points on each edge (with 5% margin)
-            y_range = y_max - y_min
-            x_range = x_max - x_min
-            margin = 0.05
-
-            top_count = np.sum(boundary_array[:, 0] <= y_min + margin * y_range)
-            bottom_count = np.sum(boundary_array[:, 0] >= y_max - margin * y_range)
-            left_count = np.sum(boundary_array[:, 1] <= x_min + margin * x_range)
-            right_count = np.sum(boundary_array[:, 1] >= x_max - margin * x_range)
-
-            logger.info(f"  Boundary point distribution:")
-            logger.info(f"    Top edge (north):    {top_count:6d} points")
-            logger.info(f"    Bottom edge (south): {bottom_count:6d} points")
-            logger.info(f"    Left edge (west):    {left_count:6d} points")
-            logger.info(f"    Right edge (east):   {right_count:6d} points")
-
-            # Check if distribution is severely uneven (any edge has < 5% of points)
-            total_points = len(boundary_points)
-            min_percent = min(top_count, bottom_count, left_count, right_count) / total_points * 100
-            if min_percent < 5.0:
-                logger.warning(f"  ⚠️  Warning: Uneven distribution detected (min={min_percent:.1f}%)")
-                logger.info(f"  Sparse edges may have lower visual quality")
-        else:
-            # Rectangle edges too sparse - keep morphological boundary
-            boundary_points = original_morphological_boundary
-            logger.warning(f"✗ Rectangle-edge sampling: Too few valid vertices ({rect_count}), keeping morphological boundary ({original_count} vertices)")
-            if terrain is None:
-                logger.info(f"  Tip: Pass terrain= parameter for transform-aware sampling to avoid NaN margins")
-            else:
-                logger.info(f"  Tip: Check coordinate transformation - may be mapping outside valid mesh bounds")
+        boundary_points = _select_rectangle_boundary(
+            boundary_points, coord_to_index, terrain, dem_shape, use_fractional_edges, edge_sample_spacing
+        )
 
     # Apply boundary smoothing if requested
     original_boundary_points = boundary_points
