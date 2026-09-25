@@ -122,7 +122,7 @@ class TestDetroitSnowExample:
             ],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=180,  # score step renders ~15 plots; same budget as --all-steps
         )
 
         # Check success

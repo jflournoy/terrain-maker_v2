@@ -11,9 +11,12 @@ values using smooth gaussian tapering and maximum_filter expansion. This produce
 beautiful, gradually-tapered lines matching the diagnostic plot quality.
 """
 
+import logging
 import numpy as np
 
 from src.terrain._numba_compat import NUMBA_AVAILABLE, jit
+
+logger = logging.getLogger(__name__)
 
 
 def _smooth_along_lines(metric_data, line_mask, sigma=2.0):
@@ -110,7 +113,7 @@ def expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_wi
     t_start = time.time()
 
     if not NUMBA_AVAILABLE:
-        print("  WARNING: numba not available, sparse expansion will be slow!")
+        logger.warning("  WARNING: numba not available, sparse expansion will be slow!")
 
     # CRITICAL: Expand stream mask by 3 pixels first (matches fast algorithm)
     # This fills gaps in sparse stream networks before drawing circles
@@ -127,7 +130,7 @@ def expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_wi
     if len(values) == 0 or values.max() == values.min():
         return line_mask, metric_data.copy()
 
-    print(f"  Sparse expansion: {len(coords):,} stream pixels "
+    logger.info(f"  Sparse expansion: {len(coords):,} stream pixels "
           f"({100 * len(coords) / line_mask.size:.2f}% of grid, after 3px expansion)")
 
     # Smooth metric values along the network to prevent color patches.
@@ -160,8 +163,8 @@ def expand_lines_variable_width_sparse(line_mask, metric_data, max_width, min_wi
 
     pixels_in_millions = line_mask.size / 1_000_000
     if pixels_in_millions > 5:
-        print(f"  Sparse numba expansion: {time.time() - t_expand_start:.1f}s")
-        print(f"  Total sparse time: {time.time() - t_start:.1f}s")
+        logger.info(f"  Sparse numba expansion: {time.time() - t_expand_start:.1f}s")
+        logger.info(f"  Total sparse time: {time.time() - t_start:.1f}s")
 
     expanded_mask = output > 0
     return expanded_mask, output
@@ -198,10 +201,8 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     max_safe_size_mb = 1500
 
     if array_size_mb > max_safe_size_mb:
-        print(
-            f"WARNING: Array too large for variable-width ({array_size_mb:.0f}MB), "
-            "skipping expansion"
-        )
+        logger.warning(f"WARNING: Array too large for variable-width ({array_size_mb:.0f}MB), "
+            "skipping expansion")
         return line_mask, metric_data.copy()
 
     # Get line values
@@ -235,7 +236,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
         # Scale sigma down for large arrays (>10M pixels)
         sigma_scale = min(1.0, 10.0 / pixels_in_millions)
         effective_sigma = max(3, int(max_width * sigma_scale))
-        print(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
+        logger.info(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
     else:
         effective_sigma = max_width
 
@@ -243,7 +244,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     smoothed_width = gaussian_filter(width_map, sigma=effective_sigma)
     smoothed_width = np.where(smooth_mask, smoothed_width, 0)
     if pixels_in_millions > 5:
-        print(f"  Gaussian filter ({effective_sigma}px sigma): {time.time() - t_gaussian_start:.1f}s")
+        logger.info(f"  Gaussian filter ({effective_sigma}px sigma): {time.time() - t_gaussian_start:.1f}s")
 
     # Re-normalize
     smooth_line_vals = smoothed_width[smooth_mask & (smoothed_width > 0)]
@@ -260,7 +261,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     t_distance_start = time.time()
     distances, indices = distance_transform_edt(~line_mask, return_indices=True)
     if pixels_in_millions > 5:
-        print(f"  Distance transform: {time.time() - t_distance_start:.1f}s")
+        logger.info(f"  Distance transform: {time.time() - t_distance_start:.1f}s")
 
     # Get smoothed width at nearest line pixel for each pixel
     nearest_y = indices[0]
@@ -276,7 +277,7 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     expanded_values[expanded_mask] = smoothed_metric[nearest_y[expanded_mask], nearest_x[expanded_mask]]
 
     if pixels_in_millions > 5:
-        print(f"  Total expansion time: {time.time() - t_start:.1f}s")
+        logger.info(f"  Total expansion time: {time.time() - t_start:.1f}s")
 
     return expanded_mask, expanded_values
 
@@ -344,10 +345,8 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
     max_safe_size_mb = 1500
 
     if array_size_mb > max_safe_size_mb:
-        print(
-            f"WARNING: Array too large for variable-width ({array_size_mb:.0f}MB), "
-            "skipping expansion"
-        )
+        logger.warning(f"WARNING: Array too large for variable-width ({array_size_mb:.0f}MB), "
+            "skipping expansion")
         return line_mask, metric_data.copy()
 
     # Get line values
@@ -384,7 +383,7 @@ def expand_lines_variable_width(line_mask, metric_data, max_width, min_width=1, 
     if pixels_in_millions > 10:
         sigma_scale = min(1.0, 10.0 / pixels_in_millions)
         effective_sigma = max(3, int(max_width * sigma_scale))
-        print(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
+        logger.info(f"  Large array ({pixels_in_millions:.1f}M pixels): reducing sigma from {max_width} to {effective_sigma}")
     else:
         effective_sigma = max_width
 

@@ -12,12 +12,15 @@ Data Sources:
 - HydroLAKES: https://www.hydrosheds.org/products/hydrolakes
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, Tuple, Optional, Any
 import numpy as np
 from rasterio import Affine
 import json
 import hashlib
+
+logger = logging.getLogger(__name__)
 
 
 def rasterize_lakes_to_mask(
@@ -657,10 +660,10 @@ def download_hydrolakes(
 
     if hydrolakes_path is None:
         # Return empty with instructions
-        print("HydroLAKES shapefile not found")
-        print("Expected at: data/hydrolakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp")
-        print("Or download from: https://www.hydrosheds.org/products/hydrolakes")
-        print("Extract HydroLAKES_polys_v10.shp to data/hydrolakes/HydroLAKES_polys_v10_shp/")
+        logger.info("HydroLAKES shapefile not found")
+        logger.info("Expected at: data/hydrolakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp")
+        logger.info("Or download from: https://www.hydrosheds.org/products/hydrolakes")
+        logger.info("Extract HydroLAKES_polys_v10.shp to data/hydrolakes/HydroLAKES_polys_v10_shp/")
         return {"type": "FeatureCollection", "features": []}
 
     # Filter shapefile to bbox using geopandas
@@ -698,7 +701,7 @@ def download_hydrolakes(
                         row['Pour_long'] = lon
                         row['Pour_lat'] = lat
             except Exception as e:
-                print(f"Warning: Could not load HydroLAKES pour points: {e}")
+                logger.warning(f"Warning: Could not load HydroLAKES pour points: {e}")
 
         # Convert to GeoJSON
         geojson = json.loads(gdf.to_json())
@@ -716,7 +719,7 @@ def download_hydrolakes(
         return geojson
 
     except ImportError:
-        print("geopandas required for HydroLAKES filtering")
+        logger.info("geopandas required for HydroLAKES filtering")
         return {"type": "FeatureCollection", "features": []}
 
 
@@ -743,7 +746,7 @@ def identify_lake_outlets_from_nhd(
         from shapely.geometry import shape, Point
         from shapely.ops import nearest_points
     except ImportError:
-        print("shapely required for NHD outlet detection")
+        logger.info("shapely required for NHD outlet detection")
         return {}
 
     outlets = {}

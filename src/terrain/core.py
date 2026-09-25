@@ -1,59 +1,26 @@
 from __future__ import annotations
 
-import os
 import json
 import time
 from pathlib import Path
-import glob
 
 try:
     import bpy
 except ImportError:
     bpy = None
-from dataclasses import dataclass
 import rasterio
-from rasterio.merge import merge
-from rasterio.warp import calculate_default_transform, reproject, Resampling
-from rasterio import Affine
-from scipy.ndimage import zoom, generic_filter, sobel
+from rasterio.warp import reproject, Resampling
+from scipy.ndimage import zoom
 import numpy as np
-from scipy import ndimage
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
-from math import radians
 from tqdm import tqdm
-from matplotlib.collections import LineCollection
-import numpy as np
-import shapely
-from shapely.geometry import Polygon, Point
-from shapely.affinity import scale
 import logging
-from datetime import datetime
-import sys
-import seaborn as sns
-import geopandas as gpd
-from shapely.validation import make_valid
-import colorsys
-from matplotlib.colors import to_rgb
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Optional, Dict, Any, Callable
 import functools
 import inspect
-import zarr
-import hashlib
 
+# Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-
-# Create a formatter and add it to the handler
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-console_handler.setFormatter(formatter)
-
-# Add the console handler to the logger
-logger.addHandler(console_handler)
 
 
 def calculate_target_vertices(

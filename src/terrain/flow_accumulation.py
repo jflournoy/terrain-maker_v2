@@ -9,6 +9,7 @@ Supports two backends:
 - "custom": Uses custom numba-accelerated implementation
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, Tuple, Union, Optional, Literal
 import datetime
@@ -31,6 +32,8 @@ except ImportError:
 
 # Optional numba acceleration
 from src.terrain._numba_compat import NUMBA_AVAILABLE, jit, prange
+
+logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -407,32 +410,32 @@ def compute_flow_with_basins(
     from src.terrain.transforms import upscale_scores
 
     if verbose:
-        print("=" * 60)
-        print("FLOW PIPELINE WITH BASIN PRESERVATION")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("FLOW PIPELINE WITH BASIN PRESERVATION")
+        logger.info("=" * 60)
 
     # Step 1: Detect ocean
     if verbose:
-        print("\n1. Detecting ocean...")
+        logger.info("\n1. Detecting ocean...")
     ocean_mask = detect_ocean_mask(
         dem, threshold=ocean_threshold, border_only=ocean_border_only
     )
     if verbose:
         ocean_pct = 100 * np.sum(ocean_mask) / dem.size
-        print(f"   Ocean cells: {np.sum(ocean_mask):,} ({ocean_pct:.1f}%)")
+        logger.info(f"   Ocean cells: {np.sum(ocean_mask):,} ({ocean_pct:.1f}%)")
 
     # Step 2: Detect endorheic basins (optional)
     basin_mask = None
 
     if detect_basins:
         if verbose:
-            print("\n2. Detecting endorheic basins...")
+            logger.info("\n2. Detecting endorheic basins...")
         total_cells = dem.size
         adaptive_min_size = int(1e-3 * total_cells)
         effective_min_size = adaptive_min_size if min_basin_size == 5000 else min_basin_size
 
         if verbose and effective_min_size != min_basin_size:
-            print(f"   Adaptive basin size: {effective_min_size:,} cells "
+            logger.info(f"   Adaptive basin size: {effective_min_size:,} cells "
                   f"({100*effective_min_size/total_cells:.4f}% of domain)")
 
         basin_mask, endorheic_basins = detect_endorheic_basins(
@@ -443,42 +446,42 @@ def compute_flow_with_basins(
         if basin_mask is not None and np.any(basin_mask):
             num_basins = len(endorheic_basins)
             if verbose:
-                print(f"   Found {num_basins} endorheic basin(s)")
+                logger.info(f"   Found {num_basins} endorheic basin(s)")
         else:
             if verbose:
-                print("   No significant endorheic basins detected")
+                logger.info("   No significant endorheic basins detected")
             basin_mask = None
 
     # Step 3: Create conditioning mask (basin-aware lake pre-masking)
     if verbose:
-        print("\n3. Creating DEM conditioning mask...")
+        logger.info("\n3. Creating DEM conditioning mask...")
     conditioning_mask = ocean_mask.copy()
 
     if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
         lakes_in_basins = (lake_mask > 0) & basin_mask
         if np.any(lakes_in_basins):
             if verbose:
-                print(f"   Pre-masking {np.sum(lakes_in_basins):,} lake cells "
+                logger.info(f"   Pre-masking {np.sum(lakes_in_basins):,} lake cells "
                       "inside basins (drainage sinks)")
             conditioning_mask = conditioning_mask | lakes_in_basins
         lakes_outside = (lake_mask > 0) & ~basin_mask
         if np.any(lakes_outside) and verbose:
-            print(f"   NOT masking {np.sum(lakes_outside):,} lake cells "
+            logger.info(f"   NOT masking {np.sum(lakes_outside):,} lake cells "
                   "outside basins (river connectors)")
     elif lake_mask is not None and np.any(lake_mask > 0):
         if verbose:
-            print(f"   NOT masking {np.sum(lake_mask > 0):,} lake cells "
+            logger.info(f"   NOT masking {np.sum(lake_mask > 0):,} lake cells "
                   "(no basins detected, all are connectors)")
 
     if basin_mask is not None and np.any(basin_mask):
         if verbose:
-            print(f"   Pre-masking {np.sum(basin_mask):,} basin cells "
+            logger.info(f"   Pre-masking {np.sum(basin_mask):,} basin cells "
                   "to preserve topography")
         conditioning_mask = conditioning_mask | basin_mask
 
     # Step 4: Condition DEM
     if verbose:
-        print(f"\n4. Conditioning DEM (backend={backend})...")
+        logger.info(f"\n4. Conditioning DEM (backend={backend})...")
     if backend == "spec":
         dem_conditioned, outlets, breached_dem = condition_dem_spec(
             dem, nodata_mask=conditioning_mask,
@@ -497,7 +500,7 @@ def compute_flow_with_basins(
     lake_inlets = None
     if lake_mask is not None and np.any(lake_mask > 0):
         if verbose:
-            print("\n5. Identifying lake inlets...")
+            logger.info("\n5. Identifying lake inlets...")
         outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
         inlets_dict = identify_lake_inlets(
             lake_mask, dem_conditioned, outlet_mask=outlet_mask_for_inlets
@@ -509,17 +512,17 @@ def compute_flow_with_basins(
                     if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
                         lake_inlets[row, col] = True
             if verbose:
-                print(f"   Inlet cells: {np.sum(lake_inlets)}")
+                logger.info(f"   Inlet cells: {np.sum(lake_inlets)}")
 
     # Step 6: Compute flow direction with DEM-based spillway lake routing
     if verbose:
-        print("\n6. Computing flow direction...")
+        logger.info("\n6. Computing flow direction...")
     flow_dir_base = compute_flow_direction(dem_conditioned, mask=ocean_mask)
     flow_dir = flow_dir_base.copy()
 
     if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
         if verbose:
-            print("   Applying lake flow routing (DEM-based spillways)...")
+            logger.info("   Applying lake flow routing (DEM-based spillways)...")
 
         labeled_lakes = lake_mask.copy()
         if basin_mask is not None and np.any(basin_mask):
@@ -535,7 +538,7 @@ def compute_flow_with_basins(
                 spillway_outlets[sr, sc] = True
 
             if verbose:
-                print(f"   DEM spillway detection: {len(spillways)} spillways")
+                logger.info(f"   DEM spillway detection: {len(spillways)} spillways")
 
             lake_flow = create_lake_flow_routing(
                 labeled_lakes, spillway_outlets, dem_conditioned
@@ -549,19 +552,19 @@ def compute_flow_with_basins(
                 )
 
             if verbose:
-                print(f"   Applied routing to {np.sum(lakes_outside):,} cells "
+                logger.info(f"   Applied routing to {np.sum(lakes_outside):,} cells "
                       f"with {len(spillways)} spillway outlets")
 
     # Step 7: Compute drainage area
     if verbose:
-        print("\n7. Computing drainage area...")
+        logger.info("\n7. Computing drainage area...")
     drainage_area = compute_drainage_area(flow_dir)
 
     # Step 8: Compute upstream rainfall (optional)
     upstream_rainfall = None
     if precipitation is not None:
         if verbose:
-            print("\n8. Computing upstream rainfall...")
+            logger.info("\n8. Computing upstream rainfall...")
         precip_for_accumulation = precipitation.copy()
 
         if upscale_precip and precipitation.shape != dem.shape:
@@ -579,7 +582,7 @@ def compute_flow_with_basins(
                     precipitation, (scale_y, scale_x), order=3, mode='reflect'
                 )
             if verbose:
-                print(f"   Upscaled precipitation: {precipitation.shape} → "
+                logger.info(f"   Upscaled precipitation: {precipitation.shape} → "
                       f"{precip_for_accumulation.shape}")
 
         precip_masked = precip_for_accumulation.copy()
@@ -587,8 +590,8 @@ def compute_flow_with_basins(
         upstream_rainfall = compute_upstream_rainfall(flow_dir, precip_masked)
 
     if verbose:
-        print("\nFlow pipeline complete.")
-        print("=" * 60)
+        logger.info("\nFlow pipeline complete.")
+        logger.info("=" * 60)
 
     return {
         "flow_direction": flow_dir,
@@ -757,7 +760,7 @@ def flow_accumulation(
         If spatial alignment fails or both max_cells and target_vertices specified
     """
     # Validate inputs
-    print("  flow_accumulation: validating inputs...", flush=True)
+    logger.info("  flow_accumulation: validating inputs...")
     dem_path = Path(dem_path)
     precip_path = Path(precipitation_path)
 
@@ -803,19 +806,19 @@ def flow_accumulation(
         # Check cache validity
         dem_mtime = _get_dem_mtime(dem_path)
         if _validate_cache(cache_path, cache_params, dem_mtime):
-            print("  flow_accumulation: loading from cache...", flush=True)
+            logger.info("  flow_accumulation: loading from cache...")
             return _load_from_cache(cache_path)
 
-        print("  flow_accumulation: cache miss, computing...", flush=True)
+        logger.info("  flow_accumulation: cache miss, computing...")
 
     # Load DEM
-    print("  flow_accumulation: loading DEM...", flush=True)
+    logger.info("  flow_accumulation: loading DEM...")
     with rasterio.open(dem_path) as src:
         dem_data = src.read(1).astype(np.float32)
         dem_transform = src.transform
         dem_crs = src.crs
         original_shape = dem_data.shape
-    print(f"  flow_accumulation: DEM loaded {original_shape}", flush=True)
+    logger.info(f"  flow_accumulation: DEM loaded {original_shape}")
 
     # Adaptive resolution: downsample if DEM exceeds max_cells
     downsampling_applied = False
@@ -832,9 +835,9 @@ def flow_accumulation(
         new_width = int(original_shape[1] / downsample_factor)
         downsampled_shape = (new_height, new_width)
 
-        print(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
+        logger.info(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
               f"{downsampled_shape} ({new_height * new_width:,} cells) "
-              f"[{downsample_factor:.2f}x factor]...", flush=True)
+              f"[{downsample_factor:.2f}x factor]...")
 
         # Downsample DEM using rasterio
         from rasterio.warp import reproject, Resampling
@@ -865,22 +868,22 @@ def flow_accumulation(
             scale_y = downsampled_shape[0] / original_shape[0]
             scale_x = downsampled_shape[1] / original_shape[1]
             lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
-            print(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
+            logger.info(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
 
         if lake_outlets is not None:
             from scipy.ndimage import zoom
             scale_y = downsampled_shape[0] / original_shape[0]
             scale_x = downsampled_shape[1] / original_shape[1]
             lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
-            print(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
+            logger.info(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
 
-        print(f"  ✓ Downsampled DEM to {dem_shape}", flush=True)
+        logger.info(f"  ✓ Downsampled DEM to {dem_shape}")
     elif max_cells is not None:
-        print(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
+        logger.info(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
               f"no downsampling needed")
 
     # Load precipitation (cropped to DEM bounds using library function)
-    print("  flow_accumulation: loading precipitation...", flush=True)
+    logger.info("  flow_accumulation: loading precipitation...")
     from src.terrain.data_loading import load_geotiff_cropped_to_dem
 
     precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
@@ -891,7 +894,7 @@ def flow_accumulation(
         use_windowed_read=True,
     )
 
-    print(f"  flow_accumulation: precipitation loaded {precip_data.shape}", flush=True)
+    logger.info(f"  flow_accumulation: precipitation loaded {precip_data.shape}")
 
     # Fill missing values (nodata) using nearest neighbor interpolation
     # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
@@ -905,7 +908,7 @@ def flow_accumulation(
         num_missing = np.sum(nodata_mask)
         total_pixels = precip_data.size
         pct_missing = 100.0 * num_missing / total_pixels
-        print(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...", flush=True)
+        logger.info(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...")
 
         from scipy.ndimage import distance_transform_edt
 
@@ -917,7 +920,7 @@ def flow_accumulation(
         # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
         precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
 
-        print(f"  ✓ Imputation complete", flush=True)
+        logger.info(f"  ✓ Imputation complete")
 
     # Check spatial alignment and resample if needed
     if precip_data.shape != dem_shape:
@@ -928,13 +931,13 @@ def flow_accumulation(
 
         # Use ESRGAN upscaling if requested AND actually upscaling
         if upscale_precip and is_upscaling:
-            print(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...", flush=True)
+            logger.info(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...")
 
             # Use upscale_scores if scale is uniform and an integer
             if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
                 from src.terrain.transforms import upscale_scores
                 scale_int = int(round(scale_y))
-                print(f"    Running {upscale_method} {scale_int}x upscaling...", flush=True)
+                logger.info(f"    Running {upscale_method} {scale_int}x upscaling...")
                 precip_upscaled = upscale_scores(
                     precip_data,
                     scale=scale_int,
@@ -942,7 +945,7 @@ def flow_accumulation(
                     nodata_value=0.0
                 )
                 precip_data = precip_upscaled
-                print(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}", flush=True)
+                logger.info(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
             else:
                 # Non-uniform scaling - Detroit-style approach for GPU acceleration
                 # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
@@ -954,23 +957,23 @@ def flow_accumulation(
 
                 if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
                     # Use ESRGAN for over-upscaling, then downsample
-                    print(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...", flush=True)
+                    logger.info(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...")
 
                     from src.terrain.transforms import upscale_scores
 
                     # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
-                    print(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...", flush=True)
+                    logger.info(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...")
                     precip_esrgan = upscale_scores(
                         precip_data,
                         scale=power_of_2_scale,
                         method=upscale_method,
                         nodata_value=0.0
                     )
-                    print(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}", flush=True)
+                    logger.info(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}")
 
                     # Step 2: Downsample to exact target shape with rasterio reproject
                     from rasterio.warp import reproject, Resampling
-                    print(f"    Downsampling to exact target shape...", flush=True)
+                    logger.info(f"    Downsampling to exact target shape...")
                     precip_final = np.empty(dem_shape, dtype=np.float32)
 
                     # Create transforms for intermediate and target shapes
@@ -987,21 +990,21 @@ def flow_accumulation(
                             dst_crs=dem_crs,
                             resampling=Resampling.bilinear,
                         )
-                        print(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}", flush=True)
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
                     else:
                         # No transform available - use scipy zoom for final adjustment
                         from scipy.ndimage import zoom
                         scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
                         scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
                         precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
-                        print(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}", flush=True)
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
 
                     precip_data = precip_final
-                    print(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}", flush=True)
+                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
                 else:
                     # Fall back to basic bicubic for small scales or non-ESRGAN methods
                     from rasterio.warp import reproject, Resampling
-                    print(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...", flush=True)
+                    logger.info(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...")
 
                     precip_resampled = np.empty(dem_shape, dtype=np.float32)
                     reproject(
@@ -1014,10 +1017,10 @@ def flow_accumulation(
                         resampling=Resampling.bilinear
                     )
                     precip_data = precip_resampled
-                    print(f"  ✓ Resampled precipitation to {precip_data.shape}", flush=True)
+                    logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
         elif upscale_precip and not is_upscaling:
             # User requested upscaling but data is being downscaled - inform and use standard resampling
-            print(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...", flush=True)
+            logger.info(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...")
             from rasterio.warp import reproject, Resampling
 
             precip_resampled = np.empty(dem_shape, dtype=np.float32)
@@ -1031,10 +1034,10 @@ def flow_accumulation(
                 resampling=Resampling.bilinear
             )
             precip_data = precip_resampled
-            print(f"  ✓ Downsampled precipitation to {precip_data.shape}")
+            logger.info(f"  ✓ Downsampled precipitation to {precip_data.shape}")
         else:
             # Standard resampling (no upscaling requested)
-            print(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...", flush=True)
+            logger.info(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...")
 
             from rasterio.warp import reproject, Resampling
 
@@ -1051,7 +1054,7 @@ def flow_accumulation(
             )
 
             precip_data = precip_resampled
-            print(f"  ✓ Resampled precipitation to {precip_data.shape}")
+            logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
 
     # Determine cell size (convert from degrees to meters if geographic CRS)
     if cell_size is None:
@@ -1082,7 +1085,7 @@ def flow_accumulation(
             # Use average of width and height for area calculations
             cell_size = math.sqrt(cell_width_m * cell_height_m)
 
-            print(f"  Geographic CRS detected (cell size: {pixel_size_deg:.8f}° ≈ {cell_size:.1f}m at lat {center_lat:.2f}°)")
+            logger.info(f"  Geographic CRS detected (cell size: {pixel_size_deg:.8f}° ≈ {cell_size:.1f}m at lat {center_lat:.2f}°)")
         else:
             # Projected CRS - pixel size is already in CRS units (meters)
             cell_size = abs(dem_transform.a)
@@ -1091,23 +1094,23 @@ def flow_accumulation(
     # epsilon = 1e-5 * cell_resolution (e.g., 1e-4 for 10m DEM)
     if epsilon is None:
         epsilon = 1e-5 * cell_size
-        print(f"  Auto-calculated epsilon: {epsilon:.2e} m/cell (= 1e-5 × {cell_size:.1f}m cell size)")
+        logger.info(f"  Auto-calculated epsilon: {epsilon:.2e} m/cell (= 1e-5 × {cell_size:.1f}m cell size)")
 
     # Step 1: Detect ocean mask (if enabled)
     ocean_mask = None
     if mask_ocean:
-        print(f"Detecting ocean (elevation <= {ocean_elevation_threshold}m, border-connected)...")
+        logger.info(f"Detecting ocean (elevation <= {ocean_elevation_threshold}m, border-connected)...")
         ocean_mask = detect_ocean_mask(
             dem_data, threshold=ocean_elevation_threshold, border_only=True
         )
         ocean_cells = np.sum(ocean_mask)
         ocean_pct = 100 * ocean_cells / ocean_mask.size
-        print(f"  Ocean detected: {ocean_cells:,} cells ({ocean_pct:.1f}%)")
+        logger.info(f"  Ocean detected: {ocean_cells:,} cells ({ocean_pct:.1f}%)")
 
     # Step 1b: Detect endorheic basins (if enabled and using spec backend)
     basin_mask = None
     if detect_basins and backend == "spec":
-        print(f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)...")
+        logger.info(f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)...")
         basin_mask, endorheic_basins = detect_endorheic_basins(
             dem_data,
             min_size=min_basin_size,
@@ -1118,10 +1121,10 @@ def flow_accumulation(
         if basin_mask is not None and np.any(basin_mask):
             num_basins = len(endorheic_basins)
             basin_coverage = 100 * np.sum(basin_mask) / dem_data.size
-            print(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of domain)")
-            print(f"  Basins will be masked during conditioning to preserve topography")
+            logger.info(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of domain)")
+            logger.info(f"  Basins will be masked during conditioning to preserve topography")
         else:
-            print("  No significant endorheic basins detected")
+            logger.info("  No significant endorheic basins detected")
             basin_mask = None
     elif detect_basins and backend != "spec":
         import warnings
@@ -1143,17 +1146,17 @@ def flow_accumulation(
         lakes_in_basins = (lake_mask > 0) & basin_mask
         if np.any(lakes_in_basins):
             conditioning_mask = conditioning_mask | lakes_in_basins
-            print(f"  Pre-masking {np.sum(lakes_in_basins):,} lake cells inside basins (drainage sinks)")
+            logger.info(f"  Pre-masking {np.sum(lakes_in_basins):,} lake cells inside basins (drainage sinks)")
 
         lakes_outside = (lake_mask > 0) & ~basin_mask
         if np.any(lakes_outside):
-            print(f"  NOT masking {np.sum(lakes_outside):,} lake cells outside basins (river connectors)")
+            logger.info(f"  NOT masking {np.sum(lakes_outside):,} lake cells outside basins (river connectors)")
     elif lake_mask is not None and np.any(lake_mask > 0):
-        print(f"  NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
+        logger.info(f"  NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
 
     if basin_mask is not None and np.any(basin_mask):
         conditioning_mask = conditioning_mask | basin_mask
-        print(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
+        logger.info(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
               f"({100*np.sum(conditioning_mask)/conditioning_mask.size:.1f}%)")
 
     # Use ocean mask for flow computation (flow direction terminals)
@@ -1167,7 +1170,7 @@ def flow_accumulation(
     if backend == "spec":
         # === SPEC-COMPLIANT BACKEND ===
         # Use spec-compliant 4-stage pipeline (outlet ID + breaching + fill)
-        print(f"Using spec-compliant backend (flow-spec.md)...")
+        logger.info(f"Using spec-compliant backend (flow-spec.md)...")
 
         # Emit warnings if legacy parameters are specified
         if fill_method != "breach":
@@ -1187,7 +1190,7 @@ def flow_accumulation(
 
         # Step 2: Condition DEM using spec-compliant pipeline
         # Use combined conditioning mask (ocean + basins) to preserve topography
-        print("Conditioning DEM (outlets + breach + fill)...", flush=True)
+        logger.info("Conditioning DEM (outlets + breach + fill)...")
         nodata_mask_for_spec = conditioning_mask if detect_basins else ocean_mask
         conditioned_dem, outlets, breached_dem = condition_dem_spec(
             dem_data,
@@ -1202,12 +1205,12 @@ def flow_accumulation(
         )
 
         # Step 3: Compute flow directions
-        print("Computing flow directions...", flush=True)
+        logger.info("Computing flow directions...")
         # CRITICAL: Combine ocean/nodata with all identified outlets (edge, coastal, masked basin)
         # so that ALL outlet types are properly used as flow direction terminals
         outlet_mask = ocean_mask | outlets
         flow_direction = compute_flow_direction(conditioned_dem, mask=outlet_mask)
-        print("  ✓ Flow directions computed", flush=True)
+        logger.info("  ✓ Flow directions computed")
 
     elif backend == "pysheds":
         if not PYSHEDS_AVAILABLE:
@@ -1223,7 +1226,7 @@ def flow_accumulation(
             "Use backend='custom' for reliable results.",
             UserWarning
         )
-        print(f"Using pysheds backend for flow computation...")
+        logger.info(f"Using pysheds backend for flow computation...")
 
         # Create pysheds grid from numpy array
         # PySheds expects nodata value - use a large negative number for ocean/masked areas
@@ -1248,13 +1251,13 @@ def flow_accumulation(
         grid = PyshedsGrid(viewfinder=viewfinder)
 
         # Step 2: Condition DEM using pysheds
-        print("  pysheds: Filling pits...")
+        logger.info("  pysheds: Filling pits...")
         pit_filled = grid.fill_pits(dem_raster)
 
-        print("  pysheds: Filling depressions...")
+        logger.info("  pysheds: Filling depressions...")
         flooded = grid.fill_depressions(pit_filled)
 
-        print("  pysheds: Resolving flats...")
+        logger.info("  pysheds: Resolving flats...")
         inflated = grid.resolve_flats(flooded)
 
         conditioned_dem = np.array(inflated).astype(np.float32)
@@ -1264,7 +1267,7 @@ def flow_accumulation(
             conditioned_dem[ocean_mask] = dem_data[ocean_mask]
 
         # Step 3: Compute flow direction using pysheds
-        print("  pysheds: Computing flow direction...")
+        logger.info("  pysheds: Computing flow direction...")
         fdir = grid.flowdir(inflated)
 
         # Convert pysheds flow direction to our D8 encoding
@@ -1288,9 +1291,9 @@ def flow_accumulation(
         scaled_min_basin_size = min_basin_size
         if min_basin_size is not None and downsample_factor > 1.0:
             scaled_min_basin_size = max(100, int(min_basin_size / (downsample_factor ** 2)))
-            print(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size} → {scaled_min_basin_size} scaled)...")
+            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size} → {scaled_min_basin_size} scaled)...")
         else:
-            print(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size})...")
+            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size})...")
         conditioned_dem = condition_dem(
             dem_data,
             method=fill_method,
@@ -1300,7 +1303,7 @@ def flow_accumulation(
         )
 
         # Step 3: Compute flow directions (with combined mask)
-        print("Computing flow directions...")
+        logger.info("Computing flow directions...")
         flow_direction = compute_flow_direction(
             conditioned_dem, mask=flow_mask if np.any(flow_mask) else None
         )
@@ -1315,7 +1318,7 @@ def flow_accumulation(
             find_lake_spillways,
             compute_outlet_downstream_directions,
         )
-        print("Applying lake flow routing (DEM-based spillways)...")
+        logger.info("Applying lake flow routing (DEM-based spillways)...")
 
         # Basin-aware: only route lakes OUTSIDE preserved basins
         labeled_lakes = lake_mask.copy()
@@ -1324,7 +1327,7 @@ def flow_accumulation(
             lakes_outside = (lake_mask > 0) & ~basin_mask
             n_in = len(np.unique(lake_mask[(lake_mask > 0) & basin_mask]))
             n_out = len(np.unique(lake_mask[lakes_outside]))
-            print(f"  {n_in} lakes inside basins (natural flow), "
+            logger.info(f"  {n_in} lakes inside basins (natural flow), "
                   f"{n_out} lakes outside basins (explicit routing)")
         else:
             lakes_outside = lake_mask > 0
@@ -1336,7 +1339,7 @@ def flow_accumulation(
             for lake_id, (sr, sc, _sdir) in spillways.items():
                 spillway_outlets[sr, sc] = True
 
-            print(f"  DEM spillway detection: {len(spillways)} spillways "
+            logger.info(f"  DEM spillway detection: {len(spillways)} spillways "
                   f"(replacing {int(np.sum(lake_outlets)):,} HydroLAKES pour points)")
 
             # BFS routing: all lake cells route toward DEM spillway
@@ -1352,7 +1355,7 @@ def flow_accumulation(
                     conditioned_dem, basin_mask=basin_mask, spillways=spillways,
                 )
 
-            print(f"  Applied routing to {np.sum(lakes_outside):,} cells "
+            logger.info(f"  Applied routing to {np.sum(lakes_outside):,} cells "
                   f"with {len(spillways)} spillway outlets")
 
     # Step 3.6: Identify lake inlets (after DEM conditioning + lake routing)
@@ -1369,16 +1372,16 @@ def flow_accumulation(
                 for row, col in inlet_cells:
                     if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
                         lake_inlets[row, col] = True
-            print(f"  Lake inlets: {np.sum(lake_inlets):,} cells")
+            logger.info(f"  Lake inlets: {np.sum(lake_inlets):,} cells")
 
     # Step 4: Compute drainage area and upstream rainfall
     if backend == "pysheds":
         # Use pysheds accumulation
-        print("  pysheds: Computing drainage area...")
+        logger.info("  pysheds: Computing drainage area...")
         acc = grid.accumulation(fdir)
         drainage_area = np.array(acc).astype(np.float32)
 
-        print("  pysheds: Computing upstream rainfall (weighted)...")
+        logger.info("  pysheds: Computing upstream rainfall (weighted)...")
         # CRITICAL: Mask ocean in precipitation BEFORE accumulation
         # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
         precip_for_pysheds = precip_data.copy()
@@ -1394,10 +1397,10 @@ def flow_accumulation(
             drainage_area[ocean_mask] = 0
     else:
         # Use custom backend
-        print("Computing drainage area...")
+        logger.info("Computing drainage area...")
         drainage_area = compute_drainage_area(flow_direction)
 
-        print("Computing upstream rainfall...")
+        logger.info("Computing upstream rainfall...")
         # CRITICAL: Mask ocean in precipitation BEFORE accumulation
         # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
         precip_masked = precip_data.copy()
@@ -1497,7 +1500,7 @@ def flow_accumulation(
 
         # Save cache metadata
         _save_to_cache(cache_save_path, cache_params, dem_mtime, result)
-        print(f"  flow_accumulation: cached to {cache_save_path}", flush=True)
+        logger.info(f"  flow_accumulation: cached to {cache_save_path}")
 
     return result
 
@@ -1780,7 +1783,7 @@ def _fix_coastal_flow_directions(flow_dir: np.ndarray, mask: np.ndarray) -> None
                         fixed_count += 1
                         break
 
-    print(f"  Fixed {fixed_count:,} coastal cells to flow toward ocean/sinks")
+    logger.info(f"  Fixed {fixed_count:,} coastal cells to flow toward ocean/sinks")
 
 
 @jit(nopython=True, cache=True)
@@ -3340,26 +3343,26 @@ def breach_depressions_constrained(
     # Track which cells have drainage paths
     resolved = outlets.copy()
 
-    print("  Stage 2a: Identifying sinks...")
+    logger.info("  Stage 2a: Identifying sinks...")
 
     # Show threading info
     if NUMBA_AVAILABLE:
         try:
             from numba import get_num_threads
             num_threads = get_num_threads()
-            print(f"    Numba: {num_threads} threads available for parallel operations")
+            logger.info(f"    Numba: {num_threads} threads available for parallel operations")
         except:
             pass
 
     sinks = _identify_sinks(breached, outlets, nodata_mask)
-    print(f"    Found {len(sinks):,} sink cells")
+    logger.info(f"    Found {len(sinks):,} sink cells")
 
     if len(sinks) == 0:
-        print("    No sinks to breach")
+        logger.info("    No sinks to breach")
         return breached.astype(np.float32)
 
     # Precompute fill depths to identify shallow sinks (optimization)
-    print("    Computing sink depths...")
+    logger.info("    Computing sink depths...")
     from skimage.morphology import reconstruction
     filled_preview = breached.copy().astype(np.float64)
     seed = filled_preview.copy()
@@ -3384,10 +3387,10 @@ def breach_depressions_constrained(
     ]
 
     shallow_skipped = len(sinks) - len(significant_sinks)
-    print(f"    Skipping {shallow_skipped:,} shallow sinks (<{depth_threshold}m deep)")
-    print(f"    Processing {len(significant_sinks):,} significant sinks (>{depth_threshold}m deep)")
+    logger.info(f"    Skipping {shallow_skipped:,} shallow sinks (<{depth_threshold}m deep)")
+    logger.info(f"    Processing {len(significant_sinks):,} significant sinks (>{depth_threshold}m deep)")
 
-    print(f"  Stage 2a: Attempting constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
+    logger.info(f"  Stage 2a: Attempting constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
 
     total_sinks = len(significant_sinks)
     breached_count = 0
@@ -3401,8 +3404,8 @@ def breach_depressions_constrained(
     parallel_useful = max_breach_length < avg_dim / 4  # Sinks likely near outlets
 
     if not parallel_useful and NUMBA_AVAILABLE and parallel_method != "iterative":
-        print(f"    Note: max_breach_length ({max_breach_length}) is large relative to DEM ({rows}x{cols})")
-        print(f"    Using serial JIT (better for interior sinks that chain together)")
+        logger.info(f"    Note: max_breach_length ({max_breach_length}) is large relative to DEM ({rows}x{cols})")
+        logger.info(f"    Using serial JIT (better for interior sinks that chain together)")
 
     # Iterative refinement parallel processing
     if parallel_method == "iterative" and NUMBA_AVAILABLE and total_sinks > 0:
@@ -3411,9 +3414,9 @@ def breach_depressions_constrained(
         try:
             from numba import get_num_threads
             num_threads = get_num_threads()
-            print(f"    Using iterative refinement parallel breaching ({num_threads} CPU cores)")
+            logger.info(f"    Using iterative refinement parallel breaching ({num_threads} CPU cores)")
         except:
-            print(f"    Using iterative refinement parallel breaching")
+            logger.info(f"    Using iterative refinement parallel breaching")
 
         grid_size = 2 * max_breach_length
         remaining_sinks = list(significant_sinks)
@@ -3432,7 +3435,7 @@ def breach_depressions_constrained(
                 remaining_sinks, grid_size, (rows, cols)
             )
 
-            print(f"    Iteration {iteration}: {len(remaining_sinks):,} sinks remaining...")
+            logger.info(f"    Iteration {iteration}: {len(remaining_sinks):,} sinks remaining...")
 
             newly_resolved_sinks = []
 
@@ -3476,17 +3479,17 @@ def breach_depressions_constrained(
                 if (s[0], s[1]) not in resolved_set
             ]
 
-            print(f"      Breached {iteration_breached:,} sinks this iteration, {len(remaining_sinks):,} remaining")
+            logger.info(f"      Breached {iteration_breached:,} sinks this iteration, {len(remaining_sinks):,} remaining")
 
             # If no progress, stop iterating
             if iteration_breached == 0:
-                print(f"    No new breaches in iteration {iteration}, stopping refinement")
+                logger.info(f"    No new breaches in iteration {iteration}, stopping refinement")
                 break
 
         # Count remaining as failed
         failed_count = len(remaining_sinks)
         if failed_count > 0:
-            print(f"    {failed_count:,} sinks could not be breached (will be filled in Stage 2b)")
+            logger.info(f"    {failed_count:,} sinks could not be breached (will be filled in Stage 2b)")
 
     # Use two-phase parallel processing with numba prange (checkerboard method)
     elif parallel_method == "checkerboard" and NUMBA_AVAILABLE and total_sinks > 100 and parallel_useful:
@@ -3494,9 +3497,9 @@ def breach_depressions_constrained(
         try:
             from numba import get_num_threads
             num_threads = get_num_threads()
-            print(f"    Using two-phase parallel breaching ({num_threads} CPU cores)")
+            logger.info(f"    Using two-phase parallel breaching ({num_threads} CPU cores)")
         except:
-            print(f"    Using two-phase parallel breaching")
+            logger.info(f"    Using two-phase parallel breaching")
 
         # Cluster sinks using checkerboard pattern (grid_size = 2 * max_breach_length)
         # Sinks in same batch are guaranteed to be far enough apart that paths won't overlap
@@ -3504,7 +3507,7 @@ def breach_depressions_constrained(
         batch_black, batch_white = _cluster_sinks_checkerboard(
             significant_sinks, grid_size, (rows, cols)
         )
-        print(f"    Checkerboard clustering: {len(batch_black):,} black cells, {len(batch_white):,} white cells")
+        logger.info(f"    Checkerboard clustering: {len(batch_black):,} black cells, {len(batch_white):,} white cells")
 
         # Sub-batch size for progress reporting (process in chunks)
         # Use 1% intervals like serial version (~100 updates per phase)
@@ -3552,20 +3555,20 @@ def breach_depressions_constrained(
                 # Progress report
                 processed = chunk_end
                 percent = 100.0 * processed / n
-                print(f"      {phase_name}: {percent:5.1f}% ({processed:,}/{n:,}) - {batch_breached:,} breached, {batch_failed:,} failed")
+                logger.info(f"      {phase_name}: {percent:5.1f}% ({processed:,}/{n:,}) - {batch_breached:,} breached, {batch_failed:,} failed")
 
             return batch_breached, batch_failed, batch_resolved
 
         # Phase 1: Process "black" cells in parallel sub-batches
         if len(batch_black) > 0:
-            print(f"    Phase 1: Processing {len(batch_black):,} sinks...")
+            logger.info(f"    Phase 1: Processing {len(batch_black):,} sinks...")
             breached_count, failed_count, already_resolved_count = process_batch_with_progress(
                 batch_black, "Phase 1", breached_count, failed_count, already_resolved_count
             )
 
         # Phase 2: Process "white" cells in parallel sub-batches
         if len(batch_white) > 0:
-            print(f"    Phase 2: Processing {len(batch_white):,} sinks...")
+            logger.info(f"    Phase 2: Processing {len(batch_white):,} sinks...")
             breached_count, failed_count, already_resolved_count = process_batch_with_progress(
                 batch_white, "Phase 2", breached_count, failed_count, already_resolved_count
             )
@@ -3576,20 +3579,20 @@ def breach_depressions_constrained(
     else:
         # Serial processing for small sink counts or when numba unavailable
         if NUMBA_AVAILABLE:
-            print(f"    Using serial JIT-compiled Dijkstra (small sink count)")
+            logger.info(f"    Using serial JIT-compiled Dijkstra (small sink count)")
         else:
-            print(f"    Using serial pure-Python Dijkstra (numba unavailable)")
+            logger.info(f"    Using serial pure-Python Dijkstra (numba unavailable)")
 
         # Progress reporting
         if total_sinks > 0:
             progress_interval = max(1, total_sinks // 100)  # Report every 1%
-            print(f"    Progress (showing every 1%):")
+            logger.info(f"    Progress (showing every 1%):")
 
         for idx, (sink_r, sink_c, sink_elev, depth) in enumerate(significant_sinks):
             # Progress reporting
             if total_sinks > 0 and idx % progress_interval == 0:
                 percent = 100.0 * idx / total_sinks
-                print(f"      {percent:5.1f}% ({idx:,} / {total_sinks:,} sinks, {breached_count:,} breached, {failed_count:,} failed)")
+                logger.info(f"      {percent:5.1f}% ({idx:,} / {total_sinks:,} sinks, {breached_count:,} breached, {failed_count:,} failed)")
 
             # Skip if already resolved by previous breach
             if resolved[sink_r, sink_c]:
@@ -3616,11 +3619,11 @@ def breach_depressions_constrained(
                 failed_count += 1
 
         if total_sinks > 0:
-            print(f"      100.0% ({total_sinks:,} / {total_sinks:,} sinks, {breached_count:,} breached, {failed_count:,} failed)")
+            logger.info(f"      100.0% ({total_sinks:,} / {total_sinks:,} sinks, {breached_count:,} breached, {failed_count:,} failed)")
 
-    print(f"    Results: {breached_count:,} breached, {already_resolved_count:,} already resolved, {failed_count:,} failed")
-    print(f"    Total sinks handled: {shallow_skipped:,} shallow (skipped) + {breached_count:,} breached + {already_resolved_count:,} resolved = {shallow_skipped + breached_count + already_resolved_count:,}")
-    print(f"    Remaining for Stage 2b: {failed_count + shallow_skipped:,} sinks")
+    logger.info(f"    Results: {breached_count:,} breached, {already_resolved_count:,} already resolved, {failed_count:,} failed")
+    logger.info(f"    Total sinks handled: {shallow_skipped:,} shallow (skipped) + {breached_count:,} breached + {already_resolved_count:,} resolved = {shallow_skipped + breached_count + already_resolved_count:,}")
+    logger.info(f"    Remaining for Stage 2b: {failed_count + shallow_skipped:,} sinks")
 
     return breached.astype(np.float32)
 
@@ -3795,7 +3798,7 @@ def priority_flood_fill_epsilon(
             in_queue[ni, nj] = True
 
     if filled_count > 0:
-        print(f"    Priority-flood raised {filled_count:,} cells to resolve depressions")
+        logger.info(f"    Priority-flood raised {filled_count:,} cells to resolve depressions")
 
     return filled.astype(np.float32)
 
@@ -3936,7 +3939,7 @@ def condition_dem_spec(
     if nodata_mask is None:
         nodata_mask = np.zeros_like(dem, dtype=bool)
 
-    print("  Stage 1: Identifying outlets...")
+    logger.info("  Stage 1: Identifying outlets...")
     outlets = identify_outlets(
         dem,
         nodata_mask,
@@ -3945,20 +3948,20 @@ def condition_dem_spec(
         masked_basin_outlets
     )
     num_outlets = np.sum(outlets)
-    print(f"    Found {num_outlets:,} outlet cells")
+    logger.info(f"    Found {num_outlets:,} outlet cells")
 
     # Skip breaching if disabled (max_breach_depth <= 0 or max_breach_length <= 0)
     if max_breach_depth <= 0 or max_breach_length <= 0:
-        print("  Stage 2a: Breaching SKIPPED (disabled via parameters)")
+        logger.info("  Stage 2a: Breaching SKIPPED (disabled via parameters)")
         breached = dem.copy()
     else:
-        print(f"  Stage 2a: Constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
+        logger.info(f"  Stage 2a: Constrained breaching (max_depth={max_breach_depth}m, max_length={max_breach_length} cells)...")
         breached = breach_depressions_constrained(
             dem, outlets, max_breach_depth, max_breach_length, epsilon, nodata_mask,
             parallel_method=parallel_method
         )
 
-    print("  Stage 2b: Priority-flood fill residuals...")
+    logger.info("  Stage 2b: Priority-flood fill residuals...")
     filled = priority_flood_fill_epsilon(
         breached, outlets, epsilon, nodata_mask
     )
@@ -3970,7 +3973,7 @@ def condition_dem_spec(
     # (breaching can lower elevations to create flow paths)
     filled = np.maximum(filled, breached)
 
-    print("  DEM conditioning complete (spec-compliant pipeline)")
+    logger.info("  DEM conditioning complete (spec-compliant pipeline)")
     return filled, outlets, breached
 
 
@@ -4211,8 +4214,8 @@ def condition_dem(
         large_basins = sum(1 for size in basin_sizes.values() if size >= min_basin_size)
         num_cells_masked = np.sum(basin_mask)
         pct_masked = 100 * num_cells_masked / basin_mask.size
-        print(f"  Basin preservation: {total_depressions} depressions >{min_basin_depth}m deep, {large_basins} >= {min_basin_size} cells")
-        print(f"  Masked {num_cells_masked:,} cells ({pct_masked:.1f}% of DEM)")
+        logger.info(f"  Basin preservation: {total_depressions} depressions >{min_basin_depth}m deep, {large_basins} >= {min_basin_size} cells")
+        logger.info(f"  Masked {num_cells_masked:,} cells ({pct_masked:.1f}% of DEM)")
         exclude_mask |= basin_mask
 
     # === Main depression filling ===
@@ -4296,14 +4299,14 @@ def _fill_small_sinks(
     local_minima[:, -1] = False
 
     num_minima = np.sum(local_minima)
-    print(f"  Small sink detection: found {num_minima:,} local minima cells")
+    logger.info(f"  Small sink detection: found {num_minima:,} local minima cells")
     if num_minima == 0:
         return filled.astype(np.float32)
 
     # Label connected sink regions
     structure = np.ones((3, 3), dtype=bool)  # 8-connectivity
     labeled, num_features = label(local_minima, structure=structure)
-    print(f"  Small sink detection: {num_features:,} connected sink regions")
+    logger.info(f"  Small sink detection: {num_features:,} connected sink regions")
 
     # Get bounding boxes for all regions in one pass
     slices = find_objects(labeled)
@@ -4395,7 +4398,7 @@ def _fill_small_sinks(
         cells_raised += sink_size
 
     if sinks_filled > 0:
-        print(f"  Filled {sinks_filled} small sinks ({cells_raised:,} cells) with max_size={max_sink_size}")
+        logger.info(f"  Filled {sinks_filled} small sinks ({cells_raised:,} cells) with max_size={max_sink_size}")
 
     return filled.astype(np.float32)
 
@@ -4507,7 +4510,7 @@ def _resolve_flats(dem: np.ndarray, epsilon: float = 1e-5) -> np.ndarray:
     if flat_count == 0:
         return resolved.astype(np.float32)
 
-    print(f"  Flat resolution: {flat_count:,} flat cells found")
+    logger.info(f"  Flat resolution: {flat_count:,} flat cells found")
 
     # Find pour points: flat cells adjacent to STRICTLY LOWER terrain
     pour_points = np.zeros((rows, cols), dtype=bool)
@@ -4543,7 +4546,7 @@ def _resolve_flats(dem: np.ndarray, epsilon: float = 1e-5) -> np.ndarray:
     if pour_count == 0 and high_count == 0:
         return resolved.astype(np.float32)
 
-    print(f"  Flat resolution: {pour_count:,} pour points, {high_count:,} high points")
+    logger.info(f"  Flat resolution: {pour_count:,} pour points, {high_count:,} high points")
 
     # Compute DUAL gradients (Garbrecht-Martz algorithm)
     # Gradient 1: Distance from pour points (toward lower terrain)

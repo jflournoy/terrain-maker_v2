@@ -10,6 +10,7 @@ Supports:
 - CHELSA (high-resolution climate data)
 """
 
+import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Union, Optional
 import numpy as np
@@ -19,6 +20,8 @@ from rasterio.transform import from_bounds
 import requests
 import zipfile
 import io
+
+logger = logging.getLogger(__name__)
 
 
 # Dataset metadata
@@ -117,7 +120,7 @@ def download_precipitation(
 
     # Check cache
     if output_file.exists() and not force_download:
-        print(f"Using cached precipitation data: {output_file}")
+        logger.info(f"Using cached precipitation data: {output_file}")
         return output_file
 
     # Download data (dataset-specific)
@@ -142,7 +145,7 @@ def download_precipitation(
     # Save as GeoTIFF
     _write_precipitation_geotiff(output_file, data, transform, crs="EPSG:4326")
 
-    print(f"✓ Downloaded precipitation data to {output_file}")
+    logger.info(f"✓ Downloaded precipitation data to {output_file}")
     return output_file
 
 
@@ -183,8 +186,8 @@ def download_real_worldclim_annual(
     # File size: ~5-10MB vs 9.7GB for 30s resolution
     base_url = "https://geodata.ucdavis.edu/climate/worldclim/2_1/base/wc2.1_2.5m_bio.zip"
 
-    print(f"Downloading WorldClim annual precipitation from {base_url}...")
-    print(f"  (2.5 minute resolution, ~10MB, should take <30 seconds)")
+    logger.info(f"Downloading WorldClim annual precipitation from {base_url}...")
+    logger.info(f"  (2.5 minute resolution, ~10MB, should take <30 seconds)")
 
     try:
         # Download the ZIP file
@@ -212,7 +215,7 @@ def download_real_worldclim_annual(
             with open(tif_path, 'wb') as f:
                 f.write(zf.read(bio12_file))
 
-            print(f"✓ Downloaded WorldClim BIO12 to {tif_path}")
+            logger.info(f"✓ Downloaded WorldClim BIO12 to {tif_path}")
 
             # Read the TIF file using rasterio
             with rasterio.open(tif_path) as src:
@@ -240,8 +243,8 @@ def download_real_worldclim_annual(
                 # Create transform for subset
                 subset_transform = full_transform * Affine.translation(min_col, min_row)
 
-                print(f"✓ Extracted subset: {subset_data.shape} pixels")
-                print(f"  Precipitation range: {subset_data.min():.1f} to {subset_data.max():.1f} mm/year")
+                logger.info(f"✓ Extracted subset: {subset_data.shape} pixels")
+                logger.info(f"  Precipitation range: {subset_data.min():.1f} to {subset_data.max():.1f} mm/year")
 
                 return subset_data, subset_transform
 
@@ -293,12 +296,12 @@ def download_real_worldclim_30s_annual(
     annual_cache = cache_dir / "wc2.1_30s_prec_annual.tif"
 
     if annual_cache.exists():
-        print(f"Using cached WorldClim 30s annual precipitation: {annual_cache}")
+        logger.info(f"Using cached WorldClim 30s annual precipitation: {annual_cache}")
         with rasterio.open(annual_cache) as src:
             return _extract_worldclim_subset(src, bbox)
 
-    print(f"Downloading WorldClim 30-second precipitation from {base_url}...")
-    print(f"  (~1km resolution, ~1GB download, may take several minutes)")
+    logger.info(f"Downloading WorldClim 30-second precipitation from {base_url}...")
+    logger.info(f"  (~1km resolution, ~1GB download, may take several minutes)")
 
     try:
         # Download the ZIP file with progress indication
@@ -334,7 +337,7 @@ def download_real_worldclim_30s_annual(
             if len(monthly_files) != 12:
                 raise ValueError(f"Expected 12 monthly files, found {len(monthly_files)}: {monthly_files}")
 
-            print(f"✓ Extracting {len(monthly_files)} monthly precipitation files...")
+            logger.info(f"✓ Extracting {len(monthly_files)} monthly precipitation files...")
 
             # Extract all monthly files
             extracted_paths = []
@@ -345,7 +348,7 @@ def download_real_worldclim_30s_annual(
                 extracted_paths.append(tif_path)
 
             # Sum monthly to annual
-            print("  Summing monthly precipitation to annual total...")
+            logger.info("  Summing monthly precipitation to annual total...")
             annual_data = None
             transform = None
             crs = None
@@ -370,7 +373,7 @@ def download_real_worldclim_30s_annual(
             print()  # newline
 
             # Save annual total to cache
-            print(f"  Caching annual total to {annual_cache}...")
+            logger.info(f"  Caching annual total to {annual_cache}...")
             with rasterio.open(
                 annual_cache,
                 "w",
@@ -389,8 +392,8 @@ def download_real_worldclim_30s_annual(
             for tif_path in extracted_paths:
                 tif_path.unlink()
 
-            print(f"✓ Created annual precipitation raster: {annual_cache}")
-            print(f"  Shape: {annual_data.shape}, Range: {annual_data.min():.1f} - {annual_data.max():.1f} mm/year")
+            logger.info(f"✓ Created annual precipitation raster: {annual_cache}")
+            logger.info(f"  Shape: {annual_data.shape}, Range: {annual_data.min():.1f} - {annual_data.max():.1f} mm/year")
 
             # Extract subset for bbox
             with rasterio.open(annual_cache) as src:
@@ -445,8 +448,8 @@ def _extract_worldclim_subset(
     # Create transform for subset
     subset_transform = full_transform * Affine.translation(min_col, min_row)
 
-    print(f"✓ Extracted subset: {subset_data.shape} pixels for bbox")
-    print(f"  Precipitation range: {subset_data.min():.1f} to {subset_data.max():.1f} mm/year")
+    logger.info(f"✓ Extracted subset: {subset_data.shape} pixels for bbox")
+    logger.info(f"  Precipitation range: {subset_data.min():.1f} to {subset_data.max():.1f} mm/year")
 
     return subset_data, subset_transform
 
@@ -485,7 +488,7 @@ def download_real_prism_annual(
     # New URL structure as of 2025: https://ftp.prism.oregonstate.edu/normals/us/4km/ppt/monthly/
     base_url = "https://ftp.prism.oregonstate.edu/normals/us/4km/ppt/monthly/prism_ppt_us_25m_2020_avg_30y.zip"
 
-    print(f"Downloading PRISM annual precipitation from {base_url}...")
+    logger.info(f"Downloading PRISM annual precipitation from {base_url}...")
 
     try:
         # Download the ZIP file
@@ -513,7 +516,7 @@ def download_real_prism_annual(
             with open(tif_path, 'wb') as f:
                 f.write(zf.read(tif_file))
 
-            print(f"✓ Downloaded PRISM data to {tif_path}")
+            logger.info(f"✓ Downloaded PRISM data to {tif_path}")
 
             # Read the TIF file using rasterio
             with rasterio.open(tif_path) as src:
