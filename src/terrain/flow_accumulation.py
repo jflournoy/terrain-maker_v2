@@ -606,6 +606,255 @@ def compute_flow_with_basins(
     }
 
 
+def _load_aligned_precipitation(
+    precip_path, dem_shape, dem_transform, dem_crs, upscale_precip, upscale_method
+):
+    """Load precipitation cropped to the DEM, fill nodata, and resample it onto the DEM grid."""
+    # Load precipitation (cropped to DEM bounds using library function)
+    logger.info("  flow_accumulation: loading precipitation...")
+    from src.terrain.data_loading import load_geotiff_cropped_to_dem
+
+    precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
+        precip_path,
+        dem_shape=dem_shape,
+        dem_transform=dem_transform,
+        dem_crs=dem_crs,
+        use_windowed_read=True,
+    )
+
+    logger.info(f"  flow_accumulation: precipitation loaded {precip_data.shape}")
+
+    # Fill missing values (nodata) using nearest neighbor interpolation
+    # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
+    nodata_mask = (
+        np.isnan(precip_data) |
+        (precip_data < -1000) |  # Catch extreme negative nodata values like -9999, -32768
+        (precip_data < 0)         # Any negative value is invalid for precipitation
+    )
+
+    if np.any(nodata_mask):
+        num_missing = np.sum(nodata_mask)
+        total_pixels = precip_data.size
+        pct_missing = 100.0 * num_missing / total_pixels
+        logger.info(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...")
+
+        from scipy.ndimage import distance_transform_edt
+
+        # Find indices of nearest valid values
+        # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
+        indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)
+
+        # Fill missing values with nearest valid neighbors
+        # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
+        precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
+
+        logger.info(f"  ✓ Imputation complete")
+
+    # Check spatial alignment and resample if needed
+    if precip_data.shape != dem_shape:
+        # Calculate required scale factor
+        scale_y = dem_shape[0] / precip_data.shape[0]
+        scale_x = dem_shape[1] / precip_data.shape[1]
+        is_upscaling = scale_y > 1.0 and scale_x > 1.0
+
+        # Use ESRGAN upscaling if requested AND actually upscaling
+        if upscale_precip and is_upscaling:
+            logger.info(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...")
+
+            # Use upscale_scores if scale is uniform and an integer
+            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
+                from src.terrain.transforms import upscale_scores
+                scale_int = int(round(scale_y))
+                logger.info(f"    Running {upscale_method} {scale_int}x upscaling...")
+                precip_upscaled = upscale_scores(
+                    precip_data,
+                    scale=scale_int,
+                    method=upscale_method,
+                    nodata_value=0.0
+                )
+                precip_data = precip_upscaled
+                logger.info(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
+            else:
+                # Non-uniform scaling - Detroit-style approach for GPU acceleration
+                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
+                # Step 2: Downsample to exact target with rasterio reproject
+                import math
+                avg_scale = (scale_y + scale_x) / 2
+                # Round UP to next power of 2 (e.g., 29.458 → 32)
+                power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
+
+                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
+                    # Use ESRGAN for over-upscaling, then downsample
+                    logger.info(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...")
+
+                    from src.terrain.transforms import upscale_scores
+
+                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    logger.info(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...")
+                    precip_esrgan = upscale_scores(
+                        precip_data,
+                        scale=power_of_2_scale,
+                        method=upscale_method,
+                        nodata_value=0.0
+                    )
+                    logger.info(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}")
+
+                    # Step 2: Downsample to exact target shape with rasterio reproject
+                    from rasterio.warp import reproject, Resampling
+                    logger.info(f"    Downsampling to exact target shape...")
+                    precip_final = np.empty(dem_shape, dtype=np.float32)
+
+                    # Create transforms for intermediate and target shapes
+                    if precip_transform is not None and dem_transform is not None:
+                        # Calculate intermediate transform (after ESRGAN upscaling)
+                        esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
+
+                        reproject(
+                            source=precip_esrgan,
+                            destination=precip_final,
+                            src_transform=esrgan_transform,
+                            src_crs=precip_crs,
+                            dst_transform=dem_transform,
+                            dst_crs=dem_crs,
+                            resampling=Resampling.bilinear,
+                        )
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
+                    else:
+                        # No transform available - use scipy zoom for final adjustment
+                        from scipy.ndimage import zoom
+                        scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
+                        scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
+                        precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
+
+                    precip_data = precip_final
+                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
+                else:
+                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
+                    from rasterio.warp import reproject, Resampling
+                    logger.info(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...")
+
+                    precip_resampled = np.empty(dem_shape, dtype=np.float32)
+                    reproject(
+                        source=precip_data,
+                        destination=precip_resampled,
+                        src_transform=precip_transform,
+                        src_crs=precip_crs,
+                        dst_transform=dem_transform,
+                        dst_crs=dem_crs,
+                        resampling=Resampling.bilinear
+                    )
+                    precip_data = precip_resampled
+                    logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
+        elif upscale_precip and not is_upscaling:
+            # User requested upscaling but data is being downscaled - inform and use standard resampling
+            logger.info(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...")
+            from rasterio.warp import reproject, Resampling
+
+            precip_resampled = np.empty(dem_shape, dtype=np.float32)
+            reproject(
+                source=precip_data,
+                destination=precip_resampled,
+                src_transform=precip_transform,
+                src_crs=precip_crs,
+                dst_transform=dem_transform,
+                dst_crs=dem_crs,
+                resampling=Resampling.bilinear
+            )
+            precip_data = precip_resampled
+            logger.info(f"  ✓ Downsampled precipitation to {precip_data.shape}")
+        else:
+            # Standard resampling (no upscaling requested)
+            logger.info(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...")
+
+            from rasterio.warp import reproject, Resampling
+
+            precip_resampled = np.empty(dem_shape, dtype=np.float32)
+
+            reproject(
+                source=precip_data,
+                destination=precip_resampled,
+                src_transform=precip_transform,
+                src_crs=precip_crs,
+                dst_transform=dem_transform,
+                dst_crs=dem_crs,
+                resampling=Resampling.bilinear
+            )
+
+            precip_data = precip_resampled
+            logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
+
+    return precip_data
+
+
+def _downsample_to_max_cells(
+    original_shape, max_cells, dem_transform, lake_mask, lake_outlets, dem_data, dem_crs
+):
+    """Downsample the DEM (and lake rasters) to at most max_cells; returns the possibly-updated arrays and flags."""
+    # Adaptive resolution: downsample if DEM exceeds max_cells
+    downsampling_applied = False
+    downsample_factor = 1.0
+    dem_shape = original_shape
+
+    if max_cells is not None and (original_shape[0] * original_shape[1]) > max_cells:
+        # Calculate downsample factor to achieve max_cells
+        current_cells = original_shape[0] * original_shape[1]
+        downsample_factor = np.sqrt(current_cells / max_cells)
+
+        # Calculate new shape
+        new_height = int(original_shape[0] / downsample_factor)
+        new_width = int(original_shape[1] / downsample_factor)
+        downsampled_shape = (new_height, new_width)
+
+        logger.info(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
+              f"{downsampled_shape} ({new_height * new_width:,} cells) "
+              f"[{downsample_factor:.2f}x factor]...")
+
+        # Downsample DEM using rasterio
+        from rasterio.warp import reproject, Resampling
+
+        dem_downsampled = np.empty(downsampled_shape, dtype=np.float32)
+
+        # Calculate new transform (larger pixels)
+        downsampled_transform = dem_transform * Affine.scale(downsample_factor)
+
+        reproject(
+            source=dem_data,
+            destination=dem_downsampled,
+            src_transform=dem_transform,
+            src_crs=dem_crs,
+            dst_transform=downsampled_transform,
+            dst_crs=dem_crs,
+            resampling=Resampling.bilinear
+        )
+
+        dem_data = dem_downsampled
+        dem_transform = downsampled_transform
+        dem_shape = downsampled_shape
+        downsampling_applied = True
+
+        # Also downsample lake_mask and lake_outlets if provided
+        if lake_mask is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
+            logger.info(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
+
+        if lake_outlets is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
+            logger.info(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
+
+        logger.info(f"  ✓ Downsampled DEM to {dem_shape}")
+    elif max_cells is not None:
+        logger.info(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
+              f"no downsampling needed")
+    return dem_data, dem_shape, dem_transform, downsample_factor, downsampling_applied, lake_mask, lake_outlets
+
+
 def flow_accumulation(
     dem_path: str,
     precipitation_path: str,
@@ -820,242 +1069,32 @@ def flow_accumulation(
         original_shape = dem_data.shape
     logger.info(f"  flow_accumulation: DEM loaded {original_shape}")
 
-    # Adaptive resolution: downsample if DEM exceeds max_cells
-    downsampling_applied = False
-    downsample_factor = 1.0
-    dem_shape = original_shape
+    (
+        dem_data,
+        dem_shape,
+        dem_transform,
+        downsample_factor,
+        downsampling_applied,
+        lake_mask,
+        lake_outlets,
+    ) = _downsample_to_max_cells(
+        original_shape=original_shape,
+        max_cells=max_cells,
+        dem_transform=dem_transform,
+        lake_mask=lake_mask,
+        lake_outlets=lake_outlets,
+        dem_data=dem_data,
+        dem_crs=dem_crs,
+    )
 
-    if max_cells is not None and (original_shape[0] * original_shape[1]) > max_cells:
-        # Calculate downsample factor to achieve max_cells
-        current_cells = original_shape[0] * original_shape[1]
-        downsample_factor = np.sqrt(current_cells / max_cells)
-
-        # Calculate new shape
-        new_height = int(original_shape[0] / downsample_factor)
-        new_width = int(original_shape[1] / downsample_factor)
-        downsampled_shape = (new_height, new_width)
-
-        logger.info(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
-              f"{downsampled_shape} ({new_height * new_width:,} cells) "
-              f"[{downsample_factor:.2f}x factor]...")
-
-        # Downsample DEM using rasterio
-        from rasterio.warp import reproject, Resampling
-
-        dem_downsampled = np.empty(downsampled_shape, dtype=np.float32)
-
-        # Calculate new transform (larger pixels)
-        downsampled_transform = dem_transform * Affine.scale(downsample_factor)
-
-        reproject(
-            source=dem_data,
-            destination=dem_downsampled,
-            src_transform=dem_transform,
-            src_crs=dem_crs,
-            dst_transform=downsampled_transform,
-            dst_crs=dem_crs,
-            resampling=Resampling.bilinear
-        )
-
-        dem_data = dem_downsampled
-        dem_transform = downsampled_transform
-        dem_shape = downsampled_shape
-        downsampling_applied = True
-
-        # Also downsample lake_mask and lake_outlets if provided
-        if lake_mask is not None:
-            from scipy.ndimage import zoom
-            scale_y = downsampled_shape[0] / original_shape[0]
-            scale_x = downsampled_shape[1] / original_shape[1]
-            lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
-            logger.info(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
-
-        if lake_outlets is not None:
-            from scipy.ndimage import zoom
-            scale_y = downsampled_shape[0] / original_shape[0]
-            scale_x = downsampled_shape[1] / original_shape[1]
-            lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
-            logger.info(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
-
-        logger.info(f"  ✓ Downsampled DEM to {dem_shape}")
-    elif max_cells is not None:
-        logger.info(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
-              f"no downsampling needed")
-
-    # Load precipitation (cropped to DEM bounds using library function)
-    logger.info("  flow_accumulation: loading precipitation...")
-    from src.terrain.data_loading import load_geotiff_cropped_to_dem
-
-    precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
-        precip_path,
+    precip_data = _load_aligned_precipitation(
+        precip_path=precip_path,
         dem_shape=dem_shape,
         dem_transform=dem_transform,
         dem_crs=dem_crs,
-        use_windowed_read=True,
+        upscale_precip=upscale_precip,
+        upscale_method=upscale_method,
     )
-
-    logger.info(f"  flow_accumulation: precipitation loaded {precip_data.shape}")
-
-    # Fill missing values (nodata) using nearest neighbor interpolation
-    # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
-    nodata_mask = (
-        np.isnan(precip_data) |
-        (precip_data < -1000) |  # Catch extreme negative nodata values like -9999, -32768
-        (precip_data < 0)         # Any negative value is invalid for precipitation
-    )
-
-    if np.any(nodata_mask):
-        num_missing = np.sum(nodata_mask)
-        total_pixels = precip_data.size
-        pct_missing = 100.0 * num_missing / total_pixels
-        logger.info(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...")
-
-        from scipy.ndimage import distance_transform_edt
-
-        # Find indices of nearest valid values
-        # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
-        indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)
-
-        # Fill missing values with nearest valid neighbors
-        # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
-        precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
-
-        logger.info(f"  ✓ Imputation complete")
-
-    # Check spatial alignment and resample if needed
-    if precip_data.shape != dem_shape:
-        # Calculate required scale factor
-        scale_y = dem_shape[0] / precip_data.shape[0]
-        scale_x = dem_shape[1] / precip_data.shape[1]
-        is_upscaling = scale_y > 1.0 and scale_x > 1.0
-
-        # Use ESRGAN upscaling if requested AND actually upscaling
-        if upscale_precip and is_upscaling:
-            logger.info(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...")
-
-            # Use upscale_scores if scale is uniform and an integer
-            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
-                from src.terrain.transforms import upscale_scores
-                scale_int = int(round(scale_y))
-                logger.info(f"    Running {upscale_method} {scale_int}x upscaling...")
-                precip_upscaled = upscale_scores(
-                    precip_data,
-                    scale=scale_int,
-                    method=upscale_method,
-                    nodata_value=0.0
-                )
-                precip_data = precip_upscaled
-                logger.info(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
-            else:
-                # Non-uniform scaling - Detroit-style approach for GPU acceleration
-                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
-                # Step 2: Downsample to exact target with rasterio reproject
-                import math
-                avg_scale = (scale_y + scale_x) / 2
-                # Round UP to next power of 2 (e.g., 29.458 → 32)
-                power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
-
-                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
-                    # Use ESRGAN for over-upscaling, then downsample
-                    logger.info(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...")
-
-                    from src.terrain.transforms import upscale_scores
-
-                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
-                    logger.info(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...")
-                    precip_esrgan = upscale_scores(
-                        precip_data,
-                        scale=power_of_2_scale,
-                        method=upscale_method,
-                        nodata_value=0.0
-                    )
-                    logger.info(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}")
-
-                    # Step 2: Downsample to exact target shape with rasterio reproject
-                    from rasterio.warp import reproject, Resampling
-                    logger.info(f"    Downsampling to exact target shape...")
-                    precip_final = np.empty(dem_shape, dtype=np.float32)
-
-                    # Create transforms for intermediate and target shapes
-                    if precip_transform is not None and dem_transform is not None:
-                        # Calculate intermediate transform (after ESRGAN upscaling)
-                        esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
-
-                        reproject(
-                            source=precip_esrgan,
-                            destination=precip_final,
-                            src_transform=esrgan_transform,
-                            src_crs=precip_crs,
-                            dst_transform=dem_transform,
-                            dst_crs=dem_crs,
-                            resampling=Resampling.bilinear,
-                        )
-                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
-                    else:
-                        # No transform available - use scipy zoom for final adjustment
-                        from scipy.ndimage import zoom
-                        scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
-                        scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
-                        precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
-                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
-
-                    precip_data = precip_final
-                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
-                else:
-                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
-                    from rasterio.warp import reproject, Resampling
-                    logger.info(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...")
-
-                    precip_resampled = np.empty(dem_shape, dtype=np.float32)
-                    reproject(
-                        source=precip_data,
-                        destination=precip_resampled,
-                        src_transform=precip_transform,
-                        src_crs=precip_crs,
-                        dst_transform=dem_transform,
-                        dst_crs=dem_crs,
-                        resampling=Resampling.bilinear
-                    )
-                    precip_data = precip_resampled
-                    logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
-        elif upscale_precip and not is_upscaling:
-            # User requested upscaling but data is being downscaled - inform and use standard resampling
-            logger.info(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...")
-            from rasterio.warp import reproject, Resampling
-
-            precip_resampled = np.empty(dem_shape, dtype=np.float32)
-            reproject(
-                source=precip_data,
-                destination=precip_resampled,
-                src_transform=precip_transform,
-                src_crs=precip_crs,
-                dst_transform=dem_transform,
-                dst_crs=dem_crs,
-                resampling=Resampling.bilinear
-            )
-            precip_data = precip_resampled
-            logger.info(f"  ✓ Downsampled precipitation to {precip_data.shape}")
-        else:
-            # Standard resampling (no upscaling requested)
-            logger.info(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...")
-
-            from rasterio.warp import reproject, Resampling
-
-            precip_resampled = np.empty(dem_shape, dtype=np.float32)
-
-            reproject(
-                source=precip_data,
-                destination=precip_resampled,
-                src_transform=precip_transform,
-                src_crs=precip_crs,
-                dst_transform=dem_transform,
-                dst_crs=dem_crs,
-                resampling=Resampling.bilinear
-            )
-
-            precip_data = precip_resampled
-            logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
-
     # Determine cell size (convert from degrees to meters if geographic CRS)
     if cell_size is None:
         from rasterio.crs import CRS
