@@ -503,139 +503,14 @@ def _select_rectangle_boundary(
     return boundary_points
 
 
-def create_boundary_extension(
-    positions,
-    boundary_points,
-    coord_to_index,
-    base_depth=0.2,
-    two_tier=False,
-    mid_depth=None,
-    base_material="clay",
-    blend_edge_colors=True,
-    surface_colors=None,
-    smooth_boundary=False,
-    smooth_window_size=5,
-    use_catmull_rom=False,  # PERFORMANCE: Disabled by default due to computational cost (~1-2s per terrain)
-    catmull_rom_subdivisions=2,
-    use_rectangle_edges=False,  # NEW: Use rectangle-edge sampling instead of morphological detection
-    dem_shape=None,  # DEPRECATED: Use terrain= instead for transform-aware edges
-    terrain=None,  # NEW: Terrain object for transform-aware rectangle edges
-    edge_sample_spacing=0.33,  # Sampling density for rectangle edges (0.33 = 3x denser, ~80K boundary vertices for smooth curves)
-    boundary_winding="counter-clockwise",  # NEW: Boundary winding direction for correct face normals
-    use_fractional_edges=False,  # NEW: Use fractional coords preserving projection curvature
-    scale_factor=100.0,  # Scale factor used for mesh positions (for fractional edge X,Y computation)
-    model_offset=None,  # Model centering offset [x, y, z] (for fractional edge X,Y computation)
-):
+def _make_position_lookup(positions, coord_to_index):
+    """Build get_position_at_coords(y, x) for integer or fractional grid coordinates.
+
+    Returns exact vertex positions for integer coordinates and interpolates
+    (bilinear, partial-corner, or nearest-vertex search) for fractional ones.
+    Unresolvable lookups return None and are recorded in
+    ``get_position_at_coords.missing_corner_samples``.
     """
-    Create boundary extension vertices and faces to close the mesh.
-
-    Creates a "skirt" around the terrain by adding bottom vertices at base_depth
-    and connecting them to the top boundary with quad faces. This closes the mesh
-    into a solid object suitable for 3D printing or solid rendering.
-
-    Supports two modes:
-    - Single-tier (default): Surface → Base (one jump)
-    - Two-tier: Surface → Mid → Base (two-tier with color separation)
-
-    Args:
-        positions (np.ndarray): Array of (n, 3) vertex positions
-        boundary_points (list): List of (y, x) tuples representing ordered boundary points
-        coord_to_index (dict): Mapping from (y, x) coordinates to vertex indices
-        base_depth (float): Positive depth offset below minimum surface elevation (default: 0.2).
-                           Creates a flat base plane at: min_surface_z - base_depth.
-                           Positive values extend below surface, negative extend above.
-        two_tier (bool): Enable two-tier mode (default: False)
-        mid_depth (float, optional): Positive depth offset below surface for mid tier
-                                    (default: base_depth * 0.25, typically 0.05).
-                                    Positive values extend below surface, negative extend above.
-        base_material (str | tuple): Material for base layer - either preset name
-                                    ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
-                                    or RGB tuple (0-1 range). Default: "clay"
-        blend_edge_colors (bool): Blend surface colors to mid tier (default: True)
-                                 If False, mid tier uses base_material color for sharp transition
-        surface_colors (np.ndarray, optional): Surface vertex colors (n_vertices, 3) uint8
-        smooth_boundary (bool): Apply smoothing to boundary to eliminate stair-step edges
-                               (default: False)
-        smooth_window_size (int): Window size for boundary smoothing (default: 5).
-                                 Larger values produce smoother curves.
-        use_catmull_rom (bool): Use Catmull-Rom curve fitting for smooth boundary
-                               instead of pixel-grid topology (default: False).
-                               When enabled, eliminates staircase pattern entirely.
-                               NOTE: Computationally expensive (~0.3-2s per terrain).
-                               Provides true smooth curves vs simple smoothing.
-        catmull_rom_subdivisions (int): Number of interpolated points per boundary
-                                       segment when using Catmull-Rom curves (default: 2).
-                                       Higher values = smoother curve but MORE COMPUTATION.
-                                       Recommended: 2 (fast) or 3-4 (very smooth).
-        use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
-                                   boundary detection (default: False).
-                                   ~150x faster than morphological detection.
-                                   Ideal for rectangular DEMs from raster sources.
-        dem_shape (tuple, optional): DEPRECATED - DEM shape (height, width) for legacy rectangle-edge sampling.
-                                    Use terrain= parameter instead for transform-aware edges (avoids NaN margins).
-        terrain (Terrain, optional): Terrain object for transform-aware rectangle-edge sampling.
-                                    Provides original DEM shape and transform pipeline for accurate
-                                    coordinate mapping without NaN margins. Improves edge coverage from
-                                    0.6% (legacy) to ~100% (transform-aware) for downsampled DEMs.
-        edge_sample_spacing (float): Pixel spacing for edge sampling at original DEM resolution (default: 1.0).
-                                     Lower values = denser sampling, more edge pixels.
-        use_fractional_edges (bool): Use fractional coordinates that preserve projection curvature
-                                    (default: False). When True, creates smooth curved edge by:
-                                    1. Surface tier aligned with mesh boundary (bilinear interpolation, no gap)
-                                    2. Mid tier at fractional X,Y positions with offset Z (smooth curve below surface)
-                                    3. Base tier at fractional X,Y positions with flat Z (smooth curved base)
-                                    This eliminates gaps while preserving smooth projection-aware edge curves.
-                                    Requires terrain= parameter.
-
-    Returns:
-        tuple: When two_tier=False (backwards compatible):
-            (boundary_vertices, boundary_faces)
-        tuple: When two_tier=True:
-            (boundary_vertices, boundary_faces, boundary_colors)
-
-        Where:
-            - boundary_vertices: np.ndarray of vertex positions
-                Single-tier: (n_boundary, 3)
-                Two-tier: (2*n_boundary, 3) - mid + base vertices
-            - boundary_faces: list of tuples defining side face quad connectivity
-                Single-tier: N quads (surface→base)
-                Two-tier: 2*N quads (surface→mid + mid→base)
-            - boundary_colors: np.ndarray of (2*n_boundary, 3) uint8 colors (two-tier only)
-    """
-    from src.terrain.materials import get_base_material_color
-    from scipy.interpolate import RegularGridInterpolator
-
-    # Use rectangle-edge sampling if requested (falls back to the morphological boundary)
-    if use_rectangle_edges:
-        boundary_points = _select_rectangle_boundary(
-            boundary_points, coord_to_index, terrain, dem_shape, use_fractional_edges, edge_sample_spacing
-        )
-
-    # Apply boundary smoothing if requested
-    original_boundary_points = boundary_points
-    if smooth_boundary and len(boundary_points) > 2:
-        boundary_points = smooth_boundary_points(
-            boundary_points, window_size=smooth_window_size, closed_loop=True
-        )
-
-    # Apply Catmull-Rom curve fitting if requested (replaces pixel-grid topology)
-    if use_catmull_rom and len(boundary_points) > 2:
-        smooth_curve_points = fit_catmull_rom_boundary_curve(
-            boundary_points,
-            subdivisions=catmull_rom_subdivisions,
-            closed_loop=True,
-        )
-        boundary_points = smooth_curve_points
-
-    n_boundary = len(boundary_points)
-    # Check if we have fractional coordinates that need bilinear interpolation
-    # This can happen from: smooth_boundary, use_catmull_rom, OR use_fractional_edges
-    has_smoothed_coords = (smooth_boundary or use_catmull_rom or use_fractional_edges) and any(
-        not (isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)))
-        for y, x in boundary_points
-    )
-
-    # Helper function to get or interpolate position
     # Precompute mesh bounds for edge clamping (once, not per-call)
     mesh_bounds = None
     if coord_to_index:
@@ -784,6 +659,144 @@ def create_boundary_extension(
 
     # Initialize debug tracking
     get_position_at_coords.missing_corner_samples = []
+
+    return get_position_at_coords
+
+
+def create_boundary_extension(
+    positions,
+    boundary_points,
+    coord_to_index,
+    base_depth=0.2,
+    two_tier=False,
+    mid_depth=None,
+    base_material="clay",
+    blend_edge_colors=True,
+    surface_colors=None,
+    smooth_boundary=False,
+    smooth_window_size=5,
+    use_catmull_rom=False,  # PERFORMANCE: Disabled by default due to computational cost (~1-2s per terrain)
+    catmull_rom_subdivisions=2,
+    use_rectangle_edges=False,  # NEW: Use rectangle-edge sampling instead of morphological detection
+    dem_shape=None,  # DEPRECATED: Use terrain= instead for transform-aware edges
+    terrain=None,  # NEW: Terrain object for transform-aware rectangle edges
+    edge_sample_spacing=0.33,  # Sampling density for rectangle edges (0.33 = 3x denser, ~80K boundary vertices for smooth curves)
+    boundary_winding="counter-clockwise",  # NEW: Boundary winding direction for correct face normals
+    use_fractional_edges=False,  # NEW: Use fractional coords preserving projection curvature
+    scale_factor=100.0,  # Scale factor used for mesh positions (for fractional edge X,Y computation)
+    model_offset=None,  # Model centering offset [x, y, z] (for fractional edge X,Y computation)
+):
+    """
+    Create boundary extension vertices and faces to close the mesh.
+
+    Creates a "skirt" around the terrain by adding bottom vertices at base_depth
+    and connecting them to the top boundary with quad faces. This closes the mesh
+    into a solid object suitable for 3D printing or solid rendering.
+
+    Supports two modes:
+    - Single-tier (default): Surface → Base (one jump)
+    - Two-tier: Surface → Mid → Base (two-tier with color separation)
+
+    Args:
+        positions (np.ndarray): Array of (n, 3) vertex positions
+        boundary_points (list): List of (y, x) tuples representing ordered boundary points
+        coord_to_index (dict): Mapping from (y, x) coordinates to vertex indices
+        base_depth (float): Positive depth offset below minimum surface elevation (default: 0.2).
+                           Creates a flat base plane at: min_surface_z - base_depth.
+                           Positive values extend below surface, negative extend above.
+        two_tier (bool): Enable two-tier mode (default: False)
+        mid_depth (float, optional): Positive depth offset below surface for mid tier
+                                    (default: base_depth * 0.25, typically 0.05).
+                                    Positive values extend below surface, negative extend above.
+        base_material (str | tuple): Material for base layer - either preset name
+                                    ("clay", "obsidian", "chrome", "plastic", "gold", "ivory")
+                                    or RGB tuple (0-1 range). Default: "clay"
+        blend_edge_colors (bool): Blend surface colors to mid tier (default: True)
+                                 If False, mid tier uses base_material color for sharp transition
+        surface_colors (np.ndarray, optional): Surface vertex colors (n_vertices, 3) uint8
+        smooth_boundary (bool): Apply smoothing to boundary to eliminate stair-step edges
+                               (default: False)
+        smooth_window_size (int): Window size for boundary smoothing (default: 5).
+                                 Larger values produce smoother curves.
+        use_catmull_rom (bool): Use Catmull-Rom curve fitting for smooth boundary
+                               instead of pixel-grid topology (default: False).
+                               When enabled, eliminates staircase pattern entirely.
+                               NOTE: Computationally expensive (~0.3-2s per terrain).
+                               Provides true smooth curves vs simple smoothing.
+        catmull_rom_subdivisions (int): Number of interpolated points per boundary
+                                       segment when using Catmull-Rom curves (default: 2).
+                                       Higher values = smoother curve but MORE COMPUTATION.
+                                       Recommended: 2 (fast) or 3-4 (very smooth).
+        use_rectangle_edges (bool): Use rectangle-edge sampling instead of morphological
+                                   boundary detection (default: False).
+                                   ~150x faster than morphological detection.
+                                   Ideal for rectangular DEMs from raster sources.
+        dem_shape (tuple, optional): DEPRECATED - DEM shape (height, width) for legacy rectangle-edge sampling.
+                                    Use terrain= parameter instead for transform-aware edges (avoids NaN margins).
+        terrain (Terrain, optional): Terrain object for transform-aware rectangle-edge sampling.
+                                    Provides original DEM shape and transform pipeline for accurate
+                                    coordinate mapping without NaN margins. Improves edge coverage from
+                                    0.6% (legacy) to ~100% (transform-aware) for downsampled DEMs.
+        edge_sample_spacing (float): Pixel spacing for edge sampling at original DEM resolution (default: 1.0).
+                                     Lower values = denser sampling, more edge pixels.
+        use_fractional_edges (bool): Use fractional coordinates that preserve projection curvature
+                                    (default: False). When True, creates smooth curved edge by:
+                                    1. Surface tier aligned with mesh boundary (bilinear interpolation, no gap)
+                                    2. Mid tier at fractional X,Y positions with offset Z (smooth curve below surface)
+                                    3. Base tier at fractional X,Y positions with flat Z (smooth curved base)
+                                    This eliminates gaps while preserving smooth projection-aware edge curves.
+                                    Requires terrain= parameter.
+
+    Returns:
+        tuple: When two_tier=False (backwards compatible):
+            (boundary_vertices, boundary_faces)
+        tuple: When two_tier=True:
+            (boundary_vertices, boundary_faces, boundary_colors)
+
+        Where:
+            - boundary_vertices: np.ndarray of vertex positions
+                Single-tier: (n_boundary, 3)
+                Two-tier: (2*n_boundary, 3) - mid + base vertices
+            - boundary_faces: list of tuples defining side face quad connectivity
+                Single-tier: N quads (surface→base)
+                Two-tier: 2*N quads (surface→mid + mid→base)
+            - boundary_colors: np.ndarray of (2*n_boundary, 3) uint8 colors (two-tier only)
+    """
+    from src.terrain.materials import get_base_material_color
+    from scipy.interpolate import RegularGridInterpolator
+
+    # Use rectangle-edge sampling if requested (falls back to the morphological boundary)
+    if use_rectangle_edges:
+        boundary_points = _select_rectangle_boundary(
+            boundary_points, coord_to_index, terrain, dem_shape, use_fractional_edges, edge_sample_spacing
+        )
+
+    # Apply boundary smoothing if requested
+    original_boundary_points = boundary_points
+    if smooth_boundary and len(boundary_points) > 2:
+        boundary_points = smooth_boundary_points(
+            boundary_points, window_size=smooth_window_size, closed_loop=True
+        )
+
+    # Apply Catmull-Rom curve fitting if requested (replaces pixel-grid topology)
+    if use_catmull_rom and len(boundary_points) > 2:
+        smooth_curve_points = fit_catmull_rom_boundary_curve(
+            boundary_points,
+            subdivisions=catmull_rom_subdivisions,
+            closed_loop=True,
+        )
+        boundary_points = smooth_curve_points
+
+    n_boundary = len(boundary_points)
+    # Check if we have fractional coordinates that need bilinear interpolation
+    # This can happen from: smooth_boundary, use_catmull_rom, OR use_fractional_edges
+    has_smoothed_coords = (smooth_boundary or use_catmull_rom or use_fractional_edges) and any(
+        not (isinstance(y, (int, np.integer)) and isinstance(x, (int, np.integer)))
+        for y, x in boundary_points
+    )
+
+    # Position lookup for integer or fractional boundary coordinates
+    get_position_at_coords = _make_position_lookup(positions, coord_to_index)
 
     if not two_tier:
         # ===== SINGLE-TIER MODE (backwards compatible) =====
