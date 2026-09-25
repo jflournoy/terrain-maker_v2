@@ -401,12 +401,6 @@ def compute_flow_with_basins(
     - Configurable coastal outlet detection
     - Endorheic basin preservation
     """
-    from src.terrain.water_bodies import (
-        identify_lake_inlets,
-        create_lake_flow_routing,
-        compute_outlet_downstream_directions,
-        find_lake_spillways,
-    )
     from src.terrain.transforms import upscale_scores
 
     if verbose:
@@ -497,63 +491,13 @@ def compute_flow_with_basins(
         breached_dem = None
 
     # Step 5: Identify lake inlets
-    lake_inlets = None
-    if lake_mask is not None and np.any(lake_mask > 0):
-        if verbose:
-            logger.info("\n5. Identifying lake inlets...")
-        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
-        inlets_dict = identify_lake_inlets(
-            lake_mask, dem_conditioned, outlet_mask=outlet_mask_for_inlets
-        )
-        if inlets_dict:
-            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
-            for lake_id, inlet_cells in inlets_dict.items():
-                for row, col in inlet_cells:
-                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
-                        lake_inlets[row, col] = True
-            if verbose:
-                logger.info(f"   Inlet cells: {np.sum(lake_inlets)}")
-
-    # Step 6: Compute flow direction with DEM-based spillway lake routing
+    # Step 5-6: Compute flow direction, then route lakes outside basins via DEM spillways
     if verbose:
         logger.info("\n6. Computing flow direction...")
     flow_dir_base = compute_flow_direction(dem_conditioned, mask=ocean_mask)
-    flow_dir = flow_dir_base.copy()
-
-    if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
-        if verbose:
-            logger.info("   Applying lake flow routing (DEM-based spillways)...")
-
-        labeled_lakes = lake_mask.copy()
-        if basin_mask is not None and np.any(basin_mask):
-            labeled_lakes[basin_mask] = 0
-            lakes_outside = (lake_mask > 0) & ~basin_mask
-        else:
-            lakes_outside = lake_mask > 0
-
-        if np.any(lakes_outside):
-            spillways = find_lake_spillways(labeled_lakes, dem_conditioned)
-            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
-            for lake_id, (sr, sc, _sdir) in spillways.items():
-                spillway_outlets[sr, sc] = True
-
-            if verbose:
-                logger.info(f"   DEM spillway detection: {len(spillways)} spillways")
-
-            lake_flow = create_lake_flow_routing(
-                labeled_lakes, spillway_outlets, dem_conditioned
-            )
-            flow_dir = np.where(lakes_outside, lake_flow, flow_dir_base)
-
-            if np.any(spillway_outlets):
-                flow_dir = compute_outlet_downstream_directions(
-                    flow_dir, labeled_lakes, spillway_outlets,
-                    dem_conditioned, basin_mask=basin_mask, spillways=spillways,
-                )
-
-            if verbose:
-                logger.info(f"   Applied routing to {np.sum(lakes_outside):,} cells "
-                      f"with {len(spillways)} spillway outlets")
+    flow_dir, lake_inlets = _route_lakes_and_find_inlets(
+        lake_mask, lake_outlets, basin_mask, dem_conditioned, flow_dir_base
+    )
 
     # Step 7: Compute drainage area
     if verbose:
@@ -604,6 +548,689 @@ def compute_flow_with_basins(
         "upstream_rainfall": upstream_rainfall,
         "conditioning_mask": conditioning_mask,
     }
+
+
+def _load_aligned_precipitation(
+    precip_path, dem_shape, dem_transform, dem_crs, upscale_precip, upscale_method
+):
+    """Load precipitation cropped to the DEM, fill nodata, and resample it onto the DEM grid."""
+    # Load precipitation (cropped to DEM bounds using library function)
+    logger.info("  flow_accumulation: loading precipitation...")
+    from src.terrain.data_loading import load_geotiff_cropped_to_dem
+
+    precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
+        precip_path,
+        dem_shape=dem_shape,
+        dem_transform=dem_transform,
+        dem_crs=dem_crs,
+        use_windowed_read=True,
+    )
+
+    logger.info(f"  flow_accumulation: precipitation loaded {precip_data.shape}")
+
+    # Fill missing values (nodata) using nearest neighbor interpolation
+    # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
+    nodata_mask = (
+        np.isnan(precip_data) |
+        (precip_data < -1000) |  # Catch extreme negative nodata values like -9999, -32768
+        (precip_data < 0)         # Any negative value is invalid for precipitation
+    )
+
+    if np.any(nodata_mask):
+        num_missing = np.sum(nodata_mask)
+        total_pixels = precip_data.size
+        pct_missing = 100.0 * num_missing / total_pixels
+        logger.info(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...")
+
+        from scipy.ndimage import distance_transform_edt
+
+        # Find indices of nearest valid values
+        # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
+        indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)
+
+        # Fill missing values with nearest valid neighbors
+        # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
+        precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
+
+        logger.info(f"  ✓ Imputation complete")
+
+    # Check spatial alignment and resample if needed
+    if precip_data.shape != dem_shape:
+        # Calculate required scale factor
+        scale_y = dem_shape[0] / precip_data.shape[0]
+        scale_x = dem_shape[1] / precip_data.shape[1]
+        is_upscaling = scale_y > 1.0 and scale_x > 1.0
+
+        # Use ESRGAN upscaling if requested AND actually upscaling
+        if upscale_precip and is_upscaling:
+            logger.info(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...")
+
+            # Use upscale_scores if scale is uniform and an integer
+            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
+                from src.terrain.transforms import upscale_scores
+                scale_int = int(round(scale_y))
+                logger.info(f"    Running {upscale_method} {scale_int}x upscaling...")
+                precip_upscaled = upscale_scores(
+                    precip_data,
+                    scale=scale_int,
+                    method=upscale_method,
+                    nodata_value=0.0
+                )
+                precip_data = precip_upscaled
+                logger.info(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
+            else:
+                # Non-uniform scaling - Detroit-style approach for GPU acceleration
+                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
+                # Step 2: Downsample to exact target with rasterio reproject
+                import math
+                avg_scale = (scale_y + scale_x) / 2
+                # Round UP to next power of 2 (e.g., 29.458 → 32)
+                power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
+
+                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
+                    # Use ESRGAN for over-upscaling, then downsample
+                    logger.info(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...")
+
+                    from src.terrain.transforms import upscale_scores
+
+                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    logger.info(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...")
+                    precip_esrgan = upscale_scores(
+                        precip_data,
+                        scale=power_of_2_scale,
+                        method=upscale_method,
+                        nodata_value=0.0
+                    )
+                    logger.info(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}")
+
+                    # Step 2: Downsample to exact target shape with rasterio reproject
+                    from rasterio.warp import reproject, Resampling
+                    logger.info(f"    Downsampling to exact target shape...")
+                    precip_final = np.empty(dem_shape, dtype=np.float32)
+
+                    # Create transforms for intermediate and target shapes
+                    if precip_transform is not None and dem_transform is not None:
+                        # Calculate intermediate transform (after ESRGAN upscaling)
+                        esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
+
+                        reproject(
+                            source=precip_esrgan,
+                            destination=precip_final,
+                            src_transform=esrgan_transform,
+                            src_crs=precip_crs,
+                            dst_transform=dem_transform,
+                            dst_crs=dem_crs,
+                            resampling=Resampling.bilinear,
+                        )
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
+                    else:
+                        # No transform available - use scipy zoom for final adjustment
+                        from scipy.ndimage import zoom
+                        scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
+                        scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
+                        precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
+                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
+
+                    precip_data = precip_final
+                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
+                else:
+                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
+                    from rasterio.warp import reproject, Resampling
+                    logger.info(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...")
+
+                    precip_resampled = np.empty(dem_shape, dtype=np.float32)
+                    reproject(
+                        source=precip_data,
+                        destination=precip_resampled,
+                        src_transform=precip_transform,
+                        src_crs=precip_crs,
+                        dst_transform=dem_transform,
+                        dst_crs=dem_crs,
+                        resampling=Resampling.bilinear
+                    )
+                    precip_data = precip_resampled
+                    logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
+        elif upscale_precip and not is_upscaling:
+            # User requested upscaling but data is being downscaled - inform and use standard resampling
+            logger.info(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...")
+            from rasterio.warp import reproject, Resampling
+
+            precip_resampled = np.empty(dem_shape, dtype=np.float32)
+            reproject(
+                source=precip_data,
+                destination=precip_resampled,
+                src_transform=precip_transform,
+                src_crs=precip_crs,
+                dst_transform=dem_transform,
+                dst_crs=dem_crs,
+                resampling=Resampling.bilinear
+            )
+            precip_data = precip_resampled
+            logger.info(f"  ✓ Downsampled precipitation to {precip_data.shape}")
+        else:
+            # Standard resampling (no upscaling requested)
+            logger.info(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...")
+
+            from rasterio.warp import reproject, Resampling
+
+            precip_resampled = np.empty(dem_shape, dtype=np.float32)
+
+            reproject(
+                source=precip_data,
+                destination=precip_resampled,
+                src_transform=precip_transform,
+                src_crs=precip_crs,
+                dst_transform=dem_transform,
+                dst_crs=dem_crs,
+                resampling=Resampling.bilinear
+            )
+
+            precip_data = precip_resampled
+            logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
+
+    return precip_data
+
+
+def _downsample_to_max_cells(
+    original_shape, max_cells, dem_transform, lake_mask, lake_outlets, dem_data, dem_crs
+):
+    """Downsample the DEM (and lake rasters) to at most max_cells; returns the possibly-updated arrays and flags."""
+    # Adaptive resolution: downsample if DEM exceeds max_cells
+    downsampling_applied = False
+    downsample_factor = 1.0
+    dem_shape = original_shape
+
+    if max_cells is not None and (original_shape[0] * original_shape[1]) > max_cells:
+        # Calculate downsample factor to achieve max_cells
+        current_cells = original_shape[0] * original_shape[1]
+        downsample_factor = np.sqrt(current_cells / max_cells)
+
+        # Calculate new shape
+        new_height = int(original_shape[0] / downsample_factor)
+        new_width = int(original_shape[1] / downsample_factor)
+        downsampled_shape = (new_height, new_width)
+
+        logger.info(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
+              f"{downsampled_shape} ({new_height * new_width:,} cells) "
+              f"[{downsample_factor:.2f}x factor]...")
+
+        # Downsample DEM using rasterio
+        from rasterio.warp import reproject, Resampling
+
+        dem_downsampled = np.empty(downsampled_shape, dtype=np.float32)
+
+        # Calculate new transform (larger pixels)
+        downsampled_transform = dem_transform * Affine.scale(downsample_factor)
+
+        reproject(
+            source=dem_data,
+            destination=dem_downsampled,
+            src_transform=dem_transform,
+            src_crs=dem_crs,
+            dst_transform=downsampled_transform,
+            dst_crs=dem_crs,
+            resampling=Resampling.bilinear
+        )
+
+        dem_data = dem_downsampled
+        dem_transform = downsampled_transform
+        dem_shape = downsampled_shape
+        downsampling_applied = True
+
+        # Also downsample lake_mask and lake_outlets if provided
+        if lake_mask is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
+            logger.info(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
+
+        if lake_outlets is not None:
+            from scipy.ndimage import zoom
+            scale_y = downsampled_shape[0] / original_shape[0]
+            scale_x = downsampled_shape[1] / original_shape[1]
+            lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
+            logger.info(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
+
+        logger.info(f"  ✓ Downsampled DEM to {dem_shape}")
+    elif max_cells is not None:
+        logger.info(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
+              f"no downsampling needed")
+    return dem_data, dem_shape, dem_transform, downsample_factor, downsampling_applied, lake_mask, lake_outlets
+
+
+def _write_flow_outputs(
+    output_dir,
+    dem_path,
+    dem_transform,
+    dem_crs,
+    flow_direction,
+    drainage_area,
+    upstream_rainfall,
+    conditioned_dem,
+):
+    """Write flow direction, drainage, rainfall and conditioned DEM GeoTIFFs; return (paths, output_dir)."""
+    # Save outputs
+    if output_dir is None:
+        output_dir = dem_path.parent
+    else:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    files = {}
+    files["flow_direction"] = str(output_dir / "flow_direction.tif")
+    files["drainage_area"] = str(output_dir / "flow_accumulation_area.tif")
+    files["upstream_rainfall"] = str(output_dir / "flow_accumulation_rainfall.tif")
+    files["conditioned_dem"] = str(output_dir / "dem_conditioned.tif")
+
+    # Write output GeoTIFFs
+    _write_geotiff(files["flow_direction"], flow_direction.astype(np.uint8), dem_transform, dem_crs)
+    _write_geotiff(files["drainage_area"], drainage_area, dem_transform, dem_crs)
+    _write_geotiff(files["upstream_rainfall"], upstream_rainfall, dem_transform, dem_crs)
+    _write_geotiff(files["conditioned_dem"], conditioned_dem, dem_transform, dem_crs)
+    return files, output_dir
+
+
+def _route_lakes_and_find_inlets(
+    lake_mask, lake_outlets, basin_mask, conditioned_dem, flow_direction
+):
+    """Route flow through lakes outside endorheic basins (DEM spillways) and mark lake inlet cells."""
+    # Step 3.5: Apply lake routing if lake_mask provided
+    # Uses DEM-based spillway detection (boundary cells) instead of HydroLAKES
+    # pour points (which land in lake interiors and create terminal outlets).
+    # Basin-aware: only routes lakes outside preserved endorheic basins.
+    if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
+        from src.terrain.water_bodies import (
+            create_lake_flow_routing,
+            find_lake_spillways,
+            compute_outlet_downstream_directions,
+        )
+        logger.info("Applying lake flow routing (DEM-based spillways)...")
+
+        # Basin-aware: only route lakes OUTSIDE preserved basins
+        labeled_lakes = lake_mask.copy()
+        if basin_mask is not None and np.any(basin_mask):
+            labeled_lakes[basin_mask] = 0
+            lakes_outside = (lake_mask > 0) & ~basin_mask
+            n_in = len(np.unique(lake_mask[(lake_mask > 0) & basin_mask]))
+            n_out = len(np.unique(lake_mask[lakes_outside]))
+            logger.info(f"  {n_in} lakes inside basins (natural flow), "
+                  f"{n_out} lakes outside basins (explicit routing)")
+        else:
+            lakes_outside = lake_mask > 0
+
+        if np.any(lakes_outside):
+            # DEM-based spillways: find lowest boundary cell for each lake
+            spillways = find_lake_spillways(labeled_lakes, conditioned_dem)
+            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
+            for lake_id, (sr, sc, _sdir) in spillways.items():
+                spillway_outlets[sr, sc] = True
+
+            logger.info(f"  DEM spillway detection: {len(spillways)} spillways "
+                  f"(replacing {int(np.sum(lake_outlets)):,} HydroLAKES pour points)")
+
+            # BFS routing: all lake cells route toward DEM spillway
+            lake_flow = create_lake_flow_routing(
+                labeled_lakes, spillway_outlets, conditioned_dem
+            )
+            flow_direction = np.where(lakes_outside, lake_flow, flow_direction)
+
+            # Connect spillway outlets to downstream terrain (cycle-safe)
+            if np.any(spillway_outlets):
+                flow_direction = compute_outlet_downstream_directions(
+                    flow_direction, labeled_lakes, spillway_outlets,
+                    conditioned_dem, basin_mask=basin_mask, spillways=spillways,
+                )
+
+            logger.info(f"  Applied routing to {np.sum(lakes_outside):,} cells "
+                  f"with {len(spillways)} spillway outlets")
+
+    # Step 3.6: Identify lake inlets (after DEM conditioning + lake routing)
+    lake_inlets = None
+    if lake_mask is not None and np.any(lake_mask > 0):
+        from src.terrain.water_bodies import identify_lake_inlets
+        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
+        inlets_dict = identify_lake_inlets(
+            lake_mask, conditioned_dem, outlet_mask=outlet_mask_for_inlets
+        )
+        if inlets_dict:
+            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
+            for lake_id, inlet_cells in inlets_dict.items():
+                for row, col in inlet_cells:
+                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
+                        lake_inlets[row, col] = True
+            logger.info(f"  Lake inlets: {np.sum(lake_inlets):,} cells")
+    return flow_direction, lake_inlets
+
+
+def _condition_and_route(
+    backend,
+    fill_method,
+    min_basin_size,
+    detect_basins,
+    conditioning_mask,
+    ocean_mask,
+    dem_data,
+    coastal_elev_threshold,
+    edge_mode,
+    max_breach_depth,
+    max_breach_length,
+    epsilon,
+    masked_basin_outlets,
+    parallel_method,
+    dem_transform,
+    dem_crs,
+    downsample_factor,
+    max_fill_depth,
+    flow_mask,
+):
+    """Condition the DEM and compute D8 flow direction with the selected backend (spec, pysheds or legacy)."""
+    pysheds_state = None
+    # Initialize breached_dem (only set by spec backend, None for others)
+    breached_dem = None
+
+    # Branch based on backend
+    if backend == "spec":
+        # === SPEC-COMPLIANT BACKEND ===
+        # Use spec-compliant 4-stage pipeline (outlet ID + breaching + fill)
+        logger.info(f"Using spec-compliant backend (flow-spec.md)...")
+
+        # Emit warnings if legacy parameters are specified
+        if fill_method != "breach":
+            import warnings
+            warnings.warn(
+                f"fill_method='{fill_method}' is ignored when backend='spec'. "
+                "Use epsilon parameter instead (epsilon=0 for fill, epsilon>0 for breach-like).",
+                DeprecationWarning
+            )
+        if min_basin_size != 10000:
+            import warnings
+            warnings.warn(
+                "min_basin_size is ignored when backend='spec'. "
+                "Use max_breach_depth/max_breach_length to control basin preservation.",
+                DeprecationWarning
+            )
+
+        # Step 2: Condition DEM using spec-compliant pipeline
+        # Use combined conditioning mask (ocean + basins) to preserve topography
+        logger.info("Conditioning DEM (outlets + breach + fill)...")
+        nodata_mask_for_spec = conditioning_mask if detect_basins else ocean_mask
+        conditioned_dem, outlets, breached_dem = condition_dem_spec(
+            dem_data,
+            nodata_mask=nodata_mask_for_spec,
+            coastal_elev_threshold=coastal_elev_threshold,
+            edge_mode=edge_mode,
+            max_breach_depth=max_breach_depth,
+            max_breach_length=max_breach_length,
+            epsilon=epsilon,
+            masked_basin_outlets=masked_basin_outlets,
+            parallel_method=parallel_method,
+        )
+
+        # Step 3: Compute flow directions
+        logger.info("Computing flow directions...")
+        # CRITICAL: Combine ocean/nodata with all identified outlets (edge, coastal, masked basin)
+        # so that ALL outlet types are properly used as flow direction terminals
+        outlet_mask = ocean_mask | outlets
+        flow_direction = compute_flow_direction(conditioned_dem, mask=outlet_mask)
+        logger.info("  ✓ Flow directions computed")
+
+    elif backend == "pysheds":
+        if not PYSHEDS_AVAILABLE:
+            raise ImportError("pysheds is not installed. Install with: pip install pysheds")
+
+        # === PYSHEDS BACKEND ===
+        # Use pysheds for core hydrology (depression filling, flow direction, accumulation)
+        # WARNING: PySheds may produce flow cycles in some cases. Use custom backend for
+        # production work.
+        import warnings
+        warnings.warn(
+            "PySheds backend is experimental and may produce flow cycles. "
+            "Use backend='custom' for reliable results.",
+            UserWarning
+        )
+        logger.info(f"Using pysheds backend for flow computation...")
+
+        # Create pysheds grid from numpy array
+        # PySheds expects nodata value - use a large negative number for ocean/masked areas
+        dem_for_pysheds = dem_data.copy()
+        nodata_value = -9999.0
+        if ocean_mask is not None and np.any(ocean_mask):
+            dem_for_pysheds[ocean_mask] = nodata_value
+
+        # Create ViewFinder and Raster objects for pysheds
+        from pysheds.sview import Raster, ViewFinder
+
+        # Create ViewFinder with proper metadata
+        viewfinder = ViewFinder(
+            shape=dem_for_pysheds.shape,
+            affine=dem_transform,
+            crs=dem_crs,
+            nodata=nodata_value,
+        )
+
+        # Wrap numpy array as Raster and create grid from viewfinder
+        dem_raster = Raster(dem_for_pysheds, viewfinder=viewfinder)
+        grid = PyshedsGrid(viewfinder=viewfinder)
+
+        # Step 2: Condition DEM using pysheds
+        logger.info("  pysheds: Filling pits...")
+        pit_filled = grid.fill_pits(dem_raster)
+
+        logger.info("  pysheds: Filling depressions...")
+        flooded = grid.fill_depressions(pit_filled)
+
+        logger.info("  pysheds: Resolving flats...")
+        inflated = grid.resolve_flats(flooded)
+
+        conditioned_dem = np.array(inflated).astype(np.float32)
+
+        # Restore original ocean values to conditioned DEM
+        if ocean_mask is not None and np.any(ocean_mask):
+            conditioned_dem[ocean_mask] = dem_data[ocean_mask]
+
+        # Step 3: Compute flow direction using pysheds
+        logger.info("  pysheds: Computing flow direction...")
+        fdir = grid.flowdir(inflated)
+        pysheds_state = (grid, fdir, viewfinder)  # reused for accumulation
+
+        # Convert pysheds flow direction to our D8 encoding
+        # PySheds uses same D8 encoding by default (1,2,4,8,16,32,64,128)
+        # PySheds returns negative values for outlets/boundaries (e.g., -2)
+        # We need to convert these to 0 (outlet) before casting to uint8
+        fdir_arr = np.array(fdir)
+        fdir_arr[fdir_arr < 0] = 0  # Convert negative values to outlet (0)
+        flow_direction = fdir_arr.astype(np.uint8)
+
+        # Apply ocean mask to flow direction (ocean cells = outlet)
+        if ocean_mask is not None and np.any(ocean_mask):
+            flow_direction[ocean_mask] = 0
+            # Fix coastal cells to flow toward ocean (pysheds doesn't do this automatically)
+            _fix_coastal_flow_directions(flow_direction, ocean_mask)
+
+    else:
+        # === LEGACY BACKEND (morphological reconstruction + workarounds) ===
+        # Step 2: Condition DEM (fill pits/depressions with masking)
+        # Scale min_basin_size if downsampling was applied (area scales with factor²)
+        scaled_min_basin_size = min_basin_size
+        if min_basin_size is not None and downsample_factor > 1.0:
+            scaled_min_basin_size = max(100, int(min_basin_size / (downsample_factor ** 2)))
+            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size} → {scaled_min_basin_size} scaled)...")
+        else:
+            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size})...")
+        conditioned_dem = condition_dem(
+            dem_data,
+            method=fill_method,
+            ocean_mask=ocean_mask,
+            min_basin_size=scaled_min_basin_size,
+            max_fill_depth=max_fill_depth,
+        )
+
+        # Step 3: Compute flow directions (with combined mask)
+        logger.info("Computing flow directions...")
+        flow_direction = compute_flow_direction(
+            conditioned_dem, mask=flow_mask if np.any(flow_mask) else None
+        )
+    return breached_dem, conditioned_dem, flow_direction, pysheds_state
+
+
+def _build_conditioning_masks(
+    mask_ocean,
+    dem_data,
+    ocean_elevation_threshold,
+    detect_basins,
+    backend,
+    min_basin_size,
+    min_basin_depth,
+    lake_mask,
+):
+    """Detect ocean and endorheic basins and combine them (plus lakes inside basins) into the conditioning mask."""
+    # Step 1: Detect ocean mask (if enabled)
+    ocean_mask = None
+    if mask_ocean:
+        logger.info(f"Detecting ocean (elevation <= {ocean_elevation_threshold}m, border-connected)...")
+        ocean_mask = detect_ocean_mask(
+            dem_data, threshold=ocean_elevation_threshold, border_only=True
+        )
+        ocean_cells = np.sum(ocean_mask)
+        ocean_pct = 100 * ocean_cells / ocean_mask.size
+        logger.info(f"  Ocean detected: {ocean_cells:,} cells ({ocean_pct:.1f}%)")
+
+    # Step 1b: Detect endorheic basins (if enabled and using spec backend)
+    basin_mask = None
+    if detect_basins and backend == "spec":
+        logger.info(f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)...")
+        basin_mask, endorheic_basins = detect_endorheic_basins(
+            dem_data,
+            min_size=min_basin_size,
+            min_depth=min_basin_depth,
+            exclude_mask=ocean_mask,
+        )
+
+        if basin_mask is not None and np.any(basin_mask):
+            num_basins = len(endorheic_basins)
+            basin_coverage = 100 * np.sum(basin_mask) / dem_data.size
+            logger.info(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of domain)")
+            logger.info(f"  Basins will be masked during conditioning to preserve topography")
+        else:
+            logger.info("  No significant endorheic basins detected")
+            basin_mask = None
+    elif detect_basins and backend != "spec":
+        import warnings
+        warnings.warn(
+            f"detect_basins=True is only supported with backend='spec'. "
+            f"Use min_basin_size parameter with legacy backend instead.",
+            UserWarning
+        )
+
+    # Create combined conditioning mask for spec backend
+    # Strategy: ocean + endorheic basins + selective lakes
+    # (Lakes handled later in the pipeline based on basin location)
+    conditioning_mask = ocean_mask.copy() if ocean_mask is not None else np.zeros(dem_data.shape, dtype=bool)
+
+    # Basin-aware lake pre-masking:
+    # Lakes INSIDE basins → masked (drainage sinks like Salton Sea)
+    # Lakes OUTSIDE basins → NOT masked (river connectors)
+    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
+        lakes_in_basins = (lake_mask > 0) & basin_mask
+        if np.any(lakes_in_basins):
+            conditioning_mask = conditioning_mask | lakes_in_basins
+            logger.info(f"  Pre-masking {np.sum(lakes_in_basins):,} lake cells inside basins (drainage sinks)")
+
+        lakes_outside = (lake_mask > 0) & ~basin_mask
+        if np.any(lakes_outside):
+            logger.info(f"  NOT masking {np.sum(lakes_outside):,} lake cells outside basins (river connectors)")
+    elif lake_mask is not None and np.any(lake_mask > 0):
+        logger.info(f"  NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
+
+    if basin_mask is not None and np.any(basin_mask):
+        conditioning_mask = conditioning_mask | basin_mask
+        logger.info(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
+              f"({100*np.sum(conditioning_mask)/conditioning_mask.size:.1f}%)")
+
+    # Use ocean mask for flow computation (flow direction terminals)
+    # Note: Basins are NOT masked from flow - flow is computed inside them
+    flow_mask = ocean_mask if ocean_mask is not None else None
+    return basin_mask, conditioning_mask, flow_mask, ocean_mask
+
+
+def _cell_size_m(cell_size, dem_shape, dem_crs, dem_transform):
+    """Cell size in meters (converted from degrees for geographic CRS) unless given."""
+    # Determine cell size (convert from degrees to meters if geographic CRS)
+    if cell_size is None:
+        from rasterio.crs import CRS
+        import math
+
+        # Check if CRS is geographic (lat/lon in degrees)
+        if dem_crs is not None and CRS.from_user_input(dem_crs).is_geographic:
+            # Cell size is in degrees - convert to meters using Haversine approximation
+            # Calculate at center latitude for best accuracy
+            pixel_size_deg = abs(dem_transform.a)
+
+            # Get bounds to find center latitude
+            height, width = dem_shape
+            left = dem_transform.c
+            top = dem_transform.f
+            bottom = top + (height * dem_transform.e)
+            center_lat = (top + bottom) / 2
+
+            # Haversine approximation for degrees to meters
+            # At center latitude
+            lon_to_m = 111320 * math.cos(math.radians(center_lat))
+            lat_to_m = 110540
+
+            cell_width_m = pixel_size_deg * lon_to_m
+            cell_height_m = abs(dem_transform.e) * lat_to_m
+
+            # Use average of width and height for area calculations
+            cell_size = math.sqrt(cell_width_m * cell_height_m)
+
+            logger.info(f"  Geographic CRS detected (cell size: {pixel_size_deg:.8f}° ≈ {cell_size:.1f}m at lat {center_lat:.2f}°)")
+        else:
+            # Projected CRS - pixel size is already in CRS units (meters)
+            cell_size = abs(dem_transform.a)
+    return cell_size
+
+
+def _accumulate_flow(backend, pysheds_state, flow_direction, precip_data, ocean_mask):
+    """Drainage area (cells) and precipitation-weighted upstream rainfall, with ocean excluded."""
+    # Step 4: Compute drainage area and upstream rainfall
+    if backend == "pysheds":
+        # Use pysheds accumulation
+        from pysheds.sview import Raster
+
+        grid, fdir, viewfinder = pysheds_state
+        logger.info("  pysheds: Computing drainage area...")
+        acc = grid.accumulation(fdir)
+        drainage_area = np.array(acc).astype(np.float32)
+
+        logger.info("  pysheds: Computing upstream rainfall (weighted)...")
+        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
+        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
+        precip_for_pysheds = precip_data.copy()
+        if ocean_mask is not None and np.any(ocean_mask):
+            precip_for_pysheds[ocean_mask] = 0
+        # Wrap precipitation as Raster for weighted accumulation
+        precip_raster = Raster(precip_for_pysheds, viewfinder=viewfinder)
+        weighted_acc = grid.accumulation(fdir, weights=precip_raster)
+        upstream_rainfall = np.array(weighted_acc).astype(np.float32)
+
+        # Apply ocean mask to drainage area output (already masked for upstream_rainfall)
+        if ocean_mask is not None and np.any(ocean_mask):
+            drainage_area[ocean_mask] = 0
+    else:
+        # Use custom backend
+        logger.info("Computing drainage area...")
+        drainage_area = compute_drainage_area(flow_direction)
+
+        logger.info("Computing upstream rainfall...")
+        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
+        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
+        precip_masked = precip_data.copy()
+        if ocean_mask is not None and np.any(ocean_mask):
+            precip_masked[ocean_mask] = 0
+        upstream_rainfall = compute_upstream_rainfall(flow_direction, precip_masked)
+    return drainage_area, upstream_rainfall
 
 
 def flow_accumulation(
@@ -820,275 +1447,35 @@ def flow_accumulation(
         original_shape = dem_data.shape
     logger.info(f"  flow_accumulation: DEM loaded {original_shape}")
 
-    # Adaptive resolution: downsample if DEM exceeds max_cells
-    downsampling_applied = False
-    downsample_factor = 1.0
-    dem_shape = original_shape
+    (
+        dem_data,
+        dem_shape,
+        dem_transform,
+        downsample_factor,
+        downsampling_applied,
+        lake_mask,
+        lake_outlets,
+    ) = _downsample_to_max_cells(
+        original_shape=original_shape,
+        max_cells=max_cells,
+        dem_transform=dem_transform,
+        lake_mask=lake_mask,
+        lake_outlets=lake_outlets,
+        dem_data=dem_data,
+        dem_crs=dem_crs,
+    )
 
-    if max_cells is not None and (original_shape[0] * original_shape[1]) > max_cells:
-        # Calculate downsample factor to achieve max_cells
-        current_cells = original_shape[0] * original_shape[1]
-        downsample_factor = np.sqrt(current_cells / max_cells)
-
-        # Calculate new shape
-        new_height = int(original_shape[0] / downsample_factor)
-        new_width = int(original_shape[1] / downsample_factor)
-        downsampled_shape = (new_height, new_width)
-
-        logger.info(f"  Downsampling DEM from {original_shape} ({current_cells:,} cells) to "
-              f"{downsampled_shape} ({new_height * new_width:,} cells) "
-              f"[{downsample_factor:.2f}x factor]...")
-
-        # Downsample DEM using rasterio
-        from rasterio.warp import reproject, Resampling
-
-        dem_downsampled = np.empty(downsampled_shape, dtype=np.float32)
-
-        # Calculate new transform (larger pixels)
-        downsampled_transform = dem_transform * Affine.scale(downsample_factor)
-
-        reproject(
-            source=dem_data,
-            destination=dem_downsampled,
-            src_transform=dem_transform,
-            src_crs=dem_crs,
-            dst_transform=downsampled_transform,
-            dst_crs=dem_crs,
-            resampling=Resampling.bilinear
-        )
-
-        dem_data = dem_downsampled
-        dem_transform = downsampled_transform
-        dem_shape = downsampled_shape
-        downsampling_applied = True
-
-        # Also downsample lake_mask and lake_outlets if provided
-        if lake_mask is not None:
-            from scipy.ndimage import zoom
-            scale_y = downsampled_shape[0] / original_shape[0]
-            scale_x = downsampled_shape[1] / original_shape[1]
-            lake_mask = zoom(lake_mask, (scale_y, scale_x), order=0)
-            logger.info(f"  ✓ Downsampled lake_mask to {lake_mask.shape}")
-
-        if lake_outlets is not None:
-            from scipy.ndimage import zoom
-            scale_y = downsampled_shape[0] / original_shape[0]
-            scale_x = downsampled_shape[1] / original_shape[1]
-            lake_outlets = zoom(lake_outlets.astype(np.uint8), (scale_y, scale_x), order=0).astype(bool)
-            logger.info(f"  ✓ Downsampled lake_outlets to {lake_outlets.shape}")
-
-        logger.info(f"  ✓ Downsampled DEM to {dem_shape}")
-    elif max_cells is not None:
-        logger.info(f"DEM size ({original_shape[0] * original_shape[1]:,} cells) below max_cells ({max_cells:,}), "
-              f"no downsampling needed")
-
-    # Load precipitation (cropped to DEM bounds using library function)
-    logger.info("  flow_accumulation: loading precipitation...")
-    from src.terrain.data_loading import load_geotiff_cropped_to_dem
-
-    precip_data, precip_transform, precip_crs = load_geotiff_cropped_to_dem(
-        precip_path,
+    precip_data = _load_aligned_precipitation(
+        precip_path=precip_path,
         dem_shape=dem_shape,
         dem_transform=dem_transform,
         dem_crs=dem_crs,
-        use_windowed_read=True,
+        upscale_precip=upscale_precip,
+        upscale_method=upscale_method,
     )
-
-    logger.info(f"  flow_accumulation: precipitation loaded {precip_data.shape}")
-
-    # Fill missing values (nodata) using nearest neighbor interpolation
-    # Common nodata values: -9999, -32768, 0, NaN, or any negative values (precipitation can't be negative)
-    nodata_mask = (
-        np.isnan(precip_data) |
-        (precip_data < -1000) |  # Catch extreme negative nodata values like -9999, -32768
-        (precip_data < 0)         # Any negative value is invalid for precipitation
+    cell_size = _cell_size_m(
+        cell_size=cell_size, dem_shape=dem_shape, dem_crs=dem_crs, dem_transform=dem_transform
     )
-
-    if np.any(nodata_mask):
-        num_missing = np.sum(nodata_mask)
-        total_pixels = precip_data.size
-        pct_missing = 100.0 * num_missing / total_pixels
-        logger.info(f"  Imputing {num_missing:,} missing values ({pct_missing:.1f}%) using nearest neighbor...")
-
-        from scipy.ndimage import distance_transform_edt
-
-        # Find indices of nearest valid values
-        # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
-        indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)
-
-        # Fill missing values with nearest valid neighbors
-        # indices[0][nodata_mask] = row indices, indices[1][nodata_mask] = col indices
-        precip_data[nodata_mask] = precip_data[indices[0][nodata_mask], indices[1][nodata_mask]]
-
-        logger.info(f"  ✓ Imputation complete")
-
-    # Check spatial alignment and resample if needed
-    if precip_data.shape != dem_shape:
-        # Calculate required scale factor
-        scale_y = dem_shape[0] / precip_data.shape[0]
-        scale_x = dem_shape[1] / precip_data.shape[1]
-        is_upscaling = scale_y > 1.0 and scale_x > 1.0
-
-        # Use ESRGAN upscaling if requested AND actually upscaling
-        if upscale_precip and is_upscaling:
-            logger.info(f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}...")
-
-            # Use upscale_scores if scale is uniform and an integer
-            if abs(scale_y - scale_x) < 0.01 and abs(scale_y - round(scale_y)) < 0.01:
-                from src.terrain.transforms import upscale_scores
-                scale_int = int(round(scale_y))
-                logger.info(f"    Running {upscale_method} {scale_int}x upscaling...")
-                precip_upscaled = upscale_scores(
-                    precip_data,
-                    scale=scale_int,
-                    method=upscale_method,
-                    nodata_value=0.0
-                )
-                precip_data = precip_upscaled
-                logger.info(f"  ✓ Upscaled precipitation using {upscale_method}: {precip_data.shape}")
-            else:
-                # Non-uniform scaling - Detroit-style approach for GPU acceleration
-                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
-                # Step 2: Downsample to exact target with rasterio reproject
-                import math
-                avg_scale = (scale_y + scale_x) / 2
-                # Round UP to next power of 2 (e.g., 29.458 → 32)
-                power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
-
-                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
-                    # Use ESRGAN for over-upscaling, then downsample
-                    logger.info(f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape...")
-
-                    from src.terrain.transforms import upscale_scores
-
-                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
-                    logger.info(f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)...")
-                    precip_esrgan = upscale_scores(
-                        precip_data,
-                        scale=power_of_2_scale,
-                        method=upscale_method,
-                        nodata_value=0.0
-                    )
-                    logger.info(f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}")
-
-                    # Step 2: Downsample to exact target shape with rasterio reproject
-                    from rasterio.warp import reproject, Resampling
-                    logger.info(f"    Downsampling to exact target shape...")
-                    precip_final = np.empty(dem_shape, dtype=np.float32)
-
-                    # Create transforms for intermediate and target shapes
-                    if precip_transform is not None and dem_transform is not None:
-                        # Calculate intermediate transform (after ESRGAN upscaling)
-                        esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
-
-                        reproject(
-                            source=precip_esrgan,
-                            destination=precip_final,
-                            src_transform=esrgan_transform,
-                            src_crs=precip_crs,
-                            dst_transform=dem_transform,
-                            dst_crs=dem_crs,
-                            resampling=Resampling.bilinear,
-                        )
-                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
-                    else:
-                        # No transform available - use scipy zoom for final adjustment
-                        from scipy.ndimage import zoom
-                        scale_y_final = dem_shape[0] / precip_esrgan.shape[0]
-                        scale_x_final = dem_shape[1] / precip_esrgan.shape[1]
-                        precip_final = zoom(precip_esrgan, (scale_y_final, scale_x_final), order=1, mode='reflect')
-                        logger.info(f"    ✓ Downsampling complete: {precip_esrgan.shape} → {precip_final.shape}")
-
-                    precip_data = precip_final
-                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
-                else:
-                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
-                    from rasterio.warp import reproject, Resampling
-                    logger.info(f"  Non-uniform scaling ({scale_y:.2f}x, {scale_x:.2f}x), using rasterio reproject...")
-
-                    precip_resampled = np.empty(dem_shape, dtype=np.float32)
-                    reproject(
-                        source=precip_data,
-                        destination=precip_resampled,
-                        src_transform=precip_transform,
-                        src_crs=precip_crs,
-                        dst_transform=dem_transform,
-                        dst_crs=dem_crs,
-                        resampling=Resampling.bilinear
-                    )
-                    precip_data = precip_resampled
-                    logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
-        elif upscale_precip and not is_upscaling:
-            # User requested upscaling but data is being downscaled - inform and use standard resampling
-            logger.info(f"  Precipitation is being downscaled ({scale_y:.2f}x, {scale_x:.2f}x), using bilinear resampling...")
-            from rasterio.warp import reproject, Resampling
-
-            precip_resampled = np.empty(dem_shape, dtype=np.float32)
-            reproject(
-                source=precip_data,
-                destination=precip_resampled,
-                src_transform=precip_transform,
-                src_crs=precip_crs,
-                dst_transform=dem_transform,
-                dst_crs=dem_crs,
-                resampling=Resampling.bilinear
-            )
-            precip_data = precip_resampled
-            logger.info(f"  ✓ Downsampled precipitation to {precip_data.shape}")
-        else:
-            # Standard resampling (no upscaling requested)
-            logger.info(f"  Resampling precipitation from {precip_data.shape} to match DEM {dem_shape}...")
-
-            from rasterio.warp import reproject, Resampling
-
-            precip_resampled = np.empty(dem_shape, dtype=np.float32)
-
-            reproject(
-                source=precip_data,
-                destination=precip_resampled,
-                src_transform=precip_transform,
-                src_crs=precip_crs,
-                dst_transform=dem_transform,
-                dst_crs=dem_crs,
-                resampling=Resampling.bilinear
-            )
-
-            precip_data = precip_resampled
-            logger.info(f"  ✓ Resampled precipitation to {precip_data.shape}")
-
-    # Determine cell size (convert from degrees to meters if geographic CRS)
-    if cell_size is None:
-        from rasterio.crs import CRS
-        import math
-
-        # Check if CRS is geographic (lat/lon in degrees)
-        if dem_crs is not None and CRS.from_user_input(dem_crs).is_geographic:
-            # Cell size is in degrees - convert to meters using Haversine approximation
-            # Calculate at center latitude for best accuracy
-            pixel_size_deg = abs(dem_transform.a)
-
-            # Get bounds to find center latitude
-            height, width = dem_shape
-            left = dem_transform.c
-            top = dem_transform.f
-            bottom = top + (height * dem_transform.e)
-            center_lat = (top + bottom) / 2
-
-            # Haversine approximation for degrees to meters
-            # At center latitude
-            lon_to_m = 111320 * math.cos(math.radians(center_lat))
-            lat_to_m = 110540
-
-            cell_width_m = pixel_size_deg * lon_to_m
-            cell_height_m = abs(dem_transform.e) * lat_to_m
-
-            # Use average of width and height for area calculations
-            cell_size = math.sqrt(cell_width_m * cell_height_m)
-
-            logger.info(f"  Geographic CRS detected (cell size: {pixel_size_deg:.8f}° ≈ {cell_size:.1f}m at lat {center_lat:.2f}°)")
-        else:
-            # Projected CRS - pixel size is already in CRS units (meters)
-            cell_size = abs(dem_transform.a)
 
     # Auto-calculate epsilon if not provided (flow-spec.md guideline)
     # epsilon = 1e-5 * cell_resolution (e.g., 1e-4 for 10m DEM)
@@ -1096,317 +1483,54 @@ def flow_accumulation(
         epsilon = 1e-5 * cell_size
         logger.info(f"  Auto-calculated epsilon: {epsilon:.2e} m/cell (= 1e-5 × {cell_size:.1f}m cell size)")
 
-    # Step 1: Detect ocean mask (if enabled)
-    ocean_mask = None
-    if mask_ocean:
-        logger.info(f"Detecting ocean (elevation <= {ocean_elevation_threshold}m, border-connected)...")
-        ocean_mask = detect_ocean_mask(
-            dem_data, threshold=ocean_elevation_threshold, border_only=True
-        )
-        ocean_cells = np.sum(ocean_mask)
-        ocean_pct = 100 * ocean_cells / ocean_mask.size
-        logger.info(f"  Ocean detected: {ocean_cells:,} cells ({ocean_pct:.1f}%)")
+    basin_mask, conditioning_mask, flow_mask, ocean_mask = _build_conditioning_masks(
+        mask_ocean=mask_ocean,
+        dem_data=dem_data,
+        ocean_elevation_threshold=ocean_elevation_threshold,
+        detect_basins=detect_basins,
+        backend=backend,
+        min_basin_size=min_basin_size,
+        min_basin_depth=min_basin_depth,
+        lake_mask=lake_mask,
+    )
 
-    # Step 1b: Detect endorheic basins (if enabled and using spec backend)
-    basin_mask = None
-    if detect_basins and backend == "spec":
-        logger.info(f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)...")
-        basin_mask, endorheic_basins = detect_endorheic_basins(
-            dem_data,
-            min_size=min_basin_size,
-            min_depth=min_basin_depth,
-            exclude_mask=ocean_mask,
-        )
+    breached_dem, conditioned_dem, flow_direction, pysheds_state = _condition_and_route(
+        backend=backend,
+        fill_method=fill_method,
+        min_basin_size=min_basin_size,
+        detect_basins=detect_basins,
+        conditioning_mask=conditioning_mask,
+        ocean_mask=ocean_mask,
+        dem_data=dem_data,
+        coastal_elev_threshold=coastal_elev_threshold,
+        edge_mode=edge_mode,
+        max_breach_depth=max_breach_depth,
+        max_breach_length=max_breach_length,
+        epsilon=epsilon,
+        masked_basin_outlets=masked_basin_outlets,
+        parallel_method=parallel_method,
+        dem_transform=dem_transform,
+        dem_crs=dem_crs,
+        downsample_factor=downsample_factor,
+        max_fill_depth=max_fill_depth,
+        flow_mask=flow_mask,
+    )
 
-        if basin_mask is not None and np.any(basin_mask):
-            num_basins = len(endorheic_basins)
-            basin_coverage = 100 * np.sum(basin_mask) / dem_data.size
-            logger.info(f"  Found {num_basins} endorheic basin(s) ({basin_coverage:.2f}% of domain)")
-            logger.info(f"  Basins will be masked during conditioning to preserve topography")
-        else:
-            logger.info("  No significant endorheic basins detected")
-            basin_mask = None
-    elif detect_basins and backend != "spec":
-        import warnings
-        warnings.warn(
-            f"detect_basins=True is only supported with backend='spec'. "
-            f"Use min_basin_size parameter with legacy backend instead.",
-            UserWarning
-        )
+    flow_direction, lake_inlets = _route_lakes_and_find_inlets(
+        lake_mask=lake_mask,
+        lake_outlets=lake_outlets,
+        basin_mask=basin_mask,
+        conditioned_dem=conditioned_dem,
+        flow_direction=flow_direction,
+    )
 
-    # Create combined conditioning mask for spec backend
-    # Strategy: ocean + endorheic basins + selective lakes
-    # (Lakes handled later in the pipeline based on basin location)
-    conditioning_mask = ocean_mask.copy() if ocean_mask is not None else np.zeros(dem_data.shape, dtype=bool)
-
-    # Basin-aware lake pre-masking:
-    # Lakes INSIDE basins → masked (drainage sinks like Salton Sea)
-    # Lakes OUTSIDE basins → NOT masked (river connectors)
-    if lake_mask is not None and basin_mask is not None and np.any(basin_mask):
-        lakes_in_basins = (lake_mask > 0) & basin_mask
-        if np.any(lakes_in_basins):
-            conditioning_mask = conditioning_mask | lakes_in_basins
-            logger.info(f"  Pre-masking {np.sum(lakes_in_basins):,} lake cells inside basins (drainage sinks)")
-
-        lakes_outside = (lake_mask > 0) & ~basin_mask
-        if np.any(lakes_outside):
-            logger.info(f"  NOT masking {np.sum(lakes_outside):,} lake cells outside basins (river connectors)")
-    elif lake_mask is not None and np.any(lake_mask > 0):
-        logger.info(f"  NOT masking {np.sum(lake_mask > 0):,} lake cells (no basins detected, all are connectors)")
-
-    if basin_mask is not None and np.any(basin_mask):
-        conditioning_mask = conditioning_mask | basin_mask
-        logger.info(f"  Combined conditioning mask: {np.sum(conditioning_mask):,} cells "
-              f"({100*np.sum(conditioning_mask)/conditioning_mask.size:.1f}%)")
-
-    # Use ocean mask for flow computation (flow direction terminals)
-    # Note: Basins are NOT masked from flow - flow is computed inside them
-    flow_mask = ocean_mask if ocean_mask is not None else None
-
-    # Initialize breached_dem (only set by spec backend, None for others)
-    breached_dem = None
-
-    # Branch based on backend
-    if backend == "spec":
-        # === SPEC-COMPLIANT BACKEND ===
-        # Use spec-compliant 4-stage pipeline (outlet ID + breaching + fill)
-        logger.info(f"Using spec-compliant backend (flow-spec.md)...")
-
-        # Emit warnings if legacy parameters are specified
-        if fill_method != "breach":
-            import warnings
-            warnings.warn(
-                f"fill_method='{fill_method}' is ignored when backend='spec'. "
-                "Use epsilon parameter instead (epsilon=0 for fill, epsilon>0 for breach-like).",
-                DeprecationWarning
-            )
-        if min_basin_size != 10000:
-            import warnings
-            warnings.warn(
-                "min_basin_size is ignored when backend='spec'. "
-                "Use max_breach_depth/max_breach_length to control basin preservation.",
-                DeprecationWarning
-            )
-
-        # Step 2: Condition DEM using spec-compliant pipeline
-        # Use combined conditioning mask (ocean + basins) to preserve topography
-        logger.info("Conditioning DEM (outlets + breach + fill)...")
-        nodata_mask_for_spec = conditioning_mask if detect_basins else ocean_mask
-        conditioned_dem, outlets, breached_dem = condition_dem_spec(
-            dem_data,
-            nodata_mask=nodata_mask_for_spec,
-            coastal_elev_threshold=coastal_elev_threshold,
-            edge_mode=edge_mode,
-            max_breach_depth=max_breach_depth,
-            max_breach_length=max_breach_length,
-            epsilon=epsilon,
-            masked_basin_outlets=masked_basin_outlets,
-            parallel_method=parallel_method,
-        )
-
-        # Step 3: Compute flow directions
-        logger.info("Computing flow directions...")
-        # CRITICAL: Combine ocean/nodata with all identified outlets (edge, coastal, masked basin)
-        # so that ALL outlet types are properly used as flow direction terminals
-        outlet_mask = ocean_mask | outlets
-        flow_direction = compute_flow_direction(conditioned_dem, mask=outlet_mask)
-        logger.info("  ✓ Flow directions computed")
-
-    elif backend == "pysheds":
-        if not PYSHEDS_AVAILABLE:
-            raise ImportError("pysheds is not installed. Install with: pip install pysheds")
-
-        # === PYSHEDS BACKEND ===
-        # Use pysheds for core hydrology (depression filling, flow direction, accumulation)
-        # WARNING: PySheds may produce flow cycles in some cases. Use custom backend for
-        # production work.
-        import warnings
-        warnings.warn(
-            "PySheds backend is experimental and may produce flow cycles. "
-            "Use backend='custom' for reliable results.",
-            UserWarning
-        )
-        logger.info(f"Using pysheds backend for flow computation...")
-
-        # Create pysheds grid from numpy array
-        # PySheds expects nodata value - use a large negative number for ocean/masked areas
-        dem_for_pysheds = dem_data.copy()
-        nodata_value = -9999.0
-        if ocean_mask is not None and np.any(ocean_mask):
-            dem_for_pysheds[ocean_mask] = nodata_value
-
-        # Create ViewFinder and Raster objects for pysheds
-        from pysheds.sview import Raster, ViewFinder
-
-        # Create ViewFinder with proper metadata
-        viewfinder = ViewFinder(
-            shape=dem_for_pysheds.shape,
-            affine=dem_transform,
-            crs=dem_crs,
-            nodata=nodata_value,
-        )
-
-        # Wrap numpy array as Raster and create grid from viewfinder
-        dem_raster = Raster(dem_for_pysheds, viewfinder=viewfinder)
-        grid = PyshedsGrid(viewfinder=viewfinder)
-
-        # Step 2: Condition DEM using pysheds
-        logger.info("  pysheds: Filling pits...")
-        pit_filled = grid.fill_pits(dem_raster)
-
-        logger.info("  pysheds: Filling depressions...")
-        flooded = grid.fill_depressions(pit_filled)
-
-        logger.info("  pysheds: Resolving flats...")
-        inflated = grid.resolve_flats(flooded)
-
-        conditioned_dem = np.array(inflated).astype(np.float32)
-
-        # Restore original ocean values to conditioned DEM
-        if ocean_mask is not None and np.any(ocean_mask):
-            conditioned_dem[ocean_mask] = dem_data[ocean_mask]
-
-        # Step 3: Compute flow direction using pysheds
-        logger.info("  pysheds: Computing flow direction...")
-        fdir = grid.flowdir(inflated)
-
-        # Convert pysheds flow direction to our D8 encoding
-        # PySheds uses same D8 encoding by default (1,2,4,8,16,32,64,128)
-        # PySheds returns negative values for outlets/boundaries (e.g., -2)
-        # We need to convert these to 0 (outlet) before casting to uint8
-        fdir_arr = np.array(fdir)
-        fdir_arr[fdir_arr < 0] = 0  # Convert negative values to outlet (0)
-        flow_direction = fdir_arr.astype(np.uint8)
-
-        # Apply ocean mask to flow direction (ocean cells = outlet)
-        if ocean_mask is not None and np.any(ocean_mask):
-            flow_direction[ocean_mask] = 0
-            # Fix coastal cells to flow toward ocean (pysheds doesn't do this automatically)
-            _fix_coastal_flow_directions(flow_direction, ocean_mask)
-
-    else:
-        # === LEGACY BACKEND (morphological reconstruction + workarounds) ===
-        # Step 2: Condition DEM (fill pits/depressions with masking)
-        # Scale min_basin_size if downsampling was applied (area scales with factor²)
-        scaled_min_basin_size = min_basin_size
-        if min_basin_size is not None and downsample_factor > 1.0:
-            scaled_min_basin_size = max(100, int(min_basin_size / (downsample_factor ** 2)))
-            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size} → {scaled_min_basin_size} scaled)...")
-        else:
-            logger.info(f"Conditioning DEM (method={fill_method}, min_basin_size={min_basin_size})...")
-        conditioned_dem = condition_dem(
-            dem_data,
-            method=fill_method,
-            ocean_mask=ocean_mask,
-            min_basin_size=scaled_min_basin_size,
-            max_fill_depth=max_fill_depth,
-        )
-
-        # Step 3: Compute flow directions (with combined mask)
-        logger.info("Computing flow directions...")
-        flow_direction = compute_flow_direction(
-            conditioned_dem, mask=flow_mask if np.any(flow_mask) else None
-        )
-
-    # Step 3.5: Apply lake routing if lake_mask provided
-    # Uses DEM-based spillway detection (boundary cells) instead of HydroLAKES
-    # pour points (which land in lake interiors and create terminal outlets).
-    # Basin-aware: only routes lakes outside preserved endorheic basins.
-    if lake_mask is not None and lake_outlets is not None and np.any(lake_mask > 0):
-        from src.terrain.water_bodies import (
-            create_lake_flow_routing,
-            find_lake_spillways,
-            compute_outlet_downstream_directions,
-        )
-        logger.info("Applying lake flow routing (DEM-based spillways)...")
-
-        # Basin-aware: only route lakes OUTSIDE preserved basins
-        labeled_lakes = lake_mask.copy()
-        if basin_mask is not None and np.any(basin_mask):
-            labeled_lakes[basin_mask] = 0
-            lakes_outside = (lake_mask > 0) & ~basin_mask
-            n_in = len(np.unique(lake_mask[(lake_mask > 0) & basin_mask]))
-            n_out = len(np.unique(lake_mask[lakes_outside]))
-            logger.info(f"  {n_in} lakes inside basins (natural flow), "
-                  f"{n_out} lakes outside basins (explicit routing)")
-        else:
-            lakes_outside = lake_mask > 0
-
-        if np.any(lakes_outside):
-            # DEM-based spillways: find lowest boundary cell for each lake
-            spillways = find_lake_spillways(labeled_lakes, conditioned_dem)
-            spillway_outlets = np.zeros(lake_mask.shape, dtype=bool)
-            for lake_id, (sr, sc, _sdir) in spillways.items():
-                spillway_outlets[sr, sc] = True
-
-            logger.info(f"  DEM spillway detection: {len(spillways)} spillways "
-                  f"(replacing {int(np.sum(lake_outlets)):,} HydroLAKES pour points)")
-
-            # BFS routing: all lake cells route toward DEM spillway
-            lake_flow = create_lake_flow_routing(
-                labeled_lakes, spillway_outlets, conditioned_dem
-            )
-            flow_direction = np.where(lakes_outside, lake_flow, flow_direction)
-
-            # Connect spillway outlets to downstream terrain (cycle-safe)
-            if np.any(spillway_outlets):
-                flow_direction = compute_outlet_downstream_directions(
-                    flow_direction, labeled_lakes, spillway_outlets,
-                    conditioned_dem, basin_mask=basin_mask, spillways=spillways,
-                )
-
-            logger.info(f"  Applied routing to {np.sum(lakes_outside):,} cells "
-                  f"with {len(spillways)} spillway outlets")
-
-    # Step 3.6: Identify lake inlets (after DEM conditioning + lake routing)
-    lake_inlets = None
-    if lake_mask is not None and np.any(lake_mask > 0):
-        from src.terrain.water_bodies import identify_lake_inlets
-        outlet_mask_for_inlets = lake_outlets if lake_outlets is not None else None
-        inlets_dict = identify_lake_inlets(
-            lake_mask, conditioned_dem, outlet_mask=outlet_mask_for_inlets
-        )
-        if inlets_dict:
-            lake_inlets = np.zeros_like(lake_mask, dtype=bool)
-            for lake_id, inlet_cells in inlets_dict.items():
-                for row, col in inlet_cells:
-                    if 0 <= row < lake_inlets.shape[0] and 0 <= col < lake_inlets.shape[1]:
-                        lake_inlets[row, col] = True
-            logger.info(f"  Lake inlets: {np.sum(lake_inlets):,} cells")
-
-    # Step 4: Compute drainage area and upstream rainfall
-    if backend == "pysheds":
-        # Use pysheds accumulation
-        logger.info("  pysheds: Computing drainage area...")
-        acc = grid.accumulation(fdir)
-        drainage_area = np.array(acc).astype(np.float32)
-
-        logger.info("  pysheds: Computing upstream rainfall (weighted)...")
-        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
-        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
-        precip_for_pysheds = precip_data.copy()
-        if ocean_mask is not None and np.any(ocean_mask):
-            precip_for_pysheds[ocean_mask] = 0
-        # Wrap precipitation as Raster for weighted accumulation
-        precip_raster = Raster(precip_for_pysheds, viewfinder=viewfinder)
-        weighted_acc = grid.accumulation(fdir, weights=precip_raster)
-        upstream_rainfall = np.array(weighted_acc).astype(np.float32)
-
-        # Apply ocean mask to drainage area output (already masked for upstream_rainfall)
-        if ocean_mask is not None and np.any(ocean_mask):
-            drainage_area[ocean_mask] = 0
-    else:
-        # Use custom backend
-        logger.info("Computing drainage area...")
-        drainage_area = compute_drainage_area(flow_direction)
-
-        logger.info("Computing upstream rainfall...")
-        # CRITICAL: Mask ocean in precipitation BEFORE accumulation
-        # Otherwise ocean precip accumulates into coastal cells (coastline artifacts)
-        precip_masked = precip_data.copy()
-        if ocean_mask is not None and np.any(ocean_mask):
-            precip_masked[ocean_mask] = 0
-        upstream_rainfall = compute_upstream_rainfall(flow_direction, precip_masked)
+    drainage_area, upstream_rainfall = _accumulate_flow(
+        backend=backend,
+        pysheds_state=pysheds_state,
+        flow_direction=flow_direction,
+        precip_data=precip_data,
+        ocean_mask=ocean_mask,
+    )
 
     # Compute metadata
     total_area_km2 = (dem_shape[0] * dem_shape[1] * cell_size**2) / 1e6
@@ -1440,24 +1564,16 @@ def flow_accumulation(
     if cache:
         metadata["cache_hit"] = False
 
-    # Save outputs
-    if output_dir is None:
-        output_dir = dem_path.parent
-    else:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-    files = {}
-    files["flow_direction"] = str(output_dir / "flow_direction.tif")
-    files["drainage_area"] = str(output_dir / "flow_accumulation_area.tif")
-    files["upstream_rainfall"] = str(output_dir / "flow_accumulation_rainfall.tif")
-    files["conditioned_dem"] = str(output_dir / "dem_conditioned.tif")
-
-    # Write output GeoTIFFs
-    _write_geotiff(files["flow_direction"], flow_direction.astype(np.uint8), dem_transform, dem_crs)
-    _write_geotiff(files["drainage_area"], drainage_area, dem_transform, dem_crs)
-    _write_geotiff(files["upstream_rainfall"], upstream_rainfall, dem_transform, dem_crs)
-    _write_geotiff(files["conditioned_dem"], conditioned_dem, dem_transform, dem_crs)
+    files, output_dir = _write_flow_outputs(
+        output_dir=output_dir,
+        dem_path=dem_path,
+        dem_transform=dem_transform,
+        dem_crs=dem_crs,
+        flow_direction=flow_direction,
+        drainage_area=drainage_area,
+        upstream_rainfall=upstream_rainfall,
+        conditioned_dem=conditioned_dem,
+    )
 
     result = {
         "flow_direction": flow_direction,

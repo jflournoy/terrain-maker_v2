@@ -550,12 +550,13 @@ class TestFlowPipelineModule:
     def test_demo_passes_lakes_to_flow_accumulation(self):
         """Lakes must reach flow_accumulation, which routes them and finds inlets."""
         import inspect
-        from src.terrain.flow_accumulation import flow_accumulation
+        from src.terrain import flow_accumulation as fa
 
         demo_source = (PROJECT_ROOT / "examples" / "san_diego_flow_demo.py").read_text()
         assert "lake_mask=lake_mask" in demo_source
         assert "lake_outlets=lake_outlets" in demo_source
-        assert "identify_lake_inlets" in inspect.getsource(flow_accumulation)
+        assert "_route_lakes_and_find_inlets(" in inspect.getsource(fa.flow_accumulation)
+        assert "identify_lake_inlets" in inspect.getsource(fa._route_lakes_and_find_inlets)
 
     def test_conditioning_mask_combines_ocean_basins_lakes(self):
         """Conditioning mask should combine ocean + basins + lakes_in_basins."""
