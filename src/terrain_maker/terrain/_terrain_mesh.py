@@ -12,8 +12,37 @@ from scipy.ndimage import zoom
 import numpy as np
 import logging
 
+from terrain_maker.terrain import mesh_operations
+
 # Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
+
+
+def _center_xy(positions):
+    """Center positions horizontally in place (Z keeps absolute elevation); returns the centroid."""
+    centroid = np.mean(positions, axis=0)
+    positions[:, 0] -= centroid[0]
+    positions[:, 1] -= centroid[1]
+    return centroid
+
+
+def _boundary_winding(boundary_points, use_rectangle_edges, logger):
+    """Winding of the sorted boundary loop in image coordinates (y down)."""
+    if use_rectangle_edges:
+        # Rectangle edges trace top -> right -> bottom -> left, which is clockwise
+        logger.info("Boundary winding direction: clockwise (rectangle edges always clockwise)")
+        return "clockwise"
+    if len(boundary_points) < 3:
+        return "counter-clockwise"
+    # With y down, sum((x2 - x1) * (y2 + y1)) is negative for a clockwise loop
+    signed_area = 0
+    for i in range(len(boundary_points)):
+        y1, x1 = boundary_points[i]
+        y2, x2 = boundary_points[(i + 1) % len(boundary_points)]
+        signed_area += (x2 - x1) * (y2 + y1)
+    winding = "clockwise" if signed_area < 0 else "counter-clockwise"
+    logger.info(f"Boundary winding direction: {winding} (signed area: {signed_area:.2f})")
+    return winding
 
 
 class TerrainMeshMixin:
@@ -136,142 +165,34 @@ class TerrainMeshMixin:
         start_time = time.time()
         self.logger.info("Creating terrain mesh...")
 
-        # Get transformed DEM data
         if "dem" not in self.data_layers or not self.data_layers["dem"].get("transformed", False):
             raise ValueError("Transformed DEM layer required for mesh creation")
-
-        # Note: Color computation moved to after vertex position generation
-        # (multi-overlay mode needs y_valid and x_valid to exist)
-
-        # Water detection - store mask for later (coloring happens after compute_colors)
-        _water_mask_for_coloring = None
-        if detect_water or water_mask is not None:
-            if water_mask is None:
-                # Compute water mask from transformed DEM
-                dem_data = self.data_layers["dem"]["transformed_data"]
-                self.logger.info(
-                    f"Detecting water bodies (slope threshold: {water_slope_threshold})..."
-                )
-                from terrain_maker.terrain.water import identify_water_by_slope
-
-                water_mask = identify_water_by_slope(
-                    dem_data, slope_threshold=water_slope_threshold, fill_holes=True
-                )
-            else:
-                self.logger.info(
-                    f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)"
-                )
-            _water_mask_for_coloring = water_mask
-
         dem_data = self.data_layers["dem"]["transformed_data"]
         height, width = dem_data.shape
-
-        # Create valid points mask (non-NaN values)
-        valid_mask = ~np.isnan(dem_data)
-
-        # Generate vertex positions with scaling
-        self.logger.info("Generating vertex positions...")
-        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
-
-        positions, y_valid, x_valid = generate_vertex_positions(
-            dem_data, valid_mask, scale_factor, height_scale
+        water_mask = self._resolve_water_mask(
+            dem_data, detect_water, water_mask, water_slope_threshold
         )
 
-        # Store y_valid and x_valid as instance attributes for color computation
+        self.logger.info("Generating vertex positions...")
+        valid_mask = ~np.isnan(dem_data)
+        positions, y_valid, x_valid = mesh_operations.generate_vertex_positions(
+            dem_data, valid_mask, scale_factor, height_scale
+        )
         self.y_valid = y_valid
         self.x_valid = x_valid
 
-        # Compute colors if color mapping is set and colors haven't been computed yet
-        # Check for any color mapping mode (standard, blended, or multi-overlay)
-        has_color_mapping = (
-            hasattr(self, "color_mapping") or
-            hasattr(self, "base_colormap") or
-            hasattr(self, "color_mapping_mode")
-        )
-        if has_color_mapping and not hasattr(self, "colors"):
+        # Colors come after vertex positions (multi-overlay mode needs y_valid/x_valid),
+        # and water coloring after colors (it recolors the colormap output)
+        if self._has_color_mapping() and not hasattr(self, "colors"):
             self.compute_colors()
+        if water_mask is not None and getattr(self, "colors", None) is not None:
+            self._apply_water_gradient(water_mask, dem_data.shape)
 
-        # Apply water coloring AFTER color computation (so we modify the colormap colors)
-        if _water_mask_for_coloring is not None and hasattr(self, "colors") and self.colors is not None:
-            from scipy.ndimage import distance_transform_edt
-
-            water_mask = _water_mask_for_coloring
-
-            # Validate and resample water mask to match colors shape if needed
-            expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_data.shape
-            if water_mask.shape != expected_shape:
-                self.logger.warning(
-                    f"Water mask shape {water_mask.shape} does not match colors shape {expected_shape}. "
-                    f"Resampling water mask to match colors. This can happen when colors are computed from "
-                    f"a different layer than DEM (e.g., score layers)."
-                )
-                # Resample water mask to match colors shape
-                zoom_y = expected_shape[0] / water_mask.shape[0]
-                zoom_x = expected_shape[1] / water_mask.shape[1]
-                water_mask = zoom(
-                    water_mask.astype(np.float32),
-                    zoom=(zoom_y, zoom_x),
-                    order=0,  # Nearest neighbor for boolean
-                    prefilter=False,
-                ).astype(np.bool_)
-
-            water_distances = distance_transform_edt(water_mask)
-
-            # Define gradient colors: blue to dark blue (Great Lakes depth)
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Medium blue (shore)
-            center_color = np.array([15, 50, 85], dtype=np.float32)  # Deep blue (center)
-
-            # Map water mask (2D grid) to vertex indices
-            # self.colors is a 1D vertex array, not a 2D grid
-            water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            water_vertex_indices = np.where(water_at_vertices)[0]
-
-            # Get raw pixel distances for water vertices using grid coordinates
-            water_y = self.y_valid[water_vertex_indices]
-            water_x = self.x_valid[water_vertex_indices]
-            water_pixel_distances = water_distances[water_y, water_x]
-
-            # Cartographic shoreline vignette style (vintage map aesthetic)
-            # Gradient only in shoreline band; interior water is uniform dark
-            shoreline_width_pixels = 12
-
-            # t=1 means dark (interior), t=0 means light (at shore edge)
-            # Start with all water as interior (dark)
-            t = np.ones_like(water_pixel_distances)
-
-            # Apply gradient only within shoreline band
-            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
-            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
-
-            # Power curve for smoother transition
-            t = np.power(t, 0.5)[:, np.newaxis]
-            water_colors = edge_color * (1 - t) + center_color * t
-
-            # Apply water colors - handle both grid-space (H, W, 4) and vertex-space (N, 4) colors
-            if self.colors.ndim == 3:
-                # Grid-space colors - index using y, x coordinates directly
-                self.colors[water_y, water_x, :3] = water_colors.astype(np.uint8)
-            else:
-                # Vertex-space colors - index using vertex indices
-                self.colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
-
-            self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
-
-        # Center the model if requested
         if center_model:
             self.logger.info("Centering model at origin...")
-            # Calculate centroid
-            centroid = np.mean(positions, axis=0)
-            # Center horizontally (x, y) but preserve elevation (z)
-            positions[:, 0] -= centroid[0]
-            positions[:, 1] -= centroid[1]
-
-            # Store offset for later reference (camera positioning)
-            self.model_offset = centroid
+            self.model_offset = _center_xy(positions)
         else:
             self.model_offset = np.array([0, 0, 0])
-
-        # Store model parameters for reference
         self.model_params = {
             "scale_factor": scale_factor,
             "height_scale": height_scale,
@@ -284,136 +205,192 @@ class TerrainMeshMixin:
             "edge_blend_colors": edge_blend_colors,
         }
 
-        # Create mapping from (y,x) coords to vertex indices - using dictionaries for O(1) lookups
         self.logger.info("Creating coordinate to index mapping...")
         coord_to_index = {(y, x): i for i, (y, x) in enumerate(zip(y_valid, x_valid))}
-
-        # OPTIMIZATION: Find boundary points using morphological operations
         self.logger.info("Finding boundary points with optimized algorithm...")
-        from terrain_maker.terrain.mesh_operations import find_boundary_points
-
-        boundary_coords = find_boundary_points(valid_mask)
-
-        # Only sort boundary points if needed (they're used for side faces)
-        boundary_winding = "counter-clockwise"  # Default winding direction
-        if boundary_extension:
-            boundary_points = self._sort_boundary_points_optimized(boundary_coords)
-
-            # Determine winding direction based on boundary type
-            if use_rectangle_edges:
-                # Rectangle edge sampling always traces clockwise in image coordinates
-                # (top→right→bottom→left with y increasing downward)
-                boundary_winding = "clockwise"
-                self.logger.info(f"Boundary winding direction: {boundary_winding} (rectangle edges always clockwise)")
-            elif len(boundary_points) >= 3:
-                # Compute signed area to determine winding for morphological boundary.
-                # In image coordinates (y down), sum((x2-x1)*(y2+y1)) is negative for
-                # a clockwise loop, the same convention the rectangle branch uses.
-                signed_area = 0
-                for i in range(len(boundary_points)):
-                    y1, x1 = boundary_points[i]
-                    y2, x2 = boundary_points[(i + 1) % len(boundary_points)]
-                    signed_area += (x2 - x1) * (y2 + y1)
-                boundary_winding = "clockwise" if signed_area < 0 else "counter-clockwise"
-                self.logger.info(f"Boundary winding direction: {boundary_winding} (signed area: {signed_area:.2f})")
-        else:
-            boundary_points = boundary_coords
-
-        # OPTIMIZATION: Vectorized face generation using NumPy operations
+        boundary_points = mesh_operations.find_boundary_points(valid_mask)
         self.logger.info("Generating faces with vectorized operations...")
-        from terrain_maker.terrain.mesh_operations import generate_faces
+        faces = mesh_operations.generate_faces(height, width, coord_to_index)
+        vertices = positions
 
-        faces = generate_faces(height, width, coord_to_index)
-
-        # Handle boundary extension if needed
         if boundary_extension:
+            boundary_points = self._sort_boundary_points_optimized(boundary_points)
+            boundary_winding = _boundary_winding(boundary_points, use_rectangle_edges, self.logger)
             self.logger.info("Creating optimized boundary extension...")
-            from terrain_maker.terrain.mesh_operations import create_boundary_extension
-
-            # Get surface colors for two-tier edge (if available and two_tier_edge enabled)
-            surface_colors = None
-            if two_tier_edge and hasattr(self, "colors") and self.colors is not None:
-                # Flatten colors if they're 2D grid (H, W, 3) to 1D (N, 3)
-                if self.colors.ndim == 3:
-                    surface_colors = self.colors[y_valid, x_valid, :]
-                else:
-                    surface_colors = self.colors
-
-            # Call create_boundary_extension with two-tier and smoothing parameters
-            result = create_boundary_extension(
+            boundary_vertices, boundary_faces, self.boundary_colors = self._create_skirt(
                 positions,
                 boundary_points,
                 coord_to_index,
-                base_depth,
-                two_tier=two_tier_edge,
-                mid_depth=edge_mid_depth,
-                base_material=edge_base_material,
-                blend_edge_colors=edge_blend_colors,
-                surface_colors=surface_colors,
+                boundary_winding,
+                base_depth=base_depth,
+                two_tier_edge=two_tier_edge,
+                edge_mid_depth=edge_mid_depth,
+                edge_base_material=edge_base_material,
+                edge_blend_colors=edge_blend_colors,
                 smooth_boundary=smooth_boundary,
-                smooth_window_size=smooth_boundary_window,
+                smooth_boundary_window=smooth_boundary_window,
                 use_catmull_rom=use_catmull_rom,
                 catmull_rom_subdivisions=catmull_rom_subdivisions,
                 use_rectangle_edges=use_rectangle_edges,
-                terrain=self if use_rectangle_edges else None,  # NEW: Pass terrain for transform-aware edges
-                edge_sample_spacing=edge_sample_spacing,  # User-configurable density
-                boundary_winding=boundary_winding,  # Pass winding direction for correct face normals
-                use_fractional_edges=use_fractional_edges,  # NEW: Use fractional coords for projection curvature
-                scale_factor=scale_factor,  # For fractional edge X,Y computation
-                model_offset=self.model_offset,  # For fractional edge X,Y computation
+                use_fractional_edges=use_fractional_edges,
+                edge_sample_spacing=edge_sample_spacing,
+                scale_factor=scale_factor,
             )
-
-            # Handle return value (2-tuple for single-tier, 3-tuple for two-tier)
-            if two_tier_edge:
-                boundary_vertices, boundary_faces, boundary_colors = result
-                # Store boundary_colors separately for Blender vertex coloring
-                # Don't extend self.colors - it stays as 2D grid for surface vertices
-                # Boundary colors will be applied directly to mesh vertices after creation
-                self.boundary_colors = boundary_colors
-            else:
-                boundary_vertices, boundary_faces = result
-                self.boundary_colors = None
-
-            # Extend vertices with boundary vertices
             vertices = np.vstack([positions, boundary_vertices])
-            # Add boundary faces to complete the mesh
             faces.extend(boundary_faces)
-        else:
-            vertices = positions
 
-        # Store vertices and faces for later use (e.g., proximity calculations)
+        # Stored for later use (e.g., proximity calculations)
         self.vertices = vertices
         self.faces = faces
-        self.y_valid = y_valid
-        self.x_valid = x_valid
 
-        # Create the Blender mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
+
         try:
-            from terrain_maker.terrain.blender_integration import create_blender_mesh
-
-            # Prepare colors if available
-            colors = self.colors if hasattr(self, "colors") else None
-            boundary_colors = self.boundary_colors if hasattr(self, "boundary_colors") else None
-
             obj = create_blender_mesh(
                 vertices,
                 faces,
-                colors=colors,
+                colors=getattr(self, "colors", None),
                 y_valid=y_valid,
                 x_valid=x_valid,
-                boundary_colors=boundary_colors,
+                boundary_colors=getattr(self, "boundary_colors", None),
                 name="TerrainMesh",
                 logger=self.logger,
             )
-
-            elapsed = time.time() - start_time
-            self.logger.info(f"Terrain mesh created successfully in {elapsed:.2f} seconds")
-            self.terrain_obj = obj
-            return obj
-
         except Exception as e:
             self.logger.error(f"Error creating terrain mesh: {str(e)}")
             raise
+
+        self.logger.info(
+            f"Terrain mesh created successfully in {time.time() - start_time:.2f} seconds"
+        )
+        self.terrain_obj = obj
+        return obj
+
+    def _has_color_mapping(self):
+        """True if any color mapping mode (standard, blended, multi-overlay) is configured."""
+        return (
+            hasattr(self, "color_mapping")
+            or hasattr(self, "base_colormap")
+            or hasattr(self, "color_mapping_mode")
+        )
+
+    def _resolve_water_mask(self, dem_data, detect_water, water_mask, slope_threshold):
+        """The given water mask, a slope-detected one when detect_water is set, or None."""
+        if water_mask is not None:
+            self.logger.info(f"Using pre-computed water mask ({np.sum(water_mask)} water pixels)")
+            return water_mask
+        if not detect_water:
+            return None
+        from terrain_maker.terrain.water import identify_water_by_slope
+
+        self.logger.info(f"Detecting water bodies (slope threshold: {slope_threshold})...")
+        return identify_water_by_slope(dem_data, slope_threshold=slope_threshold, fill_holes=True)
+
+    def _apply_water_gradient(self, water_mask, dem_shape):
+        """Recolor water vertices with a shoreline-to-deep blue gradient (vintage map style).
+
+        Only a band of shoreline_width pixels gets the gradient; interior water is uniform dark.
+        """
+        from scipy.ndimage import distance_transform_edt
+
+        # Colors may come from a layer at a different resolution than the water mask
+        expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_shape
+        if water_mask.shape != expected_shape:
+            self.logger.warning(
+                f"Water mask shape {water_mask.shape} does not match colors shape {expected_shape}. "
+                f"Resampling water mask to match colors. This can happen when colors are computed from "
+                f"a different layer than DEM (e.g., score layers)."
+            )
+            water_mask = zoom(
+                water_mask.astype(np.float32),
+                zoom=(
+                    expected_shape[0] / water_mask.shape[0],
+                    expected_shape[1] / water_mask.shape[1],
+                ),
+                order=0,  # nearest neighbor keeps it boolean
+                prefilter=False,
+            ).astype(np.bool_)
+
+        water_distances = distance_transform_edt(water_mask)
+        edge_color = np.array([25, 85, 125], dtype=np.float32)  # medium blue (shore)
+        center_color = np.array([15, 50, 85], dtype=np.float32)  # deep blue (interior)
+        shoreline_width = 12
+
+        water_vertex_indices = np.where(water_mask[self.y_valid, self.x_valid])[0]
+        water_y = self.y_valid[water_vertex_indices]
+        water_x = self.x_valid[water_vertex_indices]
+        distances = water_distances[water_y, water_x]
+
+        # t: 0 at the shore edge (light), 1 in the interior (dark); sqrt softens the ramp
+        t = np.ones_like(distances)
+        in_band = distances < shoreline_width
+        t[in_band] = distances[in_band] / shoreline_width
+        t = np.power(t, 0.5)[:, np.newaxis]
+        water_colors = (edge_color * (1 - t) + center_color * t).astype(np.uint8)
+
+        # Colors are either grid-space (H, W, 4) or vertex-space (N, 4)
+        if self.colors.ndim == 3:
+            self.colors[water_y, water_x, :3] = water_colors
+        else:
+            self.colors[water_vertex_indices, :3] = water_colors
+        self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
+
+    def _create_skirt(
+        self,
+        positions,
+        boundary_points,
+        coord_to_index,
+        boundary_winding,
+        *,
+        base_depth,
+        two_tier_edge,
+        edge_mid_depth,
+        edge_base_material,
+        edge_blend_colors,
+        smooth_boundary,
+        smooth_boundary_window,
+        use_catmull_rom,
+        catmull_rom_subdivisions,
+        use_rectangle_edges,
+        use_fractional_edges,
+        edge_sample_spacing,
+        scale_factor,
+    ):
+        """Side faces closing the mesh. Returns (vertices, faces, colors); colors is None
+        for single-tier edges. Colors stay separate from self.colors (the surface grid)
+        and are applied to the boundary vertices after mesh creation."""
+        surface_colors = None
+        if two_tier_edge and getattr(self, "colors", None) is not None:
+            # Grid colors (H, W, C) -> per-vertex (N, C)
+            surface_colors = (
+                self.colors[self.y_valid, self.x_valid, :] if self.colors.ndim == 3 else self.colors
+            )
+
+        result = mesh_operations.create_boundary_extension(
+            positions,
+            boundary_points,
+            coord_to_index,
+            base_depth,
+            two_tier=two_tier_edge,
+            mid_depth=edge_mid_depth,
+            base_material=edge_base_material,
+            blend_edge_colors=edge_blend_colors,
+            surface_colors=surface_colors,
+            smooth_boundary=smooth_boundary,
+            smooth_window_size=smooth_boundary_window,
+            use_catmull_rom=use_catmull_rom,
+            catmull_rom_subdivisions=catmull_rom_subdivisions,
+            use_rectangle_edges=use_rectangle_edges,
+            terrain=self if use_rectangle_edges else None,  # for transform-aware edges
+            edge_sample_spacing=edge_sample_spacing,
+            boundary_winding=boundary_winding,
+            use_fractional_edges=use_fractional_edges,
+            scale_factor=scale_factor,
+            model_offset=self.model_offset,
+        )
+        if two_tier_edge:
+            return result
+        return (*result, None)
 
     def _sort_boundary_points_optimized(self, boundary_coords):
         """
