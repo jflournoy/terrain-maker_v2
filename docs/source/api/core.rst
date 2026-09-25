@@ -9,6 +9,7 @@ Terrain Class
 .. autoclass:: src.terrain.core.Terrain
    :members:
    :undoc-members:
+   :inherited-members:
    :show-inheritance:
 
    .. rubric:: Examples
