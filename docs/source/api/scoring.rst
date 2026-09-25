@@ -10,7 +10,7 @@ to [0, 1] range where 1.0 = optimal conditions.
 Core Scoring Functions
 ----------------------
 
-.. autofunction:: src.terrain.scoring.trapezoid_score
+.. autofunction:: terrain_maker.terrain.scoring.trapezoid_score
 
    Compute trapezoid (sweet spot) scoring pattern.
 
@@ -24,7 +24,7 @@ Core Scoring Functions
 
    Example::
 
-       from src.terrain.scoring import trapezoid_score
+       from terrain_maker.terrain.scoring import trapezoid_score
 
        # Snow depth scoring: 4-8-16-24 inches
        # (too shallow, ramp up, optimal, ramp down, too deep)
@@ -43,7 +43,7 @@ Core Scoring Functions
 Sledding Scoring
 ----------------
 
-.. autofunction:: src.terrain.scoring.compute_sledding_score
+.. autofunction:: terrain_maker.terrain.scoring.compute_sledding_score
 
    Compute sledding suitability score from terrain and snow data.
 
@@ -62,7 +62,7 @@ Sledding Scoring
 
    Example::
 
-       from src.terrain.scoring import compute_sledding_score
+       from terrain_maker.terrain.scoring import compute_sledding_score
 
        sledding_scores = compute_sledding_score(
            slope=slope_data,           # degrees
@@ -76,19 +76,19 @@ Sledding Scoring
 
    See :doc:`../examples/sledding` for complete usage.
 
-.. autofunction:: src.terrain.scoring.sledding_deal_breakers
+.. autofunction:: terrain_maker.terrain.scoring.sledding_deal_breakers
 
    Identify deal-breaker conditions for sledding.
 
    Returns boolean mask where True = deal breaker (unsuitable).
 
-.. autofunction:: src.terrain.scoring.sledding_synergy_bonus
+.. autofunction:: terrain_maker.terrain.scoring.sledding_synergy_bonus
 
    Apply bonus for favorable slope + snow depth combinations.
 
    **Synergy:** Steeper slopes need deeper snow for safe landings.
 
-.. autofunction:: src.terrain.scoring.coverage_diminishing_returns
+.. autofunction:: terrain_maker.terrain.scoring.coverage_diminishing_returns
 
    Apply diminishing returns to snow coverage duration.
 
@@ -97,7 +97,7 @@ Sledding Scoring
 Cross-Country Skiing Scoring
 -----------------------------
 
-.. autofunction:: src.terrain.scoring.compute_xc_skiing_score
+.. autofunction:: terrain_maker.terrain.scoring.compute_xc_skiing_score
 
    Compute cross-country skiing suitability score.
 
@@ -115,7 +115,7 @@ Cross-Country Skiing Scoring
 
    Example::
 
-       from src.terrain.scoring import compute_xc_skiing_score
+       from terrain_maker.terrain.scoring import compute_xc_skiing_score
 
        xc_scores = compute_xc_skiing_score(
            slope=slope_data,
@@ -126,7 +126,7 @@ Cross-Country Skiing Scoring
 
    See examples/detroit_xc_skiing.py for complete usage.
 
-.. autofunction:: src.terrain.scoring.xc_skiing_deal_breakers
+.. autofunction:: terrain_maker.terrain.scoring.xc_skiing_deal_breakers
 
    Identify deal-breaker conditions for cross-country skiing.
 
@@ -180,7 +180,7 @@ Score Interpretation
 
 Use perceptually uniform colormaps for score visualization::
 
-    from src.terrain.color_mapping import elevation_colormap
+    from terrain_maker.terrain.color_mapping import elevation_colormap
 
     # Visualize scores
     colors = elevation_colormap(

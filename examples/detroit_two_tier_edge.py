@@ -40,8 +40,8 @@ import bpy
 
 import numpy as np
 
-from src.terrain.core import Terrain
-from src.terrain.loader import load_dem_files
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.loader import load_dem_files
 
 # Set up logging
 logging.basicConfig(

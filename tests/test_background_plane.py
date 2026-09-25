@@ -16,7 +16,7 @@ class TestHexToRgb:
 
     def test_hex_with_hash_standard(self):
         """#RRGGBB format converts to RGB tuple."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         # Eggshell white
         r, g, b = hex_to_rgb("#F5F5F0")
@@ -29,7 +29,7 @@ class TestHexToRgb:
 
     def test_hex_without_hash(self):
         """RRGGBB format (without #) converts correctly."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("F5F5F0")
         assert abs(r - 245/255) < 0.01
@@ -38,7 +38,7 @@ class TestHexToRgb:
 
     def test_hex_shorthand_expansion(self):
         """#RGB shorthand expands correctly."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         # #FFF should expand to #FFFFFF
         r, g, b = hex_to_rgb("#FFF")
@@ -48,7 +48,7 @@ class TestHexToRgb:
 
     def test_hex_shorthand_without_hash(self):
         """RGB shorthand without # also works."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("FFF")
         assert abs(r - 1.0) < 0.01
@@ -57,7 +57,7 @@ class TestHexToRgb:
 
     def test_pure_black(self):
         """#000000 converts to (0.0, 0.0, 0.0)."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("#000000")
         assert abs(r) < 0.001
@@ -66,7 +66,7 @@ class TestHexToRgb:
 
     def test_pure_white(self):
         """#FFFFFF converts to (1.0, 1.0, 1.0)."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("#FFFFFF")
         assert abs(r - 1.0) < 0.001
@@ -75,7 +75,7 @@ class TestHexToRgb:
 
     def test_case_insensitive_uppercase(self):
         """Uppercase hex works."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r1, g1, b1 = hex_to_rgb("#F5F5F0")
         r2, g2, b2 = hex_to_rgb("#f5f5f0")
@@ -85,7 +85,7 @@ class TestHexToRgb:
 
     def test_invalid_hex_raises_valueerror(self):
         """Invalid hex strings raise ValueError."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         with pytest.raises(ValueError):
             hex_to_rgb("#GGGGGG")  # Invalid characters
@@ -98,7 +98,7 @@ class TestHexToRgb:
 
     def test_red_channel(self):
         """Red channel is extracted correctly."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("#FF0000")
         assert abs(r - 1.0) < 0.001
@@ -107,7 +107,7 @@ class TestHexToRgb:
 
     def test_green_channel(self):
         """Green channel is extracted correctly."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("#00FF00")
         assert abs(r) < 0.001
@@ -116,7 +116,7 @@ class TestHexToRgb:
 
     def test_blue_channel(self):
         """Blue channel is extracted correctly."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         r, g, b = hex_to_rgb("#0000FF")
         assert abs(r) < 0.001
@@ -125,7 +125,7 @@ class TestHexToRgb:
 
     def test_returns_tuple(self):
         """Function returns a tuple of 3 floats."""
-        from src.terrain.scene_setup import hex_to_rgb
+        from terrain_maker.terrain.scene_setup import hex_to_rgb
 
         result = hex_to_rgb("#F5F5F0")
         assert isinstance(result, tuple)
@@ -144,21 +144,21 @@ class TestCreateMatteMaterial:
         """Function accepts hex color strings."""
         # This test verifies the function signature accepts hex colors
         # by checking that hex_to_rgb is being used internally
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         # Just verify the function exists and is callable
         assert callable(create_matte_material)
 
     def test_accepts_rgb_tuple(self):
         """Function accepts RGB tuples."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         # Verify function exists
         assert callable(create_matte_material)
 
     def test_default_color_is_eggshell(self):
         """Default color is eggshell white (#F5F5F0)."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         # We can verify the function has correct defaults in signature
         import inspect
@@ -170,7 +170,7 @@ class TestCreateMatteMaterial:
 
     def test_default_roughness_is_one(self):
         """Default roughness is 1.0 (fully matte)."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         import inspect
         sig = inspect.signature(create_matte_material)
@@ -181,7 +181,7 @@ class TestCreateMatteMaterial:
 
     def test_default_no_shadows(self):
         """Default receive_shadows is False."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         import inspect
         sig = inspect.signature(create_matte_material)
@@ -192,7 +192,7 @@ class TestCreateMatteMaterial:
 
     def test_has_docstring(self):
         """Function has proper documentation."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         assert create_matte_material.__doc__ is not None
         assert 'matte' in create_matte_material.__doc__.lower()
@@ -200,7 +200,7 @@ class TestCreateMatteMaterial:
 
     def test_material_name_parameter(self):
         """Function accepts a name parameter for the material."""
-        from src.terrain.scene_setup import create_matte_material
+        from terrain_maker.terrain.scene_setup import create_matte_material
 
         import inspect
         sig = inspect.signature(create_matte_material)
@@ -217,13 +217,13 @@ class TestCalculateCameraFrustumSize:
 
     def test_function_exists(self):
         """Function exists and is callable."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         assert callable(calculate_camera_frustum_size)
 
     def test_function_signature(self):
         """Function has expected parameters."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         import inspect
         sig = inspect.signature(calculate_camera_frustum_size)
@@ -234,7 +234,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_ortho_returns_tuple(self):
         """Orthographic camera calculation returns (width, height) tuple."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         # Test with orthographic camera
         result = calculate_camera_frustum_size(
@@ -249,7 +249,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_ortho_scale_affects_width(self):
         """Orthographic: width equals ortho_scale."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         scale = 5.0
         result = calculate_camera_frustum_size(
@@ -264,7 +264,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_ortho_respects_aspect_ratio(self):
         """Orthographic: height computed from aspect ratio."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         aspect_ratio = 16 / 9
         result = calculate_camera_frustum_size(
@@ -280,7 +280,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_perspective_returns_tuple(self):
         """Perspective camera calculation returns (width, height) tuple."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         result = calculate_camera_frustum_size(
             camera_type="PERSP",
@@ -295,7 +295,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_perspective_fov_affects_size(self):
         """Perspective: larger FOV produces larger frustum."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         distance = 10.0
         aspect_ratio = 1.0
@@ -321,7 +321,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_perspective_distance_affects_size(self):
         """Perspective: larger distance produces larger frustum."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         fov = 49.13
         aspect_ratio = 1.0
@@ -347,7 +347,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_perspective_aspect_ratio_maintained(self):
         """Perspective: aspect ratio is respected."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         aspect_ratio = 16 / 9
 
@@ -365,7 +365,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_positive_dimensions(self):
         """All dimensions are positive values."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         # Orthographic
         ortho_result = calculate_camera_frustum_size(
@@ -386,7 +386,7 @@ class TestCalculateCameraFrustumSize:
 
     def test_has_docstring(self):
         """Function has proper documentation."""
-        from src.terrain.scene_setup import calculate_camera_frustum_size
+        from terrain_maker.terrain.scene_setup import calculate_camera_frustum_size
 
         assert calculate_camera_frustum_size.__doc__ is not None
         assert 'frustum' in calculate_camera_frustum_size.__doc__.lower()
@@ -401,13 +401,13 @@ class TestCreateBackgroundPlane:
 
     def test_function_exists(self):
         """Function exists and is callable."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         assert callable(create_background_plane)
 
     def test_function_signature(self):
         """Function has expected parameters."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         import inspect
         sig = inspect.signature(create_background_plane)
@@ -424,7 +424,7 @@ class TestCreateBackgroundPlane:
 
     def test_default_distance_below(self):
         """Default distance_below is 50.0 units."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         import inspect
         sig = inspect.signature(create_background_plane)
@@ -433,7 +433,7 @@ class TestCreateBackgroundPlane:
 
     def test_default_color_is_eggshell(self):
         """Default color is eggshell white (#F5F5F0)."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         import inspect
         sig = inspect.signature(create_background_plane)
@@ -442,7 +442,7 @@ class TestCreateBackgroundPlane:
 
     def test_default_size_multiplier(self):
         """Default size_multiplier is 2.0."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         import inspect
         sig = inspect.signature(create_background_plane)
@@ -451,7 +451,7 @@ class TestCreateBackgroundPlane:
 
     def test_default_receive_shadows_false(self):
         """Default receive_shadows is False."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         import inspect
         sig = inspect.signature(create_background_plane)
@@ -460,7 +460,7 @@ class TestCreateBackgroundPlane:
 
     def test_has_docstring(self):
         """Function has proper documentation."""
-        from src.terrain.scene_setup import create_background_plane
+        from terrain_maker.terrain.scene_setup import create_background_plane
 
         assert create_background_plane.__doc__ is not None
         assert 'background' in create_background_plane.__doc__.lower()
@@ -537,7 +537,7 @@ class TestDetroitCombinedRenderCLI:
         content = script_path.read_text()
 
         # Check that the function is imported
-        assert "from src.terrain.scene_setup import create_background_plane" in content, \
+        assert "from terrain_maker.terrain.scene_setup import create_background_plane" in content, \
             "create_background_plane not imported in script"
 
     def test_cli_options_documented(self):

@@ -17,7 +17,7 @@ Scoring Transforms
 
 All transforms convert raw values into scores in [0, 1].
 
-.. automodule:: src.scoring.transforms
+.. automodule:: terrain_maker.scoring.transforms
    :members:
    :undoc-members:
    :show-inheritance:
@@ -25,7 +25,7 @@ All transforms convert raw values into scores in [0, 1].
 Score Components and Combiner
 -----------------------------
 
-.. automodule:: src.scoring.combiner
+.. automodule:: terrain_maker.scoring.combiner
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,7 +36,7 @@ Pre-built Scoring Configurations
 Sledding Scorer
 ~~~~~~~~~~~~~~~
 
-.. automodule:: src.scoring.configs.sledding
+.. automodule:: terrain_maker.scoring.configs.sledding
    :members:
    :undoc-members:
    :show-inheritance:
@@ -44,7 +44,7 @@ Sledding Scorer
 XC Skiing Scorer
 ~~~~~~~~~~~~~~~~
 
-.. automodule:: src.scoring.configs.xc_skiing
+.. automodule:: terrain_maker.scoring.configs.xc_skiing
    :members:
    :undoc-members:
    :show-inheritance:
@@ -54,7 +54,7 @@ Usage Examples
 
 Using the combiner framework::
 
-    from src.scoring.combiner import ScoreCombiner, ScoreComponent
+    from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
     scorer = ScoreCombiner(
         components=[
@@ -78,7 +78,7 @@ Using the combiner framework::
 
 Using pre-built scorers::
 
-    from src.scoring.configs.sledding import DEFAULT_SLEDDING_SCORER
+    from terrain_maker.scoring.configs.sledding import DEFAULT_SLEDDING_SCORER
 
     scores = DEFAULT_SLEDDING_SCORER.combine(
         slope_mean=slope_stats.slope_mean,

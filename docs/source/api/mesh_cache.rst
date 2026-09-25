@@ -10,7 +10,7 @@ without waiting for mesh generation.
 MeshCache
 ---------
 
-.. autoclass:: src.terrain.mesh_cache.MeshCache
+.. autoclass:: terrain_maker.terrain.mesh_cache.MeshCache
    :members:
    :undoc-members:
 
@@ -30,7 +30,7 @@ MeshCache
 
    Example::
 
-       from src.terrain.mesh_cache import MeshCache
+       from terrain_maker.terrain.mesh_cache import MeshCache
 
        cache = MeshCache(cache_dir='.mesh_cache', enabled=True)
 
@@ -153,7 +153,7 @@ Integration with Pipeline
 
 MeshCache integrates with :class:`~terrain.pipeline.TerrainPipeline`::
 
-    from src.terrain.pipeline import TerrainPipeline
+    from terrain_maker.terrain.pipeline import TerrainPipeline
 
     pipeline = TerrainPipeline(
         dem_dir='data/dem',

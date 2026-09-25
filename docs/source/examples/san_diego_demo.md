@@ -35,7 +35,7 @@ python examples/san_diego_demo.py --skip-download
 ### Step 1: Download DEM Data
 
 ```python
-from src.terrain.dem_downloader import download_dem_by_bbox
+from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
 
 bbox = (32.5, -117.6, 33.5, -116.0)  # San Diego County
 download_dem_by_bbox(
@@ -55,7 +55,7 @@ The library automatically:
 ### Step 2: Load DEM Files
 
 ```python
-from src.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.data_loading import load_dem_files
 
 dem, transform = load_dem_files("data/san_diego_dem")
 ```
@@ -70,7 +70,7 @@ The library handles:
 ### Step 3: Create and Transform Terrain
 
 ```python
-from src.terrain.core import Terrain
+from terrain_maker.terrain.core import Terrain
 
 terrain = Terrain(dem, transform, dem_crs="EPSG:4326")
 
@@ -92,7 +92,7 @@ terrain.apply_transforms()
 ### Step 4: Setup Colors and Water
 
 ```python
-from src.terrain.core import elevation_colormap
+from terrain_maker.terrain.core import elevation_colormap
 
 terrain.set_color_mapping(
     lambda elev: elevation_colormap(elev, cmap_name="plasma"),
@@ -132,8 +132,8 @@ Creates a high-quality 3D mesh with:
 ### Step 6: Setup Scene and Render
 
 ```python
-from src.terrain.scene_setup import position_camera_relative, setup_hdri_lighting, create_background_plane
-from src.terrain.materials import apply_colormap_material
+from terrain_maker.terrain.scene_setup import position_camera_relative, setup_hdri_lighting, create_background_plane
+from terrain_maker.terrain.materials import apply_colormap_material
 
 # Camera positioned south-southwest looking northeast
 camera = position_camera_relative(

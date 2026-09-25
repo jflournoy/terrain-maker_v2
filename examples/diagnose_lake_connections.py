@@ -27,12 +27,12 @@ import rasterio
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import LogNorm
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
     compute_outlet_downstream_directions,
 )
-from src.terrain.flow_accumulation import D8_OFFSETS, D8_DIRECTIONS
+from terrain_maker.terrain.flow_accumulation import D8_OFFSETS, D8_DIRECTIONS
 
 
 def load_cached_data(output_dir: Path):
@@ -374,7 +374,7 @@ def plot_lake_stream_connections(data, lake_mask, outlet_mask, outlet_info, outp
 
 def plot_before_after(data, lake_mask, outlet_mask, output_path):
     """Show drainage area before vs after applying outlet downstream routing."""
-    from src.terrain.flow_accumulation import compute_drainage_area
+    from terrain_maker.terrain.flow_accumulation import compute_drainage_area
 
     flow_dir_original = data["flow_dir"]
     dem = data["dem"]
@@ -469,7 +469,7 @@ def plot_before_after(data, lake_mask, outlet_mask, output_path):
 
 def debug_outlet_rejections(data, lake_mask, outlet_mask):
     """For top-drainage outlets, trace each candidate neighbor and show why rejected."""
-    from src.terrain.water_bodies import _trace_flows_to_lake
+    from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
     flow_dir = data["flow_dir"]
     dem = data["dem"]
@@ -534,7 +534,7 @@ def plot_outlet_neighbor_detail(data, lake_mask, outlet_mask, output_path, n_out
       cyan   = IN-LAKE (same lake, skipped)
     Each neighbor is annotated with elevation difference.
     """
-    from src.terrain.water_bodies import _trace_flows_to_lake
+    from terrain_maker.terrain.water_bodies import _trace_flows_to_lake
 
     flow_dir = data["flow_dir"]
     dem = data["dem"]

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'src/terrain/**'
+      - 'src/terrain_maker/terrain/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 

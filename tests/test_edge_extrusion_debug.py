@@ -19,8 +19,8 @@ class TestEdgeExtrusionVisualizations:
 
     def test_visualize_rectangle_sampling_stage(self):
         """Create plot of original rectangle edge sampling in DEM space."""
-        from src.terrain.mesh_operations import generate_rectangle_edge_pixels
-        from src.terrain.visualization.edge_debug import plot_rectangle_edge_sampling
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_pixels
+        from terrain_maker.terrain.visualization.edge_debug import plot_rectangle_edge_sampling
 
         # Create a simple 100×100 DEM
         dem_shape = (100, 100)
@@ -54,8 +54,8 @@ class TestEdgeExtrusionVisualizations:
         """Create plots showing each stage of coordinate transformation."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.core import Terrain
-        from src.terrain.visualization.edge_debug import plot_transformation_pipeline
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.visualization.edge_debug import plot_transformation_pipeline
         from rasterio.transform import Affine
 
         # Create a simple test DEM
@@ -109,8 +109,8 @@ class TestEdgeExtrusionVisualizations:
 
     def test_visualize_edge_distribution(self):
         """Create plot showing point distribution on edges (N/S/E/W)."""
-        from src.terrain.mesh_operations import generate_rectangle_edge_pixels
-        from src.terrain.visualization.edge_debug import plot_edge_distribution
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_pixels
+        from terrain_maker.terrain.visualization.edge_debug import plot_edge_distribution
 
         dem_shape = (100, 100)
         edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
@@ -131,11 +131,11 @@ class TestEdgeExtrusionVisualizations:
 
     def test_visualize_deduplication_impact(self):
         """Show before/after of deduplication on boundary points."""
-        from src.terrain.mesh_operations import (
+        from terrain_maker.terrain.mesh_operations import (
             generate_rectangle_edge_pixels,
             deduplicate_boundary_points,
         )
-        from src.terrain.visualization.edge_debug import plot_deduplication_comparison
+        from terrain_maker.terrain.visualization.edge_debug import plot_deduplication_comparison
 
         dem_shape = (100, 100)
         edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
@@ -156,11 +156,11 @@ class TestEdgeExtrusionVisualizations:
 
     def test_visualize_boundary_sorting(self):
         """Show the effect of angular sorting on boundary points."""
-        from src.terrain.mesh_operations import (
+        from terrain_maker.terrain.mesh_operations import (
             generate_rectangle_edge_pixels,
             sort_boundary_points_angular,
         )
-        from src.terrain.visualization.edge_debug import plot_sorting_effect
+        from terrain_maker.terrain.visualization.edge_debug import plot_sorting_effect
 
         dem_shape = (100, 100)
         edge_pixels = generate_rectangle_edge_pixels(dem_shape, edge_sample_spacing=1.0)
@@ -191,8 +191,8 @@ class TestEdgeExtrusionVisualizations:
 
     def test_full_pipeline_debug_visualization(self, tmp_path):
         """Create comprehensive debug visualization of entire rectangle edge pipeline."""
-        from src.terrain.visualization.edge_debug import create_full_pipeline_debug_plot
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.visualization.edge_debug import create_full_pipeline_debug_plot
+        from terrain_maker.terrain.core import Terrain
         from rasterio.transform import Affine
 
         # Create simple test data

@@ -12,7 +12,7 @@ The Background Plane feature (5-phase TDD implementation) has been thoroughly au
 ## Audit Scope
 
 - **Code Files**: 3 primary files modified/created
-  - `src/terrain/scene_setup.py` - 383 lines of new code (4 functions)
+  - `src/terrain_maker/terrain/scene_setup.py` - 383 lines of new code (4 functions)
   - `examples/detroit_combined_render.py` - CLI integration
   - `tests/test_background_plane.py` - 43 unit tests
 
@@ -194,7 +194,7 @@ The Background Plane feature (5-phase TDD implementation) has been thoroughly au
 
 ## Files to Review
 
-- `src/terrain/scene_setup.py` - Core implementation (4 functions)
+- `src/terrain_maker/terrain/scene_setup.py` - Core implementation (4 functions)
 - `examples/detroit_combined_render.py` - CLI integration
 - `tests/test_background_plane.py` - Test suite
 

@@ -18,7 +18,7 @@ class TestColorComputationShape:
         """_compute_multi_overlay_colors returns grid-space colors (H, W, 4)."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         from rasterio.transform import Affine
 
         # Create a simple DEM
@@ -40,7 +40,7 @@ class TestColorComputationShape:
         terrain.apply_transforms()
 
         # Set up color mapping
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         terrain.set_multi_color_mapping(
             base_colormap=lambda score: elevation_colormap(
@@ -74,7 +74,7 @@ class TestColorComputationShape:
         """create_blender_mesh should handle vertex-space colors (N, 4) correctly."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         # Simple quad mesh
         vertices = np.array(
@@ -114,7 +114,7 @@ class TestColorComputationShape:
         """create_blender_mesh should handle grid-space colors (H, W, 4) correctly."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.blender_integration import create_blender_mesh
+        from terrain_maker.terrain.blender_integration import create_blender_mesh
 
         # Simple quad mesh
         vertices = np.array(
@@ -149,9 +149,9 @@ class TestColorComputationShape:
 
     def test_vertex_colors_are_non_uniform(self, sample_dem):
         """Vertex colors should vary across mesh when data is non-uniform."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         from rasterio.transform import Affine
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.color_mapping import elevation_colormap
 
         # Create DEM with variation (sample_dem has peak in center)
         dem = sample_dem  # Has Gaussian peak
@@ -194,8 +194,8 @@ class TestEndToEndColorPipeline:
         """Full pipeline: set_multi_color_mapping -> create_mesh -> verify colors applied."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.core import Terrain
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.color_mapping import elevation_colormap
         from rasterio.transform import Affine
 
         # Create test data
@@ -261,8 +261,8 @@ class TestEndToEndColorPipeline:
         """Verify that computed colors are actually applied to mesh vertices."""
         pytest.importorskip("bpy")
         import bpy
-        from src.terrain.core import Terrain
-        from src.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.core import Terrain
+        from terrain_maker.terrain.color_mapping import elevation_colormap
         from rasterio.transform import Affine
 
         # Create gradient DEM

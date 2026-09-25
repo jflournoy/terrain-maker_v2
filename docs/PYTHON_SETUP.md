@@ -144,8 +144,8 @@ terrain-maker_v2/
 ### Basic Terrain Processing
 
 ```python
-from src.terrain.core import Terrain
-from src.config import DEM_DIR
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.config import DEM_DIR
 
 # Initialize terrain
 terrain = Terrain()
@@ -164,8 +164,8 @@ terrain.render(output_path="output/terrain.png")
 ### Snow Analysis
 
 ```python
-from src.snow.analysis import SnowAnalysis
-from src.config import SNODAS_DIR
+from terrain_maker.snow.analysis import SnowAnalysis
+from terrain_maker.config import SNODAS_DIR
 
 # Initialize snow analysis
 snow = SnowAnalysis(
@@ -191,7 +191,7 @@ snow.visualize_snow_data(data_type='sledding_score')
 The project automatically caches processed data to avoid recomputation:
 
 ```python
-from src.config import CACHE_DIR
+from terrain_maker.config import CACHE_DIR
 
 # Caches are stored in:
 # - data/cache/dem/        - DEM preprocessing

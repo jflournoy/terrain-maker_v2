@@ -11,14 +11,14 @@ def test_python_version():
 
 
 def test_src_modules_importable():
-    """Test that src modules can be imported."""
+    """Test that package modules can be imported."""
     # Test basic imports
     try:
-        from src import config
+        from terrain_maker import config
 
         assert config.PROJECT_ROOT is not None
     except ImportError as e:
-        pytest.fail(f"Failed to import src.config: {e}")
+        pytest.fail(f"Failed to import terrain_maker.config: {e}")
 
 
 def test_project_structure():
@@ -26,10 +26,10 @@ def test_project_structure():
     project_root = Path(__file__).parent.parent
 
     expected_dirs = [
-        "src",
-        "src/terrain",
-        "src/snow",
-        "src/utils",
+        "src/terrain_maker",
+        "src/terrain_maker/terrain",
+        "src/terrain_maker/snow",
+        "src/terrain_maker/utils",
         "tests",
         "data",
         "docs",

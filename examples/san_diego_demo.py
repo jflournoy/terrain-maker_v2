@@ -34,9 +34,9 @@ try:
 except ImportError:
     pass
 
-from src.terrain.dem_downloader import download_dem_by_bbox
-from src.terrain.data_loading import load_dem_files
-from src.terrain.core import (
+from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.core import (
     Terrain,
     elevation_colormap,
     clear_scene,
@@ -47,8 +47,8 @@ from src.terrain.core import (
     flip_raster,
     scale_elevation,
 )
-from src.terrain.scene_setup import create_background_plane, setup_hdri_lighting
-from src.terrain.materials import apply_colormap_material
+from terrain_maker.terrain.scene_setup import create_background_plane, setup_hdri_lighting
+from terrain_maker.terrain.materials import apply_colormap_material
 
 
 def main():

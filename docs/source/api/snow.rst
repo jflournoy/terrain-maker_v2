@@ -16,7 +16,7 @@ Pipeline for loading and computing snow statistics:
 2. ``calculate_snow_statistics`` - Compute aggregated seasonal statistics
 3. ``load_snodas_stats`` - High-level orchestrator with caching and fallback
 
-.. automodule:: src.snow.snodas
+.. automodule:: terrain_maker.snow.snodas
    :members:
    :undoc-members:
    :show-inheritance:
@@ -28,7 +28,7 @@ Tiled slope computation at full DEM resolution with geographic transform-aware
 aggregation. Ensures cliff faces within a pixel are captured rather than
 hidden by downsampling.
 
-.. automodule:: src.snow.slope_statistics
+.. automodule:: terrain_maker.snow.slope_statistics
    :members:
    :undoc-members:
    :show-inheritance:

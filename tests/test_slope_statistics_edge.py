@@ -6,7 +6,7 @@ Tests the reshape bug where edge tiles have mismatched sizes.
 
 import numpy as np
 import pytest
-from src.snow.slope_statistics import aggregate_by_geographic_mapping
+from terrain_maker.snow.slope_statistics import aggregate_by_geographic_mapping
 
 
 class TestAggregateByGeographicMapping:

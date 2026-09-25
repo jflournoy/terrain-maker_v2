@@ -19,7 +19,7 @@ The `terrain.diagnostics` module provides visualization functions for:
 Shows before/after comparison of wavelet denoising with difference maps and cross-section profiles.
 
 ```python
-from src.terrain.diagnostics import plot_wavelet_diagnostics
+from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
 plot_wavelet_diagnostics(
     original=dem_original,
@@ -41,7 +41,7 @@ plot_wavelet_diagnostics(
 Visualizes the wavelet decomposition showing detail coefficients at each level.
 
 ```python
-from src.terrain.diagnostics import plot_wavelet_coefficients
+from terrain_maker.terrain.diagnostics import plot_wavelet_coefficients
 
 plot_wavelet_coefficients(
     data=dem_data,
@@ -56,7 +56,7 @@ plot_wavelet_coefficients(
 Generates complete wavelet diagnostic report with multiple visualizations.
 
 ```python
-from src.terrain.diagnostics import generate_full_wavelet_diagnostics
+from terrain_maker.terrain.diagnostics import generate_full_wavelet_diagnostics
 
 generate_full_wavelet_diagnostics(
     original=dem_original,
@@ -75,7 +75,7 @@ generate_full_wavelet_diagnostics(
 Visualizes how smoothing varies based on terrain slope - showing more smoothing on flat areas and less on steep terrain.
 
 ```python
-from src.terrain.diagnostics import plot_adaptive_smooth_diagnostics
+from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_diagnostics
 
 plot_adaptive_smooth_diagnostics(
     original=dem_original,
@@ -100,7 +100,7 @@ plot_adaptive_smooth_diagnostics(
 Shows histograms comparing original vs smoothed elevation distributions.
 
 ```python
-from src.terrain.diagnostics import plot_adaptive_smooth_histogram
+from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_histogram
 
 plot_adaptive_smooth_histogram(
     original=dem_original,
@@ -118,7 +118,7 @@ plot_adaptive_smooth_histogram(
 Visualizes morphological bump removal showing original, smoothed, and removed features.
 
 ```python
-from src.terrain.diagnostics import plot_bump_removal_diagnostics
+from terrain_maker.terrain.diagnostics import plot_bump_removal_diagnostics
 
 plot_bump_removal_diagnostics(
     original=dem_original,
@@ -144,7 +144,7 @@ plot_bump_removal_diagnostics(
 Compares original and upscaled score grids with zoomed regions and histograms.
 
 ```python
-from src.terrain.diagnostics import plot_upscale_diagnostics
+from terrain_maker.terrain.diagnostics import plot_upscale_diagnostics
 
 plot_upscale_diagnostics(
     original=scores_lowres,
@@ -170,7 +170,7 @@ plot_upscale_diagnostics(
 Convenience function that handles file paths and method detection.
 
 ```python
-from src.terrain.diagnostics import generate_upscale_diagnostics
+from terrain_maker.terrain.diagnostics import generate_upscale_diagnostics
 
 generate_upscale_diagnostics(
     original=scores,
@@ -189,7 +189,7 @@ generate_upscale_diagnostics(
 Creates RGB channel histograms for rendered images to analyze color balance.
 
 ```python
-from src.terrain.diagnostics import generate_rgb_histogram
+from terrain_maker.terrain.diagnostics import generate_rgb_histogram
 
 generate_rgb_histogram(
     image_path=Path("render.png"),
@@ -207,7 +207,7 @@ generate_rgb_histogram(
 Creates luminance (brightness) histogram with clipping analysis.
 
 ```python
-from src.terrain.diagnostics import generate_luminance_histogram
+from terrain_maker.terrain.diagnostics import generate_luminance_histogram
 
 generate_luminance_histogram(
     image_path=Path("render.png"),

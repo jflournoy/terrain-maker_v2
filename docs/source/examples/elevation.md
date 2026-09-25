@@ -27,12 +27,12 @@ python examples/detroit_elevation_real.py --direction south
 ## The Code
 
 ```python
-from src.terrain.core import Terrain, load_dem_files
-from src.terrain.transforms import reproject_raster, flip_raster, scale_elevation
-from src.terrain.color_mapping import elevation_colormap
-from src.terrain.water import identify_water_by_slope
-from src.terrain.scene_setup import position_camera_relative
-from src.terrain.rendering import render_scene_to_file
+from terrain_maker.terrain.core import Terrain, load_dem_files
+from terrain_maker.terrain.transforms import reproject_raster, flip_raster, scale_elevation
+from terrain_maker.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.scene_setup import position_camera_relative
+from terrain_maker.terrain.rendering import render_scene_to_file
 
 # 1. Load elevation data
 dem_data, transform = load_dem_files(SRTM_TILES_DIR, pattern='*.hgt')

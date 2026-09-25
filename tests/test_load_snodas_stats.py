@@ -9,8 +9,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.snow.snodas import load_snodas_stats
-from src.terrain.gridded_data import TiledDataConfig
+from terrain_maker.snow.snodas import load_snodas_stats
+from terrain_maker.terrain.gridded_data import TiledDataConfig
 
 
 EXPECTED_KEYS = {"median_max_depth", "mean_snow_day_ratio", "interseason_cv", "mean_intraseason_cv"}

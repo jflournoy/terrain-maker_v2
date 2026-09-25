@@ -14,13 +14,13 @@ class TestGpuSlopeCalculation:
 
     def test_gpu_horn_slope_imports(self):
         """GPU Horn slope function should be importable."""
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         assert callable(gpu_horn_slope)
 
     def test_gpu_horn_slope_returns_same_shape(self):
         """GPU slope calculation should preserve input shape."""
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         dem = np.random.rand(100, 100).astype(np.float32) * 1000
         result = gpu_horn_slope(dem)
@@ -29,7 +29,7 @@ class TestGpuSlopeCalculation:
 
     def test_gpu_horn_slope_flat_terrain_is_zero(self):
         """Flat terrain should have zero slope."""
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         # Constant elevation = flat terrain
         dem = np.full((50, 50), 100.0, dtype=np.float32)
@@ -40,7 +40,7 @@ class TestGpuSlopeCalculation:
 
     def test_gpu_horn_slope_tilted_plane(self):
         """Tilted plane should have uniform non-zero slope."""
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         # Create plane with slope of 1 unit per pixel in x direction
         x = np.arange(100, dtype=np.float32)
@@ -55,7 +55,7 @@ class TestGpuSlopeCalculation:
 
     def test_gpu_horn_slope_handles_nan(self):
         """GPU slope should handle NaN values gracefully."""
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         dem = np.random.rand(50, 50).astype(np.float32) * 1000
         dem[20:25, 20:25] = np.nan  # Add NaN region
@@ -70,7 +70,7 @@ class TestGpuSlopeCalculation:
     def test_gpu_horn_slope_matches_scipy(self):
         """GPU slope should produce same results as scipy implementation."""
         from scipy import ndimage
-        from src.terrain.gpu_ops import gpu_horn_slope
+        from terrain_maker.terrain.gpu_ops import gpu_horn_slope
 
         dem = np.random.rand(100, 100).astype(np.float32) * 1000
 
@@ -91,13 +91,13 @@ class TestGpuGaussianBlur:
 
     def test_gpu_gaussian_blur_imports(self):
         """GPU Gaussian blur function should be importable."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         assert callable(gpu_gaussian_blur)
 
     def test_gpu_gaussian_blur_returns_same_shape(self):
         """GPU Gaussian blur should preserve input shape."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         data = np.random.rand(100, 100).astype(np.float32)
         result = gpu_gaussian_blur(data, sigma=2.0)
@@ -106,7 +106,7 @@ class TestGpuGaussianBlur:
 
     def test_gpu_gaussian_blur_smooths_noise(self):
         """Gaussian blur should reduce noise (lower standard deviation)."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         # Create noisy data
         np.random.seed(42)
@@ -120,7 +120,7 @@ class TestGpuGaussianBlur:
 
     def test_gpu_gaussian_blur_preserves_constant(self):
         """Blurring a constant should return the same constant."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         data = np.full((50, 50), 42.0, dtype=np.float32)
         result = gpu_gaussian_blur(data, sigma=5.0)
@@ -130,7 +130,7 @@ class TestGpuGaussianBlur:
 
     def test_gpu_gaussian_blur_larger_sigma_more_smooth(self):
         """Larger sigma should produce smoother result."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         np.random.seed(42)
         data = np.random.rand(100, 100).astype(np.float32)
@@ -144,7 +144,7 @@ class TestGpuGaussianBlur:
     def test_gpu_gaussian_blur_matches_scipy(self):
         """GPU Gaussian blur should produce similar results to scipy."""
         from scipy.ndimage import gaussian_filter
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         data = np.random.rand(100, 100).astype(np.float32) * 100
         sigma = 2.0
@@ -162,7 +162,7 @@ class TestGpuGaussianBlur:
 
     def test_gpu_gaussian_blur_handles_nan(self):
         """GPU Gaussian blur should handle NaN values."""
-        from src.terrain.gpu_ops import gpu_gaussian_blur
+        from terrain_maker.terrain.gpu_ops import gpu_gaussian_blur
 
         data = np.random.rand(50, 50).astype(np.float32)
         data[20:25, 20:25] = np.nan
@@ -178,13 +178,13 @@ class TestGpuMedianFilter:
 
     def test_gpu_median_filter_imports(self):
         """GPU median filter should be importable."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         assert callable(gpu_median_filter)
 
     def test_gpu_median_filter_returns_same_shape(self):
         """GPU median filter should preserve input shape."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         data = np.random.rand(100, 100).astype(np.float32)
         result = gpu_median_filter(data, kernel_size=3)
@@ -193,7 +193,7 @@ class TestGpuMedianFilter:
 
     def test_gpu_median_filter_removes_salt_pepper_noise(self):
         """Median filter should remove salt-and-pepper noise."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         # Create data with salt-and-pepper noise
         data = np.full((50, 50), 0.5, dtype=np.float32)
@@ -208,7 +208,7 @@ class TestGpuMedianFilter:
 
     def test_gpu_median_filter_preserves_edges(self):
         """Median filter should preserve sharp edges better than Gaussian."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         # Create data with sharp edge
         data = np.zeros((50, 50), dtype=np.float32)
@@ -223,7 +223,7 @@ class TestGpuMedianFilter:
     def test_gpu_median_filter_matches_scipy(self):
         """GPU median filter should match scipy results."""
         from scipy.ndimage import median_filter
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         np.random.seed(42)
         data = np.random.rand(50, 50).astype(np.float32)
@@ -238,7 +238,7 @@ class TestGpuMedianFilter:
 
     def test_gpu_median_filter_different_kernel_sizes(self):
         """Median filter should work with different kernel sizes."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         data = np.random.rand(50, 50).astype(np.float32)
 
@@ -253,7 +253,7 @@ class TestGpuMedianFilter:
 
     def test_gpu_median_filter_handles_nan(self):
         """GPU median filter should handle NaN values."""
-        from src.terrain.gpu_ops import gpu_median_filter
+        from terrain_maker.terrain.gpu_ops import gpu_median_filter
 
         data = np.random.rand(50, 50).astype(np.float32)
         data[20:25, 20:25] = np.nan
@@ -269,19 +269,19 @@ class TestGpuMaxMinFilter:
 
     def test_gpu_max_filter_imports(self):
         """GPU max filter should be importable."""
-        from src.terrain.gpu_ops import gpu_max_filter
+        from terrain_maker.terrain.gpu_ops import gpu_max_filter
 
         assert callable(gpu_max_filter)
 
     def test_gpu_min_filter_imports(self):
         """GPU min filter should be importable."""
-        from src.terrain.gpu_ops import gpu_min_filter
+        from terrain_maker.terrain.gpu_ops import gpu_min_filter
 
         assert callable(gpu_min_filter)
 
     def test_gpu_max_filter_returns_same_shape(self):
         """GPU max filter should preserve input shape."""
-        from src.terrain.gpu_ops import gpu_max_filter
+        from terrain_maker.terrain.gpu_ops import gpu_max_filter
 
         data = np.random.rand(100, 100).astype(np.float32)
         result = gpu_max_filter(data, kernel_size=3)
@@ -290,7 +290,7 @@ class TestGpuMaxMinFilter:
 
     def test_gpu_min_filter_returns_same_shape(self):
         """GPU min filter should preserve input shape."""
-        from src.terrain.gpu_ops import gpu_min_filter
+        from terrain_maker.terrain.gpu_ops import gpu_min_filter
 
         data = np.random.rand(100, 100).astype(np.float32)
         result = gpu_min_filter(data, kernel_size=3)
@@ -299,7 +299,7 @@ class TestGpuMaxMinFilter:
 
     def test_gpu_max_filter_finds_local_maxima(self):
         """Max filter should dilate bright regions."""
-        from src.terrain.gpu_ops import gpu_max_filter
+        from terrain_maker.terrain.gpu_ops import gpu_max_filter
 
         # Single bright pixel
         data = np.zeros((10, 10), dtype=np.float32)
@@ -312,7 +312,7 @@ class TestGpuMaxMinFilter:
 
     def test_gpu_min_filter_finds_local_minima(self):
         """Min filter should erode bright regions."""
-        from src.terrain.gpu_ops import gpu_min_filter
+        from terrain_maker.terrain.gpu_ops import gpu_min_filter
 
         # Single dark pixel
         data = np.ones((10, 10), dtype=np.float32)
@@ -326,7 +326,7 @@ class TestGpuMaxMinFilter:
     def test_gpu_max_filter_matches_scipy(self):
         """GPU max filter should match scipy results."""
         from scipy.ndimage import maximum_filter
-        from src.terrain.gpu_ops import gpu_max_filter
+        from terrain_maker.terrain.gpu_ops import gpu_max_filter
 
         np.random.seed(42)
         data = np.random.rand(50, 50).astype(np.float32)
@@ -342,7 +342,7 @@ class TestGpuMaxMinFilter:
     def test_gpu_min_filter_matches_scipy(self):
         """GPU min filter should match scipy results."""
         from scipy.ndimage import minimum_filter
-        from src.terrain.gpu_ops import gpu_min_filter
+        from terrain_maker.terrain.gpu_ops import gpu_min_filter
 
         np.random.seed(42)
         data = np.random.rand(50, 50).astype(np.float32)
@@ -357,7 +357,7 @@ class TestGpuMaxMinFilter:
 
     def test_gpu_max_min_filter_relationship(self):
         """Max of negated data should equal negated min of original."""
-        from src.terrain.gpu_ops import gpu_max_filter, gpu_min_filter
+        from terrain_maker.terrain.gpu_ops import gpu_max_filter, gpu_min_filter
 
         data = np.random.rand(50, 50).astype(np.float32)
 

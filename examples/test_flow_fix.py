@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 import rasterio
 from rasterio import Affine
-from src.terrain.flow_accumulation import flow_accumulation
+from terrain_maker.terrain.flow_accumulation import flow_accumulation
 import matplotlib.pyplot as plt
 
 

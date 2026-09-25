@@ -58,7 +58,7 @@ Also updated from abstract to physical:
 ## Code Changes
 
 ### 1. Core Scoring Function
-File: `src/terrain/scoring.py`
+File: `src/terrain_maker/terrain/scoring.py`
 
 **`sledding_deal_breakers()`:**
 - Changed parameter: `slope_variability` → `roughness`
@@ -75,7 +75,7 @@ File: `src/terrain/scoring.py`
 - Updated examples and docstrings
 
 ### 2. Scoring Config
-File: `src/scoring/configs/sledding.py`
+File: `src/terrain_maker/scoring/configs/sledding.py`
 
 **`compute_improved_sledding_score()`:**
 - Changed: `slope_variability = slope_stats.slope_std`
@@ -102,7 +102,7 @@ If you have custom scoring code that uses the old API:
 
 ### Before
 ```python
-from src.terrain.scoring import compute_sledding_score
+from terrain_maker.terrain.scoring import compute_sledding_score
 
 score = compute_sledding_score(
     snow_depth=12.0,
@@ -114,7 +114,7 @@ score = compute_sledding_score(
 
 ### After
 ```python
-from src.terrain.scoring import compute_sledding_score
+from terrain_maker.terrain.scoring import compute_sledding_score
 
 score = compute_sledding_score(
     snow_depth=12.0,
@@ -126,7 +126,7 @@ score = compute_sledding_score(
 
 ### Getting Roughness from Slope Stats
 ```python
-from src.snow.slope_statistics import compute_tiled_slope_statistics
+from terrain_maker.snow.slope_statistics import compute_tiled_slope_statistics
 
 # Compute slope statistics
 slope_stats = compute_tiled_slope_statistics(

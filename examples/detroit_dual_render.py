@@ -52,7 +52,7 @@ import bpy
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     elevation_colormap,
     clear_scene,
@@ -65,9 +65,9 @@ from src.terrain.core import (
     flip_raster,
     scale_elevation,
 )
-from src.terrain.blender_integration import apply_vertex_colors
-from src.terrain.data_loading import load_dem_files
-from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
+from terrain_maker.terrain.blender_integration import apply_vertex_colors
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from examples.score_loaders import (
     load_sledding_scores,
     load_xc_skiing_scores,

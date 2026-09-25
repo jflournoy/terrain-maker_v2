@@ -39,14 +39,14 @@ from rasterio.transform import rowcol
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import Terrain
-from src.terrain.data_loading import load_dem_files
-from src.terrain.gridded_data import (
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.gridded_data import (
     downsample_for_viz,
     TiledDataConfig,
 )
-from src.snow import load_snodas_stats
-from src.scoring.configs import (
+from terrain_maker.snow import load_snodas_stats
+from terrain_maker.scoring.configs import (
     DEFAULT_XC_SKIING_SCORER,
     xc_skiing_compute_derived_inputs,
 )
@@ -706,10 +706,10 @@ def run_step_render_3d(
 
     try:
         import bpy
-        from src.terrain.color_mapping import elevation_colormap
-        from src.terrain.transforms import reproject_raster, flip_raster, scale_elevation
+        from terrain_maker.terrain.color_mapping import elevation_colormap
+        from terrain_maker.terrain.transforms import reproject_raster, flip_raster, scale_elevation
         from math import radians
-        from src.terrain.core import setup_light, clear_scene, position_camera_relative
+        from terrain_maker.terrain.core import setup_light, clear_scene, position_camera_relative
 
         # Clear scene
         clear_scene()
@@ -788,7 +788,7 @@ def run_step_render_3d(
         terrain.compute_colors(water_mask=water_mask)
 
         # Re-apply colors to mesh
-        from src.terrain.blender_integration import apply_vertex_colors
+        from terrain_maker.terrain.blender_integration import apply_vertex_colors
 
         apply_vertex_colors(mesh_obj, terrain.colors, terrain.y_valid, terrain.x_valid)
 

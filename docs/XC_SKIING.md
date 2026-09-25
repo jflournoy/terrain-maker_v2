@@ -73,11 +73,11 @@ Real XC skiing locations from OpenStreetMap, each scored based on local snow con
 
 ```python
 from pathlib import Path
-from src.terrain.core import Terrain
-from src.terrain.data_loading import load_dem_files
-from src.terrain.gridded_data import GriddedDataLoader, TiledDataConfig
-from src.snow import batch_process_snodas_data, calculate_snow_statistics
-from src.scoring.configs import DEFAULT_XC_SKIING_SCORER
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.gridded_data import GriddedDataLoader, TiledDataConfig
+from terrain_maker.snow import batch_process_snodas_data, calculate_snow_statistics
+from terrain_maker.scoring.configs import DEFAULT_XC_SKIING_SCORER
 
 # 1. Load elevation data
 dem_dir = Path("data/dem/detroit")
@@ -100,7 +100,7 @@ snow_stats = loader.run_pipeline(
 )
 
 # 3. Compute XC skiing suitability scores
-from src.scoring.configs import xc_skiing_compute_derived_inputs
+from terrain_maker.scoring.configs import xc_skiing_compute_derived_inputs
 inputs = xc_skiing_compute_derived_inputs(snow_stats)
 score_grid = DEFAULT_XC_SKIING_SCORER.compute(inputs)
 

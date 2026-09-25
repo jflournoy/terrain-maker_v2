@@ -20,7 +20,7 @@ from pathlib import Path
 import tempfile
 
 # Import the flow accumulation functions (these don't exist yet - RED phase)
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     flow_accumulation,
     compute_flow_direction,
     compute_drainage_area,
@@ -708,7 +708,7 @@ def test_condition_dem_detects_border_connected_ocean():
     dem[3, 2] = 1.5
 
     # Detect ocean as border-connected areas at/below threshold
-    from src.terrain.flow_accumulation import detect_ocean_mask
+    from terrain_maker.terrain.flow_accumulation import detect_ocean_mask
     ocean_mask = detect_ocean_mask(dem, threshold=0.0, border_only=True)
 
     # Border-connected ocean should be detected
@@ -844,7 +844,7 @@ def test_detect_endorheic_basins():
             dist = np.sqrt((i - 7.5) ** 2 + (j - 7.5) ** 2)
             dem[i, j] = 20.0 - dist * 2.0  # Basin center at ~5m
 
-    from src.terrain.flow_accumulation import detect_endorheic_basins
+    from terrain_maker.terrain.flow_accumulation import detect_endorheic_basins
 
     basin_mask, basin_sizes = detect_endorheic_basins(dem, min_size=10)
 
@@ -2503,7 +2503,7 @@ class TestDijkstraEdgeOutlets:
         start_row, start_col = int(sink_rows[0]), int(sink_cols[0])
 
         # Try to find breach path
-        from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+        from terrain_maker.terrain.flow_accumulation import _find_breach_path_dijkstra
 
         path = _find_breach_path_dijkstra(
             dem=dem,
@@ -2544,7 +2544,7 @@ class TestDijkstraEdgeOutlets:
             sink_rows, sink_cols = np.where(sinks)
             start_row, start_col = int(sink_rows[0]), int(sink_cols[0])
 
-            from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+            from terrain_maker.terrain.flow_accumulation import _find_breach_path_dijkstra
 
             path = _find_breach_path_dijkstra(
                 dem=dem,
@@ -2580,7 +2580,7 @@ class TestDijkstraEdgeOutlets:
         # Get center sink
         center_r, center_c = dem.shape[0] // 2, dem.shape[1] // 2
 
-        from src.terrain.flow_accumulation import _find_breach_path_dijkstra
+        from terrain_maker.terrain.flow_accumulation import _find_breach_path_dijkstra
 
         path = _find_breach_path_dijkstra(
             dem=dem,
@@ -2695,7 +2695,7 @@ def test_breach_depressions_constrained_balanced_defaults():
     # Small depression: 5m deep (noise that should be breached easily)
     dem[45, 45] = 95.0
 
-    from src.terrain.flow_accumulation import breach_depressions_constrained, identify_outlets
+    from terrain_maker.terrain.flow_accumulation import breach_depressions_constrained, identify_outlets
     nodata_mask = np.zeros_like(dem, dtype=bool)
     outlets = identify_outlets(dem, nodata_mask=nodata_mask, coastal_elev_threshold=10.0, edge_mode="all")
 

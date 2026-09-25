@@ -32,7 +32,7 @@ python examples/validate_flow_with_nhd_data.py --data-source nhd --min-area-km2 
 
 **Usage:**
 ```python
-from src.terrain.water_bodies import download_water_bodies
+from terrain_maker.terrain.water_bodies import download_water_bodies
 
 geojson_path = download_water_bodies(
     bbox=(south, west, north, east),  # WGS84 degrees
@@ -62,7 +62,7 @@ geojson_path = download_water_bodies(
 
 **Usage:**
 ```python
-from src.terrain.water_bodies import download_water_bodies
+from terrain_maker.terrain.water_bodies import download_water_bodies
 
 geojson_path = download_water_bodies(
     bbox=(south, west, north, east),
@@ -186,12 +186,12 @@ def identify_outlet_cells(
 ```python
 from pathlib import Path
 import rasterio
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     download_water_bodies,
     rasterize_lakes_to_mask,
     identify_outlet_cells,
 )
-from src.terrain.flow_accumulation import flow_accumulation
+from terrain_maker.terrain.flow_accumulation import flow_accumulation
 
 # 1. Load DEM
 with rasterio.open("data/dem.tif") as src:
@@ -381,5 +381,5 @@ Cache keys are based on data_source + bbox hash, so:
 
 - **NHD API docs:** https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer
 - **HydroLAKES:** https://www.hydrosheds.org/products/hydrolakes
-- **Source code:** [src/terrain/water_bodies.py](../src/terrain/water_bodies.py)
+- **Source code:** [src/terrain_maker/terrain/water_bodies.py](../src/terrain_maker/terrain/water_bodies.py)
 - **Validation script:** [validate_flow_with_nhd_data.py](validate_flow_with_nhd_data.py)

@@ -4,7 +4,7 @@ import importlib
 
 import pytest
 
-import src.terrain.core as core
+import terrain_maker.terrain.core as core
 
 
 @pytest.mark.parametrize("name", sorted(core._REEXPORTS))

@@ -22,7 +22,7 @@ class TestScoreComponent:
 
     def test_create_additive_component(self):
         """Can create an additive score component."""
-        from src.scoring.combiner import ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreComponent
 
         component = ScoreComponent(
             name="slope_score",
@@ -39,7 +39,7 @@ class TestScoreComponent:
 
     def test_create_multiplicative_component(self):
         """Can create a multiplicative (penalty) component."""
-        from src.scoring.combiner import ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreComponent
 
         component = ScoreComponent(
             name="cliff_penalty",
@@ -54,7 +54,7 @@ class TestScoreComponent:
 
     def test_additive_requires_weight(self):
         """Additive components must have a weight."""
-        from src.scoring.combiner import ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreComponent
 
         with pytest.raises(ValueError, match="weight"):
             ScoreComponent(
@@ -67,7 +67,7 @@ class TestScoreComponent:
 
     def test_apply_transform(self):
         """Component can apply its transform to a value."""
-        from src.scoring.combiner import ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreComponent
 
         component = ScoreComponent(
             name="slope_score",
@@ -96,7 +96,7 @@ class TestScoreCombiner:
 
     def test_create_combiner_with_components(self):
         """Can create a combiner with multiple components."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="sledding_score",
@@ -123,7 +123,7 @@ class TestScoreCombiner:
 
     def test_additive_weights_must_sum_to_one(self):
         """Additive component weights should sum to 1.0."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         with pytest.raises(ValueError, match="sum to 1"):
             ScoreCombiner(
@@ -148,7 +148,7 @@ class TestScoreCombiner:
 
     def test_compute_additive_only(self):
         """Compute score with only additive components."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="test",
@@ -177,7 +177,7 @@ class TestScoreCombiner:
 
     def test_compute_with_multiplicative(self):
         """Compute score with both additive and multiplicative components."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="test",
@@ -210,7 +210,7 @@ class TestScoreCombiner:
 
     def test_compute_with_numpy_arrays(self):
         """Should work with numpy arrays element-wise."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="test",
@@ -243,7 +243,7 @@ class TestScoreCombiner:
 
     def test_multiple_multiplicative_components(self):
         """Multiple multiplicative components should all multiply."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="test",
@@ -277,7 +277,7 @@ class TestScoreCombiner:
 
     def test_get_component_scores(self):
         """Can retrieve individual component scores for debugging."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         combiner = ScoreCombiner(
             name="test",
@@ -326,7 +326,7 @@ class TestSleddingScoreConfig:
 
     def test_create_sledding_scorer(self):
         """Can create a complete sledding score combiner."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         sledding = ScoreCombiner(
             name="sledding_suitability",
@@ -407,7 +407,7 @@ class TestSleddingScoreConfig:
 
     def test_to_dict_and_from_dict(self):
         """Can serialize/deserialize a combiner config."""
-        from src.scoring.combiner import ScoreCombiner, ScoreComponent
+        from terrain_maker.scoring.combiner import ScoreCombiner, ScoreComponent
 
         original = ScoreCombiner(
             name="test",

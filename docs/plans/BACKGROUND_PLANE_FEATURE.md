@@ -14,7 +14,7 @@ Add a configurable background plane for Blender renders that sits below the terr
 
 ### Core Library Function: `create_background_plane()`
 
-**Location**: `src/terrain/scene_setup.py`
+**Location**: `src/terrain_maker/terrain/scene_setup.py`
 
 **Parameters**:
 - `camera`: Blender camera object (required to calculate plane size)
@@ -316,7 +316,7 @@ Consider adding named presets:
 ## API Example
 
 ```python
-from src.terrain.scene_setup import create_background_plane
+from terrain_maker.terrain.scene_setup import create_background_plane
 
 # Basic usage (eggshell white, no shadows)
 background = create_background_plane(
@@ -346,9 +346,9 @@ python examples/detroit_combined_render.py --background --background-shadow  # E
 - `tests/test_background_plane.py` - Test suite
 
 ### Modified Files
-- `src/terrain/scene_setup.py` - Add new functions
+- `src/terrain_maker/terrain/scene_setup.py` - Add new functions
 - `examples/detroit_combined_render.py` - Add CLI options
-- `src/terrain/__init__.py` - Export new functions (if needed)
+- `src/terrain_maker/terrain/__init__.py` - Export new functions (if needed)
 
 ---
 

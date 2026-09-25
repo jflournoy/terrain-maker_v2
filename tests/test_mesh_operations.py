@@ -13,13 +13,13 @@ class TestVertexPositionGeneration:
 
     def test_generate_vertex_positions_imports(self):
         """Test that generate_vertex_positions can be imported."""
-        from src.terrain.mesh_operations import generate_vertex_positions
+        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
         assert callable(generate_vertex_positions)
 
     def test_generate_vertex_positions_basic(self):
         """Test basic vertex position generation from DEM."""
-        from src.terrain.mesh_operations import generate_vertex_positions
+        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
         # Simple 3x3 DEM
         dem_data = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
@@ -41,7 +41,7 @@ class TestVertexPositionGeneration:
 
     def test_generate_vertex_positions_with_scaling(self):
         """Test vertex generation with scale factor."""
-        from src.terrain.mesh_operations import generate_vertex_positions
+        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
         dem_data = np.array([[10.0, 20.0], [30.0, 40.0]])
         valid_mask = ~np.isnan(dem_data)
@@ -60,7 +60,7 @@ class TestVertexPositionGeneration:
 
     def test_generate_vertex_positions_handles_nan(self):
         """Test that NaN values are excluded from positions."""
-        from src.terrain.mesh_operations import generate_vertex_positions
+        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
         # DEM with NaN in center
         dem_data = np.array([[1.0, 2.0, 3.0], [4.0, np.nan, 6.0], [7.0, 8.0, 9.0]])
@@ -79,7 +79,7 @@ class TestVertexPositionGeneration:
 
     def test_generate_vertex_positions_returns_xy_indices(self):
         """Test that function also returns x_valid, y_valid indices."""
-        from src.terrain.mesh_operations import generate_vertex_positions
+        from terrain_maker.terrain.mesh_operations import generate_vertex_positions
 
         dem_data = np.array([[1.0, 2.0], [3.0, 4.0]])
         valid_mask = ~np.isnan(dem_data)
@@ -104,13 +104,13 @@ class TestFindBoundaryPoints:
 
     def test_find_boundary_points_imports(self):
         """Test that find_boundary_points can be imported."""
-        from src.terrain.mesh_operations import find_boundary_points
+        from terrain_maker.terrain.mesh_operations import find_boundary_points
 
         assert callable(find_boundary_points)
 
     def test_find_boundary_points_simple_rectangle(self):
         """Test finding boundary of simple filled rectangle."""
-        from src.terrain.mesh_operations import find_boundary_points
+        from terrain_maker.terrain.mesh_operations import find_boundary_points
 
         # 4x4 filled grid - boundary should be perimeter only
         valid_mask = np.ones((4, 4), dtype=bool)
@@ -124,7 +124,7 @@ class TestFindBoundaryPoints:
 
     def test_find_boundary_points_with_hole(self):
         """Test finding boundary with internal hole (should only find outer boundary)."""
-        from src.terrain.mesh_operations import find_boundary_points
+        from terrain_maker.terrain.mesh_operations import find_boundary_points
 
         # 5x5 grid with 3x3 hole in center
         valid_mask = np.ones((5, 5), dtype=bool)
@@ -142,7 +142,7 @@ class TestFindBoundaryPoints:
 
     def test_find_boundary_points_all_false(self):
         """Test that all-False mask returns empty boundary."""
-        from src.terrain.mesh_operations import find_boundary_points
+        from terrain_maker.terrain.mesh_operations import find_boundary_points
 
         valid_mask = np.zeros((5, 5), dtype=bool)
 
@@ -152,7 +152,7 @@ class TestFindBoundaryPoints:
 
     def test_find_boundary_points_returns_tuples(self):
         """Test that boundary points are (y, x) tuples."""
-        from src.terrain.mesh_operations import find_boundary_points
+        from terrain_maker.terrain.mesh_operations import find_boundary_points
 
         valid_mask = np.ones((3, 3), dtype=bool)
 
@@ -169,13 +169,13 @@ class TestFaceGeneration:
 
     def test_generate_faces_imports(self):
         """Test that generate_faces can be imported."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         assert callable(generate_faces)
 
     def test_generate_faces_simple_grid(self):
         """Test face generation for simple 2x2 grid (1 quad)."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         # 2x2 grid has all valid points
         height, width = 2, 2
@@ -194,7 +194,7 @@ class TestFaceGeneration:
 
     def test_generate_faces_3x3_grid(self):
         """Test face generation for 3x3 grid (4 quads)."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         # 3x3 grid, all valid
         height, width = 3, 3
@@ -220,7 +220,7 @@ class TestFaceGeneration:
 
     def test_generate_faces_with_missing_point(self):
         """Test that missing points create triangular faces."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         # 2x2 grid with one missing corner
         height, width = 2, 2
@@ -237,7 +237,7 @@ class TestFaceGeneration:
 
     def test_generate_faces_skips_insufficient_points(self):
         """Test that quads with <3 valid points are skipped."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         # 2x2 grid with only 2 points
         height, width = 2, 2
@@ -251,7 +251,7 @@ class TestFaceGeneration:
 
     def test_generate_faces_returns_tuples(self):
         """Test that faces are returned as tuples of vertex indices."""
-        from src.terrain.mesh_operations import generate_faces
+        from terrain_maker.terrain.mesh_operations import generate_faces
 
         height, width = 2, 2
         coord_to_index = {(0, 0): 0, (0, 1): 1, (1, 0): 2, (1, 1): 3}
@@ -268,13 +268,13 @@ class TestBoundaryExtension:
 
     def test_create_boundary_extension_imports(self):
         """Test that create_boundary_extension can be imported."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         assert callable(create_boundary_extension)
 
     def test_create_boundary_extension_simple_square(self):
         """Test boundary extension for simple square perimeter."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         # Simple 2x2 grid positions
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
@@ -301,7 +301,7 @@ class TestBoundaryExtension:
 
     def test_create_boundary_extension_preserves_xy(self):
         """Test that boundary vertices preserve x,y coordinates."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[2.5, 3.7, 10.0], [5.1, 6.2, 15.0]], dtype=float)
 
@@ -322,7 +322,7 @@ class TestBoundaryExtension:
 
     def test_create_boundary_extension_face_indices(self):
         """Test that side faces correctly reference top and bottom vertices."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 5], [1, 0, 6]], dtype=float)
         boundary_points = [(0, 0), (1, 0)]
@@ -349,13 +349,13 @@ class TestBoundaryPointSorting:
 
     def test_sort_boundary_points_imports(self):
         """Test that sort_boundary_points can be imported from mesh_operations."""
-        from src.terrain.mesh_operations import sort_boundary_points
+        from terrain_maker.terrain.mesh_operations import sort_boundary_points
 
         assert callable(sort_boundary_points)
 
     def test_sort_boundary_points_simple_rectangle(self):
         """Test sorting boundary points of a simple rectangle."""
-        from src.terrain.mesh_operations import sort_boundary_points
+        from terrain_maker.terrain.mesh_operations import sort_boundary_points
 
         # Simple 4x4 rectangle boundary points (perimeter only)
         boundary_coords = [
@@ -398,14 +398,14 @@ class TestBoundaryPointSorting:
 
     def test_sort_boundary_points_empty_list(self):
         """Test that empty boundary list returns empty list."""
-        from src.terrain.mesh_operations import sort_boundary_points
+        from terrain_maker.terrain.mesh_operations import sort_boundary_points
 
         result = sort_boundary_points([])
         assert result == []
 
     def test_sort_boundary_points_single_point(self):
         """Test that single point returns list with that point."""
-        from src.terrain.mesh_operations import sort_boundary_points
+        from terrain_maker.terrain.mesh_operations import sort_boundary_points
 
         result = sort_boundary_points([(5, 7)])
         assert result == [(5, 7)]
@@ -416,7 +416,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_vertex_generation(self):
         """Test that two-tier mode creates mid and base vertices."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -452,7 +452,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_mid_depth_auto_calculation(self):
         """Test that mid_depth auto-calculates as 25% of base_depth."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 5]], dtype=float)
         boundary_points = [(0, 0)]
@@ -476,7 +476,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_face_generation(self):
         """Test that two-tier mode creates upper and lower tier faces."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2]], dtype=float)
         boundary_points = [(0, 0), (1, 0)]
@@ -501,7 +501,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_color_assignment_blend_enabled(self):
         """Test color assignment with blend_edge_colors=True."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2]], dtype=float)
         boundary_points = [(0, 0), (1, 0)]
@@ -530,7 +530,7 @@ class TestTwoTierBoundaryExtension:
         assert boundary_colors[:2].dtype == np.uint8, "Colors should be uint8"
 
         # Base vertices (last 2) should have clay color
-        from src.terrain.materials import BASE_MATERIALS
+        from terrain_maker.terrain.materials import BASE_MATERIALS
 
         clay_rgb = BASE_MATERIALS["clay"]
         expected_clay = (np.array(clay_rgb) * 255).astype(np.uint8)
@@ -539,7 +539,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_color_assignment_blend_disabled(self):
         """Test color assignment with blend_edge_colors=False."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1]], dtype=float)
         boundary_points = [(0, 0)]
@@ -557,7 +557,7 @@ class TestTwoTierBoundaryExtension:
         )
 
         # Both mid and base should use clay color when blending disabled
-        from src.terrain.materials import BASE_MATERIALS
+        from terrain_maker.terrain.materials import BASE_MATERIALS
 
         clay_rgb = BASE_MATERIALS["clay"]
         expected_clay = (np.array(clay_rgb) * 255).astype(np.uint8)
@@ -566,7 +566,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_material_presets(self):
         """Test that material preset names resolve correctly."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1]], dtype=float)
         boundary_points = [(0, 0)]
@@ -590,7 +590,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_material_rgb_tuple(self):
         """Test that custom RGB tuples work."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1]], dtype=float)
         boundary_points = [(0, 0)]
@@ -613,7 +613,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_backwards_compatibility(self):
         """Test that two_tier=False produces same results as before."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2]], dtype=float)
         boundary_points = [(0, 0), (1, 0)]
@@ -632,7 +632,7 @@ class TestTwoTierBoundaryExtension:
 
     def test_two_tier_invalid_material_name_raises(self):
         """Test that invalid material name raises helpful error."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1]], dtype=float)
         boundary_points = [(0, 0)]
@@ -658,13 +658,13 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_imports(self):
         """Test that smooth_boundary_points can be imported."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         assert callable(smooth_boundary_points)
 
     def test_smooth_boundary_points_basic(self):
         """Test basic smoothing of boundary points."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         # Create a simple stair-step boundary (zigzag pattern)
         # This simulates pixel-grid aligned boundary
@@ -697,7 +697,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_closed_loop(self):
         """Test smoothing preserves closed loop property."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         # Create a closed loop (rectangle-ish)
         boundary = [
@@ -719,7 +719,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_no_smoothing(self):
         """Test that window_size=1 returns original points."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         boundary = [(0, 0), (1, 2), (3, 4), (5, 6)]
 
@@ -732,7 +732,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_increasing_strength(self):
         """Test that larger window size produces more smoothing."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         # Create a zigzag pattern
         boundary = [(i, i % 2) for i in range(10)]
@@ -751,7 +751,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_empty_list(self):
         """Test handling of empty boundary list."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         smoothed = smooth_boundary_points([], window_size=3)
 
@@ -759,7 +759,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_single_point(self):
         """Test handling of single point."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         boundary = [(5, 10)]
         smoothed = smooth_boundary_points(boundary, window_size=3)
@@ -769,7 +769,7 @@ class TestBoundarySmoothing:
 
     def test_smooth_boundary_points_two_points(self):
         """Test handling of two points."""
-        from src.terrain.mesh_operations import smooth_boundary_points
+        from terrain_maker.terrain.mesh_operations import smooth_boundary_points
 
         boundary = [(0, 0), (10, 10)]
         smoothed = smooth_boundary_points(boundary, window_size=3)
@@ -785,13 +785,13 @@ class TestCatmullRomCurve:
 
     def test_catmull_rom_curve_imports(self):
         """Test that catmull_rom_curve can be imported."""
-        from src.terrain.mesh_operations import catmull_rom_curve
+        from terrain_maker.terrain.mesh_operations import catmull_rom_curve
 
         assert callable(catmull_rom_curve)
 
     def test_catmull_rom_curve_basic_interpolation(self):
         """Test basic Catmull-Rom curve interpolation."""
-        from src.terrain.mesh_operations import catmull_rom_curve
+        from terrain_maker.terrain.mesh_operations import catmull_rom_curve
 
         # Four control points
         p0 = np.array([0.0, 0.0])
@@ -810,7 +810,7 @@ class TestCatmullRomCurve:
 
     def test_catmull_rom_curve_t_boundaries(self):
         """Test Catmull-Rom curve at t=0 and t=1."""
-        from src.terrain.mesh_operations import catmull_rom_curve
+        from terrain_maker.terrain.mesh_operations import catmull_rom_curve
 
         p0 = np.array([0.0, 0.0])
         p1 = np.array([1.0, 1.0])
@@ -827,13 +827,13 @@ class TestCatmullRomCurve:
 
     def test_fit_catmull_rom_boundary_curve_imports(self):
         """Test that fit_catmull_rom_boundary_curve can be imported."""
-        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+        from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
         assert callable(fit_catmull_rom_boundary_curve)
 
     def test_fit_catmull_rom_boundary_curve_basic(self):
         """Test fitting Catmull-Rom curve through boundary points."""
-        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+        from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
         # Simple staircase boundary
         boundary = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -851,7 +851,7 @@ class TestCatmullRomCurve:
 
     def test_fit_catmull_rom_boundary_curve_smooth_output(self):
         """Test that fitted curve produces smooth output."""
-        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+        from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
         # Staircase pattern (jagged)
         boundary = [
@@ -874,7 +874,7 @@ class TestCatmullRomCurve:
 
     def test_fit_catmull_rom_boundary_curve_closed_loop(self):
         """Test Catmull-Rom curve with closed loop."""
-        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+        from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
         # Rectangle
         boundary = [(0, 0), (2, 0), (2, 2), (0, 2)]
@@ -887,7 +887,7 @@ class TestCatmullRomCurve:
 
     def test_fit_catmull_rom_boundary_curve_open_path(self):
         """Test Catmull-Rom curve with open path."""
-        from src.terrain.mesh_operations import fit_catmull_rom_boundary_curve
+        from terrain_maker.terrain.mesh_operations import fit_catmull_rom_boundary_curve
 
         # Line of points
         boundary = [(0, 0), (1, 1), (2, 0), (3, 1)]
@@ -904,7 +904,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_parameter(self):
         """Test that use_catmull_rom parameter is accepted."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         # Simple 2x2 DEM
         dem = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -927,7 +927,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_increases_vertices(self):
         """Test that Catmull-Rom increases boundary vertex count via interpolation."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array(
             [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
@@ -961,7 +961,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_subdivisions_effect(self):
         """Test that higher subdivisions produce more vertices."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array(
             [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
@@ -994,7 +994,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_backwards_compatible(self):
         """Test that default (use_catmull_rom=False) preserves original behavior."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array(
             [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
@@ -1026,7 +1026,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_two_tier(self):
         """Test Catmull-Rom with two-tier edge mode."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array(
             [[0, 0, 1], [1, 0, 2], [1, 1, 3], [0, 1, 4]], dtype=float
@@ -1059,7 +1059,7 @@ class TestCreateBoundaryExtensionCatmullRom:
 
     def test_create_boundary_extension_catmull_rom_smooth_vertices(self):
         """Test that Catmull-Rom produces smooth vertex transitions."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         # Create staircase boundary pattern
         positions = np.array(
@@ -1106,7 +1106,7 @@ class TestRectangleEdgeBoundary:
 
     def test_generate_rectangle_edge_vertices_imports(self):
         """TDD RED: Test that function can be imported."""
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
 
         assert callable(generate_rectangle_edge_vertices)
 
@@ -1116,7 +1116,7 @@ class TestRectangleEdgeBoundary:
         For a 4x4 DEM with edge_sample_spacing=1, should create boundary vertices
         at all edge pixels sampling at the given spacing.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         # Simple 4x4 DEM
@@ -1158,7 +1158,7 @@ class TestRectangleEdgeBoundary:
         When transforms_list is empty, output coordinates should match
         original_transform applied to pixel coordinates.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         dem_shape = (4, 4)
@@ -1191,7 +1191,7 @@ class TestRectangleEdgeBoundary:
 
         All faces should be quads (4 vertices) connecting consecutive edge vertices.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         dem_shape = (4, 4)
@@ -1224,7 +1224,7 @@ class TestRectangleEdgeBoundary:
 
         With spacing=2, should have approximately half the vertices compared to spacing=1.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         dem_shape = (10, 10)
@@ -1264,7 +1264,7 @@ class TestRectangleEdgeBoundary:
         Surface vertices should have Z values from the DEM at their pixel locations.
         Base vertices should be at base_depth.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         # Create DEM with distinct edge values
@@ -1316,7 +1316,7 @@ class TestRectangleEdgeBoundary:
 
         Should apply only the original_transform, no additional transforms.
         """
-        from src.terrain.mesh_operations import generate_rectangle_edge_vertices
+        from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
         from rasterio import Affine
 
         dem_shape = (3, 3)
@@ -1342,7 +1342,7 @@ class TestRectangleEdgeWithTwoTier:
 
     def test_create_boundary_extension_with_rectangle_edges_parameter(self):
         """TDD RED: create_boundary_extension should accept use_rectangle_edges parameter."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -1362,7 +1362,7 @@ class TestRectangleEdgeWithTwoTier:
 
     def test_rectangle_edges_with_two_tier_mode(self):
         """TDD RED: Rectangle edges should work with two-tier edge extension."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         boundary_points = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -1385,7 +1385,7 @@ class TestRectangleEdgeWithTwoTier:
 
     def test_rectangle_edges_dem_shape_parameter(self):
         """TDD RED: When using rectangle edges, need dem_shape parameter."""
-        from src.terrain.mesh_operations import create_boundary_extension
+        from terrain_maker.terrain.mesh_operations import create_boundary_extension
 
         positions = np.array([[0, 0, 1], [1, 0, 2], [0, 1, 3], [1, 1, 4]], dtype=float)
         # Minimal boundary for 2x2 DEM

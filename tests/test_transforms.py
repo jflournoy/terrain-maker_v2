@@ -13,13 +13,13 @@ class TestDownsampleRaster:
 
     def test_downsample_raster_imports(self):
         """Test that downsample_raster can be imported."""
-        from src.terrain.transforms import downsample_raster
+        from terrain_maker.terrain.transforms import downsample_raster
 
         assert callable(downsample_raster)
 
     def test_downsample_raster_reduces_size(self):
         """Test that downsampling reduces array size."""
-        from src.terrain.transforms import downsample_raster
+        from terrain_maker.terrain.transforms import downsample_raster
 
         # 100x100 array
         data = np.random.rand(100, 100)
@@ -34,7 +34,7 @@ class TestDownsampleRaster:
 
     def test_downsample_raster_preserves_nodata(self):
         """Test that nodata values are preserved."""
-        from src.terrain.transforms import downsample_raster
+        from terrain_maker.terrain.transforms import downsample_raster
 
         data = np.ones((20, 20))
         data[5:10, 5:10] = np.nan
@@ -47,7 +47,7 @@ class TestDownsampleRaster:
 
     def test_downsample_raster_returns_three_tuple(self):
         """Test that function returns (data, transform, crs) tuple."""
-        from src.terrain.transforms import downsample_raster
+        from terrain_maker.terrain.transforms import downsample_raster
 
         data = np.random.rand(10, 10)
         transform_func = downsample_raster(zoom_factor=0.5)
@@ -62,13 +62,13 @@ class TestSmoothRaster:
 
     def test_smooth_raster_imports(self):
         """Test that smooth_raster can be imported."""
-        from src.terrain.transforms import smooth_raster
+        from terrain_maker.terrain.transforms import smooth_raster
 
         assert callable(smooth_raster)
 
     def test_smooth_raster_reduces_noise(self):
         """Test that smoothing reduces high-frequency noise."""
-        from src.terrain.transforms import smooth_raster
+        from terrain_maker.terrain.transforms import smooth_raster
 
         # Create noisy data
         np.random.seed(42)
@@ -82,7 +82,7 @@ class TestSmoothRaster:
 
     def test_smooth_raster_preserves_shape(self):
         """Test that smoothing preserves array shape."""
-        from src.terrain.transforms import smooth_raster
+        from terrain_maker.terrain.transforms import smooth_raster
 
         data = np.random.rand(30, 40)
         transform_func = smooth_raster(window_size=3)
@@ -92,7 +92,7 @@ class TestSmoothRaster:
 
     def test_smooth_raster_handles_nodata(self):
         """Test that nodata values are preserved in core region."""
-        from src.terrain.transforms import smooth_raster
+        from terrain_maker.terrain.transforms import smooth_raster
 
         data = np.ones((20, 20))
         data[5:15, 5:15] = np.nan
@@ -106,7 +106,7 @@ class TestSmoothRaster:
 
     def test_smooth_raster_returns_three_tuple(self):
         """Test that function returns (data, transform, crs) tuple."""
-        from src.terrain.transforms import smooth_raster
+        from terrain_maker.terrain.transforms import smooth_raster
 
         data = np.random.rand(10, 10)
         transform_func = smooth_raster(window_size=3)
@@ -121,13 +121,13 @@ class TestFlipRaster:
 
     def test_flip_raster_imports(self):
         """Test that flip_raster can be imported."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         assert callable(flip_raster)
 
     def test_flip_raster_horizontal(self):
         """Test horizontal (top-bottom) flip."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         # Create array with distinct rows
         data = np.array([[1, 2], [3, 4], [5, 6]])
@@ -141,7 +141,7 @@ class TestFlipRaster:
 
     def test_flip_raster_vertical(self):
         """Test vertical (left-right) flip."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         # Create array with distinct columns
         data = np.array([[1, 2, 3], [4, 5, 6]])
@@ -155,7 +155,7 @@ class TestFlipRaster:
 
     def test_flip_raster_preserves_shape(self):
         """Test that flipping preserves array shape."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         data = np.random.rand(25, 30)
 
@@ -166,7 +166,7 @@ class TestFlipRaster:
 
     def test_flip_raster_invalid_axis_raises(self):
         """Test that invalid axis raises ValueError."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         data = np.array([[1, 2], [3, 4]])
         transform_func = flip_raster(axis="invalid")
@@ -176,7 +176,7 @@ class TestFlipRaster:
 
     def test_flip_raster_returns_three_tuple(self):
         """Test that function returns (data, transform, crs) tuple."""
-        from src.terrain.transforms import flip_raster
+        from terrain_maker.terrain.transforms import flip_raster
 
         data = np.random.rand(10, 10)
         transform_func = flip_raster(axis="horizontal")
@@ -191,13 +191,13 @@ class TestScaleElevation:
 
     def test_scale_elevation_imports(self):
         """Test that scale_elevation can be imported."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         assert callable(scale_elevation)
 
     def test_scale_elevation_multiplies_values(self):
         """Test that scaling multiplies elevation values."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         data = np.array([[1.0, 2.0], [3.0, 4.0]])
 
@@ -209,7 +209,7 @@ class TestScaleElevation:
 
     def test_scale_elevation_handles_nodata(self):
         """Test that nodata values are preserved."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         data = np.array([[1.0, np.nan], [3.0, 4.0]])
 
@@ -224,7 +224,7 @@ class TestScaleElevation:
 
     def test_scale_elevation_preserves_shape(self):
         """Test that scaling preserves array shape."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         data = np.random.rand(20, 30)
         transform_func = scale_elevation(scale_factor=1.5)
@@ -234,7 +234,7 @@ class TestScaleElevation:
 
     def test_scale_elevation_with_factor_one(self):
         """Test that scale factor of 1.0 leaves data unchanged."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         data = np.random.rand(10, 10)
         transform_func = scale_elevation(scale_factor=1.0)
@@ -244,7 +244,7 @@ class TestScaleElevation:
 
     def test_scale_elevation_returns_three_tuple(self):
         """Test that function returns (data, transform, crs) tuple."""
-        from src.terrain.transforms import scale_elevation
+        from terrain_maker.terrain.transforms import scale_elevation
 
         data = np.random.rand(10, 10)
         transform_func = scale_elevation(scale_factor=2.0)
@@ -259,13 +259,13 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_imports(self):
         """Test that feature_preserving_smooth can be imported."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         assert callable(feature_preserving_smooth)
 
     def test_feature_preserving_smooth_returns_three_tuple(self):
         """Test that function returns (data, transform, crs) tuple."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         data = np.random.rand(20, 20)
         transform_func = feature_preserving_smooth(sigma_spatial=2.0)
@@ -276,7 +276,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_preserves_shape(self):
         """Test that smoothing preserves array shape."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         data = np.random.rand(30, 40)
         transform_func = feature_preserving_smooth(sigma_spatial=2.0)
@@ -286,7 +286,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_reduces_noise(self):
         """Test that smoothing reduces high-frequency noise in flat areas."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         # Create flat terrain with noise
         np.random.seed(42)
@@ -301,7 +301,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_preserves_edges(self):
         """Test that sharp elevation changes (edges) are preserved."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         # Create terrain with sharp ridge (cliff)
         terrain = np.zeros((100, 100))
@@ -321,7 +321,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_handles_nodata(self):
         """Test that nodata values are preserved."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         data = np.ones((30, 30)) * 50
         data[10:20, 10:20] = np.nan  # NaN region
@@ -334,7 +334,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_auto_intensity_sigma(self):
         """Test that intensity sigma is auto-calculated when None."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
 
         # Create terrain with known elevation range
         data = np.linspace(0, 100, 400).reshape(20, 20)
@@ -349,7 +349,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_with_transform(self):
         """Test that affine transform is passed through unchanged."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
         from rasterio import Affine
 
         data = np.random.rand(20, 20)
@@ -363,7 +363,7 @@ class TestFeaturePreservingSmooth:
 
     def test_feature_preserving_smooth_large_sigma_capped(self):
         """Test that excessively large sigma values are capped to prevent memory issues."""
-        from src.terrain.transforms import feature_preserving_smooth
+        from terrain_maker.terrain.transforms import feature_preserving_smooth
         import logging
 
         data = np.random.rand(30, 30)
@@ -389,13 +389,13 @@ class TestSmoothScoreData:
 
     def test_smooth_score_data_imports(self):
         """Test that smooth_score_data can be imported."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         assert callable(smooth_score_data)
 
     def test_smooth_score_data_returns_array(self):
         """Test that smooth_score_data returns a numpy array."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Simple score grid (0-1 range)
         scores = np.array([
@@ -412,7 +412,7 @@ class TestSmoothScoreData:
 
     def test_smooth_score_data_preserves_range(self):
         """Test that smoothed scores stay in 0-1 range."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         scores = np.random.rand(50, 50).astype(np.float32)
 
@@ -427,7 +427,7 @@ class TestSmoothScoreData:
         Simulates the blocky appearance of upsampled low-res SNODAS data.
         After smoothing, the variance in gradient magnitude should decrease.
         """
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Create blocky score pattern (simulating upsampled low-res data)
         scores = np.zeros((40, 40), dtype=np.float32)
@@ -456,7 +456,7 @@ class TestSmoothScoreData:
         High scores should stay high, low scores should stay low.
         Only the transitions should be softened.
         """
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Create distinct regions
         scores = np.zeros((40, 40), dtype=np.float32)
@@ -472,7 +472,7 @@ class TestSmoothScoreData:
 
     def test_smooth_score_data_handles_nan(self):
         """Test that NaN values are preserved."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         scores = np.random.rand(20, 20).astype(np.float32)
         scores[8:12, 8:12] = np.nan  # NaN region in center
@@ -486,7 +486,7 @@ class TestSmoothScoreData:
 
     def test_smooth_score_data_sigma_spatial_effect(self):
         """Test that larger sigma_spatial produces more smoothing."""
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Blocky pattern
         scores = np.zeros((30, 30), dtype=np.float32)
@@ -510,7 +510,7 @@ class TestSmoothScoreData:
         set to a reasonable fraction of the range. The default behavior is
         edge-preserving: sharp 0→1 transitions are maintained (by design).
         """
-        from src.terrain.transforms import smooth_score_data
+        from terrain_maker.terrain.transforms import smooth_score_data
 
         # Create scores with small variations (like upsampled SNODAS blocks)
         # Adjacent blocks have similar but not identical values
@@ -546,13 +546,13 @@ class TestDespeckleScores:
 
     def test_despeckle_scores_imports(self):
         """Test that despeckle_scores can be imported."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         assert callable(despeckle_scores)
 
     def test_despeckle_scores_returns_array(self):
         """Test that despeckle_scores returns numpy array."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         scores = np.random.rand(50, 50).astype(np.float32)
         result = despeckle_scores(scores)
@@ -567,7 +567,7 @@ class TestDespeckleScores:
         surrounded by high scores should be replaced with the median
         (which will be high).
         """
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         # Create high-score region with isolated low speckles
         scores = np.full((20, 20), 0.8, dtype=np.float32)
@@ -585,7 +585,7 @@ class TestDespeckleScores:
 
     def test_despeckle_scores_removes_isolated_high_speckles(self):
         """Test that isolated high scores in low regions are removed."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         # Create low-score region with isolated high speckles
         scores = np.full((20, 20), 0.2, dtype=np.float32)
@@ -602,7 +602,7 @@ class TestDespeckleScores:
         A 5x5 block of low scores should NOT be removed, even with
         a 3x3 kernel, because most pixels have same-value neighbors.
         """
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         scores = np.full((30, 30), 0.8, dtype=np.float32)
         # Add a large low-score region (5x5 block)
@@ -616,7 +616,7 @@ class TestDespeckleScores:
 
     def test_despeckle_scores_kernel_size_effect(self):
         """Test that larger kernel removes larger speckle clusters."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         # Create high region with 3x3 speckle cluster
         # A 3x3 kernel will preserve 3x3 clusters (center has 8 neighbors same value)
@@ -639,7 +639,7 @@ class TestDespeckleScores:
 
     def test_despeckle_scores_handles_nan(self):
         """Test that NaN values are preserved."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         scores = np.random.rand(20, 20).astype(np.float32)
         scores[5:8, 5:8] = np.nan
@@ -653,7 +653,7 @@ class TestDespeckleScores:
 
     def test_despeckle_scores_preserves_range(self):
         """Test that output stays in valid score range [0, 1]."""
-        from src.terrain.transforms import despeckle_scores
+        from terrain_maker.terrain.transforms import despeckle_scores
 
         scores = np.random.rand(50, 50).astype(np.float32)
         despeckled = despeckle_scores(scores)
@@ -671,13 +671,13 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_slope_adaptive_smooth_imports(self):
         """Test that slope_adaptive_smooth can be imported."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
 
         assert callable(slope_adaptive_smooth)
 
     def test_slope_of_flat_terrain_is_zero(self):
         """Flat terrain should have ~0 degree slope."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Flat plane at 100m elevation
@@ -694,7 +694,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_slope_of_known_gradient_plane(self):
         """A plane tilted at 45° should have 45° slope."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create 45° slope: rise = run = pixel_size
@@ -721,7 +721,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_slope_of_5_degree_gradient(self):
         """A plane tilted at 5° should have ~5° slope."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # For 5° slope: tan(5°) ≈ 0.0875
@@ -753,7 +753,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_slope_of_1_degree_gradient_gets_smoothed(self):
         """A 1° slope should be mostly smoothed (below 2° threshold)."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # For 1° slope: tan(1°) ≈ 0.01745
@@ -793,7 +793,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_pixel_size_affects_slope_calculation(self):
         """Different pixel sizes should give different slope calculations."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Same elevation gradient: 30m rise per pixel + NOISE
@@ -838,7 +838,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_no_affine_assumes_1m_pixels_with_warning(self):
         """Without affine, should assume 1m pixels and warn."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         import warnings
 
         size = 30
@@ -862,7 +862,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
         This test documents the bug: if affine has degree-based pixel size,
         slopes will be computed incorrectly (division by tiny number = huge slopes).
         """
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         size = 30
@@ -889,7 +889,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_elevation_scale_compensation(self):
         """elevation_scale parameter should compensate for prior scale_elevation."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create a 5° slope DEM
@@ -940,7 +940,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
         mixing values across the boundary. Edge preservation reduces smoothing weight
         in those near-edge flat areas, keeping them closer to original values.
         """
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create terrain with a sharp lake edge: flat land at 100m, lake at 80m
@@ -1016,7 +1016,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_strength_parameter_scales_smoothing_effect(self):
         """strength parameter should scale the maximum smoothing effect."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create flat terrain with noise
@@ -1057,7 +1057,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_strength_zero_has_no_effect(self):
         """strength=0 should result in no change to the DEM."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create flat terrain with noise
@@ -1076,7 +1076,7 @@ class TestSlopeAdaptiveSmoothSlopeComputation:
 
     def test_strength_in_transform_name(self):
         """strength should appear in transform name when not 1.0."""
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
 
         # Default strength - not in name
         transform_default = slope_adaptive_smooth(strength=1.0)
@@ -1221,7 +1221,7 @@ class TestDiagnosticsSlopeComputation:
     def test_diagnostics_slope_matches_transform_slope(self):
         """Diagnostic plot should compute same slope as the transform."""
         from scipy import ndimage
-        from src.terrain.transforms import slope_adaptive_smooth
+        from terrain_maker.terrain.transforms import slope_adaptive_smooth
         from rasterio import Affine
 
         # Create a 5° slope
@@ -1385,7 +1385,7 @@ class TestReprojectAutoThreads:
         return data, transform
 
     def test_cached_reproject_default_threads(self, tmp_path):
-        from src.terrain.transforms import cached_reproject
+        from terrain_maker.terrain.transforms import cached_reproject
 
         data, transform = self._wgs84_grid()
         reproject_fn = cached_reproject(cache_dir=str(tmp_path))
@@ -1396,7 +1396,7 @@ class TestReprojectAutoThreads:
         assert np.isfinite(out).any()
 
     def test_reproject_raster_zero_threads(self):
-        from src.terrain.transforms import reproject_raster
+        from terrain_maker.terrain.transforms import reproject_raster
 
         data, transform = self._wgs84_grid()
         out, _, _ = reproject_raster(num_threads=0)(data, transform)

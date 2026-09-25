@@ -43,9 +43,9 @@ Each stage produces a visual artifact:
 
 ```python
 from pathlib import Path
-from src.terrain.io import load_dem_files
-from src.terrain.core import Terrain
-from src.snow.analysis import SnowAnalysis
+from terrain_maker.terrain.io import load_dem_files
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.snow.analysis import SnowAnalysis
 
 # 1. Load elevation data
 dem_dir = Path("data/dem/detroit")
@@ -304,7 +304,7 @@ The improved sledding score uses a fundamentally different approach than weighte
 # The score uses trapezoid functions, deal breakers, and synergies
 sledding_score = snow.calculate_sledding_score()
 
-# Key scoring parameters (defined in src/terrain/scoring.py):
+# Key scoring parameters (defined in src/terrain_maker/terrain/scoring.py):
 # - Snow range: 1-20 inches (optimal 2-12")
 # - Slope range: 1-20 degrees (optimal 6-12°)
 # - Deal breaker thresholds: slope >35°, variability >5°, coverage <0.5mo

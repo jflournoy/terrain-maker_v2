@@ -65,7 +65,7 @@ class TestDischargeCalculation:
 
     def test_compute_discharge_potential_returns_array(self):
         """compute_discharge_potential should return numpy array."""
-        from src.terrain.flow_accumulation import compute_discharge_potential
+        from terrain_maker.terrain.flow_accumulation import compute_discharge_potential
 
         drainage_area = np.array([[1, 2, 4], [2, 8, 16], [4, 16, 64]], dtype=np.float32)
         upstream_rainfall = np.array([[100, 200, 400], [200, 800, 1600], [400, 1600, 6400]], dtype=np.float32)
@@ -77,7 +77,7 @@ class TestDischargeCalculation:
 
     def test_compute_discharge_potential_formula(self):
         """Discharge potential = drainage_area × (upstream_rainfall / mean_rainfall)."""
-        from src.terrain.flow_accumulation import compute_discharge_potential
+        from terrain_maker.terrain.flow_accumulation import compute_discharge_potential
 
         drainage_area = np.array([[1, 2], [4, 8]], dtype=np.float32)
         upstream_rainfall = np.array([[100, 200], [400, 800]], dtype=np.float32)
@@ -94,7 +94,7 @@ class TestDischargeCalculation:
 
     def test_compute_discharge_potential_handles_zeros(self):
         """Should handle zero rainfall cells without division errors."""
-        from src.terrain.flow_accumulation import compute_discharge_potential
+        from terrain_maker.terrain.flow_accumulation import compute_discharge_potential
 
         drainage_area = np.array([[1, 2], [4, 8]], dtype=np.float32)
         upstream_rainfall = np.array([[0, 200], [400, 0]], dtype=np.float32)
@@ -249,14 +249,14 @@ class TestFlowAccumulationModule:
 
     def test_module_exports_compute_discharge_potential(self):
         """flow_accumulation module should export compute_discharge_potential."""
-        from src.terrain import flow_accumulation
+        from terrain_maker.terrain import flow_accumulation
 
         assert hasattr(flow_accumulation, 'compute_discharge_potential'), \
             "flow_accumulation module should export compute_discharge_potential"
 
     def test_compute_discharge_potential_signature(self):
         """compute_discharge_potential should accept drainage_area and upstream_rainfall."""
-        from src.terrain.flow_accumulation import compute_discharge_potential
+        from terrain_maker.terrain.flow_accumulation import compute_discharge_potential
         import inspect
 
         sig = inspect.signature(compute_discharge_potential)
@@ -297,7 +297,7 @@ class TestIntegration:
 
     def test_discharge_potential_computation_end_to_end(self, sample_dem, sample_precip):
         """Full computation of discharge potential from DEM and precipitation."""
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
             compute_upstream_rainfall,
@@ -323,7 +323,7 @@ class TestIntegration:
 
     def test_discharge_correlates_with_drainage(self, sample_dem, sample_precip):
         """Discharge potential should correlate with drainage area."""
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
             compute_upstream_rainfall,

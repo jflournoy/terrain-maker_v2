@@ -11,7 +11,7 @@ import importlib.util
 
 import numpy as np
 import pytest
-from src.terrain.transforms import downsample_raster, downsample_raster_optimized
+from terrain_maker.terrain.transforms import downsample_raster, downsample_raster_optimized
 
 
 class TestTwoPassDownsampling:

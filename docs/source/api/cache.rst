@@ -11,7 +11,7 @@ All caches use hash-based validation to automatically invalidate when source dat
 DEMCache
 --------
 
-.. autoclass:: src.terrain.cache.DEMCache
+.. autoclass:: terrain_maker.terrain.cache.DEMCache
    :members:
    :undoc-members:
 
@@ -31,7 +31,7 @@ DEMCache
 
    Example::
 
-       from src.terrain.cache import DEMCache
+       from terrain_maker.terrain.cache import DEMCache
 
        cache = DEMCache(cache_dir='.dem_cache', enabled=True)
 
@@ -45,7 +45,7 @@ DEMCache
 TransformCache
 --------------
 
-.. autoclass:: src.terrain.cache.TransformCache
+.. autoclass:: terrain_maker.terrain.cache.TransformCache
    :members:
    :undoc-members:
 
@@ -65,7 +65,7 @@ TransformCache
 
    Example::
 
-       from src.terrain.cache import TransformCache
+       from terrain_maker.terrain.cache import TransformCache
 
        cache = TransformCache(cache_dir='.transform_cache')
 
@@ -81,7 +81,7 @@ TransformCache
 PipelineCache
 -------------
 
-.. autoclass:: src.terrain.cache.PipelineCache
+.. autoclass:: terrain_maker.terrain.cache.PipelineCache
    :members:
    :undoc-members:
 
@@ -104,7 +104,7 @@ PipelineCache
 
    Example::
 
-       from src.terrain.cache import PipelineCache
+       from terrain_maker.terrain.cache import PipelineCache
 
        cache = PipelineCache(cache_dir='.pipeline_cache')
 

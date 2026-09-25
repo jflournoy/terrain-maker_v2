@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     compute_upstream_rainfall,

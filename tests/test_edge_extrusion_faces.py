@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from rasterio.transform import Affine
 
-from terrain.mesh_operations import generate_rectangle_edge_vertices
+from terrain_maker.terrain.mesh_operations import generate_rectangle_edge_vertices
 
 
 class TestEdgeExtrusionFaces:

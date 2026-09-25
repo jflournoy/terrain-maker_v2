@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, str(project_root))
 
-from src.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.water import identify_water_by_slope
 
 
 class TestWaterDetection(unittest.TestCase):
@@ -223,7 +223,7 @@ class TestWaterIntegrationWithTerrain(unittest.TestCase):
 
     def test_terrain_create_mesh_accepts_water_detection(self):
         """Test that Terrain.create_mesh works with water detection."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         # Create simple test terrain
         dem = np.array(

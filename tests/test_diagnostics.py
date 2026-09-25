@@ -17,13 +17,13 @@ class TestGenerateRGBHistogram:
 
     def test_generate_rgb_histogram_imports(self):
         """Test that generate_rgb_histogram can be imported."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
 
         assert callable(generate_rgb_histogram)
 
     def test_generate_rgb_histogram_creates_output_file(self, tmp_path):
         """Test that generate_rgb_histogram creates an output file."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
 
         # Create a test image
@@ -40,7 +40,7 @@ class TestGenerateRGBHistogram:
 
     def test_generate_rgb_histogram_with_rgba_image(self, tmp_path):
         """Test that generate_rgb_histogram handles RGBA images."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
 
         # Create a test RGBA image
@@ -57,7 +57,7 @@ class TestGenerateRGBHistogram:
 
     def test_generate_rgb_histogram_with_grayscale_returns_none(self, tmp_path):
         """Test that generate_rgb_histogram returns None for grayscale images."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
 
         # Create a grayscale image
@@ -73,7 +73,7 @@ class TestGenerateRGBHistogram:
 
     def test_generate_rgb_histogram_with_missing_file_returns_none(self, tmp_path):
         """Test that generate_rgb_histogram returns None for missing files."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
 
         input_path = tmp_path / "nonexistent.png"
         output_path = tmp_path / "histogram.png"
@@ -87,7 +87,7 @@ class TestGenerateRGBHistogram:
         Note: Unlike other diagnostic functions, generate_rgb_histogram does not
         create parent directories automatically. It returns None if the path is invalid.
         """
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
 
         # Create a test image
@@ -109,13 +109,13 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_imports(self):
         """Test that generate_luminance_histogram can be imported."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
 
         assert callable(generate_luminance_histogram)
 
     def test_generate_luminance_histogram_creates_output_file(self, tmp_path):
         """Test that generate_luminance_histogram creates an output file."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create a test image
@@ -132,7 +132,7 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_with_grayscale(self, tmp_path):
         """Test that generate_luminance_histogram handles grayscale images."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create a grayscale image
@@ -149,7 +149,7 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_with_rgba(self, tmp_path):
         """Test that generate_luminance_histogram handles RGBA images."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create a test RGBA image
@@ -166,7 +166,7 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_with_missing_file_returns_none(self, tmp_path):
         """Test that generate_luminance_histogram returns None for missing files."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
 
         input_path = tmp_path / "nonexistent.png"
         output_path = tmp_path / "luminance.png"
@@ -176,7 +176,7 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_with_pure_black_image(self, tmp_path):
         """Test luminance histogram with pure black image."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create pure black image
@@ -193,7 +193,7 @@ class TestGenerateLuminanceHistogram:
 
     def test_generate_luminance_histogram_with_pure_white_image(self, tmp_path):
         """Test luminance histogram with pure white image."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create pure white image
@@ -214,13 +214,13 @@ class TestPlotWaveletDiagnostics:
 
     def test_plot_wavelet_diagnostics_imports(self):
         """Test that plot_wavelet_diagnostics can be imported."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         assert callable(plot_wavelet_diagnostics)
 
     def test_plot_wavelet_diagnostics_creates_file(self, tmp_path):
         """Test that plot_wavelet_diagnostics creates an output file."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         # Create simple test data
         original = np.random.rand(50, 50) * 100 + 200
@@ -234,7 +234,7 @@ class TestPlotWaveletDiagnostics:
 
     def test_plot_wavelet_diagnostics_with_nan_nodata(self, tmp_path):
         """Test plot_wavelet_diagnostics handles NaN nodata values."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         # Create data with NaN values
         original = np.random.rand(50, 50) * 100 + 200
@@ -251,7 +251,7 @@ class TestPlotWaveletDiagnostics:
 
     def test_plot_wavelet_diagnostics_custom_profile_row(self, tmp_path):
         """Test plot_wavelet_diagnostics with custom profile row."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         original = np.random.rand(50, 50) * 100 + 200
         denoised = original + np.random.randn(50, 50) * 0.1
@@ -270,13 +270,13 @@ class TestPlotProcessingPipeline:
 
     def test_plot_processing_pipeline_imports(self):
         """Test that plot_processing_pipeline can be imported."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         assert callable(plot_processing_pipeline)
 
     def test_plot_processing_pipeline_creates_file(self, tmp_path):
         """Test that plot_processing_pipeline creates an output file."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         # Create test stages
         stages = {
@@ -293,7 +293,7 @@ class TestPlotProcessingPipeline:
 
     def test_plot_processing_pipeline_with_empty_stages_returns_none(self, tmp_path):
         """Test that empty stages dict returns None."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         output_path = tmp_path / "pipeline.png"
         result = plot_processing_pipeline({}, output_path)
@@ -302,7 +302,7 @@ class TestPlotProcessingPipeline:
 
     def test_plot_processing_pipeline_with_single_stage(self, tmp_path):
         """Test plot_processing_pipeline with single stage."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         stages = {"Only Stage": np.random.rand(50, 50) * 100 + 200}
 
@@ -314,7 +314,7 @@ class TestPlotProcessingPipeline:
 
     def test_plot_processing_pipeline_with_many_stages(self, tmp_path):
         """Test plot_processing_pipeline with many stages."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         # Create 6 stages (2 rows x 3 cols)
         stages = {
@@ -334,13 +334,13 @@ class TestPlotBumpRemovalDiagnostics:
 
     def test_plot_bump_removal_diagnostics_imports(self):
         """Test that plot_bump_removal_diagnostics can be imported."""
-        from src.terrain.diagnostics import plot_bump_removal_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_bump_removal_diagnostics
 
         assert callable(plot_bump_removal_diagnostics)
 
     def test_plot_bump_removal_diagnostics_creates_file(self, tmp_path):
         """Test that plot_bump_removal_diagnostics creates an output file."""
-        from src.terrain.diagnostics import plot_bump_removal_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_bump_removal_diagnostics
 
         # Create test data with bumps
         original = np.ones((50, 50)) * 100
@@ -357,7 +357,7 @@ class TestPlotBumpRemovalDiagnostics:
 
     def test_plot_bump_removal_diagnostics_with_no_bumps(self, tmp_path):
         """Test bump removal diagnostics when no bumps exist."""
-        from src.terrain.diagnostics import plot_bump_removal_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_bump_removal_diagnostics
 
         # Identical arrays - no bumps removed
         original = np.ones((50, 50)) * 100
@@ -375,13 +375,13 @@ class TestGenerateBumpRemovalDiagnostics:
 
     def test_generate_bump_removal_diagnostics_imports(self):
         """Test that generate_bump_removal_diagnostics can be imported."""
-        from src.terrain.diagnostics import generate_bump_removal_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_bump_removal_diagnostics
 
         assert callable(generate_bump_removal_diagnostics)
 
     def test_generate_bump_removal_diagnostics_creates_file(self, tmp_path):
         """Test that generate_bump_removal_diagnostics creates an output file."""
-        from src.terrain.diagnostics import generate_bump_removal_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_bump_removal_diagnostics
 
         original = np.random.rand(50, 50) * 100 + 200
         after_removal = original - np.random.rand(50, 50) * 0.5
@@ -399,13 +399,13 @@ class TestPlotUpscaleDiagnostics:
 
     def test_plot_upscale_diagnostics_imports(self):
         """Test that plot_upscale_diagnostics can be imported."""
-        from src.terrain.diagnostics import plot_upscale_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_upscale_diagnostics
 
         assert callable(plot_upscale_diagnostics)
 
     def test_plot_upscale_diagnostics_creates_file(self, tmp_path):
         """Test that plot_upscale_diagnostics creates an output file."""
-        from src.terrain.diagnostics import plot_upscale_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_upscale_diagnostics
 
         # Create test data at different scales
         original = np.random.rand(25, 25)
@@ -421,7 +421,7 @@ class TestPlotUpscaleDiagnostics:
 
     def test_plot_upscale_diagnostics_with_nan_values(self, tmp_path):
         """Test upscale diagnostics handles NaN values."""
-        from src.terrain.diagnostics import plot_upscale_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_upscale_diagnostics
 
         original = np.random.rand(25, 25)
         original[5:10, 5:10] = np.nan
@@ -442,13 +442,13 @@ class TestGenerateUpscaleDiagnostics:
 
     def test_generate_upscale_diagnostics_imports(self):
         """Test that generate_upscale_diagnostics can be imported."""
-        from src.terrain.diagnostics import generate_upscale_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_upscale_diagnostics
 
         assert callable(generate_upscale_diagnostics)
 
     def test_generate_upscale_diagnostics_creates_file(self, tmp_path):
         """Test that generate_upscale_diagnostics creates an output file."""
-        from src.terrain.diagnostics import generate_upscale_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_upscale_diagnostics
 
         original = np.random.rand(20, 20)
         upscaled = np.random.rand(80, 80)
@@ -466,13 +466,13 @@ class TestPlotAdaptiveSmoothDiagnostics:
 
     def test_plot_adaptive_smooth_diagnostics_imports(self):
         """Test that plot_adaptive_smooth_diagnostics can be imported."""
-        from src.terrain.diagnostics import plot_adaptive_smooth_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_diagnostics
 
         assert callable(plot_adaptive_smooth_diagnostics)
 
     def test_plot_adaptive_smooth_diagnostics_creates_file(self, tmp_path):
         """Test that plot_adaptive_smooth_diagnostics creates an output file."""
-        from src.terrain.diagnostics import plot_adaptive_smooth_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_diagnostics
 
         # Create test DEM data
         np.random.seed(42)
@@ -489,7 +489,7 @@ class TestPlotAdaptiveSmoothDiagnostics:
 
     def test_plot_adaptive_smooth_diagnostics_with_edge_threshold(self, tmp_path):
         """Test adaptive smooth diagnostics with edge threshold."""
-        from src.terrain.diagnostics import plot_adaptive_smooth_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_diagnostics
 
         np.random.seed(42)
         original = np.random.rand(50, 50) * 100 + 200
@@ -512,13 +512,13 @@ class TestPlotAdaptiveSmoothHistogram:
 
     def test_plot_adaptive_smooth_histogram_imports(self):
         """Test that plot_adaptive_smooth_histogram can be imported."""
-        from src.terrain.diagnostics import plot_adaptive_smooth_histogram
+        from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_histogram
 
         assert callable(plot_adaptive_smooth_histogram)
 
     def test_plot_adaptive_smooth_histogram_creates_file(self, tmp_path):
         """Test that plot_adaptive_smooth_histogram creates an output file."""
-        from src.terrain.diagnostics import plot_adaptive_smooth_histogram
+        from terrain_maker.terrain.diagnostics import plot_adaptive_smooth_histogram
 
         np.random.seed(42)
         original = np.random.rand(50, 50) * 100 + 200
@@ -538,13 +538,13 @@ class TestGenerateFullAdaptiveSmoothDiagnostics:
 
     def test_generate_full_adaptive_smooth_diagnostics_imports(self):
         """Test that generate_full_adaptive_smooth_diagnostics can be imported."""
-        from src.terrain.diagnostics import generate_full_adaptive_smooth_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_full_adaptive_smooth_diagnostics
 
         assert callable(generate_full_adaptive_smooth_diagnostics)
 
     def test_generate_full_adaptive_smooth_diagnostics_creates_files(self, tmp_path):
         """Test that generate_full_adaptive_smooth_diagnostics creates both output files."""
-        from src.terrain.diagnostics import generate_full_adaptive_smooth_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_full_adaptive_smooth_diagnostics
 
         np.random.seed(42)
         original = np.random.rand(50, 50) * 100 + 200
@@ -565,13 +565,13 @@ class TestPlotWaveletCoefficients:
 
     def test_plot_wavelet_coefficients_imports(self):
         """Test that plot_wavelet_coefficients can be imported."""
-        from src.terrain.diagnostics import plot_wavelet_coefficients
+        from terrain_maker.terrain.diagnostics import plot_wavelet_coefficients
 
         assert callable(plot_wavelet_coefficients)
 
     def test_plot_wavelet_coefficients_creates_file(self, tmp_path):
         """Test that plot_wavelet_coefficients creates an output file when pywt is available."""
-        from src.terrain.diagnostics import plot_wavelet_coefficients
+        from terrain_maker.terrain.diagnostics import plot_wavelet_coefficients
 
         try:
             import pywt
@@ -588,7 +588,7 @@ class TestPlotWaveletCoefficients:
 
     def test_plot_wavelet_coefficients_with_nan_values(self, tmp_path):
         """Test wavelet coefficients plot handles NaN values."""
-        from src.terrain.diagnostics import plot_wavelet_coefficients
+        from terrain_maker.terrain.diagnostics import plot_wavelet_coefficients
 
         try:
             import pywt
@@ -610,13 +610,13 @@ class TestGenerateFullWaveletDiagnostics:
 
     def test_generate_full_wavelet_diagnostics_imports(self):
         """Test that generate_full_wavelet_diagnostics can be imported."""
-        from src.terrain.diagnostics import generate_full_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_full_wavelet_diagnostics
 
         assert callable(generate_full_wavelet_diagnostics)
 
     def test_generate_full_wavelet_diagnostics_creates_files(self, tmp_path):
         """Test that generate_full_wavelet_diagnostics creates both output files."""
-        from src.terrain.diagnostics import generate_full_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import generate_full_wavelet_diagnostics
 
         try:
             import pywt
@@ -641,7 +641,7 @@ class TestHistogramLogScale:
 
     def test_rgb_histogram_uses_log_scale_yaxis(self, tmp_path, monkeypatch):
         """Test that RGB histogram uses log scale on Y-axis."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
         import matplotlib.pyplot as plt
 
@@ -671,7 +671,7 @@ class TestHistogramLogScale:
 
     def test_luminance_histogram_uses_log_scale_yaxis(self, tmp_path, monkeypatch):
         """Test that luminance histogram uses log scale on Y-axis."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
         import matplotlib.pyplot as plt
 
@@ -701,7 +701,7 @@ class TestHistogramLogScale:
 
     def test_rgb_histogram_handles_zero_counts_gracefully(self, tmp_path):
         """Test that RGB histogram handles bins with zero counts (log(0) issue)."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
 
         # Create image with only a few distinct values - many bins will have 0 counts
@@ -722,7 +722,7 @@ class TestHistogramLogScale:
 
     def test_luminance_histogram_handles_zero_counts_gracefully(self, tmp_path):
         """Test that luminance histogram handles bins with zero counts."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Create image with single luminance value - most bins will have 0 counts
@@ -740,7 +740,7 @@ class TestHistogramLogScale:
 
     def test_rgb_histogram_ylabel_indicates_log_scale(self, tmp_path, monkeypatch):
         """Test that RGB histogram Y-axis label indicates log scale."""
-        from src.terrain.diagnostics import generate_rgb_histogram
+        from terrain_maker.terrain.diagnostics import generate_rgb_histogram
         from PIL import Image
         import matplotlib.pyplot as plt
 
@@ -769,7 +769,7 @@ class TestHistogramLogScale:
 
     def test_luminance_histogram_ylabel_indicates_log_scale(self, tmp_path, monkeypatch):
         """Test that luminance histogram Y-axis label indicates log scale."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
         import matplotlib.pyplot as plt
 
@@ -802,7 +802,7 @@ class TestHistogramLuminanceCalculation:
 
     def test_luminance_calculation_pure_red(self, tmp_path):
         """Test luminance calculation for pure red image."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Pure red: R=255, G=0, B=0
@@ -822,7 +822,7 @@ class TestHistogramLuminanceCalculation:
 
     def test_luminance_calculation_pure_green(self, tmp_path):
         """Test luminance calculation for pure green image."""
-        from src.terrain.diagnostics import generate_luminance_histogram
+        from terrain_maker.terrain.diagnostics import generate_luminance_histogram
         from PIL import Image
 
         # Pure green: R=0, G=255, B=0
@@ -846,7 +846,7 @@ class TestDiagnosticsEdgeCases:
 
     def test_very_small_arrays(self, tmp_path):
         """Test diagnostics with very small arrays."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         # 5x5 array - minimal size
         original = np.random.rand(5, 5) * 100 + 200
@@ -860,7 +860,7 @@ class TestDiagnosticsEdgeCases:
 
     def test_rectangular_arrays(self, tmp_path):
         """Test diagnostics with non-square arrays."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         stages = {
             "Stage 1": np.random.rand(30, 100) * 100 + 200,
@@ -875,7 +875,7 @@ class TestDiagnosticsEdgeCases:
 
     def test_large_value_ranges(self, tmp_path):
         """Test diagnostics with large elevation ranges."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         # Large elevation range: 0 to 10000m
         original = np.random.rand(50, 50) * 10000
@@ -889,7 +889,7 @@ class TestDiagnosticsEdgeCases:
 
     def test_uniform_arrays(self, tmp_path):
         """Test diagnostics with uniform (constant) arrays."""
-        from src.terrain.diagnostics import plot_wavelet_diagnostics
+        from terrain_maker.terrain.diagnostics import plot_wavelet_diagnostics
 
         # Uniform values - no variation
         original = np.ones((50, 50)) * 100
@@ -903,7 +903,7 @@ class TestDiagnosticsEdgeCases:
 
     def test_all_nan_arrays(self, tmp_path):
         """Test handling of all-NaN arrays."""
-        from src.terrain.diagnostics import plot_processing_pipeline
+        from terrain_maker.terrain.diagnostics import plot_processing_pipeline
 
         stages = {
             "All NaN": np.full((50, 50), np.nan),

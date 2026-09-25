@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from rasterio import Affine
 
-from src.terrain import flow_accumulation, flow_pipeline
+from terrain_maker.terrain import flow_accumulation, flow_pipeline
 
 SHAPE = (60, 60)
 TRANSFORM = Affine(0.001, 0, -117.0, 0, -0.001, 33.0)

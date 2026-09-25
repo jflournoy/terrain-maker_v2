@@ -51,14 +51,14 @@ class TestPositionCameraRelative:
     # === Function Existence ===
     def test_function_exists(self):
         """Function should be importable from core module."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         assert callable(position_camera_relative)
 
     # === Position Tests ===
     def test_direction_above_positions_on_z_axis(self, mock_mesh):
         """Camera 'above' should be directly over mesh center on Z axis."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above")
         center = get_mesh_center(mock_mesh)
@@ -68,7 +68,7 @@ class TestPositionCameraRelative:
 
     def test_direction_south_positions_negative_y(self, mock_mesh):
         """Camera 'south' should be at -Y from mesh center."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="south")
         center = get_mesh_center(mock_mesh)
@@ -76,7 +76,7 @@ class TestPositionCameraRelative:
 
     def test_direction_north_positions_positive_y(self, mock_mesh):
         """Camera 'north' should be at +Y from mesh center."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="north")
         center = get_mesh_center(mock_mesh)
@@ -84,7 +84,7 @@ class TestPositionCameraRelative:
 
     def test_distance_parameter_affects_position(self, mock_mesh):
         """Larger distance should place camera further from mesh."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam1 = position_camera_relative(mock_mesh, direction="south", distance=1.0)
         cam2 = position_camera_relative(mock_mesh, direction="south", distance=2.0)
@@ -94,7 +94,7 @@ class TestPositionCameraRelative:
 
     def test_elevation_parameter_affects_z_position(self, mock_mesh):
         """Elevation parameter should control camera Z position."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam1 = position_camera_relative(mock_mesh, direction="south", elevation=0.3)
         cam2 = position_camera_relative(mock_mesh, direction="south", elevation=0.7)
@@ -103,7 +103,7 @@ class TestPositionCameraRelative:
     # === Direction/Rotation Tests (using forward vector) ===
     def test_camera_points_at_center(self, mock_mesh):
         """Camera forward vector should point toward mesh center."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="south", look_at="center")
 
@@ -122,7 +122,7 @@ class TestPositionCameraRelative:
 
     def test_above_camera_looks_straight_down(self, mock_mesh):
         """Camera 'above' should look straight down (-Z direction in world space)."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above", look_at="center")
 
@@ -137,7 +137,7 @@ class TestPositionCameraRelative:
 
     def test_south_camera_has_positive_pitch(self, mock_mesh):
         """Camera from 'south' should have positive X rotation (pitch up to look at terrain)."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="south", look_at="center")
 
@@ -149,7 +149,7 @@ class TestPositionCameraRelative:
     # === Return Value Tests ===
     def test_returns_camera_object(self, mock_mesh):
         """Should return camera object."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="south")
         assert camera is not None
@@ -158,7 +158,7 @@ class TestPositionCameraRelative:
     # === Cardinal Directions ===
     def test_all_cardinal_directions_supported(self, mock_mesh):
         """Function should support all 8 cardinal/vertical directions."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         directions = [
             "north",
@@ -248,7 +248,7 @@ class TestPositionCameraRelativeMultiMesh:
     # === Accepts List of Meshes ===
     def test_accepts_list_of_meshes(self, two_meshes_side_by_side):
         """Function should accept a list of mesh objects."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = two_meshes_side_by_side
         camera = position_camera_relative(meshes, direction="south")
@@ -258,7 +258,7 @@ class TestPositionCameraRelativeMultiMesh:
 
     def test_accepts_single_mesh_in_list(self, mock_mesh):
         """Function should work with a single-element list for consistency."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative([mock_mesh], direction="south")
 
@@ -268,7 +268,7 @@ class TestPositionCameraRelativeMultiMesh:
     # === Combined Bounding Box Tests ===
     def test_combined_bbox_wider_than_single_mesh(self, two_meshes_side_by_side):
         """Combined bounding box should span both meshes."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = two_meshes_side_by_side
         mesh_left, mesh_right = meshes
@@ -288,7 +288,7 @@ class TestPositionCameraRelativeMultiMesh:
 
     def test_combined_bbox_center_between_meshes(self, two_meshes_side_by_side):
         """Camera should target the center of the combined bounding box."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = two_meshes_side_by_side
 
@@ -302,7 +302,7 @@ class TestPositionCameraRelativeMultiMesh:
 
     def test_ortho_scale_covers_all_meshes(self, two_meshes_side_by_side):
         """Orthographic scale should be large enough to see all meshes."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = two_meshes_side_by_side
         mesh_left = meshes[0]
@@ -322,7 +322,7 @@ class TestPositionCameraRelativeMultiMesh:
     # === Direction Tests with Multiple Meshes ===
     def test_all_directions_work_with_multiple_meshes(self, two_meshes_side_by_side):
         """All cardinal directions should work with a list of meshes."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = two_meshes_side_by_side
         directions = [
@@ -338,7 +338,7 @@ class TestPositionCameraRelativeMultiMesh:
     # === Three Meshes Tests ===
     def test_three_meshes_combined_bbox(self, three_meshes_triangle):
         """Should handle three or more meshes correctly."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         meshes = three_meshes_triangle
 
@@ -352,7 +352,7 @@ class TestPositionCameraRelativeMultiMesh:
     # === Backward Compatibility ===
     def test_single_mesh_still_works(self, mock_mesh):
         """Single mesh (not in list) should still work for backward compatibility."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # This is the existing API - should continue to work
         camera = position_camera_relative(mock_mesh, direction="south")
@@ -362,7 +362,7 @@ class TestPositionCameraRelativeMultiMesh:
 
     def test_single_mesh_same_result_as_single_element_list(self, mock_mesh):
         """Single mesh and [single_mesh] should produce equivalent camera positions."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam_single = position_camera_relative(mock_mesh, direction="south", distance=1.5)
         cam_list = position_camera_relative([mock_mesh], direction="south", distance=1.5)
@@ -386,7 +386,7 @@ class TestWrapperParameterPassthrough:
         Regression test: Catches bugs where ortho_scale is passed to wrong param
         due to positional argument mismatch between wrapper and underlying function.
         """
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Call with small ortho_scale
         cam1 = position_camera_relative(
@@ -419,7 +419,7 @@ class TestWrapperParameterPassthrough:
 
     def test_focal_length_passed_through_wrapper(self, mock_mesh):
         """Verify focal_length is correctly passed through core.py wrapper."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam = position_camera_relative(
             mock_mesh,
@@ -435,7 +435,7 @@ class TestWrapperParameterPassthrough:
 
     def test_sun_azimuth_elevation_passed_through_wrapper(self, mock_mesh):
         """Verify sun_azimuth and sun_elevation are correctly passed through."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Need sun_energy > 0 to create light
         cam = position_camera_relative(
@@ -468,7 +468,7 @@ class TestFittingDistanceMode:
 
     def test_fitting_distance_mode_accepted(self, mock_mesh):
         """Function should accept distance_mode='fit' parameter."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(
             mock_mesh,
@@ -482,7 +482,7 @@ class TestFittingDistanceMode:
 
     def test_fit_distance_1_fills_frame(self, mock_mesh):
         """distance=1.0 with mode='fit' should position camera to fill frame with mesh."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
         import math
 
         camera = position_camera_relative(
@@ -520,7 +520,7 @@ class TestFittingDistanceMode:
 
     def test_fit_distance_scales_with_multiplier(self, mock_mesh):
         """distance=1.5 should be 1.5x farther than distance=1.0."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam1 = position_camera_relative(
             mock_mesh,
@@ -547,7 +547,7 @@ class TestFittingDistanceMode:
 
     def test_fit_maintains_framing_across_elevations(self, mock_mesh):
         """Changing elevation maintains framing (distance from mesh adjusts)."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Low elevation view
         cam_low = position_camera_relative(
@@ -580,7 +580,7 @@ class TestFittingDistanceMode:
 
     def test_diagonal_mode_is_default(self, mock_mesh):
         """Without distance_mode parameter, should use diagonal mode (backward compat)."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Default behavior (no distance_mode)
         cam_default = position_camera_relative(
@@ -617,7 +617,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_direction_exists(self, mock_mesh):
         """The 'above-tilted' direction should be recognized without error."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Should not raise ValueError for unrecognized direction
         camera = position_camera_relative(mock_mesh, direction="above-tilted")
@@ -627,7 +627,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_looks_mostly_down(self, mock_mesh):
         """Camera should look mostly downward (Z component strongly negative)."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above-tilted")
 
@@ -642,7 +642,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_has_slight_offset(self, mock_mesh):
         """Camera should NOT be directly above - should have SW offset."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above-tilted")
 
@@ -661,7 +661,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_position_directly_above(self, mock_mesh):
         """Camera position should be directly above mesh center (like 'above')."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above-tilted")
         center = get_mesh_center(mock_mesh)
@@ -676,7 +676,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_still_high_elevation(self, mock_mesh):
         """Camera should still be high above the mesh (like 'above')."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         camera = position_camera_relative(mock_mesh, direction="above-tilted")
         center = get_mesh_center(mock_mesh)
@@ -689,7 +689,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_different_from_pure_above(self, mock_mesh):
         """'above-tilted' should have different rotation than 'above'."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         cam_above = position_camera_relative(mock_mesh, direction="above")
         cam_tilted = position_camera_relative(mock_mesh, direction="above-tilted")
@@ -712,7 +712,7 @@ class TestAboveTiltedDirection:
 
     def test_above_tilted_in_all_directions_list(self, mock_mesh):
         """'above-tilted' should be included in the full list of supported directions."""
-        from src.terrain.core import position_camera_relative
+        from terrain_maker.terrain.core import position_camera_relative
 
         # Test alongside other directions to ensure it's a first-class citizen
         directions = [

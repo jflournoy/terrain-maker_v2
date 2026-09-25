@@ -22,7 +22,7 @@ Pipeline Steps
 API Reference
 -------------
 
-.. automodule:: src.terrain.flow_pipeline
+.. automodule:: terrain_maker.terrain.flow_pipeline
    :members:
    :undoc-members:
    :show-inheritance:

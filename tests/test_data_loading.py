@@ -18,20 +18,20 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_imports(self):
         """Test that load_dem_files can be imported."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         assert callable(load_dem_files)
 
     def test_load_dem_files_nonexistent_directory_raises(self):
         """Test that nonexistent directory raises ValueError."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with pytest.raises(ValueError, match="does not exist"):
             load_dem_files("/nonexistent/directory/path")
 
     def test_load_dem_files_file_not_directory_raises(self):
         """Test that file path instead of directory raises ValueError."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.NamedTemporaryFile() as tmp:
             with pytest.raises(ValueError, match="not a directory"):
@@ -39,7 +39,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_no_matching_files_raises(self):
         """Test that directory with no matching files raises ValueError."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(ValueError, match="No files matching"):
@@ -47,7 +47,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_returns_tuple(self):
         """Test that function returns (array, transform) tuple."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a simple test DEM file
@@ -77,7 +77,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_loads_single_file(self):
         """Test loading a single DEM file."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             dem_data = np.arange(100).reshape(10, 10).astype(np.float32)
@@ -105,7 +105,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_loads_multiple_files(self):
         """Test loading and merging multiple DEM files."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create two adjacent DEM tiles
@@ -152,7 +152,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_custom_pattern(self):
         """Test loading with custom file pattern."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create files with different extensions
@@ -199,7 +199,7 @@ class TestLoadDemFiles:
 
     def test_load_dem_files_recursive_search(self):
         """Test recursive subdirectory search."""
-        from src.terrain.data_loading import load_dem_files
+        from terrain_maker.terrain.data_loading import load_dem_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create subdirectory
@@ -239,13 +239,13 @@ class TestLoadScoreGrid:
 
     def test_load_score_grid_imports(self):
         """Test that load_score_grid can be imported."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         assert callable(load_score_grid)
 
     def test_load_score_grid_with_transform(self):
         """Load NPZ with transform metadata returns both array and Affine."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create test data with transform
@@ -270,7 +270,7 @@ class TestLoadScoreGrid:
 
     def test_load_score_grid_without_transform(self):
         """Load NPZ without transform returns array and None."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create test data WITHOUT transform
@@ -288,7 +288,7 @@ class TestLoadScoreGrid:
 
     def test_load_score_grid_flexible_keys(self):
         """Finds data under various key names."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             score_data = np.random.rand(20, 20).astype(np.float32)
@@ -313,7 +313,7 @@ class TestLoadScoreGrid:
 
     def test_load_score_grid_custom_keys(self):
         """User can specify custom keys to search for."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             score_data = np.random.rand(30, 30).astype(np.float32)
@@ -327,14 +327,14 @@ class TestLoadScoreGrid:
 
     def test_load_score_grid_file_not_found(self):
         """Raises FileNotFoundError for missing file."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with pytest.raises(FileNotFoundError):
             load_score_grid(Path("/nonexistent/path/scores.npz"))
 
     def test_load_score_grid_preserves_dtype(self):
         """Preserves original data type."""
-        from src.terrain.data_loading import load_score_grid
+        from terrain_maker.terrain.data_loading import load_score_grid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Test float32
@@ -357,13 +357,13 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_imports(self):
         """Test that parse_hgt_filename can be imported."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         assert callable(parse_hgt_filename)
 
     def test_parse_hgt_filename_northern_western(self):
         """N42W083.hgt -> lat=42, lon=-83."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename("N42W083.hgt")
         assert lat == 42
@@ -371,7 +371,7 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_northern_eastern(self):
         """N45E010.hgt -> lat=45, lon=10."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename("N45E010.hgt")
         assert lat == 45
@@ -379,7 +379,7 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_southern_western(self):
         """S15W047.hgt -> lat=-15, lon=-47."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename("S15W047.hgt")
         assert lat == -15
@@ -387,7 +387,7 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_southern_eastern(self):
         """S33E018.hgt -> lat=-33, lon=18."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename("S33E018.hgt")
         assert lat == -33
@@ -395,7 +395,7 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_with_path(self):
         """Works with Path object containing directory."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename(Path("/some/dir/N42W083.hgt"))
         assert lat == 42
@@ -403,7 +403,7 @@ class TestParseHgtFilename:
 
     def test_parse_hgt_filename_invalid_returns_none(self):
         """Invalid filenames return (None, None)."""
-        from src.terrain.data_loading import parse_hgt_filename
+        from terrain_maker.terrain.data_loading import parse_hgt_filename
 
         lat, lon = parse_hgt_filename("not_a_valid_hgt.hgt")
         assert lat is None
@@ -435,13 +435,13 @@ class TestLoadFilteredHgtFiles:
 
     def test_load_filtered_hgt_files_imports(self):
         """Test that load_filtered_hgt_files can be imported."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         assert callable(load_filtered_hgt_files)
 
     def test_load_filtered_hgt_files_filters_by_latitude(self):
         """Only loads HGT files within latitude range."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -466,7 +466,7 @@ class TestLoadFilteredHgtFiles:
 
     def test_load_filtered_hgt_files_filters_by_longitude(self):
         """Only loads HGT files within longitude range."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -489,7 +489,7 @@ class TestLoadFilteredHgtFiles:
 
     def test_load_filtered_hgt_files_no_filter(self):
         """Without filters, loads all HGT files."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -508,7 +508,7 @@ class TestLoadFilteredHgtFiles:
 
     def test_load_filtered_hgt_files_returns_tuple(self):
         """Returns (array, transform) tuple."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -524,7 +524,7 @@ class TestLoadFilteredHgtFiles:
 
     def test_load_filtered_hgt_files_no_matching_raises(self):
         """Raises ValueError when no files match filters."""
-        from src.terrain.data_loading import load_filtered_hgt_files
+        from terrain_maker.terrain.data_loading import load_filtered_hgt_files
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)

@@ -7,10 +7,9 @@ from pathlib import Path
 import sys
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from terrain.data_loading import load_dem_files
-from terrain.flow_accumulation import compute_flow_direction
+from terrain_maker.terrain.data_loading import load_dem_files
+from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
 # San Diego area DEM directory
 dem_dir = Path("data/san_diego_dem")

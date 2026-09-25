@@ -188,7 +188,7 @@ final_score = (
 
 ## Default Sledding Configuration
 
-Located at: `src/scoring/configs/sledding_default.json`
+Located at: `src/terrain_maker/scoring/configs/sledding_default.json`
 
 ### Additive Components (sum to 1.0)
 
@@ -214,14 +214,14 @@ Located at: `src/scoring/configs/sledding_default.json`
 
 ```bash
 # Copy default config
-cp src/scoring/configs/sledding_default.json my_config.json
+cp src/terrain_maker/scoring/configs/sledding_default.json my_config.json
 
 # Edit thresholds, weights, etc.
 ```
 
 ```python
 import json
-from src.scoring import ScoreCombiner
+from terrain_maker.scoring import ScoreCombiner
 
 with open("my_config.json") as f:
     scorer = ScoreCombiner.from_dict(json.load(f))
@@ -232,7 +232,7 @@ score = snow.calculate_sledding_score(scorer=scorer)
 ### Option 2: Programmatic Modification
 
 ```python
-from src.scoring import ScoreComponent, ScoreCombiner
+from terrain_maker.scoring import ScoreComponent, ScoreCombiner
 
 # Create custom scorer
 scorer = ScoreCombiner(
@@ -259,7 +259,7 @@ score = snow.calculate_sledding_score(scorer=scorer)
 ### Option 3: Modify Default
 
 ```python
-from src.scoring.configs.sledding import create_default_sledding_scorer
+from terrain_maker.scoring.configs.sledding import create_default_sledding_scorer
 
 scorer = create_default_sledding_scorer()
 

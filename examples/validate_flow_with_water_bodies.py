@@ -35,7 +35,7 @@ from scipy.ndimage import zoom
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import flow functions
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     detect_ocean_mask,
@@ -45,13 +45,13 @@ from src.terrain.flow_accumulation import (
 
 
 # Import water body functions
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
 )
 
 # Import visualization functions from library
-from src.terrain.visualization.flow_diagnostics import (
+from terrain_maker.terrain.visualization.flow_diagnostics import (
     save_flow_plot,
     FLOW_COLORMAPS,
     D8_VECTORS,
@@ -616,7 +616,7 @@ def main():
         print(f"   Min lake area: {args.min_lake_area} km²")
 
         try:
-            from src.terrain.water_bodies import download_water_bodies
+            from terrain_maker.terrain.water_bodies import download_water_bodies
 
             # Download/load water bodies
             geojson_path = download_water_bodies(

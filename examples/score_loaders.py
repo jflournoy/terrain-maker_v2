@@ -14,7 +14,7 @@ from typing import Optional, Tuple
 import numpy as np
 from affine import Affine
 
-from src.terrain.data_loading import load_score_grid
+from terrain_maker.terrain.data_loading import load_score_grid
 
 logger = logging.getLogger(__name__)
 

@@ -119,7 +119,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     load_dem_files,
     scale_elevation,
@@ -132,8 +132,8 @@ from src.terrain.core import (
     setup_render_settings,
     render_scene_to_file,
 )
-from src.terrain.cache import DEMCache
-from src.terrain.mesh_cache import MeshCache
+from terrain_maker.terrain.cache import DEMCache
+from terrain_maker.terrain.mesh_cache import MeshCache
 
 try:
     import bpy
@@ -385,7 +385,7 @@ def main():
         # Detect water on the UNSCALED DEM
         print(f"      Detecting water bodies (on unscaled DEM)...")
         try:
-            from src.terrain.water import identify_water_by_slope
+            from terrain_maker.terrain.water import identify_water_by_slope
             import numpy as np
 
             transformed_dem = terrain.data_layers["dem"]["transformed_data"]

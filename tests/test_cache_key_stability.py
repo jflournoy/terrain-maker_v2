@@ -16,7 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 TRANSFORM_KEY_SCRIPT = """
 import numpy as np
-from src.terrain.cache import TransformCache
+from terrain_maker.terrain.cache import TransformCache
 cache = TransformCache(cache_dir={cache_dir!r})
 print(cache.compute_transform_hash(
     upstream_hash="abc",
@@ -27,7 +27,7 @@ print(cache.compute_transform_hash(
 
 PIPELINE_KEY_SCRIPT = """
 import numpy as np
-from src.terrain.cache import PipelineCache
+from terrain_maker.terrain.cache import PipelineCache
 cache = PipelineCache(cache_dir={cache_dir!r})
 cache.define_target("t", params={{"mask": np.arange(12, dtype=np.float32).reshape(3, 4)}})
 print(cache.compute_target_key("t"))
@@ -63,7 +63,7 @@ class TestKeysStableAcrossProcesses:
 
 class TestMeshKeySensitiveToArrayContent:
     def test_same_shape_different_values_give_different_keys(self, tmp_path):
-        from src.terrain.mesh_cache import MeshCache
+        from terrain_maker.terrain.mesh_cache import MeshCache
 
         cache = MeshCache(cache_dir=tmp_path)
         zeros = np.zeros((4, 4), dtype=np.uint8)
@@ -75,7 +75,7 @@ class TestMeshKeySensitiveToArrayContent:
         assert key_zeros != key_ones
 
     def test_same_values_give_same_key(self, tmp_path):
-        from src.terrain.mesh_cache import MeshCache
+        from terrain_maker.terrain.mesh_cache import MeshCache
 
         cache = MeshCache(cache_dir=tmp_path)
         mask = np.eye(4, dtype=np.uint8)

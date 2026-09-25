@@ -18,11 +18,11 @@ See :doc:`../guides/flow-routing` for detailed algorithm explanations and debugg
 Main Functions
 --------------
 
-.. autofunction:: src.terrain.flow_accumulation.flow_accumulation
+.. autofunction:: terrain_maker.terrain.flow_accumulation.flow_accumulation
 
    Example::
 
-       from src.terrain.flow_accumulation import flow_accumulation
+       from terrain_maker.terrain.flow_accumulation import flow_accumulation
 
        # Run complete flow pipeline
        result = flow_accumulation(
@@ -40,12 +40,12 @@ Main Functions
 Flow Direction
 --------------
 
-.. autofunction:: src.terrain.flow_accumulation.compute_flow_direction
+.. autofunction:: terrain_maker.terrain.flow_accumulation.compute_flow_direction
 
    Example::
 
        import numpy as np
-       from src.terrain.flow_accumulation import compute_flow_direction
+       from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
        # Create simple DEM
        dem = np.array([
@@ -60,11 +60,11 @@ Flow Direction
 Drainage Area
 -------------
 
-.. autofunction:: src.terrain.flow_accumulation.compute_drainage_area
+.. autofunction:: terrain_maker.terrain.flow_accumulation.compute_drainage_area
 
    Example::
 
-       from src.terrain.flow_accumulation import (
+       from terrain_maker.terrain.flow_accumulation import (
            compute_flow_direction,
            compute_drainage_area,
        )
@@ -76,11 +76,11 @@ Drainage Area
 Upstream Rainfall
 -----------------
 
-.. autofunction:: src.terrain.flow_accumulation.compute_upstream_rainfall
+.. autofunction:: terrain_maker.terrain.flow_accumulation.compute_upstream_rainfall
 
    Example::
 
-       from src.terrain.flow_accumulation import (
+       from terrain_maker.terrain.flow_accumulation import (
            compute_flow_direction,
            compute_upstream_rainfall,
        )
@@ -93,14 +93,14 @@ Upstream Rainfall
 DEM Conditioning
 ----------------
 
-.. autofunction:: src.terrain.flow_accumulation.condition_dem_spec
+.. autofunction:: terrain_maker.terrain.flow_accumulation.condition_dem_spec
 
    This is the recommended conditioning function, implementing the spec-compliant
    constrained breaching and priority-flood fill algorithm.
 
    Example::
 
-       from src.terrain.flow_accumulation import condition_dem_spec
+       from terrain_maker.terrain.flow_accumulation import condition_dem_spec
 
        dem_conditioned, outlets = condition_dem_spec(
            dem,
@@ -112,36 +112,36 @@ DEM Conditioning
            epsilon=1e-4,
        )
 
-.. autofunction:: src.terrain.flow_accumulation.condition_dem
+.. autofunction:: terrain_maker.terrain.flow_accumulation.condition_dem
 
    Legacy conditioning function with simpler fill-only approach.
 
-.. autofunction:: src.terrain.flow_accumulation.breach_depressions_constrained
+.. autofunction:: terrain_maker.terrain.flow_accumulation.breach_depressions_constrained
 
    Low-level breaching function for advanced use cases.
 
-.. autofunction:: src.terrain.flow_accumulation.priority_flood_fill_epsilon
+.. autofunction:: terrain_maker.terrain.flow_accumulation.priority_flood_fill_epsilon
 
    Low-level priority-flood fill with epsilon gradient.
 
 Outlet and Basin Detection
 --------------------------
 
-.. autofunction:: src.terrain.flow_accumulation.identify_outlets
+.. autofunction:: terrain_maker.terrain.flow_accumulation.identify_outlets
 
-.. autofunction:: src.terrain.flow_accumulation.detect_ocean_mask
+.. autofunction:: terrain_maker.terrain.flow_accumulation.detect_ocean_mask
 
    Example::
 
-       from src.terrain.flow_accumulation import detect_ocean_mask
+       from terrain_maker.terrain.flow_accumulation import detect_ocean_mask
 
        ocean_mask = detect_ocean_mask(dem, threshold=0.0, border_only=True)
 
-.. autofunction:: src.terrain.flow_accumulation.detect_endorheic_basins
+.. autofunction:: terrain_maker.terrain.flow_accumulation.detect_endorheic_basins
 
    Example::
 
-       from src.terrain.flow_accumulation import detect_endorheic_basins
+       from terrain_maker.terrain.flow_accumulation import detect_endorheic_basins
 
        basin_mask, basins = detect_endorheic_basins(
            dem,
@@ -160,12 +160,12 @@ The module uses ESRI's standard D8 power-of-2 encoding::
     #  16  x  1
     #  32 64 128
 
-.. py:data:: src.terrain.flow_accumulation.D8_DIRECTIONS
+.. py:data:: terrain_maker.terrain.flow_accumulation.D8_DIRECTIONS
    :type: dict
 
    Mapping from (row_offset, col_offset) to direction code.
 
-.. py:data:: src.terrain.flow_accumulation.D8_OFFSETS
+.. py:data:: terrain_maker.terrain.flow_accumulation.D8_OFFSETS
    :type: dict
 
    Reverse mapping from direction code to (row_offset, col_offset).

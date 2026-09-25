@@ -12,7 +12,7 @@ into tiles with configurable memory limits.
 Core Classes
 ------------
 
-.. autoclass:: src.terrain.gridded_data.GriddedDataLoader
+.. autoclass:: terrain_maker.terrain.gridded_data.GriddedDataLoader
    :members:
    :undoc-members:
 
@@ -34,7 +34,7 @@ Core Classes
 
    Example::
 
-       from src.terrain.gridded_data import GriddedDataLoader, TiledDataConfig
+       from terrain_maker.terrain.gridded_data import GriddedDataLoader, TiledDataConfig
 
        # Configure tiling
        config = TiledDataConfig(
@@ -65,7 +65,7 @@ Core Classes
 Configuration
 -------------
 
-.. autoclass:: src.terrain.gridded_data.TiledDataConfig
+.. autoclass:: terrain_maker.terrain.gridded_data.TiledDataConfig
    :members:
    :undoc-members:
 
@@ -98,7 +98,7 @@ Configuration
 Memory Monitoring
 -----------------
 
-.. autoclass:: src.terrain.gridded_data.MemoryMonitor
+.. autoclass:: terrain_maker.terrain.gridded_data.MemoryMonitor
    :members:
    :undoc-members:
 
@@ -119,7 +119,7 @@ Memory Monitoring
 
    Example::
 
-       from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig
+       from terrain_maker.terrain.gridded_data import MemoryMonitor, TiledDataConfig
 
        config = TiledDataConfig(max_memory_percent=85.0)
        monitor = MemoryMonitor(config)
@@ -133,7 +133,7 @@ Memory Monitoring
        # Stop monitoring
        monitor.stop()
 
-.. autoexception:: src.terrain.gridded_data.MemoryLimitExceeded
+.. autoexception:: terrain_maker.terrain.gridded_data.MemoryLimitExceeded
 
    Raised when memory usage exceeds configured limits.
 
@@ -142,7 +142,7 @@ Memory Monitoring
 Tile Specification
 ------------------
 
-.. autoclass:: src.terrain.gridded_data.TileSpecGridded
+.. autoclass:: terrain_maker.terrain.gridded_data.TileSpecGridded
    :members:
    :undoc-members:
 
@@ -158,11 +158,11 @@ Tile Specification
 Utility Functions
 -----------------
 
-.. autofunction:: src.terrain.gridded_data.downsample_for_viz
+.. autofunction:: terrain_maker.terrain.gridded_data.downsample_for_viz
 
    Downsample large grids for faster visualization.
 
-.. autofunction:: src.terrain.gridded_data.create_mock_snow_data
+.. autofunction:: terrain_maker.terrain.gridded_data.create_mock_snow_data
 
    Create mock SNODAS-like data for testing.
 

@@ -222,7 +222,7 @@ Raises:
 
 Example:
     >>> # Smooth road vertices and apply to mesh
-    >>> from src.terrain.roads import smooth_road_vertices
+    >>> from terrain_maker.terrain.roads import smooth_road_vertices
     >>>
     >>> vertices = np.array([v.co[:] for v in mesh.data.vertices])
     >>> smoothed = smooth_road_vertices(vertices, road_mask, y_valid, x_valid)
@@ -1185,7 +1185,7 @@ Note:
     This method requires that:
     - Transforms have been applied (apply_transforms() called)
     - The DEM layer exists in data_layers
-    - Water detection module (src.terrain.water) is available
+    - Water detection module (terrain_maker.terrain.water) is available
 
 #### `downsample_raster(zoom_factor, method, nodata_value)`
 
@@ -1506,7 +1506,7 @@ Raises:
     RuntimeError: If create_mesh() hasn't been called yet (needed for mask validation).
 
 Example:
-    >>> from src.terrain.color_mapping import elevation_colormap
+    >>> from terrain_maker.terrain.color_mapping import elevation_colormap
     >>> # Compute proximity mask for park zones
     >>> park_mask = terrain.compute_proximity_mask(
     ...     park_lons, park_lats, radius_meters=1000
@@ -2785,7 +2785,7 @@ Provides declarative task dependencies with automatic caching, staleness detecti
 and execution planning. Integrates with existing DEMCache and MeshCache.
 
 Example:
-    from src.terrain.pipeline import TerrainPipeline
+    from terrain_maker.terrain.pipeline import TerrainPipeline
 
     pipeline = TerrainPipeline(dem_dir="data/dem/detroit", cache_enabled=True)
 
@@ -3076,7 +3076,7 @@ Much more efficient than creating individual Blender objects - rasterizes
 roads in ~5 seconds and automatically handles coordinate transformations.
 
 Usage - Simple API:
-    from src.terrain.roads import add_roads_layer
+    from terrain_maker.terrain.roads import add_roads_layer
     from examples.detroit_roads import get_roads
 
     # After creating terrain:
@@ -3089,7 +3089,7 @@ Usage - Simple API:
     )
 
 Usage - Manual pipeline:
-    from src.terrain.roads import rasterize_roads_to_layer
+    from terrain_maker.terrain.roads import rasterize_roads_to_layer
     from examples.detroit_roads import get_roads
 
     roads_geojson = get_roads(bbox)

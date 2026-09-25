@@ -17,7 +17,7 @@ class TestLakeRasterization:
 
     def test_rasterize_creates_mask_matching_bbox(self):
         """Lake mask should match the specified bbox and resolution."""
-        from src.terrain.water_bodies import rasterize_lakes_to_mask
+        from terrain_maker.terrain.water_bodies import rasterize_lakes_to_mask
 
         # Simple lake polygon (square)
         lakes_geojson = {
@@ -57,7 +57,7 @@ class TestLakeRasterization:
 
     def test_rasterize_labels_separate_lakes(self):
         """Each lake should have a unique label in the mask."""
-        from src.terrain.water_bodies import rasterize_lakes_to_mask
+        from terrain_maker.terrain.water_bodies import rasterize_lakes_to_mask
 
         lakes_geojson = {
             "type": "FeatureCollection",
@@ -96,7 +96,7 @@ class TestLakeRasterization:
 
     def test_rasterize_returns_proper_affine_transform(self):
         """Transform should correctly map pixel coordinates to geographic."""
-        from src.terrain.water_bodies import rasterize_lakes_to_mask
+        from terrain_maker.terrain.water_bodies import rasterize_lakes_to_mask
 
         lakes_geojson = {
             "type": "FeatureCollection",
@@ -132,7 +132,7 @@ class TestLakeOutletDetection:
 
     def test_identify_outlet_from_pour_point(self):
         """Should identify outlet cell from HydroLAKES pour point."""
-        from src.terrain.water_bodies import identify_outlet_cells
+        from terrain_maker.terrain.water_bodies import identify_outlet_cells
 
         # Create a simple lake mask (10x10 lake at center of 20x20 grid)
         lake_mask = np.zeros((20, 20), dtype=np.uint8)
@@ -158,7 +158,7 @@ class TestLakeOutletDetection:
 
     def test_endorheic_lake_has_no_outlet(self):
         """Lake with no outlet should be marked as endorheic."""
-        from src.terrain.water_bodies import identify_outlet_cells
+        from terrain_maker.terrain.water_bodies import identify_outlet_cells
 
         lake_mask = np.zeros((20, 20), dtype=np.uint8)
         lake_mask[5:15, 5:15] = 1
@@ -178,8 +178,8 @@ class TestLakeFlowRouting:
 
     def test_create_lake_flow_routing_routes_to_outlet(self):
         """All lake cells should have flow path to outlet."""
-        from src.terrain.water_bodies import create_lake_flow_routing
-        from src.terrain.flow_accumulation import D8_OFFSETS
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.flow_accumulation import D8_OFFSETS
 
         # Create lake mask (5x5 lake)
         lake_mask = np.zeros((10, 10), dtype=np.uint8)
@@ -206,7 +206,7 @@ class TestLakeFlowRouting:
 
     def test_lake_flow_routing_converges_to_outlet(self):
         """Following flow directions from any lake cell should reach outlet."""
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
         lake_mask = np.zeros((10, 10), dtype=np.uint8)
         lake_mask[2:7, 2:7] = 1
@@ -255,7 +255,7 @@ class TestLakeFlowRouting:
 
     def test_endorheic_lake_is_terminal_sink(self):
         """Lake with no outlet should have all cells with flow_dir=0."""
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
         lake_mask = np.zeros((10, 10), dtype=np.uint8)
         lake_mask[2:7, 2:7] = 1
@@ -278,8 +278,8 @@ class TestFlowAccumulationWithLakes:
 
     def test_outlet_receives_upstream_and_lake_accumulation(self):
         """Lake outlet should receive all upstream + lake interior drainage."""
-        from src.terrain.water_bodies import create_lake_flow_routing
-        from src.terrain.flow_accumulation import compute_drainage_area
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.flow_accumulation import compute_drainage_area
 
         # Create simple terrain: slope from top to bottom with lake in middle
         dem = np.zeros((20, 20))
@@ -299,7 +299,7 @@ class TestFlowAccumulationWithLakes:
         lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
 
         # Compute terrain flow direction (would need to merge with lake flow)
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
         terrain_flow = compute_flow_direction(dem)
 
         # Merge: lake cells use lake_flow, others use terrain_flow
@@ -340,7 +340,7 @@ class TestOutletDownstreamDirections:
 
         Returns (flow_dir, lake_mask, outlet_mask, dem, basin_mask)
         """
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem = np.zeros((20, 20))
         for r in range(20):
@@ -362,7 +362,7 @@ class TestOutletDownstreamDirections:
         flow_dir = compute_flow_direction(dem)
 
         # Apply lake routing (BFS toward outlet)
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
         lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
         flow_dir[lake_mask > 0] = lake_flow[lake_mask > 0]
 
@@ -370,7 +370,7 @@ class TestOutletDownstreamDirections:
 
     def test_outlet_points_to_lowest_neighbor(self):
         """Outlet should get flow direction toward lowest adjacent non-lake cell."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
 
         flow_dir, lake_mask, outlet_mask, dem, basin_mask = (
             self._make_terrain_with_lake()
@@ -403,7 +403,7 @@ class TestOutletDownstreamDirections:
 
     def test_endorheic_outlet_stays_terminal(self):
         """Outlet inside an endorheic basin should remain terminal (flow_dir=0)."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
 
         flow_dir, lake_mask, outlet_mask, dem, _ = self._make_terrain_with_lake()
 
@@ -422,8 +422,8 @@ class TestOutletDownstreamDirections:
 
     def test_multiple_outlets_route_independently(self):
         """Each lake outlet should find its own downstream direction."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem = np.zeros((20, 20))
         for r in range(20):
@@ -444,7 +444,7 @@ class TestOutletDownstreamDirections:
         basin_mask = np.zeros((20, 20), dtype=bool)
 
         flow_dir = compute_flow_direction(dem)
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
         lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
         flow_dir[lake_mask > 0] = lake_flow[lake_mask > 0]
 
@@ -467,8 +467,8 @@ class TestOutletDownstreamDirections:
 
     def test_outlet_at_domain_edge_stays_terminal(self):
         """Outlet at grid boundary with no valid downstream stays terminal."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import compute_flow_direction
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import compute_flow_direction
 
         dem = np.ones((10, 10)) * 50.0
 
@@ -484,7 +484,7 @@ class TestOutletDownstreamDirections:
         basin_mask = np.zeros((10, 10), dtype=bool)
 
         flow_dir = compute_flow_direction(dem)
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
         lake_flow = create_lake_flow_routing(lake_mask, outlet_mask, dem)
         flow_dir[lake_mask > 0] = lake_flow[lake_mask > 0]
 
@@ -505,7 +505,7 @@ class TestOutletDownstreamDirections:
 
     def test_does_not_modify_non_outlet_cells(self):
         """Function should only modify outlet cells, not other flow directions."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
 
         flow_dir, lake_mask, outlet_mask, dem, basin_mask = (
             self._make_terrain_with_lake()
@@ -526,7 +526,7 @@ class TestOutletDownstreamDirections:
 
     def test_returns_modified_copy_not_in_place(self):
         """Function should return a new array, not modify the input."""
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
 
         flow_dir, lake_mask, outlet_mask, dem, basin_mask = (
             self._make_terrain_with_lake()
@@ -556,13 +556,13 @@ class TestOutletDownstreamDirections:
 
         The function must detect this and skip such neighbors.
         """
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
             D8_DIRECTIONS,
         )
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
         # Terrain slopes left→right overall, with a lake in the middle.
         # The key: the lowest non-lake neighbor of the outlet flows BACK
@@ -642,12 +642,12 @@ class TestOutletDownstreamDirections:
         When ALL neighbors of the outlet flow back into the lake,
         the outlet should stay terminal rather than create a cycle.
         """
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )
-        from src.terrain.water_bodies import create_lake_flow_routing
+        from terrain_maker.terrain.water_bodies import create_lake_flow_routing
 
         # Pure bowl: all terrain slopes toward center
         dem = np.zeros((15, 15))
@@ -690,8 +690,8 @@ class TestOutletDownstreamDirections:
         - This would create: outlet→(6,4)→outlet = 2-step cycle
         - Cell (6,5) is also lower, and flows away → safe candidate
         """
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import compute_drainage_area
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import compute_drainage_area
 
         # Build flow_dir manually so we control exactly where cells flow
         flow_dir = np.zeros((10, 10), dtype=np.uint8)
@@ -785,8 +785,8 @@ class TestOutletDownstreamDirections:
         above the rim elevation (HydroLAKES pour point in depression),
         but find_lake_spillways() found a valid exit at the lowest rim point.
         """
-        from src.terrain.water_bodies import compute_outlet_downstream_directions
-        from src.terrain.flow_accumulation import compute_drainage_area
+        from terrain_maker.terrain.water_bodies import compute_outlet_downstream_directions
+        from terrain_maker.terrain.flow_accumulation import compute_drainage_area
 
         # Build a scenario: lake surface = 50.0, all non-lake neighbors >= 50.0
         # So the normal lower-neighbor search finds nothing.
@@ -862,11 +862,11 @@ class TestDrainageContinuityThroughLakes:
         Without outlet routing: outlet is terminal, drainage resets downstream.
         With outlet routing: drainage propagates through lake to downstream.
         """
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_drainage_area,
         )
@@ -922,11 +922,11 @@ class TestDrainageContinuityThroughLakes:
 
     def test_upstream_rainfall_propagates_through_lake(self):
         """Upstream rainfall should accumulate through lakes, not reset."""
-        from src.terrain.water_bodies import (
+        from terrain_maker.terrain.water_bodies import (
             create_lake_flow_routing,
             compute_outlet_downstream_directions,
         )
-        from src.terrain.flow_accumulation import (
+        from terrain_maker.terrain.flow_accumulation import (
             compute_flow_direction,
             compute_upstream_rainfall,
         )
@@ -997,7 +997,7 @@ class TestFindLakeSpillways:
         The spillway should be at the downstream (south) edge of the lake
         where the valley exits — that's where the rim is lowest.
         """
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         # Terrain: valley running N-S in the center
         dem = np.zeros((20, 20))
@@ -1033,7 +1033,7 @@ class TestFindLakeSpillways:
 
     def test_spillway_cell_is_lake_boundary(self):
         """The spillway cell must be a lake cell adjacent to non-lake terrain."""
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         dem = np.zeros((15, 15))
         for r in range(15):
@@ -1065,7 +1065,7 @@ class TestFindLakeSpillways:
 
     def test_spillway_points_to_lowest_non_lake_neighbor(self):
         """Among multiple exit points, spillway should be at the lowest one."""
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         # Flat terrain with one low spot on the east side of the lake
         dem = np.ones((15, 15)) * 80.0
@@ -1093,7 +1093,7 @@ class TestFindLakeSpillways:
 
     def test_multiple_lakes_each_get_spillway(self):
         """Each lake in the mask should get its own independent spillway."""
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         dem = np.zeros((20, 20))
         for r in range(20):
@@ -1119,7 +1119,7 @@ class TestFindLakeSpillways:
 
     def test_single_cell_lake_has_spillway(self):
         """A single-cell lake should have a spillway to its lowest neighbor."""
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         dem = np.ones((10, 10)) * 80.0
         dem[5, 5] = 70.0   # Lake cell
@@ -1149,7 +1149,7 @@ class TestFindLakeSpillways:
         with the dam at the downstream end. The lowest rim point is at
         the dam location where water would overflow.
         """
-        from src.terrain.water_bodies import find_lake_spillways
+        from terrain_maker.terrain.water_bodies import find_lake_spillways
 
         # Bowl terrain
         dem = np.zeros((20, 20))
@@ -1188,7 +1188,7 @@ class TestWaterBodyDownload:
     @pytest.mark.skipif(True, reason="Requires network access")
     def test_download_nhd_returns_geojson(self):
         """NHD download should return valid GeoJSON with waterbodies."""
-        from src.terrain.water_bodies import download_nhd_water_bodies
+        from terrain_maker.terrain.water_bodies import download_nhd_water_bodies
 
         bbox = (32.5, -117.0, 32.6, -116.9)
         output_dir = Path("/tmp/test_nhd")

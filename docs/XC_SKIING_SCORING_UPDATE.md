@@ -60,7 +60,7 @@ Parks handle terrain safety, so only snow conditions matter:
 ## Code Changes
 
 ### 1. Core Scoring Functions
-File: `src/terrain/scoring.py`
+File: `src/terrain_maker/terrain/scoring.py`
 
 **Added `xc_skiing_deal_breakers()` function:**
 ```python
@@ -113,7 +113,7 @@ def compute_xc_skiing_score(
 ```
 
 ### 2. Scoring Config
-File: `src/scoring/configs/xc_skiing.py`
+File: `src/terrain_maker/scoring/configs/xc_skiing.py`
 
 **Added `compute_improved_xc_skiing_score()` wrapper:**
 ```python
@@ -130,8 +130,8 @@ def compute_improved_xc_skiing_score(
     - Hard deal breaker: Coverage < 15% (< ~18 days per season)
     - Weighted sum (depth 30%, coverage 60%, consistency 10%)
     """
-    from src.terrain.scoring import compute_xc_skiing_score
-    from src.scoring.transforms import snow_consistency
+    from terrain_maker.terrain.scoring import compute_xc_skiing_score
+    from terrain_maker.scoring.transforms import snow_consistency
 
     snow_depth_mm = snow_stats["median_max_depth"]
     snow_coverage = snow_stats["mean_snow_day_ratio"]
@@ -162,7 +162,7 @@ Key test cases:
 - Consistency has minor impact (10% weight)
 
 ### 4. Exports
-File: `src/scoring/configs/__init__.py`
+File: `src/terrain_maker/scoring/configs/__init__.py`
 
 - Added `compute_improved_xc_skiing_score` to imports and __all__
 
@@ -172,7 +172,7 @@ If you have custom scoring code that uses the old ScoreCombiner API:
 
 ### Before
 ```python
-from src.scoring.configs import DEFAULT_XC_SKIING_SCORER, xc_skiing_compute_derived_inputs
+from terrain_maker.scoring.configs import DEFAULT_XC_SKIING_SCORER, xc_skiing_compute_derived_inputs
 
 # Compute derived inputs
 inputs = xc_skiing_compute_derived_inputs(snow_stats)
@@ -183,7 +183,7 @@ score = DEFAULT_XC_SKIING_SCORER.compute(inputs)
 
 ### After (Using Improved Scoring)
 ```python
-from src.scoring.configs import compute_improved_xc_skiing_score
+from terrain_maker.scoring.configs import compute_improved_xc_skiing_score
 
 # Direct computation with deal breaker and linear coverage
 score = compute_improved_xc_skiing_score(snow_stats)
@@ -266,7 +266,7 @@ Therefore, XC skiing scoring focuses on **snow reliability** as the primary fact
 
 ## References
 
-- Core functions: `src/terrain/scoring.py` (lines 369-510)
-- Config wrapper: `src/scoring/configs/xc_skiing.py` (lines 137-177)
+- Core functions: `src/terrain_maker/terrain/scoring.py` (lines 369-510)
+- Config wrapper: `src/terrain_maker/scoring/configs/xc_skiing.py` (lines 137-177)
 - Test suite: `tests/test_xc_skiing_score.py`
 - Analysis document: `analyze_xc_scoring.md`

@@ -70,7 +70,7 @@ terrain.set_color_mapping(
 )
 
 # 5. Detect water bodies on unscaled DEM (critical!)
-from src.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.water import identify_water_by_slope
 transformed_dem = terrain.data_layers['dem']['transformed_data']
 unscaled_dem = transformed_dem / 0.0001  # Undo elevation scaling
 water_mask = identify_water_by_slope(unscaled_dem, slope_threshold=0.01, fill_holes=True)
@@ -163,7 +163,7 @@ transformed_dem = terrain.data_layers['dem']['transformed_data']
 unscaled_dem = transformed_dem / 0.0001  # Undo elevation scaling
 
 # 3. Detect water on unscaled DEM with very low threshold
-from src.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.water import identify_water_by_slope
 water_mask = identify_water_by_slope(
     unscaled_dem,
     slope_threshold=0.01,  # Extremely low threshold for nearly-flat water

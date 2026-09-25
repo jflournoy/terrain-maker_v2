@@ -29,12 +29,12 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import Normalize
 from matplotlib import cm
 import matplotlib.patheffects as pe
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     rasterize_lakes_to_mask,
     identify_outlet_cells,
     find_lake_spillways,
 )
-from src.terrain.flow_accumulation import D8_OFFSETS, D8_DIRECTIONS
+from terrain_maker.terrain.flow_accumulation import D8_OFFSETS, D8_DIRECTIONS
 
 
 # Arrow offsets for D8 directions (dx, dy in plot coords = col, -row)

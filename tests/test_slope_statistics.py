@@ -13,7 +13,7 @@ Tests focus on:
 import pytest
 import numpy as np
 from rasterio.transform import Affine
-from src.snow.slope_statistics import (
+from terrain_maker.snow.slope_statistics import (
     TiledSlopeConfig,
     SlopeStatistics,
     TileSpec,

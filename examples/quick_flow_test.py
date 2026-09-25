@@ -8,7 +8,7 @@ import rasterio
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 print("Loading modules...", flush=True)
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     condition_dem,

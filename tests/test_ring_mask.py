@@ -14,14 +14,14 @@ class TestComputeRingMask:
 
     def test_compute_ring_mask_grid_exists(self):
         """Test that compute_ring_mask_grid function is importable."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         terrain = Terrain.__new__(Terrain)
         assert hasattr(terrain, "compute_ring_mask_grid")
 
     def test_compute_ring_mask_grid_returns_boolean_array(self):
         """Test that function returns a boolean numpy array."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         # Create minimal terrain with mock data
@@ -52,7 +52,7 @@ class TestComputeRingMask:
 
     def test_compute_ring_mask_grid_ring_shape(self):
         """Test that the mask forms a ring (annulus), not a filled circle."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)
@@ -87,7 +87,7 @@ class TestComputeRingMask:
 
     def test_compute_ring_mask_grid_no_points_returns_empty(self):
         """Test that empty points array returns all-False mask."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)
@@ -114,7 +114,7 @@ class TestComputeRingMask:
 
     def test_compute_ring_mask_grid_multiple_points(self):
         """Test that multiple points each get rings."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)
@@ -147,7 +147,7 @@ class TestComputeRingMask:
 
     def test_compute_ring_mask_grid_inner_radius_zero_is_filled(self):
         """Test that inner_radius=0 creates a filled circle, not a ring."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)
@@ -180,7 +180,7 @@ class TestApplyRingColor:
 
     def test_apply_ring_color_darkens_ring_vertices(self):
         """Test that ring mask causes vertices to be darkened."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         terrain = Terrain.__new__(Terrain)
         terrain.dem = np.ones((50, 50), dtype=np.float32) * 200
@@ -219,7 +219,7 @@ class TestApplyRingColor:
 
     def test_apply_ring_color_preserves_non_ring_vertices(self):
         """Test that non-ring vertices keep their original color."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
 
         terrain = Terrain.__new__(Terrain)
         terrain.dem = np.ones((50, 50), dtype=np.float32) * 200
@@ -250,7 +250,7 @@ class TestRingMaskParameters:
 
     def test_ring_mask_invalid_radii_raises(self):
         """Test that inner_radius > outer_radius raises ValueError."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)
@@ -278,7 +278,7 @@ class TestRingMaskParameters:
 
     def test_ring_mask_negative_radius_raises(self):
         """Test that negative radius raises ValueError."""
-        from src.terrain.core import Terrain
+        from terrain_maker.terrain.core import Terrain
         import logging
 
         terrain = Terrain.__new__(Terrain)

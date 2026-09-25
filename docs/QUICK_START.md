@@ -39,7 +39,7 @@ Download from [NASA Earth Explorer](https://earthexplorer.usgs.gov/):
 
 ```python
 from pathlib import Path
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     load_dem_files,
     elevation_colormap,
@@ -159,7 +159,7 @@ terrain.set_color_mapping(color_by_slope, source_layers=['dem'])
 
 ### Detect and color water bodies
 ```python
-from src.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.water import identify_water_by_slope
 
 # Get unscaled DEM for meaningful slope calculations
 # (important: detect BEFORE scaling elevation)
@@ -193,11 +193,11 @@ See the [Water Body Detection section](API_REFERENCE.md#terrainwater) in the API
 
 ## Troubleshooting
 
-**"ModuleNotFoundError: No module named 'src'"**
+**"ModuleNotFoundError: No module named 'terrain_maker'"**
 ```bash
-# Make sure you're in the project root directory
+# Install the package (editable) into your environment
 cd terrain-maker_v2
-python your_script.py
+uv sync
 ```
 
 **"Blender not found"**

@@ -3,7 +3,7 @@
 Road Network Data Fetcher CLI.
 
 Command-line interface for fetching road network data from OpenStreetMap.
-The actual fetching logic is in the library: src/terrain/roads.py
+The actual fetching logic is in the library: src/terrain_maker/terrain/roads.py
 
 Usage:
     # Fetch roads for San Diego
@@ -16,7 +16,7 @@ Usage:
     python examples/detroit_roads.py --bbox 42.3 -83.5 42.5 -82.8 --output roads.geojson
 
 Library usage:
-    from src.terrain.roads import get_roads, get_roads_tiled
+    from terrain_maker.terrain.roads import get_roads, get_roads_tiled
 
     # Fetch roads for a bounding box
     bbox = (42.3, -83.5, 42.5, -82.8)  # (south, west, north, east)
@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import from library
-from src.terrain.roads import get_roads, get_roads_tiled
+from terrain_maker.terrain.roads import get_roads, get_roads_tiled
 
 
 if __name__ == "__main__":

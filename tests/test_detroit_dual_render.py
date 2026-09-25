@@ -201,7 +201,7 @@ class TestDualRenderLibraryUsage:
             content = f.read()
 
         # Should import Terrain from terrain.core
-        assert "from src.terrain.core import" in content
+        assert "from terrain_maker.terrain.core import" in content
         assert "Terrain" in content
 
         # Should use Terrain class

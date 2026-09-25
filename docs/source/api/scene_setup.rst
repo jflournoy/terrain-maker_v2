@@ -9,7 +9,7 @@ in Blender, from camera positioning to HDRI lighting.
 Background Plane
 ----------------
 
-.. autofunction:: src.terrain.scene_setup.create_background_plane
+.. autofunction:: terrain_maker.terrain.scene_setup.create_background_plane
 
    Used in :doc:`../examples/combined_render` for clean backgrounds.
 
@@ -25,11 +25,11 @@ Background Plane
 Camera Setup
 ------------
 
-.. autofunction:: src.terrain.scene_setup.setup_camera
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_camera
 
    Basic camera creation and configuration.
 
-.. autofunction:: src.terrain.scene_setup.position_camera_relative
+.. autofunction:: terrain_maker.terrain.scene_setup.position_camera_relative
 
    Smart camera positioning using cardinal directions (north, south, east, west, above).
    Used in :doc:`../examples/combined_render`.
@@ -44,18 +44,18 @@ Camera Setup
            tilt_angle=0
        )
 
-.. autofunction:: src.terrain.scene_setup.calculate_camera_frustum_size
+.. autofunction:: terrain_maker.terrain.scene_setup.calculate_camera_frustum_size
 
    Calculate camera field of view for precise framing.
 
 Lighting
 --------
 
-.. autofunction:: src.terrain.scene_setup.setup_two_point_lighting
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_two_point_lighting
 
    Traditional two-point lighting with sun and fill lights.
 
-.. autofunction:: src.terrain.scene_setup.setup_hdri_lighting
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_hdri_lighting
 
    Environment-based HDRI lighting for photorealistic results.
    Used in :doc:`../examples/combined_render`.
@@ -68,11 +68,11 @@ Lighting
            rotation=0.0
        )
 
-.. autofunction:: src.terrain.scene_setup.setup_light
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_light
 
    Create individual Blender lights (sun, spot, area, point).
 
-.. autofunction:: src.terrain.scene_setup.setup_world_atmosphere
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_world_atmosphere
 
    Add atmospheric scattering effects.
 
@@ -87,22 +87,22 @@ Lighting
 Scene Management
 ----------------
 
-.. autofunction:: src.terrain.scene_setup.clear_scene
+.. autofunction:: terrain_maker.terrain.scene_setup.clear_scene
 
    Remove all objects from the scene before setting up.
 
-.. autofunction:: src.terrain.scene_setup.setup_camera_and_light
+.. autofunction:: terrain_maker.terrain.scene_setup.setup_camera_and_light
 
    Legacy combined camera+light setup (consider using individual functions instead).
 
 Utilities
 ---------
 
-.. autofunction:: src.terrain.scene_setup.create_matte_material
+.. autofunction:: terrain_maker.terrain.scene_setup.create_matte_material
 
    Create matte materials for background objects.
 
-.. autofunction:: src.terrain.scene_setup.hex_to_rgb
+.. autofunction:: terrain_maker.terrain.scene_setup.hex_to_rgb
 
    Convert hex color strings to RGB tuples.
 

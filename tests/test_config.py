@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from src import config
+from terrain_maker import config
 
 
 def test_project_root_exists():

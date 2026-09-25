@@ -12,7 +12,7 @@ import geopandas as gpd
 import shapely.geometry
 from rasterio.transform import Affine
 
-from src.terrain.advanced_viz import (
+from terrain_maker.terrain.advanced_viz import (
     horn_slope,
     create_values_legend,
 )
@@ -201,7 +201,7 @@ class TestCreateValuesLegend:
         values = np.arange(0, 100, dtype=float)  # Values 0-99
         mock_terrain = Mock(bound_box=[(0, 0, 0), (10, 10, 10)], location=Mock(x=0, y=0, z=0))
 
-        with patch("src.terrain.advanced_viz.bpy") as mock_bpy:
+        with patch("terrain_maker.terrain.advanced_viz.bpy") as mock_bpy:
             self._setup_legend_mocks(mock_bpy)
             legend_obj, text_objs = create_values_legend(
                 mock_terrain, values, n_samples=5, label="Test"
@@ -215,7 +215,7 @@ class TestCreateValuesLegend:
         values = np.array([10.0, 20.0, np.nan, 30.0, np.nan, 40.0, 50.0])
         mock_terrain = Mock(bound_box=[(0, 0, 0), (10, 10, 10)], location=Mock(x=0, y=0, z=0))
 
-        with patch("src.terrain.advanced_viz.bpy") as mock_bpy:
+        with patch("terrain_maker.terrain.advanced_viz.bpy") as mock_bpy:
             self._setup_legend_mocks(mock_bpy)
             legend_obj, text_objs = create_values_legend(
                 mock_terrain, values, n_samples=3, label="Test"
@@ -241,7 +241,7 @@ class TestCreateValuesLegend:
             location=Mock(x=5, y=5, z=0),
         )
 
-        with patch("src.terrain.advanced_viz.bpy") as mock_bpy:
+        with patch("terrain_maker.terrain.advanced_viz.bpy") as mock_bpy:
             self._setup_legend_mocks(mock_bpy)
             legend_obj, text_objs = create_values_legend(
                 mock_terrain, values, position_offset=(5, 0, 0)
@@ -255,7 +255,7 @@ class TestCreateValuesLegend:
         values = np.arange(100, dtype=float)
         mock_terrain = Mock(bound_box=[(0, 0, 0), (10, 10, 10)], location=Mock(x=0, y=0, z=0))
 
-        with patch("src.terrain.advanced_viz.bpy") as mock_bpy:
+        with patch("terrain_maker.terrain.advanced_viz.bpy") as mock_bpy:
             self._setup_legend_mocks(mock_bpy)
             legend_obj, text_objs = create_values_legend(
                 mock_terrain, values, colormap_name="viridis"
@@ -270,7 +270,7 @@ class TestCreateValuesLegend:
         mock_terrain = Mock(bound_box=[(0, 0, 0), (10, 10, 10)], location=Mock(x=0, y=0, z=0))
         scale = 0.5
 
-        with patch("src.terrain.advanced_viz.bpy") as mock_bpy:
+        with patch("terrain_maker.terrain.advanced_viz.bpy") as mock_bpy:
             mock_legend_obj = self._setup_legend_mocks(mock_bpy)
             legend_obj, text_objs = create_values_legend(mock_terrain, values, scale=scale)
 
@@ -283,7 +283,7 @@ class TestAdvancedVizIntegration:
 
     def test_functions_importable(self):
         """All advanced viz functions should be importable."""
-        from src.terrain.advanced_viz import (
+        from terrain_maker.terrain.advanced_viz import (
             horn_slope,
             create_values_legend,
         )

@@ -46,7 +46,7 @@ Optional dependencies:
 
 ```python
 # Check terrain-maker
-from src.terrain.core import Terrain
+from terrain_maker.terrain.core import Terrain
 print("terrain-maker OK")
 
 # Check Blender

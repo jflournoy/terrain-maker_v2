@@ -106,7 +106,7 @@ from mathutils import Vector
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     elevation_colormap,
     clear_scene,
@@ -123,8 +123,8 @@ from src.terrain.core import (
     setup_hdri_lighting,
     setup_world_atmosphere,
 )
-from src.terrain.color_mapping import boreal_mako_cmap
-from src.terrain.transforms import (
+from terrain_maker.terrain.color_mapping import boreal_mako_cmap
+from terrain_maker.terrain.transforms import (
     smooth_score_data,
     despeckle_scores,
     despeckle_dem,
@@ -134,9 +134,9 @@ from src.terrain.transforms import (
     downsample_then_reproject,
     upscale_scores,
 )
-from src.terrain.scene_setup import create_background_plane
-from src.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_ring_colors, apply_vertex_positions
-from src.terrain.materials import (
+from terrain_maker.terrain.scene_setup import create_background_plane
+from terrain_maker.terrain.blender_integration import apply_vertex_colors, apply_road_mask, apply_ring_colors, apply_vertex_positions
+from terrain_maker.terrain.materials import (
     apply_terrain_with_obsidian_roads,
     apply_test_material,
     get_all_colors_choices,
@@ -144,13 +144,13 @@ from src.terrain.materials import (
     get_terrain_materials_choices,
     get_terrain_materials_help,
 )
-from src.terrain.data_loading import load_dem_files, load_filtered_hgt_files
-from src.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
-from src.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
-from src.terrain.water import identify_water_by_slope
-from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
-from src.terrain.cache import PipelineCache
-from src.terrain.diagnostics import (
+from terrain_maker.terrain.data_loading import load_dem_files, load_filtered_hgt_files
+from terrain_maker.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
+from terrain_maker.terrain.roads import add_roads_layer, smooth_road_vertices, offset_road_vertices, smooth_road_mask
+from terrain_maker.terrain.water import identify_water_by_slope
+from terrain_maker.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
+from terrain_maker.terrain.cache import PipelineCache
+from terrain_maker.terrain.diagnostics import (
     generate_rgb_histogram,
     generate_luminance_histogram,
     generate_score_histogram,
@@ -586,8 +586,8 @@ def create_component_panels(
     Returns:
         List of Blender mesh objects for the component panels.
     """
-    from src.terrain.color_mapping import elevation_colormap
-    from src.terrain.transforms import downsample_then_reproject, flip_raster, scale_elevation
+    from terrain_maker.terrain.color_mapping import elevation_colormap
+    from terrain_maker.terrain.transforms import downsample_then_reproject, flip_raster, scale_elevation
 
     component_names = ["snow_depth", "snow_coverage", "snow_consistency"]
     component_labels = {
@@ -741,7 +741,7 @@ def create_component_panels(
             logger.info("    ✓ Created mesh '%s' (%d verts)", mesh_obj.name, len(mesh_obj.data.vertices))
             # Apply same terrain material preset as the main mesh
             if mesh_obj.data.materials:
-                from src.terrain.materials import apply_colormap_material as _apply_mat
+                from terrain_maker.terrain.materials import apply_colormap_material as _apply_mat
                 terrain_mat = getattr(args, "terrain_material", "satin")
                 _apply_mat(mesh_obj.data.materials[0], terrain_material=terrain_mat)
                 logger.info("    → Applied '%s' terrain material", terrain_mat)
@@ -2065,7 +2065,7 @@ Examples:
 
     # Rebuild boreal_mako colormap with specified purple position (or without purple)
     # Always rebuild to ensure consistency between visualization and rendering
-    from src.terrain.color_mapping import _build_boreal_mako_cmap, _build_boreal_mako_print_cmap
+    from terrain_maker.terrain.color_mapping import _build_boreal_mako_cmap, _build_boreal_mako_print_cmap
     import matplotlib
     purple_pos = None if args.no_purple else args.purple_position
     custom_boreal_mako = _build_boreal_mako_cmap(
@@ -3345,7 +3345,7 @@ Examples:
             apply_test_material(mesh_combined.data.materials[0], args.test_material)
         else:
             # No roads, no test material - apply terrain material preset directly
-            from src.terrain.materials import apply_colormap_material
+            from terrain_maker.terrain.materials import apply_colormap_material
             logger.info(f"Applying terrain material preset: {args.terrain_material}")
             apply_colormap_material(mesh_combined.data.materials[0], terrain_material=args.terrain_material)
 

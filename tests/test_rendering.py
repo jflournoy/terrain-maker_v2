@@ -33,14 +33,14 @@ class TestSetupRenderSettings:
 
     def test_setup_render_settings_imports(self):
         """Test that setup_render_settings can be imported."""
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         assert callable(setup_render_settings)
 
     def test_setup_render_settings_sets_cycles_engine(self):
         """Test that Cycles render engine is configured."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings()
 
@@ -50,7 +50,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_configures_samples(self):
         """Test that render samples are configured."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         custom_samples = 256
         setup_render_settings(samples=custom_samples)
@@ -60,7 +60,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_configures_denoising(self):
         """Test that denoising is configured."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings(use_denoising=True)
 
@@ -69,7 +69,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_unavailable_denoiser_falls_back(self):
         """An unavailable denoiser (e.g. OPTIX without NVIDIA) should not crash."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings(denoiser="NOT_A_DENOISER")
 
@@ -78,7 +78,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_configures_preview_samples(self):
         """Test that preview samples are configured."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         preview_samples = 64
         setup_render_settings(preview_samples=preview_samples)
@@ -88,7 +88,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_sets_color_management(self):
         """Test that color management is configured for sRGB."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings()
 
@@ -99,7 +99,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_configures_bounces(self):
         """Test that light bounces are configured."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings()
 
@@ -110,7 +110,7 @@ class TestSetupRenderSettings:
     def test_setup_render_settings_cpu_fallback(self):
         """Test that GPU configuration is skipped when use_gpu=False."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Should not raise error when use_gpu=False
         # This just skips GPU configuration, doesn't force CPU
@@ -127,14 +127,14 @@ class TestRenderSceneToFile:
 
     def test_render_scene_to_file_imports(self):
         """Test that render_scene_to_file can be imported."""
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
 
         assert callable(render_scene_to_file)
 
     def test_render_scene_to_file_configures_output_path(self):
         """Test that output path is configured (without actual render)."""
         import bpy
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -154,7 +154,7 @@ class TestRenderSceneToFile:
     def test_render_scene_to_file_configures_resolution(self):
         """Test that resolution is configured."""
         import bpy
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -175,7 +175,7 @@ class TestRenderSceneToFile:
     def test_render_scene_to_file_configures_format(self):
         """Test that file format is configured."""
         import bpy
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -195,7 +195,7 @@ class TestRenderSceneToFile:
     def test_render_scene_to_file_png_compression(self):
         """Test that PNG compression is configured."""
         import bpy
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -214,7 +214,7 @@ class TestRenderSceneToFile:
 
     def test_render_scene_to_file_returns_path_or_none(self):
         """Test that function returns Path or None."""
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -234,7 +234,7 @@ class TestSetupRenderSettingsMemory:
 
     def test_setup_render_settings_accepts_persistent_data(self):
         """Test that use_persistent_data parameter is accepted."""
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Should not raise error when persistent_data is passed
         setup_render_settings(use_persistent_data=True)
@@ -242,7 +242,7 @@ class TestSetupRenderSettingsMemory:
     def test_setup_render_settings_persistent_data_enabled(self):
         """Test that persistent data is enabled when requested."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings(use_persistent_data=True)
 
@@ -252,7 +252,7 @@ class TestSetupRenderSettingsMemory:
     def test_setup_render_settings_persistent_data_disabled_by_default(self):
         """Test that persistent data is not enabled by default."""
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Reset to known state
         bpy.context.scene.render.use_persistent_data = False
@@ -263,7 +263,7 @@ class TestSetupRenderSettingsMemory:
 
     def test_setup_render_settings_accepts_auto_tile(self):
         """Test that use_auto_tile parameter is accepted."""
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Should not raise error when auto_tile is passed
         setup_render_settings(use_auto_tile=True)
@@ -275,7 +275,7 @@ class TestSetupRenderSettingsMemory:
         This is essential for large print-quality renders (3000x2400+).
         """
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings(use_auto_tile=True)
 
@@ -284,7 +284,7 @@ class TestSetupRenderSettingsMemory:
 
     def test_setup_render_settings_accepts_tile_size(self):
         """Test that tile_size parameter is accepted."""
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Should not raise error when tile_size is passed
         setup_render_settings(use_auto_tile=True, tile_size=1024)
@@ -296,7 +296,7 @@ class TestSetupRenderSettingsMemory:
         Typical values: 512, 1024, 2048 pixels.
         """
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         tile_size = 1024
         setup_render_settings(use_auto_tile=True, tile_size=tile_size)
@@ -311,7 +311,7 @@ class TestSetupRenderSettingsMemory:
         be enabled when explicitly requested for large images.
         """
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         # Reset to known state
         bpy.context.scene.cycles.use_auto_tile = False
@@ -328,7 +328,7 @@ class TestSetupRenderSettingsMemory:
         - auto_tile: Splits large image into smaller GPU-friendly tiles
         """
         import bpy
-        from src.terrain.rendering import setup_render_settings
+        from terrain_maker.terrain.rendering import setup_render_settings
 
         setup_render_settings(
             use_persistent_data=True,
@@ -347,63 +347,63 @@ class TestGPUMemoryErrorDetection:
 
     def test_is_gpu_memory_error_detects_cuda_out_of_memory(self):
         """Test detection of CUDA out of memory errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_detects_generic_out_of_memory(self):
         """Test detection of generic out of memory errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("Out of memory allocating render buffer")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_detects_gpu_memory(self):
         """Test detection of GPU memory errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("GPU memory exhausted during rendering")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_detects_vram(self):
         """Test detection of VRAM errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("Insufficient VRAM for tile size")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_detects_cuda_error(self):
         """Test detection of general CUDA errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("CUDA error: device-side assert triggered")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_detects_optix(self):
         """Test detection of OptiX denoiser errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("OptiX denoiser failed to allocate memory")
         assert _is_gpu_memory_error(error) is True
 
     def test_is_gpu_memory_error_ignores_other_errors(self):
         """Test that non-GPU errors are not flagged."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("File not found: scene.blend")
         assert _is_gpu_memory_error(error) is False
 
     def test_is_gpu_memory_error_ignores_network_errors(self):
         """Test that network errors are not flagged as GPU errors."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("Connection timeout reading asset")
         assert _is_gpu_memory_error(error) is False
 
     def test_is_gpu_memory_error_case_insensitive(self):
         """Test that error detection is case insensitive."""
-        from src.terrain.rendering import _is_gpu_memory_error
+        from terrain_maker.terrain.rendering import _is_gpu_memory_error
 
         error = RuntimeError("cuda OUT OF MEMORY error occurred")
         assert _is_gpu_memory_error(error) is True
@@ -414,7 +414,7 @@ class TestRenderRetryParameters:
 
     def test_render_scene_to_file_accepts_max_retries(self):
         """Test that max_retries parameter is accepted."""
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
         from pathlib import Path
 
@@ -426,7 +426,7 @@ class TestRenderRetryParameters:
 
     def test_render_scene_to_file_accepts_retry_delay(self):
         """Test that retry_delay parameter is accepted."""
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
         from pathlib import Path
 
@@ -441,7 +441,7 @@ class TestRenderRetryParameters:
     def test_render_scene_to_file_default_max_retries(self):
         """Test that default max_retries is 3."""
         import inspect
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
 
         sig = inspect.signature(render_scene_to_file)
         assert sig.parameters["max_retries"].default == 3
@@ -449,7 +449,7 @@ class TestRenderRetryParameters:
     def test_render_scene_to_file_default_retry_delay(self):
         """Test that default retry_delay is 5.0 seconds."""
         import inspect
-        from src.terrain.rendering import render_scene_to_file
+        from terrain_maker.terrain.rendering import render_scene_to_file
 
         sig = inspect.signature(render_scene_to_file)
         assert sig.parameters["retry_delay"].default == 5.0

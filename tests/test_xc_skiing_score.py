@@ -9,7 +9,7 @@ XC skiing focuses on snow conditions only (parks handle terrain safety).
 import numpy as np
 import pytest
 
-from src.terrain.scoring import (
+from terrain_maker.terrain.scoring import (
     trapezoid_score,
     xc_skiing_deal_breakers,
     compute_xc_skiing_score,

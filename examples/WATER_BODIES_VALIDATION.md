@@ -234,7 +234,7 @@ flow_water_bodies_small/
 Replace synthetic lakes with real data:
 
 ```python
-from src.terrain.water_bodies import download_water_bodies
+from terrain_maker.terrain.water_bodies import download_water_bodies
 
 # Download NHD (USA only)
 geojson_path = download_water_bodies(
@@ -258,7 +258,7 @@ geojson_path = download_water_bodies(
 Use lake routing in terrain analysis:
 
 ```python
-from src.terrain.flow_accumulation import flow_accumulation
+from terrain_maker.terrain.flow_accumulation import flow_accumulation
 
 results = flow_accumulation(
     dem_path="data/dem.tif",
@@ -283,6 +283,6 @@ Water body integration is working correctly:
 
 ## References
 
-- [flow_accumulation.py](../src/terrain/flow_accumulation.py) - Main flow computation
-- [water_bodies.py](../src/terrain/water_bodies.py) - Lake handling functions
+- [flow_accumulation.py](../src/terrain_maker/terrain/flow_accumulation.py) - Main flow computation
+- [water_bodies.py](../src/terrain_maker/terrain/water_bodies.py) - Lake handling functions
 - [flow-spec.md](../flow-spec.md) - Flow algorithm specification

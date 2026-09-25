@@ -42,7 +42,7 @@ from validate_flow_with_water_bodies import (
 )
 
 # Import water body functions
-from src.terrain.water_bodies import (
+from terrain_maker.terrain.water_bodies import (
     download_water_bodies,
     rasterize_lakes_to_mask,
     identify_outlet_cells,
@@ -50,7 +50,7 @@ from src.terrain.water_bodies import (
 )
 
 # Import flow functions
-from src.terrain.flow_accumulation import (
+from terrain_maker.terrain.flow_accumulation import (
     compute_flow_direction,
     compute_drainage_area,
     compute_upstream_rainfall,

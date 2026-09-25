@@ -15,9 +15,9 @@ from rasterio import Affine
 
 pytest.importorskip("bpy")
 
-from src.terrain import mesh_operations  # noqa: E402
-from src.terrain.color_mapping import elevation_colormap  # noqa: E402
-from src.terrain.core import Terrain  # noqa: E402
+from terrain_maker.terrain import mesh_operations  # noqa: E402
+from terrain_maker.terrain.color_mapping import elevation_colormap  # noqa: E402
+from terrain_maker.terrain.core import Terrain  # noqa: E402
 
 
 def _dem(irregular=False):
