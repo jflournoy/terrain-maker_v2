@@ -220,6 +220,37 @@ def transform_wrapper(transform_func):
     return wrapped_transform
 
 
+def _current_grid(layer_info):
+    """(shape, transform, crs) of a layer after transforms, or its original grid if none ran.
+
+    Layers added after downsampling thus align to the actual mesh dimensions.
+    """
+    if layer_info.get("transformed", False) and "transformed_data" in layer_info:
+        return (
+            layer_info["transformed_data"].shape,
+            layer_info.get("transformed_transform", layer_info["transform"]),
+            layer_info.get("transformed_crs", layer_info["crs"]),
+        )
+    return layer_info["data"].shape, layer_info["transform"], layer_info["crs"]
+
+
+def _reproject_onto_grid(data, transform, crs, shape, dst_transform, dst_crs, resampling, nodata):
+    """Reproject data onto a destination grid; uncovered pixels stay nodata (not 0)."""
+    aligned = np.full(shape, nodata, dtype=data.dtype)
+    reproject(
+        data,
+        aligned,
+        src_transform=transform,
+        src_crs=crs,
+        dst_transform=dst_transform,
+        dst_crs=dst_crs,
+        resampling=resampling,
+        src_nodata=nodata,
+        dst_nodata=nodata,
+    )
+    return aligned
+
+
 class TerrainCache:
     """
     Cache manager for terrain data processing results.
@@ -642,102 +673,31 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
         """
         self.logger.info(f"Adding data layer '{name}'")
 
-        # Handle same_extent_as: calculate transform from reference layer's bounds
         if same_extent_as is not None:
-            if same_extent_as not in self.data_layers:
-                raise KeyError(f"Reference layer '{same_extent_as}' not found for same_extent_as")
-
-            ref_info = self.data_layers[same_extent_as]
-
-            # Use ORIGINAL extent and CRS (before transforms) since the source data
-            # typically covers the same geographic area as the original reference layer.
-            # The reprojection will handle coordinate transformation.
-            ref_data = ref_info["data"]
-            ref_transform = ref_info["transform"]
-            ref_crs = ref_info["crs"]
-
-            # Calculate geographic bounds of reference layer
-            ref_height, ref_width = ref_data.shape
-            # Top-left corner
-            x_origin = ref_transform.c
-            y_origin = ref_transform.f
-            # Bottom-right corner
-            x_end = x_origin + ref_transform.a * ref_width
-            y_end = y_origin + ref_transform.e * ref_height
-
-            # Calculate pixel size for source data to cover same extent
-            src_height, src_width = data.shape
-            pixel_width = (x_end - x_origin) / src_width
-            pixel_height = (y_end - y_origin) / src_height
-
-            # Create transform for source data
-            transform = rasterio.Affine(pixel_width, 0, x_origin, 0, pixel_height, y_origin)
-            crs = ref_crs
-
-            self.logger.info(
-                f"Calculated transform from '{same_extent_as}' extent: "
-                f"origin=({x_origin:.4f}, {y_origin:.4f}), "
-                f"pixel=({pixel_width:.6f}, {pixel_height:.6f})"
-            )
-
-            # If target_layer not specified, use same_extent_as as target
+            transform, crs = self._grid_covering_layer(same_extent_as, data.shape)
             if target_layer is None:
                 target_layer = same_extent_as
-
-        # Validate that transform and crs are provided (either directly or via same_extent_as)
         if transform is None:
-            raise ValueError("transform is required (or use same_extent_as to calculate automatically)")
+            raise ValueError(
+                "transform is required (or use same_extent_as to calculate automatically)"
+            )
         if crs is None:
-            raise ValueError("crs is required (or use same_extent_as to inherit from reference layer)")
+            raise ValueError(
+                "crs is required (or use same_extent_as to inherit from reference layer)"
+            )
 
-        # Store target_layer reference for post-transform alignment
-        target_layer_ref = target_layer
-
-        # Determine target CRS and transform
         if target_layer is not None:
             if target_layer not in self.data_layers:
                 raise KeyError(f"Target layer '{target_layer}' not found")
-
-            target_info = self.data_layers[target_layer]
-
-            # Use transformed data dimensions if transforms have been applied,
-            # otherwise fall back to original dimensions. This ensures data layers
-            # added after downsampling are automatically resampled to match the
-            # actual mesh dimensions.
-            if target_info.get("transformed", False) and "transformed_data" in target_info:
-                target_shape = target_info["transformed_data"].shape
-                target_transform = target_info.get(
-                    "transformed_transform", target_info["transform"]
-                )
-                target_crs = target_info.get("transformed_crs", target_info["crs"])
-                self.logger.debug(
-                    f"Using transformed target shape {target_shape} for layer alignment"
-                )
-            else:
-                target_shape = target_info["data"].shape
-                target_transform = target_info["transform"]
-                target_crs = target_info["crs"]
-
+            target_shape, target_transform, target_crs = _current_grid(
+                self.data_layers[target_layer]
+            )
         elif target_crs is not None:
-            # If target_crs provided but no reference layer, we need a reference layer
+            # Grid of the first layer, in the requested CRS
             if not self.data_layers:
                 raise ValueError("Cannot determine target grid without reference layer")
-
-            # Use first layer as reference for grid
-            reference_layer = next(iter(self.data_layers.values()))
-
-            # Use transformed dimensions if available
-            if reference_layer.get("transformed", False) and "transformed_data" in reference_layer:
-                target_transform = reference_layer.get(
-                    "transformed_transform", reference_layer["transform"]
-                )
-                target_shape = reference_layer["transformed_data"].shape
-            else:
-                target_transform = reference_layer["transform"]
-                target_shape = reference_layer["data"].shape
-
+            target_shape, target_transform, _ = _current_grid(next(iter(self.data_layers.values())))
         else:
-            # If no target specified, keep original
             self.data_layers[name] = {
                 "data": data,
                 "transform": transform,
@@ -748,69 +708,74 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
             self.logger.info(f"Added layer '{name}' with original CRS {crs}")
             return
 
-        # Resolve nodata value: explicit arg > auto-detect from dtype
-        if nodata is None:
-            nodata_value = np.nan if np.issubdtype(data.dtype, np.floating) else 0
-        else:
-            nodata_value = nodata
-
-        # Create target array and reproject if needed
-        # Note: Affine.__ne__ returns array, so use tuple comparison instead
-        transforms_differ = (crs != target_crs) or (tuple(transform) != tuple(target_transform))
-        if transforms_differ:
-            self.logger.info(f"Reprojecting from {crs} to {target_crs}")
-            self.logger.info(f"Transforms: {transform} to {target_transform}")
-            # Initialise with nodata so uncovered destination pixels don't become 0
-            aligned_data = np.full(target_shape, nodata_value, dtype=data.dtype)
-
-            try:
-                reproject(
-                    data,
-                    aligned_data,
-                    src_transform=transform,
-                    src_crs=crs,
-                    dst_transform=target_transform,
-                    dst_crs=target_crs,
-                    resampling=resampling,
-                    src_nodata=nodata_value,
-                    dst_nodata=nodata_value,
-                )
-
-                # Store reprojected data
-                self.data_layers[name] = {
-                    "data": aligned_data,
-                    "transform": target_transform,
-                    "crs": target_crs,
-                    "original_data": data,
-                    "original_transform": transform,
-                    "original_crs": crs,
-                    "transformed": False,
-                    "target_layer": target_layer_ref,
-                }
-
-                self.logger.info(f"Successfully added layer '{name}' (reprojected):")
-                self.logger.info(f"  Shape: {aligned_data.shape}")
-                valid_pixels = aligned_data[~np.isnan(aligned_data)] if np.issubdtype(aligned_data.dtype, np.floating) else aligned_data.ravel()
-                if valid_pixels.size > 0:
-                    self.logger.info(
-                        f"  Value range: {valid_pixels.min():.2f} to {valid_pixels.max():.2f}"
-                    )
-                else:
-                    self.logger.info("  Value range: all nodata (no valid pixels after reprojection)")
-
-            except Exception as e:
-                self.logger.error(f"Failed to reproject layer '{name}': {str(e)}")
-                raise
-        else:
-            # No reprojection needed
+        # Affine.__ne__ returns an array, so compare as tuples
+        if crs == target_crs and tuple(transform) == tuple(target_transform):
             self.data_layers[name] = {
                 "data": data,
                 "transform": transform,
                 "crs": crs,
                 "transformed": False,
-                "target_layer": target_layer_ref,
+                "target_layer": target_layer,
             }
             self.logger.info(f"Added layer '{name}' (no reprojection needed)")
+            return
+
+        if nodata is None:
+            nodata = np.nan if np.issubdtype(data.dtype, np.floating) else 0
+        self.logger.info(f"Reprojecting from {crs} to {target_crs}")
+        self.logger.info(f"Transforms: {transform} to {target_transform}")
+        try:
+            aligned_data = _reproject_onto_grid(
+                data, transform, crs, target_shape, target_transform, target_crs, resampling, nodata
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to reproject layer '{name}': {str(e)}")
+            raise
+
+        self.data_layers[name] = {
+            "data": aligned_data,
+            "transform": target_transform,
+            "crs": target_crs,
+            "original_data": data,
+            "original_transform": transform,
+            "original_crs": crs,
+            "transformed": False,
+            "target_layer": target_layer,
+        }
+        self.logger.info(f"Successfully added layer '{name}' (reprojected):")
+        self.logger.info(f"  Shape: {aligned_data.shape}")
+        valid = (
+            aligned_data[~np.isnan(aligned_data)]
+            if np.issubdtype(aligned_data.dtype, np.floating)
+            else aligned_data.ravel()
+        )
+        if valid.size > 0:
+            self.logger.info(f"  Value range: {valid.min():.2f} to {valid.max():.2f}")
+        else:
+            self.logger.info("  Value range: all nodata (no valid pixels after reprojection)")
+
+    def _grid_covering_layer(self, layer_name, shape):
+        """Transform and CRS that stretch an array of shape over a layer's original extent.
+
+        Uses the layer's ORIGINAL (pre-transform) grid: source data usually covers the
+        same area as the original reference, and reprojection handles the rest.
+        """
+        if layer_name not in self.data_layers:
+            raise KeyError(f"Reference layer '{layer_name}' not found for same_extent_as")
+        ref = self.data_layers[layer_name]
+        ref_height, ref_width = ref["data"].shape
+        ref_transform = ref["transform"]
+        x_origin, y_origin = ref_transform.c, ref_transform.f
+        x_end = x_origin + ref_transform.a * ref_width
+        y_end = y_origin + ref_transform.e * ref_height
+        pixel_width = (x_end - x_origin) / shape[1]
+        pixel_height = (y_end - y_origin) / shape[0]
+        self.logger.info(
+            f"Calculated transform from '{layer_name}' extent: "
+            f"origin=({x_origin:.4f}, {y_origin:.4f}), "
+            f"pixel=({pixel_width:.6f}, {pixel_height:.6f})"
+        )
+        return rasterio.Affine(pixel_width, 0, x_origin, 0, pixel_height, y_origin), ref["crs"]
 
     def get_bbox_wgs84(self, layer: str = "dem") -> tuple[float, float, float, float]:
         """
@@ -1271,4 +1236,4 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
 
         return zoom_factor
 
-                # Keep alpha unchanged
+        # Keep alpha unchanged
