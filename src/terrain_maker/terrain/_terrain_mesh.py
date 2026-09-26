@@ -287,11 +287,8 @@ class TerrainMeshMixin:
         return identify_water_by_slope(dem_data, slope_threshold=slope_threshold, fill_holes=True)
 
     def _apply_water_gradient(self, water_mask, dem_shape):
-        """Recolor water vertices with a shoreline-to-deep blue gradient (vintage map style).
-
-        Only a band of shoreline_width pixels gets the gradient; interior water is uniform dark.
-        """
-        from scipy.ndimage import distance_transform_edt
+        """Recolor water vertices with a shoreline-to-deep blue gradient (vintage map style)."""
+        from terrain_maker.terrain.water import shoreline_water_colors
 
         # Colors may come from a layer at a different resolution than the water mask
         expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_shape
@@ -311,22 +308,11 @@ class TerrainMeshMixin:
                 prefilter=False,
             ).astype(np.bool_)
 
-        water_distances = distance_transform_edt(water_mask)
-        edge_color = np.array([25, 85, 125], dtype=np.float32)  # medium blue (shore)
-        center_color = np.array([15, 50, 85], dtype=np.float32)  # deep blue (interior)
-        shoreline_width = 12
-
-        water_vertex_indices = np.where(water_mask[self.y_valid, self.x_valid])[0]
+        water_vertex_indices, water_colors = shoreline_water_colors(
+            water_mask, self.y_valid, self.x_valid
+        )
         water_y = self.y_valid[water_vertex_indices]
         water_x = self.x_valid[water_vertex_indices]
-        distances = water_distances[water_y, water_x]
-
-        # t: 0 at the shore edge (light), 1 in the interior (dark); sqrt softens the ramp
-        t = np.ones_like(distances)
-        in_band = distances < shoreline_width
-        t[in_band] = distances[in_band] / shoreline_width
-        t = np.power(t, 0.5)[:, np.newaxis]
-        water_colors = (edge_color * (1 - t) + center_color * t).astype(np.uint8)
 
         # Colors are either grid-space (H, W, 4) or vertex-space (N, 4)
         if self.colors.ndim == 3:

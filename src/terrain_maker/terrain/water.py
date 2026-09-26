@@ -128,3 +128,32 @@ def _smooth_water_mask(water_mask, structure_size=3):
     smoothed = ndimage.binary_closing(water_mask, structure=structure, iterations=1)
 
     return smoothed
+
+
+def shoreline_water_colors(water_mask, y_valid, x_valid, shoreline_width=12):
+    """Vertex colors for water in a cartographic shoreline-vignette style.
+
+    Water within shoreline_width pixels of the shore ramps from light to deep blue;
+    interior water is uniformly deep blue.
+
+    Args:
+        water_mask: Boolean (H, W) grid, True = water.
+        y_valid, x_valid: Grid (row, col) of each surface vertex.
+        shoreline_width: Width in pixels of the gradient band.
+
+    Returns:
+        (vertex_indices, rgb): indices of water vertices and their uint8 RGB colors.
+    """
+    edge_color = np.array([25, 85, 125], dtype=np.float32)  # light blue (shore)
+    center_color = np.array([15, 50, 85], dtype=np.float32)  # deep blue (interior)
+
+    water_distances = ndimage.distance_transform_edt(water_mask)
+    vertex_indices = np.where(water_mask[y_valid, x_valid])[0]
+    distances = water_distances[y_valid[vertex_indices], x_valid[vertex_indices]]
+
+    # t: 0 at the shore (light), 1 in the interior (dark); sqrt softens the ramp
+    t = np.ones_like(distances)
+    in_band = distances < shoreline_width
+    t[in_band] = distances[in_band] / shoreline_width
+    t = np.power(t, 0.5)[:, np.newaxis]
+    return vertex_indices, (edge_color * (1 - t) + center_color * t).astype(np.uint8)

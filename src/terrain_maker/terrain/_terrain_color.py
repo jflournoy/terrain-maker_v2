@@ -5,11 +5,22 @@ from __future__ import annotations
 
 import numpy as np
 import logging
-from typing import Optional, Dict, Any, Callable
 
+from terrain_maker.terrain.water import shoreline_water_colors
+from typing import Optional, Dict, Any, Callable
 
 # Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
+
+
+def _as_rgba(colors):
+    """Append an opaque alpha channel to RGB colors (255 for uint8, else 1)."""
+    if colors.shape[-1] != 3:
+        return colors
+    alpha = np.full(
+        colors.shape[:2] + (1,), 255 if colors.dtype == np.uint8 else 1, dtype=colors.dtype
+    )
+    return np.concatenate([colors, alpha], axis=-1)
 
 
 class TerrainColorMixin:
@@ -226,7 +237,9 @@ class TerrainColorMixin:
 
         self.logger.info("Blended color mapping configured:")
         self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
-        self.logger.info(f"  Overlay colormap: {overlay_colormap.__name__} on {overlay_source_layers}")
+        self.logger.info(
+            f"  Overlay colormap: {overlay_colormap.__name__} on {overlay_source_layers}"
+        )
 
         # Log mask info (grid-space or vertex-space)
         mask_sum = np.sum(overlay_mask)
@@ -366,14 +379,7 @@ class TerrainColorMixin:
         self.logger.info("Computing colors...")
 
         # Prepare color data arrays
-        color_arrays = [
-            (
-                self.data_layers[layer]["transformed_data"]
-                if self.data_layers[layer].get("transformed")
-                else self.data_layers[layer]["data"]
-            )
-            for layer in self.color_sources
-        ]
+        color_arrays = [self._layer_array(layer) for layer in self.color_sources]
 
         # Compute base colors
         try:
@@ -391,24 +397,11 @@ class TerrainColorMixin:
             )
 
         # Ensure RGBA
-        if colors.shape[-1] == 3:
-            # Create alpha channel with appropriate max value for the data type
-            if colors.dtype == np.uint8:
-                alpha_channel = np.full(colors.shape[:2] + (1,), 255, dtype=colors.dtype)
-            else:
-                alpha_channel = np.ones(colors.shape[:2] + (1,), dtype=colors.dtype)
-            colors = np.concatenate([colors, alpha_channel], axis=-1)
+        colors = _as_rgba(colors)
 
         # Apply mask if provided
         if self.mask_func:
-            mask_arrays = [
-                (
-                    self.data_layers[layer]["transformed_data"]
-                    if self.data_layers[layer].get("transformed")
-                    else self.data_layers[layer]["data"]
-                )
-                for layer in self.mask_sources
-            ]
+            mask_arrays = [self._layer_array(layer) for layer in self.mask_sources]
 
             try:
                 mask = self.mask_func(*mask_arrays, **self.mask_kwargs)
@@ -444,168 +437,72 @@ class TerrainColorMixin:
             np.ndarray: RGBA color array with blended colors.
         """
         self.logger.info("Computing blended colors...")
-
-        # Get transformed DEM data to determine grid shape
-        dem_data = self.data_layers["dem"]["transformed_data"]
-        height, width = dem_data.shape
-
-        # Compute base colors for all pixels
-        base_arrays = [
-            (
-                self.data_layers[layer]["transformed_data"]
-                if self.data_layers[layer].get("transformed")
-                else self.data_layers[layer]["data"]
+        base_grid = _as_rgba(
+            self._apply_colormap(
+                self.base_colormap, self.base_color_sources, self.base_color_kwargs, "base"
             )
-            for layer in self.base_color_sources
-        ]
-
-        try:
-            base_colors_grid = self.base_colormap(*base_arrays, **self.base_color_kwargs)
-        except Exception as e:
-            self.logger.error(f"Error computing base colors: {str(e)}")
-            raise
-
-        # Compute overlay colors for all pixels
-        overlay_arrays = [
-            (
-                self.data_layers[layer]["transformed_data"]
-                if self.data_layers[layer].get("transformed")
-                else self.data_layers[layer]["data"]
+        )
+        overlay_grid = _as_rgba(
+            self._apply_colormap(
+                self.overlay_colormap,
+                self.overlay_color_sources,
+                self.overlay_color_kwargs,
+                "overlay",
             )
-            for layer in self.overlay_color_sources
-        ]
+        )
+        base_vertex_colors = base_grid[self.y_valid, self.x_valid]
+        overlay_vertex_colors = overlay_grid[self.y_valid, self.x_valid]
 
-        try:
-            overlay_colors_grid = self.overlay_colormap(*overlay_arrays, **self.overlay_color_kwargs)
-        except Exception as e:
-            self.logger.error(f"Error computing overlay colors: {str(e)}")
-            raise
-
-        # Ensure both are RGBA
-        for colors_grid, name in [(base_colors_grid, "base"), (overlay_colors_grid, "overlay")]:
-            if colors_grid.shape[-1] == 3:
-                if colors_grid.dtype == np.uint8:
-                    alpha = np.full(colors_grid.shape[:2] + (1,), 255, dtype=colors_grid.dtype)
-                else:
-                    alpha = np.ones(colors_grid.shape[:2] + (1,), dtype=colors_grid.dtype)
-                if name == "base":
-                    base_colors_grid = np.concatenate([colors_grid, alpha], axis=-1)
-                else:
-                    overlay_colors_grid = np.concatenate([colors_grid, alpha], axis=-1)
-
-        # Map grid colors to vertex colors using y_valid, x_valid
-        # These map vertex index to (row, col) in the grid
-        base_vertex_colors = base_colors_grid[self.y_valid, self.x_valid]
-        overlay_vertex_colors = overlay_colors_grid[self.y_valid, self.x_valid]
-
-        # Handle boundary vertices if they exist
-        # Boundary vertices (from boundary_extension) don't map to grid pixels
-        # Use nearest valid pixel color (or default color)
-        num_surface_vertices = len(self.y_valid)
-        # vertices may not be set yet if compute_colors() is called early
-        num_total_vertices = len(self.vertices) if self.vertices is not None else num_surface_vertices
-
-        if num_total_vertices > num_surface_vertices:
-            # Has boundary vertices - pad with default color
-            self.logger.info(
-                f"  Padding colors for {num_total_vertices - num_surface_vertices} boundary vertices"
-            )
-            # Use mean color for boundary (or could use edge colors)
-            default_color = np.mean(base_vertex_colors, axis=0).astype(base_vertex_colors.dtype)
-
-            # Extend vertex colors arrays
-            base_vertex_colors = np.vstack(
-                [base_vertex_colors, np.tile(default_color, (num_total_vertices - num_surface_vertices, 1))]
-            )
-            overlay_vertex_colors = np.vstack(
-                [
-                    overlay_vertex_colors,
-                    np.tile(default_color, (num_total_vertices - num_surface_vertices, 1)),
-                ]
-            )
-
-        # Convert overlay_mask to vertex-space if it's grid-space
-        if self.overlay_mask.ndim == 2:
-            # Grid-space mask: convert to vertex-space using y_valid, x_valid
-            self.logger.info(f"  Converting grid-space mask to vertex-space...")
-            overlay_mask_vertex = self.overlay_mask[self.y_valid, self.x_valid]
-
-            # Pad with False for boundary vertices if they exist
-            if num_total_vertices > num_surface_vertices:
-                padding = np.zeros(num_total_vertices - num_surface_vertices, dtype=bool)
-                overlay_mask_vertex = np.concatenate([overlay_mask_vertex, padding])
-        else:
-            # Already vertex-space
-            overlay_mask_vertex = self.overlay_mask
-
-        # Blend colors using overlay_mask: True = overlay, False = base
-        colors = np.where(
-            overlay_mask_vertex[:, None],  # Broadcast to (N, 1) for RGBA channels
-            overlay_vertex_colors,
-            base_vertex_colors,
+        # Masks may be grid-space (H, W) or already vertex-space (N,)
+        grid_mask = self.overlay_mask.ndim == 2
+        overlay_mask = (
+            self.overlay_mask[self.y_valid, self.x_valid] if grid_mask else self.overlay_mask
         )
 
-        num_overlay = np.sum(overlay_mask_vertex)
-        num_base = len(overlay_mask_vertex) - num_overlay
+        # Boundary (skirt) vertices exist only after create_mesh and don't map to pixels:
+        # give them the mean base color and never the overlay
+        n_surface = len(self.y_valid)
+        n_boundary = (len(self.vertices) if self.vertices is not None else n_surface) - n_surface
+        if n_boundary > 0:
+            self.logger.info(f"  Padding colors for {n_boundary} boundary vertices")
+            fill = np.tile(
+                np.mean(base_vertex_colors, axis=0).astype(base_vertex_colors.dtype),
+                (n_boundary, 1),
+            )
+            base_vertex_colors = np.vstack([base_vertex_colors, fill])
+            overlay_vertex_colors = np.vstack([overlay_vertex_colors, fill])
+            if grid_mask:
+                overlay_mask = np.concatenate([overlay_mask, np.zeros(n_boundary, dtype=bool)])
+
+        colors = np.where(overlay_mask[:, None], overlay_vertex_colors, base_vertex_colors)
+        num_overlay = np.sum(overlay_mask)
         self.logger.info(
-            f"Blended colors computed: {num_overlay} overlay vertices, {num_base} base vertices"
+            f"Blended colors computed: {num_overlay} overlay vertices, "
+            f"{len(overlay_mask) - num_overlay} base vertices"
         )
 
-        # Apply water coloring if water mask provided
         if water_mask is not None:
-            self.logger.info(f"Applying water coloring to blended vertex colors...")
-            self.logger.debug(f"  Water mask shape: {water_mask.shape}")
-            self.logger.debug(f"  DEM shape: {dem_data.shape}")
-            self.logger.debug(f"  Num surface vertices: {num_surface_vertices}")
-            self.logger.debug(f"  y_valid range: {self.y_valid.min()}-{self.y_valid.max()}")
-            self.logger.debug(f"  x_valid range: {self.x_valid.min()}-{self.x_valid.max()}")
-
-            # Create shoreline vignette for water bodies (cartographic style)
-            # Compute distance transform to measure distance from water edges (shores)
-            from scipy.ndimage import distance_transform_edt
-
-            water_distances = distance_transform_edt(water_mask)
-
-            # Define gradient colors for shoreline vignette
-            edge_color = np.array([25, 85, 125], dtype=np.float32)  # Light blue (shore)
-            center_color = np.array([15, 50, 85], dtype=np.float32)  # Dark blue (interior)
-
-            # Map water mask from grid space to vertex space (vectorized)
-            # Only for surface vertices (not boundary vertices)
-            water_at_vertices = water_mask[self.y_valid, self.x_valid]
-            water_vertex_indices = np.where(water_at_vertices)[0]
-
-            # Get raw pixel distances for all water vertices
-            water_y = self.y_valid[water_vertex_indices]
-            water_x = self.x_valid[water_vertex_indices]
-            water_pixel_distances = water_distances[water_y, water_x]
-
-            # Cartographic shoreline vignette style (vintage map aesthetic)
-            # Gradient only in shoreline band; interior water is uniform dark
-            shoreline_width_pixels = 12
-
-            # t=1 means dark (interior), t=0 means light (at shore edge)
-            # Start with all water as interior (dark)
-            t = np.ones_like(water_pixel_distances)
-
-            # Apply gradient only within shoreline band
-            in_shoreline_band = water_pixel_distances < shoreline_width_pixels
-            t[in_shoreline_band] = water_pixel_distances[in_shoreline_band] / shoreline_width_pixels
-
-            # Power curve for smoother transition
-            t = np.power(t, 0.5)[:, np.newaxis]
-            water_colors = edge_color * (1 - t) + center_color * t
-
-            # Apply gradient colors to water vertices
-            surface_colors = colors[:num_surface_vertices]
-            surface_colors[water_vertex_indices, :3] = water_colors.astype(np.uint8)
-            water_vertex_count = len(water_vertex_indices)
-
-            self.logger.info(f"Water colored blue ({water_vertex_count} vertices)")
+            water_indices, water_colors = shoreline_water_colors(
+                water_mask, self.y_valid, self.x_valid
+            )
+            colors[water_indices, :3] = water_colors
+            self.logger.info(f"Water colored blue ({len(water_indices)} vertices)")
 
         self.colors = colors
-
         return colors
+
+    def _layer_array(self, layer):
+        """A layer's data after transforms, or its original data if none ran."""
+        info = self.data_layers[layer]
+        return info["transformed_data"] if info.get("transformed") else info["data"]
+
+    def _apply_colormap(self, colormap, source_layers, kwargs, label):
+        """Run a colormap on the named layers, logging which mapping failed."""
+        try:
+            return colormap(*[self._layer_array(layer) for layer in source_layers], **kwargs)
+        except Exception as e:
+            self.logger.error(f"Error computing {label} colors: {str(e)}")
+            raise
 
     def _compute_multi_overlay_colors(self, water_mask=None):
         """
@@ -633,14 +530,7 @@ class TerrainColorMixin:
         height, width = dem_data.shape
 
         # Compute base colors for all pixels
-        base_arrays = [
-            (
-                self.data_layers[layer]["transformed_data"]
-                if self.data_layers[layer].get("transformed")
-                else self.data_layers[layer]["data"]
-            )
-            for layer in self.base_color_sources
-        ]
+        base_arrays = [self._layer_array(layer) for layer in self.base_color_sources]
 
         try:
             base_colors_grid = self.base_colormap(*base_arrays, **self.base_color_kwargs)
@@ -649,12 +539,7 @@ class TerrainColorMixin:
             raise
 
         # Ensure base colors are RGBA
-        if base_colors_grid.shape[-1] == 3:
-            if base_colors_grid.dtype == np.uint8:
-                alpha = np.full(base_colors_grid.shape[:2] + (1,), 255, dtype=base_colors_grid.dtype)
-            else:
-                alpha = np.ones(base_colors_grid.shape[:2] + (1,), dtype=base_colors_grid.dtype)
-            base_colors_grid = np.concatenate([base_colors_grid, alpha], axis=-1)
+        base_colors_grid = _as_rgba(base_colors_grid)
 
         # Initialize result grid with base colors
         result_colors_grid = np.copy(base_colors_grid)
@@ -667,14 +552,7 @@ class TerrainColorMixin:
             priority = overlay["priority"]
 
             # Get overlay source data
-            overlay_arrays = [
-                (
-                    self.data_layers[layer]["transformed_data"]
-                    if self.data_layers[layer].get("transformed")
-                    else self.data_layers[layer]["data"]
-                )
-                for layer in overlay_sources
-            ]
+            overlay_arrays = [self._layer_array(layer) for layer in overlay_sources]
 
             try:
                 overlay_colors_grid = overlay_colormap(*overlay_arrays, **overlay_kwargs)
@@ -683,12 +561,7 @@ class TerrainColorMixin:
                 raise
 
             # Ensure overlay colors are RGBA
-            if overlay_colors_grid.shape[-1] == 3:
-                if overlay_colors_grid.dtype == np.uint8:
-                    alpha = np.full(overlay_colors_grid.shape[:2] + (1,), 255, dtype=overlay_colors_grid.dtype)
-                else:
-                    alpha = np.ones(overlay_colors_grid.shape[:2] + (1,), dtype=overlay_colors_grid.dtype)
-                overlay_colors_grid = np.concatenate([overlay_colors_grid, alpha], axis=-1)
+            overlay_colors_grid = _as_rgba(overlay_colors_grid)
 
             # Create mask for where this overlay applies
             # Option 1: Explicit mask provided (e.g., park_mask for proximity-based overlays)
@@ -719,14 +592,18 @@ class TerrainColorMixin:
                         f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
                         f"{np.sum(overlay_mask)} grid pixels"
                     )
-                elif has_mesh and len(explicit_mask.shape) == 1 and len(explicit_mask) >= len(self.y_valid):
+                elif (
+                    has_mesh
+                    and len(explicit_mask.shape) == 1
+                    and len(explicit_mask) >= len(self.y_valid)
+                ):
                     # Vertex-space mask but might include boundary vertices
                     self.logger.info(
                         f"Overlay {overlay_idx}: mask has {len(explicit_mask)} entries, "
                         f"using first {len(self.y_valid)} for surface vertices"
                     )
                     overlay_mask = np.zeros(grid_shape, dtype=bool)
-                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask[:len(self.y_valid)]
+                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask[: len(self.y_valid)]
                     use_explicit_mask = True
                     self.logger.info(
                         f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
