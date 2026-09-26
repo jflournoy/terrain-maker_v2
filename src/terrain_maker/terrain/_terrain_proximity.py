@@ -368,6 +368,7 @@ class TerrainProximityMixin:
         Args:
             ring_mask: 2D boolean array matching DEM shape. True = apply ring color.
             ring_color: RGB tuple (0-1 range) for ring color. Default: dark gray.
+                Scaled to 0-255 when colors are stored as integers.
 
         Raises:
             ValueError: If ring_mask shape doesn't match DEM or colors not initialized.
@@ -379,6 +380,14 @@ class TerrainProximityMixin:
 
         ys = np.clip(self.y_valid, 0, ring_mask.shape[0] - 1).astype(int)
         xs = np.clip(self.x_valid, 0, ring_mask.shape[1] - 1).astype(int)
-        in_ring = np.nonzero(ring_mask[ys, xs])[0]
-        for channel in range(3):
-            self.colors[in_ring, channel] = ring_color[channel]
+        in_ring = ring_mask[ys, xs]
+
+        # compute_colors stores 0-255 integers; float colors are taken as 0-1
+        color = np.asarray(ring_color[:3], dtype=float)
+        if np.issubdtype(self.colors.dtype, np.integer):
+            color = np.round(color * 255)
+        # Colors are grid-space (H, W, C) from compute_colors, or per-vertex (N, C)
+        if self.colors.ndim == 3:
+            self.colors[self.y_valid[in_ring], self.x_valid[in_ring], :3] = color
+        else:
+            self.colors[np.nonzero(in_ring)[0], :3] = color
