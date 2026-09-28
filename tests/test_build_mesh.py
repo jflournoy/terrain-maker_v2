@@ -51,3 +51,11 @@ def test_float_colors_in_unit_range_are_kept():
     colors = vertex_colors_rgba(3, grid, np.array([0, 0]), np.array([0, 1]))
     np.testing.assert_allclose(colors[:2], 0.5)
     np.testing.assert_allclose(colors[2], 1.0)  # uncolored vertex is white
+
+
+def test_vertices_outside_the_color_grid_are_an_error_not_white():
+    import pytest
+
+    grid = np.zeros((2, 2, 4), dtype=np.uint8)
+    with pytest.raises(ValueError, match="outside"):
+        vertex_colors_rgba(3, grid, np.array([0, 1, 5]), np.array([0, 1, 0]))
