@@ -1799,6 +1799,10 @@ def upscale_scores(
     data = scores.copy()
     if np.any(mask):
         from scipy.ndimage import distance_transform_edt
+
+        from terrain_maker.terrain._memory import EDT_INDICES, check_memory
+
+        check_memory(mask.size, EDT_INDICES, "Nearest-neighbor nodata fill (upscale_scores)")
         # Fill nodata with nearest neighbor
         indices = distance_transform_edt(mask, return_distances=False, return_indices=True)
         data = data[tuple(indices)]

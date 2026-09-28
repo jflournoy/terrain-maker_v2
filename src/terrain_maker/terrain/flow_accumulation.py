@@ -584,6 +584,9 @@ def _load_aligned_precipitation(
 
         from scipy.ndimage import distance_transform_edt
 
+        from terrain_maker.terrain._memory import EDT_INDICES, check_memory
+
+        check_memory(nodata_mask.size, EDT_INDICES, "Precipitation nodata imputation")
         # Find indices of nearest valid values
         # Returns shape (ndim, *input_shape) - for 2D: (2, H, W)
         indices = distance_transform_edt(nodata_mask, return_distances=False, return_indices=True)

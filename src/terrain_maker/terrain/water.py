@@ -11,6 +11,8 @@ from scipy import ndimage
 from scipy.ndimage import generic_filter
 import logging
 
+from terrain_maker.terrain._memory import EDT_DISTANCES, check_memory
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,6 +149,7 @@ def shoreline_water_colors(water_mask, y_valid, x_valid, shoreline_width=12):
     edge_color = np.array([25, 85, 125], dtype=np.float32)  # light blue (shore)
     center_color = np.array([15, 50, 85], dtype=np.float32)  # deep blue (interior)
 
+    check_memory(water_mask.size, EDT_DISTANCES, "Shoreline water gradient")
     water_distances = ndimage.distance_transform_edt(water_mask)
     vertex_indices = np.where(water_mask[y_valid, x_valid])[0]
     distances = water_distances[y_valid[vertex_indices], x_valid[vertex_indices]]

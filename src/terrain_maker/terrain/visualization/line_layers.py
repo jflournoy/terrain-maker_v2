@@ -259,6 +259,9 @@ def expand_lines_variable_width_fast(line_mask, metric_data, max_width, min_widt
     # FAST APPROACH: Single distance transform instead of iterative dilation
     # Find nearest line pixel for every pixel
     t_distance_start = time.time()
+    from terrain_maker.terrain._memory import EDT_DISTANCES_AND_INDICES, check_memory
+
+    check_memory(line_mask.size, EDT_DISTANCES_AND_INDICES, "Variable-width line expansion")
     distances, indices = distance_transform_edt(~line_mask, return_indices=True)
     if pixels_in_millions > 5:
         logger.info(f"  Distance transform: {time.time() - t_distance_start:.1f}s")
