@@ -8,7 +8,6 @@ try:
     import bpy
 except ImportError:
     bpy = None
-from scipy.ndimage import zoom
 import numpy as np
 import logging
 
@@ -186,7 +185,7 @@ class TerrainMeshMixin:
         if self._has_color_mapping() and not hasattr(self, "colors"):
             self.compute_colors()
         if water_mask is not None and getattr(self, "colors", None) is not None:
-            self._apply_water_gradient(water_mask, dem_data.shape)
+            self._apply_water_gradient(self.colors, water_mask)
 
         if center_model:
             self.logger.info("Centering model at origin...")
@@ -268,11 +267,7 @@ class TerrainMeshMixin:
 
     def _has_color_mapping(self):
         """True if any color mapping mode (standard, blended, multi-overlay) is configured."""
-        return (
-            hasattr(self, "color_mapping")
-            or hasattr(self, "base_colormap")
-            or hasattr(self, "color_mapping_mode")
-        )
+        return getattr(self, "_color_spec", None) is not None
 
     def _resolve_water_mask(self, dem_data, detect_water, water_mask, slope_threshold):
         """The given water mask, a slope-detected one when detect_water is set, or None."""
@@ -285,41 +280,6 @@ class TerrainMeshMixin:
 
         self.logger.info(f"Detecting water bodies (slope threshold: {slope_threshold})...")
         return identify_water_by_slope(dem_data, slope_threshold=slope_threshold, fill_holes=True)
-
-    def _apply_water_gradient(self, water_mask, dem_shape):
-        """Recolor water vertices with a shoreline-to-deep blue gradient (vintage map style)."""
-        from terrain_maker.terrain.water import shoreline_water_colors
-
-        # Colors may come from a layer at a different resolution than the water mask
-        expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_shape
-        if water_mask.shape != expected_shape:
-            self.logger.warning(
-                f"Water mask shape {water_mask.shape} does not match colors shape {expected_shape}. "
-                f"Resampling water mask to match colors. This can happen when colors are computed from "
-                f"a different layer than DEM (e.g., score layers)."
-            )
-            water_mask = zoom(
-                water_mask.astype(np.float32),
-                zoom=(
-                    expected_shape[0] / water_mask.shape[0],
-                    expected_shape[1] / water_mask.shape[1],
-                ),
-                order=0,  # nearest neighbor keeps it boolean
-                prefilter=False,
-            ).astype(np.bool_)
-
-        water_vertex_indices, water_colors = shoreline_water_colors(
-            water_mask, self.y_valid, self.x_valid
-        )
-        water_y = self.y_valid[water_vertex_indices]
-        water_x = self.x_valid[water_vertex_indices]
-
-        # Colors are either grid-space (H, W, 4) or vertex-space (N, 4)
-        if self.colors.ndim == 3:
-            self.colors[water_y, water_x, :3] = water_colors
-        else:
-            self.colors[water_vertex_indices, :3] = water_colors
-        self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
 
     def _create_skirt(
         self,

@@ -143,14 +143,14 @@ CASES = {
 }
 EXPECTED = {
     "blend_after_mesh_padding": {
-        "shape": (3513, 4),
+        "shape": (40, 48, 4),
         "dtype": "uint8",
-        "colors": "e7b435f89a580c3b",
+        "colors": "6b03f6df941b40c7",
     },
-    "blend_grid_mask": {"shape": (1920, 4), "dtype": "uint8", "colors": "6b03f6df941b40c7"},
-    "blend_rgb_overlay": {"shape": (1920, 4), "dtype": "uint8", "colors": "5f2ac1a2532a32d0"},
-    "blend_vertex_mask": {"shape": (1920, 4), "dtype": "uint8", "colors": "6b03f6df941b40c7"},
-    "blend_water": {"shape": (3513, 4), "dtype": "uint8", "colors": "abf501ec525a6a7c"},
+    "blend_grid_mask": {"shape": (40, 48, 4), "dtype": "uint8", "colors": "6b03f6df941b40c7"},
+    "blend_rgb_overlay": {"shape": (40, 48, 4), "dtype": "uint8", "colors": "5f2ac1a2532a32d0"},
+    "blend_vertex_mask": {"shape": (40, 48, 4), "dtype": "uint8", "colors": "6b03f6df941b40c7"},
+    "blend_water": {"shape": (40, 48, 4), "dtype": "uint8", "colors": "384b161f19b7d9f6"},
     "layer_explicit_nodata": {
         "keys": [
             "crs",

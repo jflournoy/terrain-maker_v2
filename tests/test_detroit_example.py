@@ -85,10 +85,9 @@ class TestDetroitEndToEnd:
 
         terrain.set_color_mapping(color_func, source_layers=["dem"])
 
-        # Verify color mapping is configured
-        assert hasattr(terrain, "color_mapping")
-        assert terrain.color_mapping is not None
-        assert terrain.color_sources == ["dem"]
+        # Verify the mapping is configured: colors compute as an RGBA grid
+        colors = terrain.compute_colors()
+        assert colors.shape == terrain.data_layers["dem"]["data"].shape + (4,)
 
     def test_detroit_example_creates_mesh(self, tmp_path):
         """Detroit example should create Blender mesh successfully."""
