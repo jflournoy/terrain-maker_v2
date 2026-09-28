@@ -921,8 +921,93 @@ def position_component_panels(
 # MAIN
 # =============================================================================
 
-def main():
-    """Main entry point."""
+ELEVATION_SCALE = 0.0001  # meters -> scene units, applied once after all DEM smoothing
+
+
+def smooth_dem_after_water_detection(args, terrain):
+    """Apply the requested DEM smoothing steps in order, then scale elevations once.
+
+    Runs after water detection because smoothing can flatten land into false "water".
+    Every step works on unscaled elevations (meters), since the slope- and kernel-based
+    steps are tuned in meters.
+    """
+    dem_layer = terrain.data_layers["dem"]
+    steps = []
+    if args.smooth:
+        steps.append((
+            f"feature-preserving smoothing (spatial={args.smooth_spatial}, "
+            f"intensity={args.smooth_intensity or 'auto'})",
+            feature_preserving_smooth(
+                sigma_spatial=args.smooth_spatial, sigma_intensity=args.smooth_intensity
+            ),
+        ))
+    if args.despeckle_dem:
+        steps.append((
+            f"DEM despeckle (kernel_size={args.despeckle_dem_kernel})",
+            despeckle_dem(kernel_size=args.despeckle_dem_kernel),
+        ))
+    if args.wavelet_denoise:
+        steps.append((
+            f"wavelet denoising (wavelet={args.wavelet_type}, levels={args.wavelet_levels}, "
+            f"sigma={args.wavelet_sigma})",
+            wavelet_denoise_dem(
+                wavelet=args.wavelet_type,
+                levels=args.wavelet_levels,
+                threshold_sigma=args.wavelet_sigma,
+                preserve_structure=True,
+            ),
+        ))
+    if args.adaptive_smooth:
+        steps.append((
+            f"slope-adaptive smoothing (threshold={args.adaptive_slope_threshold}°, "
+            f"sigma={args.adaptive_smooth_sigma}, transition={args.adaptive_transition}°, "
+            f"edge={args.adaptive_edge_threshold})",
+            slope_adaptive_smooth(
+                slope_threshold=args.adaptive_slope_threshold,
+                smooth_sigma=args.adaptive_smooth_sigma,
+                transition_width=args.adaptive_transition,
+                edge_threshold=args.adaptive_edge_threshold,
+            ),
+        ))
+    if args.remove_bumps is not None:
+        steps.append((
+            f"bump removal (kernel={args.remove_bumps}, strength={args.remove_bumps_strength})",
+            remove_bumps(kernel_size=args.remove_bumps, strength=args.remove_bumps_strength),
+        ))
+    steps.append((f"elevation scale x{ELEVATION_SCALE}", scale_elevation(scale_factor=ELEVATION_SCALE)))
+
+    for description, transform in steps:
+        logger.info(f"Applying {description}")
+        # Transforms take (data, affine) and return (data, affine, crs); slope-based
+        # steps need the pixel size from the affine
+        dem_layer["transformed_data"], _, _ = transform(
+            dem_layer["transformed_data"], dem_layer.get("transformed_transform")
+        )
+
+
+def parse_rgb(text):
+    """Parse 'R,G,B' with three floats in 0-1; raise ValueError otherwise."""
+    try:
+        values = tuple(float(x.strip()) for x in text.split(","))
+    except ValueError:
+        raise ValueError(f"expected three numbers 'R,G,B', got {text!r}") from None
+    if len(values) != 3:
+        raise ValueError(f"expected exactly three values 'R,G,B', got {text!r}")
+    if not all(0.0 <= v <= 1.0 for v in values):
+        raise ValueError(f"RGB values must be in 0-1, got {text!r}")
+    return values
+
+
+def _rgb_arg(text):
+    """argparse type for 'R,G,B' colors, so a bad color is a usage error, not a silent default."""
+    try:
+        return parse_rgb(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+
+
+def build_parser():
+    """Command-line interface for the combined render."""
     parser = argparse.ArgumentParser(
         description="Detroit Combined Terrain Rendering (Sledding with XC Skiing Parks)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1500,17 +1585,14 @@ Examples:
         "--wavelet-diagnostics",
         action="store_true",
         default=False,
-        help="Export diagnostic plots showing wavelet denoising effect on terrain. "
-             "Creates before/after comparison and coefficient analysis plots. "
-             "Requires --wavelet-denoise to be enabled.",
+        help="Deprecated, no effect: diagnostic plots were removed from this script.",
     )
 
     parser.add_argument(
         "--diagnostic-dir",
         type=str,
         default=None,
-        help="Directory to save diagnostic plots (default: OUTPUT_DIR/diagnostics). "
-             "Created automatically if doesn't exist.",
+        help="Deprecated, no effect: diagnostic plots were removed from this script.",
     )
 
     # Morphological bump removal
@@ -1868,8 +1950,8 @@ Examples:
 
     parser.add_argument(
         "--park-ring-color",
-        type=str,
-        default="0.15,0.15,0.15",
+        type=_rgb_arg,
+        default=(0.15, 0.15, 0.15),
         help="RGB color for park rings as 'R,G,B' (0-1 range). Default: dark gray (0.15,0.15,0.15).",
     )
 
@@ -1996,7 +2078,40 @@ Examples:
              "colormap). Accepts any matplotlib colormap name.",
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def parse_args(argv=None):
+    """Parse and validate arguments; resolve option-dependent defaults."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    # Edge base material: a named material, or an 'R,G,B' tuple
+    if args.two_tier_edge and "," in args.edge_base_material:
+        try:
+            args.edge_base_material = parse_rgb(args.edge_base_material)
+        except ValueError as e:
+            parser.error(f"--edge-base-material: {e}")
+
+    # Colormaps for component panels and the temporal sculpture follow --print-colors
+    if args.component_colormaps is None:
+        args.component_colormaps = (
+            ["warm_gray"] * 3 if args.print_colors else ["viridis", "plasma", "cividis"]
+        )
+    if args.temporal_colormap is None and args.print_colors:
+        args.temporal_colormap = "warm_gray"
+    return args
+
+
+def main(argv=None):
+    """Main entry point."""
+    args = parse_args(argv)
+    for flag, used in (
+        ("--wavelet-diagnostics", args.wavelet_diagnostics),
+        ("--diagnostic-dir", args.diagnostic_dir is not None),
+    ):
+        if used:
+            logger.warning(f"{flag} has no effect: diagnostic plots were removed from this script")
 
     # Handle --read-command: read metadata from existing image and exit
     if args.read_command:
@@ -2013,32 +2128,6 @@ Examples:
         sys.exit(0)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Resolve default colormaps for components and temporal
-    if args.component_colormaps is None:
-        if args.print_colors:
-            args.component_colormaps = ["warm_gray"] * 3
-        else:
-            args.component_colormaps = ["viridis", "plasma", "cividis"]
-    if args.temporal_colormap is None and args.print_colors:
-        args.temporal_colormap = "warm_gray"
-
-    # Parse edge_base_material (could be a material name or RGB tuple string)
-    if args.two_tier_edge:
-        if "," in args.edge_base_material:
-            # Parse as RGB tuple
-            try:
-                rgb_values = [float(x.strip()) for x in args.edge_base_material.split(",")]
-                if len(rgb_values) != 3:
-                    raise ValueError("RGB tuple must have exactly 3 values")
-                if not all(0 <= v <= 1 for v in rgb_values):
-                    raise ValueError("RGB values must be in range 0-1")
-                args.edge_base_material = tuple(rgb_values)
-            except (ValueError, IndexError) as e:
-                print(f"Error parsing --edge-base-material RGB tuple: {e}")
-                print("Format should be: '0.6,0.55,0.5' (three values 0-1)")
-                sys.exit(1)
-        # else: leave as string material name
 
     # Set resolution and quality based on mode
     if args.print_quality:
@@ -2539,16 +2628,6 @@ Examples:
     # Water detection happens AFTER this phase, BEFORE any smoothing
     # =========================================================================
 
-    # Configure diagnostic modes for transform visualization
-    adaptive_diagnostic_mode = args.adaptive_smooth
-    bump_diagnostic_mode = args.remove_bumps is not None
-    wavelet_diagnostic_mode = args.wavelet_diagnostics and args.wavelet_denoise
-    if args.wavelet_diagnostics and not args.wavelet_denoise:
-        logger.warning("--wavelet-diagnostics requires --wavelet-denoise to be enabled. Ignoring.")
-
-    # Debug: report which modes are active
-    logger.info(f"DEBUG: Transform modes: adaptive={adaptive_diagnostic_mode}, bump={bump_diagnostic_mode}, wavelet={wavelet_diagnostic_mode}")
-
     # Apply geometry transforms to DEM (with caching)
     if args.cache:
         transform_key = cache.compute_target_key("dem_transformed")
@@ -2629,165 +2708,7 @@ Examples:
     # These operations may artificially flatten areas, so water is detected first
     # =========================================================================
 
-    # Apply feature-preserving smoothing
-    if args.smooth:
-        logger.info(f"Applying feature-preserving smoothing (spatial={args.smooth_spatial}, intensity={args.smooth_intensity or 'auto'})")
-        smooth_transform = feature_preserving_smooth(
-            sigma_spatial=args.smooth_spatial,
-            sigma_intensity=args.smooth_intensity,
-        )
-        dem_layer = terrain_combined.data_layers["dem"]
-        smoothed_dem, _, _ = smooth_transform(dem_layer["transformed_data"])
-        dem_layer["transformed_data"] = smoothed_dem
-
-    # Apply DEM despeckle (uniform noise removal via median filter)
-    if args.despeckle_dem:
-        logger.info(f"Applying DEM despeckle (kernel_size={args.despeckle_dem_kernel})")
-        despeckle_transform = despeckle_dem(kernel_size=args.despeckle_dem_kernel)
-        dem_layer = terrain_combined.data_layers["dem"]
-        despeckled_dem, _, _ = despeckle_transform(dem_layer["transformed_data"])
-        dem_layer["transformed_data"] = despeckled_dem
-
-    # Apply wavelet denoising (normal mode - not diagnostic)
-    if args.wavelet_denoise and not wavelet_diagnostic_mode:
-        logger.info(
-            f"Applying wavelet denoising (wavelet={args.wavelet_type}, levels={args.wavelet_levels}, "
-            f"sigma={args.wavelet_sigma})"
-        )
-        wavelet_transform = wavelet_denoise_dem(
-            wavelet=args.wavelet_type,
-            levels=args.wavelet_levels,
-            threshold_sigma=args.wavelet_sigma,
-            preserve_structure=True,
-        )
-        dem_layer = terrain_combined.data_layers["dem"]
-        denoised_dem, _, _ = wavelet_transform(dem_layer["transformed_data"])
-        dem_layer["transformed_data"] = denoised_dem
-
-    # Apply wavelet denoising with diagnostics (if requested)
-    if wavelet_diagnostic_mode:
-        logger.info(
-            f"Wavelet diagnostic mode: capturing before/after state "
-            f"(wavelet={args.wavelet_type}, levels={args.wavelet_levels}, sigma={args.wavelet_sigma})"
-        )
-
-        # Get the transformed DEM (pre-wavelet)
-        dem_layer = terrain_combined.data_layers["dem"]
-        pre_wavelet_dem = dem_layer["transformed_data"].copy()
-
-        # Apply wavelet denoising manually
-        wavelet_transform = wavelet_denoise_dem(
-            wavelet=args.wavelet_type,
-            levels=args.wavelet_levels,
-            threshold_sigma=args.wavelet_sigma,
-            preserve_structure=True,
-        )
-        post_wavelet_dem, _, _ = wavelet_transform(pre_wavelet_dem)
-
-        # Update the terrain with the denoised DEM
-        dem_layer["transformed_data"] = post_wavelet_dem
-
-
-    # Apply adaptive smoothing with diagnostics (if requested)
-    if adaptive_diagnostic_mode:
-        edge_str = f", edge={args.adaptive_edge_threshold}m" if args.adaptive_edge_threshold else ""
-        logger.info(
-            f"Adaptive smooth diagnostic mode: capturing before/after state "
-            f"(threshold={args.adaptive_slope_threshold}°, sigma={args.adaptive_smooth_sigma}, "
-            f"transition={args.adaptive_transition}°{edge_str})"
-        )
-
-        # Get the transformed DEM (pre-smooth, already downsampled)
-        dem_layer = terrain_combined.data_layers["dem"]
-        pre_smooth_dem = dem_layer["transformed_data"].copy()
-        dem_affine = dem_layer.get("transformed_transform")
-
-        pixel_size = abs(dem_affine.a) if dem_affine is not None else None
-        if pixel_size is not None:
-            logger.info(f"  Pixel size (downsampled): {pixel_size:.1f}m")
-
-        # Apply adaptive smoothing manually
-        adaptive_transform = slope_adaptive_smooth(
-            slope_threshold=args.adaptive_slope_threshold,
-            smooth_sigma=args.adaptive_smooth_sigma,
-            transition_width=args.adaptive_transition,
-            edge_threshold=args.adaptive_edge_threshold,
-        )
-        post_smooth_dem, _, _ = adaptive_transform(pre_smooth_dem, dem_affine)
-
-        # Apply scale_elevation after smoothing (same as normal mode)
-        scale_transform = scale_elevation(scale_factor=0.0001)
-        scaled_dem, _, _ = scale_transform(post_smooth_dem)
-
-        # Update the terrain with the smoothed and scaled DEM
-        dem_layer["transformed_data"] = scaled_dem
-
-        # Debug: verify adaptive smooth saved correctly
-        verify_dem = terrain_combined.data_layers["dem"]["transformed_data"]
-        logger.info(f"DEBUG: After adaptive smooth save: std={np.nanstd(verify_dem):.6f}, "
-                    f"same_array={verify_dem is scaled_dem}, "
-                    f"pre_smooth_std={np.nanstd(pre_smooth_dem):.4f}, post_smooth_std={np.nanstd(post_smooth_dem):.4f}")
-
-        logger.info(f"✓ Saved adaptive smooth histogram: {histogram_path}")
-
-    # Apply bump removal with diagnostics (if requested)
-    if bump_diagnostic_mode:
-        strength_str = f", strength={args.remove_bumps_strength}" if args.remove_bumps_strength < 1.0 else ""
-        logger.info(f"Bump removal diagnostic mode: capturing before/after state (kernel={args.remove_bumps}{strength_str})")
-
-        # Get the transformed DEM (pre-bump-removal, already downsampled)
-        dem_layer = terrain_combined.data_layers["dem"]
-        pre_bump_dem = dem_layer["transformed_data"].copy()
-
-        # Check if data is already scaled (from adaptive smooth mode)
-        already_scaled = adaptive_diagnostic_mode  # adaptive mode applies scale_elevation
-
-        # If already scaled, unscale for proper bump removal then rescale
-        if already_scaled:
-            logger.info("  Note: DEM already scaled from adaptive smooth - unscaling for bump removal")
-            pre_bump_dem_unscaled = pre_bump_dem / 0.0001
-            bump_transform = remove_bumps(kernel_size=args.remove_bumps, strength=args.remove_bumps_strength)
-            post_bump_dem_unscaled, _, _ = bump_transform(pre_bump_dem_unscaled, None)
-            # Scale back
-            scaled_dem = post_bump_dem_unscaled * 0.0001
-            post_bump_dem = post_bump_dem_unscaled  # For diagnostics (unscaled)
-        else:
-            # Apply bump removal to unscaled data
-            bump_transform = remove_bumps(kernel_size=args.remove_bumps, strength=args.remove_bumps_strength)
-            post_bump_dem, _, _ = bump_transform(pre_bump_dem, None)
-
-            # Apply scale_elevation after bump removal
-            scale_transform = scale_elevation(scale_factor=0.0001)
-            scaled_dem, _, _ = scale_transform(post_bump_dem)
-
-        # Update the terrain with the processed DEM
-        dem_layer["transformed_data"] = scaled_dem
-
-        # Debug: verify bump removal saved correctly
-        verify_dem = terrain_combined.data_layers["dem"]["transformed_data"]
-        logger.info(f"DEBUG: After bump removal save: std={np.nanstd(verify_dem):.6f}, "
-                    f"pre_bump_std={np.nanstd(pre_bump_dem):.6f}, post_bump_std={np.nanstd(post_bump_dem):.6f}")
-
-        # Generate diagnostic plots (using unscaled data for meaningful elevation values)
-        diagnostic_dir = Path(args.diagnostic_dir) if args.diagnostic_dir else args.output_dir / "diagnostics"
-        logger.info(f"Generating bump removal diagnostic plots in {diagnostic_dir}")
-
-        # Use unscaled data for diagnostics
-        if already_scaled:
-            diag_original = pre_bump_dem / 0.0001  # Unscale for meaningful elevation values
-            diag_after = post_bump_dem  # Already unscaled above
-        else:
-            diag_original = pre_bump_dem
-            diag_after = post_bump_dem
-
-
-    # Apply scale_elevation in normal mode (diagnostic modes handle it themselves)
-    if not adaptive_diagnostic_mode and not bump_diagnostic_mode:
-        logger.debug("Applying scale_elevation to DEM...")
-        scale_transform = scale_elevation(scale_factor=0.0001)
-        dem_layer = terrain_combined.data_layers["dem"]
-        scaled_dem, _, _ = scale_transform(dem_layer["transformed_data"])
-        dem_layer["transformed_data"] = scaled_dem
+    smooth_dem_after_water_detection(args, terrain_combined)
 
     # Debug: verify DEM state before mesh creation
     dem_for_debug = terrain_combined.data_layers["dem"]["transformed_data"]
@@ -3261,15 +3182,7 @@ Examples:
 
     # Apply ring colors for park outlines if enabled
     if args.park_rings and park_ring_mask_grid is not None:
-        # Parse ring color from CLI argument
-        try:
-            ring_rgb = tuple(float(x.strip()) for x in args.park_ring_color.split(","))
-            if len(ring_rgb) != 3:
-                raise ValueError("Ring color must have exactly 3 values")
-        except (ValueError, IndexError) as e:
-            logger.warning(f"Invalid --park-ring-color '{args.park_ring_color}': {e}. Using default dark gray.")
-            ring_rgb = (0.15, 0.15, 0.15)
-
+        ring_rgb = args.park_ring_color  # validated 'R,G,B' tuple
         logger.info(f"Applying park ring outlines (color: RGB{ring_rgb})...")
         apply_ring_colors(
             mesh_combined,

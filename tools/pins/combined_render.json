@@ -1,9 +1,101 @@
 {
  "adaptive": {
-  "error": "UnboundLocalError: cannot access local variable 'histogram_path' where it is not associated with a value"
+  "files": {
+   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+  },
+  "meshes": [
+   {
+    "boundary_colors": null,
+    "colors": "707eaf8c261cd5fc",
+    "faces": "85f10583dabf81db",
+    "layers": {
+     "dem": "549a090a49ac68e3",
+     "sledding": "f810ff2e1be36bc3",
+     "xc_skiing": "f810ff2e1be36bc3"
+    },
+    "model_params": {
+     "base_depth": "-0.2",
+     "centered": "True",
+     "edge_base_material": "clay",
+     "edge_blend_colors": "True",
+     "edge_mid_depth": "None",
+     "height_scale": "30.0",
+     "offset": "[1.4710854102237694, 1.952467072948804, 0.5984925817988972]",
+     "scale_factor": "100",
+     "two_tier_edge": "False"
+    },
+    "vertices": "61062d5760bdd440"
+   }
+  ],
+  "scene": [
+   [
+    "Camera",
+    "CAMERA",
+    [
+     -0.0011,
+     0.0025,
+     2.0951
+    ]
+   ],
+   [
+    "TerrainMesh",
+    "MESH",
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ]
+  ]
  },
  "adaptive_bumps": {
-  "error": "UnboundLocalError: cannot access local variable 'histogram_path' where it is not associated with a value"
+  "files": {
+   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+  },
+  "meshes": [
+   {
+    "boundary_colors": null,
+    "colors": "707eaf8c261cd5fc",
+    "faces": "85f10583dabf81db",
+    "layers": {
+     "dem": "2b1819c5f2b5bc3e",
+     "sledding": "f810ff2e1be36bc3",
+     "xc_skiing": "f810ff2e1be36bc3"
+    },
+    "model_params": {
+     "base_depth": "-0.2",
+     "centered": "True",
+     "edge_base_material": "clay",
+     "edge_blend_colors": "True",
+     "edge_mid_depth": "None",
+     "height_scale": "30.0",
+     "offset": "[1.4710854102237694, 1.952467072948804, 0.5816240242021137]",
+     "scale_factor": "100",
+     "two_tier_edge": "False"
+    },
+    "vertices": "1678aaa409ad14ef"
+   }
+  ],
+  "scene": [
+   [
+    "Camera",
+    "CAMERA",
+    [
+     -0.0011,
+     0.0025,
+     2.0951
+    ]
+   ],
+   [
+    "TerrainMesh",
+    "MESH",
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ]
+  ]
  },
  "default": {
   "files": {
