@@ -120,11 +120,12 @@ class MultiOverlayColorMapping:
             if spec.get("mask") is not None:
                 mask = _grid_mask(terrain, np.asarray(spec["mask"]), colors.shape[:2])
                 if mask is None:
-                    terrain.logger.warning(
-                        f"Overlay {i}: mask shape {np.shape(spec['mask'])} doesn't match grid "
-                        f"shape {colors.shape[:2]}. Falling back to threshold-based mask."
+                    # An explicit mask that doesn't fit must not silently become a threshold
+                    raise ValueError(
+                        f"Overlay {i}: mask shape {np.shape(spec['mask'])} matches neither the "
+                        f"color grid {colors.shape[:2]} nor the mesh vertices"
                     )
-            if mask is None:
+            else:
                 mask = _threshold_mask(
                     terrain._layer_array(spec["source_layers"][0]), spec.get("threshold", 0.5)
                 )

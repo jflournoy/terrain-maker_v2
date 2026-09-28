@@ -227,7 +227,13 @@ def vertex_colors_rgba(n_vertices, colors=None, y_valid=None, x_valid=None, boun
         ys, xs = np.asarray(y_valid[:n_surface]), np.asarray(x_valid[:n_surface])
         if unit.ndim == 3:
             inside = (ys >= 0) & (ys < unit.shape[0]) & (xs >= 0) & (xs < unit.shape[1])
-            result[:n_surface][inside] = unit[ys[inside], xs[inside]]
+            if not np.all(inside):
+                # The color grid must be the DEM grid; a smaller one means misaligned colors
+                raise ValueError(
+                    f"{np.sum(~inside)} surface vertices lie outside the {unit.shape[:2]} "
+                    "color grid; colors must be computed on the DEM grid"
+                )
+            result[:n_surface] = unit[ys, xs]
         else:
             n = min(n_surface, len(unit))
             result[:n] = unit[:n]

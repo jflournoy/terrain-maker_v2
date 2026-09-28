@@ -80,3 +80,13 @@ def test_vertex_mask_without_mesh_raises(terrain):
     )
     with pytest.raises(ValueError, match="create_mesh"):
         terrain.compute_colors()
+
+
+def test_multi_overlay_mask_of_wrong_shape_is_an_error_not_a_threshold(terrain):
+    terrain.set_multi_color_mapping(
+        elevation_colormap,
+        ["dem"],
+        [{"colormap": _viridis, "source_layers": ["dem"], "priority": 1, "mask": np.ones((3, 3))}],
+    )
+    with pytest.raises(ValueError, match="mask"):
+        terrain.compute_colors()
