@@ -95,6 +95,7 @@ import gc
 import shlex
 from datetime import datetime
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional, Tuple
 import numpy as np
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
@@ -920,6 +921,121 @@ def position_component_panels(
 # =============================================================================
 # MAIN
 # =============================================================================
+
+@dataclass(frozen=True)
+class ScoreNormalization:
+    """The one definition of how a score becomes a colormap position in [0, 1].
+
+    score / max, optionally stretched so min_nonzero maps to 0, then raised to gamma.
+    The colormap and every score histogram use apply(), so they cannot disagree.
+    """
+
+    max: float
+    min_nonzero: float
+    stretch: bool
+    gamma: float
+
+    @classmethod
+    def from_rendered_region(cls, scores, dem, water_mask, *, stretch, gamma):
+        """Measure max and smallest nonzero score over rendered pixels: valid DEM and score,
+        not water (water is colored blue, not by score)."""
+        rendered = ~np.isnan(dem) & ~np.isnan(scores)
+        if water_mask is not None:
+            rendered &= ~water_mask
+        if not np.any(rendered):
+            raise ValueError("no rendered pixels with a valid score to normalize over")
+        values = scores[rendered]
+        nonzero = values[values > 0]
+        return cls(
+            max=float(values.max()),
+            min_nonzero=float(nonzero.min()) if nonzero.size else 0.0,
+            stretch=stretch,
+            gamma=gamma,
+        )
+
+    def apply(self, scores):
+        normalized = scores / self.max
+        norm_min = self.min_nonzero / self.max
+        if self.stretch and norm_min < 1.0:
+            normalized = np.clip((normalized - norm_min) / (1.0 - norm_min), 0.0, 1.0)
+        return np.power(normalized, self.gamma)
+
+    @property
+    def label(self):
+        return "Normalized" + (" + stretch" if self.stretch else "") + f", gamma={self.gamma}"
+
+    def __str__(self):
+        return f"max={self.max:.4f}, nonzero min={self.min_nonzero:.4f}, {self.label}"
+
+
+def upscale_factor_for_ratio(ratio):
+    """Smallest power of two >= ratio (1 when no upscaling is needed), capped at 16."""
+    for factor in (1, 2, 4, 8):
+        if ratio <= factor:
+            return factor
+    return 16
+
+
+MOCK_DEM_SHAPE = (1024, 1024)
+# ~0.0001 degrees (~10 m) pixels over the Detroit area, north-up
+MOCK_DEM_TRANSFORM = Affine.translation(-83.2, 42.5) * Affine.scale(0.0001, -0.0001)
+DEM_DIR = Path("data/dem/detroit")
+DEM_MIN_LATITUDE = 41  # N41+ tiles: Detroit metro and north, where snow cover is better
+
+
+def load_dem(args):
+    """(dem, transform, crs): the real Detroit DEM, or a random one only with --mock-data."""
+    if args.mock_data:
+        logger.info("Generating mock DEM...")
+        dem = np.random.randint(150, 250, MOCK_DEM_SHAPE).astype(np.float32)
+        return dem, MOCK_DEM_TRANSFORM, "EPSG:4326"
+    if not DEM_DIR.exists():
+        raise FileNotFoundError(
+            f"DEM directory {DEM_DIR} not found (run from the repository root, or use --mock-data)"
+        )
+    dem, transform = load_filtered_hgt_files(DEM_DIR, min_latitude=DEM_MIN_LATITUDE)
+    logger.info("  (focusing on Detroit metro and northern areas with better snow)")
+    return dem, transform, "EPSG:4326"
+
+
+def require_transform(transform, what, producer):
+    """A score grid's georeferencing; refuse to guess it from the DEM extent."""
+    if transform is None:
+        raise ValueError(
+            f"{what} have no stored transform, so their location is unknown. "
+            f"Regenerate them with {producer} (which stores the transform)."
+        )
+    logger.info(f"Using transform from {what} file")
+    return transform
+
+
+def dem_cache_params(args):
+    """Everything that determines the loaded DEM, for its cache key.
+
+    Includes a fingerprint of the DEM files, so updating the data invalidates the cache.
+    """
+    params = {"directory": str(DEM_DIR), "min_latitude": DEM_MIN_LATITUDE, "mock_data": args.mock_data}
+    if not args.mock_data and DEM_DIR.exists():
+        params["files"] = sorted(
+            (p.name, p.stat().st_size, int(p.stat().st_mtime)) for p in DEM_DIR.iterdir() if p.is_file()
+        )
+    return params
+
+
+def transform_cache_params(args, target_vertices):
+    """Everything that determines the geometry-transformed DEM, for its cache key.
+
+    Only these inputs affect the cached dem_transformed result: the DEM smoothing steps run
+    after the cache (see smooth_dem_after_water_detection), so they are not part of the key.
+    """
+    return {
+        "src_crs": "EPSG:4326",
+        "dst_crs": "EPSG:32617",
+        "flip": "horizontal",
+        "target_vertices": target_vertices,
+        "downsample_method": args.downsample_method,
+    }
+
 
 ELEVATION_SCALE = 0.0001  # meters -> scene units, applied once after all DEM smoothing
 
@@ -2212,73 +2328,14 @@ def main(argv=None):
 
     # Define pipeline targets with their parameters
     # This allows cache keys to change when parameters change
-    dem_dir = Path("data/dem/detroit")
-    dem_params = {
-        "directory": str(dem_dir),
-        "min_latitude": 41,
-        "mock_data": args.mock_data,
-    }
-
-    transform_params = {
-        "src_crs": "EPSG:4326",
-        "dst_crs": "EPSG:32617",
-        "flip": "horizontal",
-        "scale_factor": 0.0001,
-        "target_vertices": int(np.floor(render_width * render_height * args.vertex_multiplier)),
-        "smooth": args.smooth,
-        "smooth_spatial": args.smooth_spatial,
-        "smooth_intensity": args.smooth_intensity,
-        "despeckle_dem": args.despeckle_dem,
-        "despeckle_dem_kernel": args.despeckle_dem_kernel if args.despeckle_dem else None,
-        "wavelet_denoise": args.wavelet_denoise,
-        "wavelet_type": args.wavelet_type if args.wavelet_denoise else None,
-        "wavelet_levels": args.wavelet_levels if args.wavelet_denoise else None,
-        "wavelet_sigma": args.wavelet_sigma if args.wavelet_denoise else None,
-        "adaptive_smooth": args.adaptive_smooth,
-        "adaptive_slope_threshold": args.adaptive_slope_threshold if args.adaptive_smooth else None,
-        "adaptive_smooth_sigma": args.adaptive_smooth_sigma if args.adaptive_smooth else None,
-        "adaptive_transition": args.adaptive_transition if args.adaptive_smooth else None,
-        "adaptive_edge_threshold": args.adaptive_edge_threshold if args.adaptive_smooth else None,
-        "remove_bumps": args.remove_bumps,
-        "remove_bumps_strength": args.remove_bumps_strength if args.remove_bumps else None,
-    }
-
-    color_params = {
-        "colormap": score_cmap_name,
-        "purple_position": None if args.no_purple else args.purple_position,
-        "purple_width": args.purple_width,
-        "no_purple": args.no_purple,
-        "normalize_scores": args.normalize_scores,
-        "gamma": args.gamma,
-        "smooth_scores": args.smooth_scores,
-        "smooth_scores_spatial": args.smooth_scores_spatial if args.smooth_scores else None,
-        "despeckle_scores": args.despeckle_scores,
-        "despeckle_kernel": args.despeckle_kernel if args.despeckle_scores else None,
-        "roads_enabled": args.roads,
-        "road_types": tuple(args.road_types) if args.roads else (),
-        "road_width": args.road_width if args.roads else 0,
-        "road_antialias": args.road_antialias if args.roads else 0,
-    }
-
-    mesh_params = {
-        "height_scale": args.height_scale,
-        "scale_factor": 100,
-        "center_model": True,
-        "boundary_extension": True,
-        "two_tier_edge": args.two_tier_edge,
-        "edge_mid_depth": args.edge_mid_depth,
-        "edge_base_material": args.edge_base_material,
-        "edge_blend_colors": args.edge_blend_colors,
-        "smooth_boundary": args.smooth_boundary,
-        "smooth_boundary_window": args.smooth_boundary_window if args.smooth_boundary else 5,
-        "terrain_material": args.terrain_material,
-    }
+    dem_params = dem_cache_params(args)
+    transform_params = transform_cache_params(
+        args, int(np.floor(render_width * render_height * args.vertex_multiplier))
+    )
 
     # Register targets with cache (defines dependency graph)
     cache.define_target("dem_loaded", params=dem_params)
     cache.define_target("dem_transformed", params=transform_params, dependencies=["dem_loaded"])
-    cache.define_target("colors_computed", params=color_params, dependencies=["dem_transformed"])
-    cache.define_target("mesh_created", params=mesh_params, dependencies=["colors_computed"])
 
     # Initialize profiling timer
     timer = PipelineTimer()
@@ -2289,34 +2346,7 @@ def main(argv=None):
     logger.info("[1/5] Loading Data")
     logger.info("=" * 70)
 
-    # Load DEM
-    if args.mock_data:
-        logger.info("Generating mock DEM...")
-        dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
-        # Create a WGS84 transform (lat/lon) for Detroit area
-        # Detroit is approximately at -83.05 lon, 42.35 lat
-        # ~0.0001 degrees per pixel (~10m resolution at this latitude)
-        # Note: Negative scale on Y because rasters are typically north-up
-        transform = Affine.translation(-83.2, 42.5) * Affine.scale(0.0001, -0.0001)
-        dem_crs = "EPSG:4326"  # WGS84 (lat/lon)
-    else:
-        dem_dir = Path("data/dem/detroit")
-        if dem_dir.exists():
-            # Load HGT files filtered to northern tiles (N41 and above)
-            # This focuses on areas with better snow coverage (Detroit metro and north)
-            # Tiles range from N37-N46; loading N41+ removes the southern ~40% of extent
-            dem, transform = load_filtered_hgt_files(
-                dem_dir,
-                min_latitude=41,  # Load N41 and above (N41, N42, N43, N44, N45, N46)
-            )
-            dem_crs = "EPSG:4326"  # Real data is typically WGS84
-            logger.info(f"  (focusing on Detroit metro and northern areas with better snow)")
-        else:
-            logger.info("Generating mock DEM (DEM directory not found)...")
-            dem = np.random.randint(150, 250, (1024, 1024)).astype(np.float32)
-            # Create a WGS84 transform for Detroit area
-            transform = Affine.translation(-83.2, 42.5) * Affine.scale(0.0001, -0.0001)
-            dem_crs = "EPSG:4326"
+    dem, transform, dem_crs = load_dem(args)
 
     # Load sledding scores
     # When using --mock-data, always generate mock scores to ensure dimensions match mock DEM
@@ -2328,24 +2358,11 @@ def main(argv=None):
     else:   
         sledding_scores, loaded_transform = load_sledding_scores(args.scores_dir)
         if sledding_scores is None:
-            logger.error("Sledding scores not found. Run detroit_snow_sledding.py first.")
-            return 1
-
-        # Use loaded transform if available (new format), otherwise fall back to calculation
-        if loaded_transform is not None:
-            score_transform = loaded_transform
-            logger.info("Using transform from score file (automatic georeferencing)")
-        else:
-            # Legacy fallback: calculate transform based on DEM extent
-            logger.info("No transform in score file, calculating from DEM extent (legacy mode)")
-            score_height, score_width = sledding_scores.shape
-            dem_height, dem_width = dem.shape
-            score_pixel_width = transform.a * dem_width / score_width
-            score_pixel_height = transform.e * dem_height / score_height
-            score_transform = Affine.translation(transform.c, transform.f) * Affine.scale(
-                score_pixel_width,
-                score_pixel_height
+            raise FileNotFoundError(
+                f"Sledding scores not found in {args.scores_dir}. Run detroit_snow_sledding.py first."
             )
+
+        score_transform = require_transform(loaded_transform, "sledding scores", "detroit_snow_sledding.py")
 
         logger.info(f"Score shape: {sledding_scores.shape}, DEM shape: {dem.shape}")
 
@@ -2358,17 +2375,12 @@ def main(argv=None):
     else:
         xc_scores, xc_loaded_transform = load_xc_skiing_scores(args.scores_dir / "xc_skiing")
         if xc_scores is None:
-            logger.error("XC skiing scores not found. Run detroit_xc_skiing.py first.")
-            return 1
+            raise FileNotFoundError(
+                f"XC skiing scores not found in {args.scores_dir / 'xc_skiing'}. "
+                "Run detroit_xc_skiing.py first."
+            )
 
-        # Use loaded transform if available, otherwise use same as sledding
-        if xc_loaded_transform is not None:
-            xc_transform = xc_loaded_transform
-            logger.info("Using transform from XC score file (automatic georeferencing)")
-        else:
-            # Legacy fallback: use sledding transform (assumes same extent)
-            xc_transform = score_transform
-            logger.info("No transform in XC score file, using sledding transform")
+        xc_transform = require_transform(xc_loaded_transform, "XC skiing scores", "detroit_xc_skiing.py")
 
     # Swap base scores if using skiing as base
     if args.base_scores == "skiing":
@@ -2410,17 +2422,7 @@ def main(argv=None):
             ratio_y = snodas_pixel_deg_y / dem_pixel_deg_y
             ratio = (ratio_x + ratio_y) / 2
 
-            # Pick smallest power of 2 that is >= ratio
-            if ratio <= 1:
-                computed_factor = 1  # No upscaling needed
-            elif ratio <= 2:
-                computed_factor = 2
-            elif ratio <= 4:
-                computed_factor = 4
-            elif ratio <= 8:
-                computed_factor = 8
-            else:
-                computed_factor = 16
+            computed_factor = upscale_factor_for_ratio(ratio)
 
             logger.info(f"Auto-calculating upscale factor (--upscale-to-dem):")
             logger.info(f"  DEM effective resolution: {target_width}×{target_height} pixels")
@@ -2530,8 +2532,10 @@ def main(argv=None):
             logger.info(f"Rasterized lake mask: shape={lake_mask_raw.shape}, "
                         f"{np.sum(lake_mask_raw > 0):,} lake pixels")
         except Exception as e:
-            logger.warning(f"HydroLAKES loading failed: {e}")
-            logger.warning("Will fall back to slope-based water detection")
+            raise RuntimeError(
+                f"HydroLAKES loading failed ({e}). Fix the download, or pass --no-water "
+                "to render without water."
+            ) from e
 
     # Load road data
     road_data = None
@@ -2546,13 +2550,14 @@ def main(argv=None):
             # Use get_roads_tiled() - handles tiling and retries automatically
             road_data = get_roads_tiled(road_bbox, args.road_types)
 
-            if road_data and road_data.get("features"):
-                logger.info(f"  Loaded {len(road_data['features'])} road segments (obsidian material)")
-            else:
-                logger.warning("  No roads found or fetch failed")
-                road_data = None
         except Exception as e:
-            logger.warning(f"Failed to load road data: {e}")
+            raise RuntimeError(
+                f"Road loading failed ({e}). Fix the download, or drop --roads."
+            ) from e
+        if road_data and road_data.get("features"):
+            logger.info(f"  Loaded {len(road_data['features'])} road segments (obsidian material)")
+        else:
+            logger.warning("  --roads: no road segments in the DEM area; rendering without roads")
             road_data = None
 
     base_score_label = "XC skiing" if args.base_scores == "skiing" else "sledding"
@@ -2789,11 +2794,16 @@ def main(argv=None):
         for layer_name in ("sledding", "xc_skiing"):
             if layer_name in terrain_combined.data_layers:
                 layer_data = terrain_combined.data_layers[layer_name]["data"]
-                if layer_data.shape == water_mask.shape:
-                    n_masked = int(np.sum(water_mask & ~np.isnan(layer_data) & (layer_data != 0)))
-                    layer_data[water_mask] = np.nan
-                    if n_masked > 0:
-                        logger.info(f"Masked {n_masked:,} lake pixels in '{layer_name}' scores")
+                # Both are aligned to the DEM grid; a mismatch means a layer was not
+                if layer_data.shape != water_mask.shape:
+                    raise ValueError(
+                        f"'{layer_name}' scores {layer_data.shape} and water mask "
+                        f"{water_mask.shape} are not on the same grid"
+                    )
+                n_masked = int(np.sum(water_mask & ~np.isnan(layer_data) & (layer_data != 0)))
+                layer_data[water_mask] = np.nan
+                if n_masked > 0:
+                    logger.info(f"Masked {n_masked:,} lake pixels in '{layer_name}' scores")
 
     # Floor near-zero scores: the multiplicative scoring model produces a spike of
     # scores barely above zero (e.g., 0.001-0.03) from marginal terrain. These compress
@@ -2869,30 +2879,16 @@ def main(argv=None):
 
             score_floor_info[_floor_layer]["n_floored"] = n_floored
 
-    # Compute normalization stats from the rendered region only.
-    # Scores were computed over the full SNODAS extent, then aligned to the DEM grid
-    # via add_data_layer. We normalize using only pixels where the DEM has valid data
-    # (i.e., the region that will actually appear in the rendered mesh), so that the
-    # colormap range isn't compressed by high/low scores outside the visible area.
-    # Water pixels (lakes) are excluded — they get colored blue, not by the score colormap.
-    _dem_for_norm = terrain_combined.data_layers["dem"]["transformed_data"]
-    _sled_for_norm = terrain_combined.data_layers["sledding"]["data"]
-    _water_mask_for_norm = water_mask if water_mask is not None else np.zeros(_dem_for_norm.shape, dtype=bool)
-    _valid_rendered = ~np.isnan(_dem_for_norm) & ~np.isnan(_sled_for_norm) & ~_water_mask_for_norm
-    _full_max = float(np.nanmax(_sled_for_norm))
-    rendered_score_max = float(np.nanmax(_sled_for_norm[_valid_rendered])) if np.any(_valid_rendered) else _full_max
-    _nonzero_valid = _valid_rendered & (_sled_for_norm > 0)
-    rendered_score_min_nonzero = float(np.nanmin(_sled_for_norm[_nonzero_valid])) if np.any(_nonzero_valid) else 0.0
-    if abs(rendered_score_max - _full_max) > 1e-6:
-        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} "
-                     f"(full grid max={_full_max:.4f}, delta={_full_max - rendered_score_max:.4f})")
-    else:
-        logger.info(f"Score normalization (rendered region): max={rendered_score_max:.4f} (matches full grid)")
-    logger.info(f"  Rendered region nonzero min={rendered_score_min_nonzero:.4f}")
-    _water_excluded = int(np.sum(_water_mask_for_norm & ~np.isnan(_dem_for_norm)))
-    if _water_excluded > 0:
-        logger.info(f"  Excluded {_water_excluded:,} water pixels from normalization")
-    del _dem_for_norm, _sled_for_norm, _valid_rendered, _nonzero_valid, _full_max, _water_mask_for_norm, _water_excluded
+    # Normalize over the rendered region only: pixels with valid DEM and score that are not
+    # water, so scores outside the visible area don't compress the colormap range
+    normalization = ScoreNormalization.from_rendered_region(
+        terrain_combined.data_layers["sledding"]["data"],
+        terrain_combined.data_layers["dem"]["transformed_data"],
+        water_mask,
+        stretch=args.normalize_scores,
+        gamma=args.gamma,
+    )
+    logger.info(f"Score normalization (rendered region): {normalization}")
 
     # === Compute scores for histogram output ===
     # Create output directory for histograms
@@ -2903,31 +2899,16 @@ def main(argv=None):
     # The "sledding" layer key always holds base scores due to swap at args.base_scores=="skiing"
     base_scores = scores_before_lake_mask.get("sledding", terrain_combined.data_layers["sledding"]["data"])
 
-    # Normalize scores to 0-1.0 range using rendered-region max
-    normalized_scores = base_scores / rendered_score_max
-
-    if args.normalize_scores:
-        # Stretch to full 0-1 range based on rendered-region min/max
-        norm_min = rendered_score_min_nonzero / rendered_score_max
-        if 1.0 > norm_min:
-            normalized_scores = (normalized_scores - norm_min) / (1.0 - norm_min)
-            normalized_scores = np.clip(normalized_scores, 0.0, 1.0)
-
-    # Apply gamma correction to normalized scores
-    gamma_corrected_scores = np.power(normalized_scores, args.gamma)
-
-    # Create colormap-colored histogram (raw vs transformed)
-    norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
     generate_score_histogram(
         raw_scores=base_scores,
-        transformed_scores=gamma_corrected_scores,
+        transformed_scores=normalization.apply(base_scores),
         output_path=viz_dir / "scores_histograms.png",
         cmap_name=score_cmap_name,
-        transform_label=norm_label,
-        rendered_max=rendered_score_max,
-        rendered_min_nonzero=rendered_score_min_nonzero,
-        gamma=args.gamma,
-        normalize_scores=args.normalize_scores,
+        transform_label=normalization.label,
+        rendered_max=normalization.max,
+        rendered_min_nonzero=normalization.min_nonzero,
+        gamma=normalization.gamma,
+        normalize_scores=normalization.stretch,
         print_cmap_name="boreal_mako_print" if args.print_colors else None,
     )
     logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
@@ -2986,7 +2967,7 @@ def main(argv=None):
             # Road elevation diagnostics removed
 
         except Exception as e:
-            logger.warning(f"Failed to add roads layer: {e}")
+            raise RuntimeError(f"Adding the roads layer failed: {e}") from e
 
     # Road smoothing is now applied after mesh creation (on vertices, not DEM)
     # This avoids the coordinate alignment issues that plagued the old approach
@@ -3029,18 +3010,8 @@ def main(argv=None):
 
     # Define base colormap functions (will be wrapped with saturation modulation if enabled)
     def sledding_colormap(score):
-        # Normalize using rendered-region max (pre-computed above) so the colormap
-        # range reflects only the area that will actually be visible in the mesh.
-        normalized = score / rendered_score_max
-        if args.normalize_scores:
-            # Stretch actual score range to full 0-1 colormap range
-            norm_min = rendered_score_min_nonzero / rendered_score_max
-            if 1.0 > norm_min:
-                normalized = (normalized - norm_min) / (1.0 - norm_min)
-                normalized = np.clip(normalized, 0.0, 1.0)
         return elevation_colormap(
-            np.power(normalized, args.gamma),
-            cmap_name=score_cmap_name, min_elev=0.0, max_elev=1.0
+            normalization.apply(score), cmap_name=score_cmap_name, min_elev=0.0, max_elev=1.0
         )
 
     def xc_skiing_colormap(score):
@@ -3620,25 +3591,16 @@ def main(argv=None):
             # Generate score distribution histogram (raw vs transformed with colormap colors)
             score_hist_path = output_path.parent / (output_path.stem + "_score_distribution.png")
             raw_scores_for_hist = terrain_combined.data_layers["sledding"]["data"]
-            # Compute transformed scores (same pipeline as sledding_colormap)
-            trans_scores_for_hist = raw_scores_for_hist / rendered_score_max
-            if args.normalize_scores:
-                norm_min = rendered_score_min_nonzero / rendered_score_max
-                if 1.0 > norm_min:
-                    trans_scores_for_hist = (trans_scores_for_hist - norm_min) / (1.0 - norm_min)
-                    trans_scores_for_hist = np.clip(trans_scores_for_hist, 0.0, 1.0)
-            trans_scores_for_hist = np.power(trans_scores_for_hist, args.gamma)
-            norm_label = "Normalized" + (" + stretch" if args.normalize_scores else "") + f", gamma={args.gamma}"
             generate_score_histogram(
                 raw_scores=raw_scores_for_hist,
-                transformed_scores=trans_scores_for_hist,
+                transformed_scores=normalization.apply(raw_scores_for_hist),
                 output_path=score_hist_path,
                 cmap_name=score_cmap_name,
-                transform_label=norm_label,
-                rendered_max=rendered_score_max,
-                rendered_min_nonzero=rendered_score_min_nonzero,
-                gamma=args.gamma,
-                normalize_scores=args.normalize_scores,
+                transform_label=normalization.label,
+                rendered_max=normalization.max,
+                rendered_min_nonzero=normalization.min_nonzero,
+                gamma=normalization.gamma,
+                normalize_scores=normalization.stretch,
             )
 
         # Print actual Blender settings used for this render
