@@ -6,13 +6,13 @@ This guide shows how to use **real water body data** from NHD (USA) or HydroLAKE
 
 ```bash
 # Use NHD data (USA only - very detailed)
-python examples/validate_flow_with_nhd_data.py --data-source nhd
+python tools/validate_flow_with_nhd_data.py --data-source nhd
 
 # Use HydroLAKES data (global coverage)
-python examples/validate_flow_with_nhd_data.py --data-source hydrolakes
+python tools/validate_flow_with_nhd_data.py --data-source hydrolakes
 
 # Adjust minimum lake size
-python examples/validate_flow_with_nhd_data.py --data-source nhd --min-area-km2 0.1
+python tools/validate_flow_with_nhd_data.py --data-source nhd --min-area-km2 0.1
 ```
 
 ## Data Sources
@@ -76,7 +76,7 @@ geojson_path = download_water_bodies(
 
 ```bash
 # Run with NHD data (automatically downloads for San Diego region)
-python examples/validate_flow_with_nhd_data.py \
+python tools/validate_flow_with_nhd_data.py \
   --data-source nhd \
   --bigness medium \
   --min-area-km2 0.05 \
@@ -323,14 +323,14 @@ For large regions (> 1000 km²):
 
 1. **Increase min_area_km2** to filter small lakes:
 ```bash
-python examples/validate_flow_with_nhd_data.py \
+python tools/validate_flow_with_nhd_data.py \
   --data-source nhd \
   --min-area-km2 1.0  # Only lakes >= 1 km²
 ```
 
 2. **Downsample DEM** before flow computation:
 ```bash
-python examples/validate_flow_with_nhd_data.py \
+python tools/validate_flow_with_nhd_data.py \
   --bigness full \
   --target-size 1000  # Downsample to 1000x1000
 ```
@@ -372,7 +372,7 @@ Cache keys are based on data_source + bbox hash, so:
 
 ## Next Steps
 
-1. **Run with real data:** Try [validate_flow_with_nhd_data.py](validate_flow_with_nhd_data.py)
+1. **Run with real data:** Try [validate_flow_with_nhd_data.py](../tools/validate_flow_with_nhd_data.py)
 2. **Integrate into your pipeline:** Use the integration example above
 3. **Contribute improvements:** Submit PRs for better outlet detection
 4. **Add new data sources:** Extend water_bodies.py with regional datasets
@@ -382,4 +382,4 @@ Cache keys are based on data_source + bbox hash, so:
 - **NHD API docs:** https://hydro.nationalmap.gov/arcgis/rest/services/nhd/MapServer
 - **HydroLAKES:** https://www.hydrosheds.org/products/hydrolakes
 - **Source code:** [src/terrain_maker/terrain/water_bodies.py](../src/terrain_maker/terrain/water_bodies.py)
-- **Validation script:** [validate_flow_with_nhd_data.py](validate_flow_with_nhd_data.py)
+- **Validation script:** [validate_flow_with_nhd_data.py](../tools/validate_flow_with_nhd_data.py)

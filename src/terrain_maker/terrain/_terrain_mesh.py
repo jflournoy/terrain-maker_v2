@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+import inspect
 import time
 
 try:
     import bpy
 except ImportError:
     bpy = None
-from scipy.ndimage import zoom
 import numpy as np
 import logging
 
 from terrain_maker.terrain import mesh_operations
+from terrain_maker.terrain.mesh_operations import MeshData
 
 # Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def _boundary_winding(boundary_points, use_rectangle_edges, logger):
 class TerrainMeshMixin:
     """Terrain methods: mesh creation and mesh-space coordinate conversion."""
 
-    def create_mesh(
+    def build_mesh(
         self,
         base_depth=0.2,
         boundary_extension=True,
@@ -72,7 +73,11 @@ class TerrainMeshMixin:
         edge_sample_spacing=0.33,
     ):
         """
-        Create a Blender mesh from transformed DEM data with both performance and control.
+        Build the terrain mesh (vertices, faces, colors) from transformed DEM data, without Blender.
+
+        create_mesh() calls this and then creates the Blender object; use build_mesh() directly
+        to test, cache or export the geometry. Also stores vertices, faces, colors, y_valid,
+        x_valid, model_offset and model_params on the terrain for later steps.
 
         Generates vertices from DEM elevation values and faces for connectivity. Optionally
         creates boundary faces to close the mesh into a solid. Supports coordinate scaling
@@ -135,7 +140,7 @@ class TerrainMeshMixin:
                 meshes to avoid OOM).
 
         Returns:
-            bpy.types.Object | None: The created terrain mesh object, or None if creation failed.
+            MeshData: vertices, faces, surface grid mapping and colors.
 
         Raises:
             ValueError: If transformed DEM layer is not available (apply_transforms() not called).
@@ -186,7 +191,7 @@ class TerrainMeshMixin:
         if self._has_color_mapping() and not hasattr(self, "colors"):
             self.compute_colors()
         if water_mask is not None and getattr(self, "colors", None) is not None:
-            self._apply_water_gradient(water_mask, dem_data.shape)
+            self._apply_water_gradient(self.colors, water_mask)
 
         if center_model:
             self.logger.info("Centering model at origin...")
@@ -243,36 +248,60 @@ class TerrainMeshMixin:
         self.vertices = vertices
         self.faces = faces
 
+        self.logger.info(
+            f"Terrain mesh built in {time.time() - start_time:.2f} seconds "
+            f"({len(vertices)} vertices, {len(faces)} faces)"
+        )
+        return MeshData(
+            vertices=vertices,
+            faces=faces,
+            y_valid=y_valid,
+            x_valid=x_valid,
+            colors=getattr(self, "colors", None),
+            boundary_colors=getattr(self, "boundary_colors", None),
+        )
+
+    def create_mesh(self, *args, name="TerrainMesh", **kwargs):
+        """
+        Build the terrain mesh and create it as a Blender object.
+
+        Takes the same arguments as build_mesh() (see there for details), plus the Blender
+        object name.
+
+        Returns:
+            bpy.types.Object: The created terrain mesh object (also stored as terrain_obj).
+
+        Examples:
+            # Default two-tier edge with smooth fractional edges and red clay base
+            mesh = terrain.create_mesh(boundary_extension=True)
+
+            # Single-tier edge, gold base material
+            mesh = terrain.create_mesh(two_tier_edge=False, edge_base_material="gold")
+        """
         from terrain_maker.terrain.blender_integration import create_blender_mesh
 
+        mesh = self.build_mesh(*args, **kwargs)
         try:
             obj = create_blender_mesh(
-                vertices,
-                faces,
-                colors=getattr(self, "colors", None),
-                y_valid=y_valid,
-                x_valid=x_valid,
-                boundary_colors=getattr(self, "boundary_colors", None),
-                name="TerrainMesh",
+                mesh.vertices,
+                mesh.faces,
+                colors=mesh.colors,
+                y_valid=mesh.y_valid,
+                x_valid=mesh.x_valid,
+                boundary_colors=mesh.boundary_colors,
+                name=name,
                 logger=self.logger,
             )
         except Exception as e:
             self.logger.error(f"Error creating terrain mesh: {str(e)}")
             raise
-
-        self.logger.info(
-            f"Terrain mesh created successfully in {time.time() - start_time:.2f} seconds"
-        )
+        self.logger.info("Terrain mesh created successfully")
         self.terrain_obj = obj
         return obj
 
     def _has_color_mapping(self):
         """True if any color mapping mode (standard, blended, multi-overlay) is configured."""
-        return (
-            hasattr(self, "color_mapping")
-            or hasattr(self, "base_colormap")
-            or hasattr(self, "color_mapping_mode")
-        )
+        return getattr(self, "_color_spec", None) is not None
 
     def _resolve_water_mask(self, dem_data, detect_water, water_mask, slope_threshold):
         """The given water mask, a slope-detected one when detect_water is set, or None."""
@@ -285,41 +314,6 @@ class TerrainMeshMixin:
 
         self.logger.info(f"Detecting water bodies (slope threshold: {slope_threshold})...")
         return identify_water_by_slope(dem_data, slope_threshold=slope_threshold, fill_holes=True)
-
-    def _apply_water_gradient(self, water_mask, dem_shape):
-        """Recolor water vertices with a shoreline-to-deep blue gradient (vintage map style)."""
-        from terrain_maker.terrain.water import shoreline_water_colors
-
-        # Colors may come from a layer at a different resolution than the water mask
-        expected_shape = self.colors.shape[:2] if self.colors.ndim == 3 else dem_shape
-        if water_mask.shape != expected_shape:
-            self.logger.warning(
-                f"Water mask shape {water_mask.shape} does not match colors shape {expected_shape}. "
-                f"Resampling water mask to match colors. This can happen when colors are computed from "
-                f"a different layer than DEM (e.g., score layers)."
-            )
-            water_mask = zoom(
-                water_mask.astype(np.float32),
-                zoom=(
-                    expected_shape[0] / water_mask.shape[0],
-                    expected_shape[1] / water_mask.shape[1],
-                ),
-                order=0,  # nearest neighbor keeps it boolean
-                prefilter=False,
-            ).astype(np.bool_)
-
-        water_vertex_indices, water_colors = shoreline_water_colors(
-            water_mask, self.y_valid, self.x_valid
-        )
-        water_y = self.y_valid[water_vertex_indices]
-        water_x = self.x_valid[water_vertex_indices]
-
-        # Colors are either grid-space (H, W, 4) or vertex-space (N, 4)
-        if self.colors.ndim == 3:
-            self.colors[water_y, water_x, :3] = water_colors
-        else:
-            self.colors[water_vertex_indices, :3] = water_colors
-        self.logger.info(f"Water colored with depth gradient ({np.sum(water_mask)} water pixels)")
 
     def _create_skirt(
         self,
@@ -523,3 +517,13 @@ class TerrainMeshMixin:
             return float(x[0]), float(y[0]), float(z[0])
 
         return x, y, z
+
+
+# create_mesh forwards to build_mesh; advertise build_mesh's parameters (plus name) for help()/docs
+_build_sig = inspect.signature(TerrainMeshMixin.build_mesh)
+TerrainMeshMixin.create_mesh.__signature__ = _build_sig.replace(
+    parameters=[
+        *_build_sig.parameters.values(),
+        inspect.Parameter("name", inspect.Parameter.KEYWORD_ONLY, default="TerrainMesh"),
+    ]
+)

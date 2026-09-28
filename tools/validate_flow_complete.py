@@ -13,11 +13,11 @@ Bigness options:
 - full: Use ENTIRE DEM area but downsample to target resolution (default 1000x1000)
 
 Usage:
-    python examples/validate_flow_complete.py                    # Small subset (200x200)
-    python examples/validate_flow_complete.py --bigness medium   # Medium subset (500x500)
-    python examples/validate_flow_complete.py --bigness large    # Large subset (1000x1000)
-    python examples/validate_flow_complete.py --bigness full     # Full area, downsampled to 1000x1000
-    python examples/validate_flow_complete.py --bigness full --target-size 2000  # Full area at 2000x2000
+    python tools/validate_flow_complete.py                    # Small subset (200x200)
+    python tools/validate_flow_complete.py --bigness medium   # Medium subset (500x500)
+    python tools/validate_flow_complete.py --bigness large    # Large subset (1000x1000)
+    python tools/validate_flow_complete.py --bigness full     # Full area, downsampled to 1000x1000
+    python tools/validate_flow_complete.py --bigness full --target-size 2000  # Full area at 2000x2000
 """
 
 import sys

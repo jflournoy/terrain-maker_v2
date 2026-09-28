@@ -12,10 +12,9 @@ import numpy as np
 import pytest
 from rasterio import Affine
 
-pytest.importorskip("bpy")
 
-from terrain_maker.terrain.color_mapping import elevation_colormap  # noqa: E402
-from terrain_maker.terrain.core import Terrain  # noqa: E402
+from terrain_maker.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain
 
 
 def _dem():
@@ -59,7 +58,7 @@ def _run(name):
         kwargs["water_mask"] = _lake_mask(dem.shape)
     elif kwargs.get("water_mask") == "half":
         kwargs["water_mask"] = _lake_mask(dem.shape)[::2, ::2]
-    terrain.create_mesh(verbose=False, **kwargs)
+    terrain.build_mesh(verbose=False, **kwargs)
 
     boundary_colors = getattr(terrain, "boundary_colors", None)
     return {

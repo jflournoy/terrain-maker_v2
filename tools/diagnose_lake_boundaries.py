@@ -10,8 +10,8 @@ For each lake, shows:
 - Whether the outlet is interior vs boundary
 
 Usage:
-    python examples/diagnose_lake_boundaries.py
-    python examples/diagnose_lake_boundaries.py --top 20
+    python tools/diagnose_lake_boundaries.py
+    python tools/diagnose_lake_boundaries.py --top 20
 """
 
 import sys

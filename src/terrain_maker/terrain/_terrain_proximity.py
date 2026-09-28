@@ -9,6 +9,8 @@ import logging
 from pyproj import Transformer
 from rasterio.transform import rowcol
 from scipy.spatial import KDTree
+
+from terrain_maker.terrain._memory import KDTREE_GRID_QUERY, check_memory
 from typing import Optional
 
 # Output handling is configured once for the whole package in _logging.py
@@ -84,6 +86,7 @@ def _cluster_centroids(points, eps, logger):
 
 def _nearest_point_distance_grid(points, shape):
     """Distance in pixels from every grid cell to the nearest of points (row, col)."""
+    check_memory(shape[0] * shape[1], KDTREE_GRID_QUERY, "Grid proximity / ring distance query")
     rows, cols = np.indices(shape)
     grid = np.column_stack([rows.ravel(), cols.ravel()])
     distances, _ = KDTree(points).query(grid, k=1)

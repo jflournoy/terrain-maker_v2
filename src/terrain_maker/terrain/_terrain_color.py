@@ -7,7 +7,10 @@ import numpy as np
 import logging
 
 from terrain_maker.terrain.water import shoreline_water_colors
+from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Callable
+
+from scipy.ndimage import zoom
 
 # Output handling is configured once for the whole package in _logging.py
 logger = logging.getLogger(__name__)
@@ -21,6 +24,132 @@ def _as_rgba(colors):
         colors.shape[:2] + (1,), 255 if colors.dtype == np.uint8 else 1, dtype=colors.dtype
     )
     return np.concatenate([colors, alpha], axis=-1)
+
+
+@dataclass
+class ColormapLayer:
+    """A colormap applied to named data layers."""
+
+    colormap: Callable
+    sources: list
+    kwargs: dict = field(default_factory=dict)
+
+    def compute(self, terrain, label):
+        arrays = [terrain._layer_array(layer) for layer in self.sources]
+        try:
+            return _as_rgba(np.asarray(self.colormap(*arrays, **self.kwargs)))
+        except Exception as e:
+            terrain.logger.error(f"Error computing {label} colors: {str(e)}")
+            raise
+
+
+@dataclass
+class SingleColorMapping:
+    """One colormap everywhere, with an optional mask that makes pixels transparent."""
+
+    colormap: Callable
+    sources: list
+    kwargs: dict
+    mask_func: Optional[Callable] = None
+    mask_sources: list = field(default_factory=list)
+    mask_kwargs: dict = field(default_factory=dict)
+    mask_threshold: Optional[float] = None
+    mode = "standard"
+
+    def compute(self, terrain):
+        colors = np.asarray(
+            ColormapLayer(self.colormap, self.sources, self.kwargs).compute(terrain, "base")
+        )
+        if colors.ndim != 3 or colors.shape[-1] not in (3, 4):
+            raise ValueError(
+                "Color mapping must return an (H, W, 3) or (H, W, 4) array; "
+                f"got shape {colors.shape}. Wrap values in a colormap such as "
+                "elevation_colormap()."
+            )
+        if self.mask_func:
+            arrays = [terrain._layer_array(layer) for layer in self.mask_sources]
+            try:
+                mask = self.mask_func(*arrays, **self.mask_kwargs)
+            except Exception as e:
+                terrain.logger.error(f"Error computing mask: {str(e)}")
+                raise
+            if self.mask_threshold is not None:
+                mask = mask >= self.mask_threshold
+            colors[..., 3] = np.where(mask, 0.0, 1.0)
+        return colors
+
+
+@dataclass
+class BlendedColorMapping:
+    """Overlay colormap where overlay_mask is True, base colormap elsewhere."""
+
+    base: ColormapLayer
+    overlay: ColormapLayer
+    overlay_mask: np.ndarray
+    mode = "blended"
+
+    def compute(self, terrain):
+        base = self.base.compute(terrain, "base")
+        overlay = self.overlay.compute(terrain, "overlay")
+        mask = _grid_mask(terrain, self.overlay_mask, base.shape[:2])
+        if mask is None:
+            raise ValueError(
+                f"overlay_mask shape {self.overlay_mask.shape} matches neither the color grid "
+                f"{base.shape[:2]} nor the mesh vertices (call create_mesh() first)"
+            )
+        terrain.logger.info(f"Blended colors: {np.sum(mask)} overlay pixels")
+        return np.where(mask[..., None], overlay, base)
+
+
+@dataclass
+class MultiOverlayColorMapping:
+    """Base colormap with overlays applied in priority order, each by mask or threshold."""
+
+    base: ColormapLayer
+    overlays: list
+    mode = "multi-overlay"
+
+    def compute(self, terrain):
+        colors = self.base.compute(terrain, "base").copy()
+        for i, spec in enumerate(self.overlays):
+            layer = ColormapLayer(
+                spec["colormap"], spec["source_layers"], spec.get("colormap_kwargs", {})
+            )
+            overlay = layer.compute(terrain, f"overlay {i}")
+            mask = None
+            if spec.get("mask") is not None:
+                mask = _grid_mask(terrain, np.asarray(spec["mask"]), colors.shape[:2])
+                if mask is None:
+                    terrain.logger.warning(
+                        f"Overlay {i}: mask shape {np.shape(spec['mask'])} doesn't match grid "
+                        f"shape {colors.shape[:2]}. Falling back to threshold-based mask."
+                    )
+            if mask is None:
+                mask = _threshold_mask(
+                    terrain._layer_array(spec["source_layers"][0]), spec.get("threshold", 0.5)
+                )
+            colors[mask] = overlay[mask]
+            terrain.logger.info(f"Overlay {i}: {np.sum(mask)} grid pixels")
+        return colors
+
+
+def _grid_mask(terrain, mask, grid_shape):
+    """A boolean mask as a grid: grid masks pass through, vertex masks are scattered
+    to their pixels (extra entries for skirt vertices are ignored). None if neither fits."""
+    if mask.shape == tuple(grid_shape):
+        return mask.astype(bool)
+    y_valid = getattr(terrain, "y_valid", None)
+    if mask.ndim == 1 and y_valid is not None and len(mask) >= len(y_valid):
+        grid = np.zeros(grid_shape, dtype=bool)
+        grid[y_valid, terrain.x_valid] = mask[: len(y_valid)]
+        return grid
+    return None
+
+
+def _threshold_mask(values, threshold):
+    """Pixels at or above threshold (strictly above for 0, so sparse layers skip zeros)."""
+    above = values > 0.0 if threshold == 0.0 else values >= threshold
+    return above & ~np.isnan(values)
 
 
 class TerrainColorMixin:
@@ -95,47 +224,34 @@ class TerrainColorMixin:
             ...     mask_layers=['dem']
             ... )
         """
-        # Validate source_layers exist
         missing_layers = [name for name in source_layers if name not in self.data_layers]
         if missing_layers:
             raise ValueError(f"Source layers not found: {missing_layers}")
-
-        # Default kwargs dicts
-        if color_kwargs is None:
-            color_kwargs = {}
-        if mask_kwargs is None:
-            mask_kwargs = {}
-
-        # Handle mask layer defaults
         if mask_func:
             if mask_layers is None:
                 mask_layers = source_layers
             elif isinstance(mask_layers, str):
                 mask_layers = [mask_layers]
-
-            # Validate mask_layers exist
             missing_mask_layers = [name for name in mask_layers if name not in self.data_layers]
             if missing_mask_layers:
                 raise ValueError(f"Mask layers not found: {missing_mask_layers}")
         else:
             mask_layers = []
 
-        # Store mapping setup
-        self.color_mapping = color_func
-        self.color_sources = list(source_layers)
-        self.color_kwargs = color_kwargs
+        self._color_spec = SingleColorMapping(
+            colormap=color_func,
+            sources=list(source_layers),
+            kwargs=color_kwargs or {},
+            mask_func=mask_func,
+            mask_sources=list(mask_layers),
+            mask_kwargs=mask_kwargs or {},
+            mask_threshold=mask_threshold,
+        )
 
-        self.mask_func = mask_func
-        self.mask_sources = mask_layers
-        self.mask_kwargs = mask_kwargs
-        self.mask_threshold = mask_threshold
-
-        # Logging
         self.logger.info(f"Color function: {color_func.__name__}")
         self.logger.info(f"Color source layers: {source_layers}")
         if color_kwargs:
             self.logger.info(f"Color kwargs: {color_kwargs}")
-
         if mask_func:
             self.logger.info(f"Mask function: {mask_func.__name__}")
             self.logger.info(f"Mask source layers: {mask_layers}")
@@ -202,52 +318,35 @@ class TerrainColorMixin:
             ... )
             >>> terrain.compute_colors()  # Apply the blended mapping
         """
-        # Validate source_layers exist
         all_layers = set(base_source_layers) | set(overlay_source_layers)
         missing_layers = [name for name in all_layers if name not in self.data_layers]
         if missing_layers:
             raise ValueError(f"Source layers not found: {missing_layers}")
-
-        # Validate overlay_mask (can be grid-space or vertex-space)
-        # Actual shape validation happens in _compute_blended_colors()
         overlay_mask = np.asarray(overlay_mask)
-
-        # Check if it's a valid 1D or 2D array
         if overlay_mask.ndim not in (1, 2):
             raise ValueError(
                 f"overlay_mask must be 1D (vertex-space) or 2D (grid-space). "
                 f"Got shape {overlay_mask.shape}."
             )
 
-        # Default kwargs
-        if base_color_kwargs is None:
-            base_color_kwargs = {}
-        if overlay_color_kwargs is None:
-            overlay_color_kwargs = {}
-
-        # Store blended color mapping configuration
-        self.color_mapping_mode = "blended"
-        self.base_colormap = base_colormap
-        self.base_color_sources = list(base_source_layers)
-        self.base_color_kwargs = base_color_kwargs
-        self.overlay_colormap = overlay_colormap
-        self.overlay_color_sources = list(overlay_source_layers)
-        self.overlay_color_kwargs = overlay_color_kwargs
-        self.overlay_mask = overlay_mask
+        self._color_spec = BlendedColorMapping(
+            base=ColormapLayer(base_colormap, list(base_source_layers), base_color_kwargs or {}),
+            overlay=ColormapLayer(
+                overlay_colormap, list(overlay_source_layers), overlay_color_kwargs or {}
+            ),
+            overlay_mask=overlay_mask,
+        )
 
         self.logger.info("Blended color mapping configured:")
         self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
         self.logger.info(
             f"  Overlay colormap: {overlay_colormap.__name__} on {overlay_source_layers}"
         )
-
-        # Log mask info (grid-space or vertex-space)
         mask_sum = np.sum(overlay_mask)
-        mask_size = overlay_mask.size
         mask_type = "grid-space" if overlay_mask.ndim == 2 else "vertex-space"
         self.logger.info(
-            f"  Overlay mask ({mask_type}): {mask_sum}/{mask_size} elements "
-            f"({100.0 * mask_sum / mask_size:.1f}%)"
+            f"  Overlay mask ({mask_type}): {mask_sum}/{overlay_mask.size} elements "
+            f"({100.0 * mask_sum / overlay_mask.size:.1f}%)"
         )
 
     def set_multi_color_mapping(
@@ -302,44 +401,29 @@ class TerrainColorMixin:
             ... )
             >>> terrain.compute_colors()
         """
-        # Validate all source_layers exist
         all_layers = set(base_source_layers)
         for overlay in overlays:
             all_layers.update(overlay.get("source_layers", []))
-
         missing_layers = [name for name in all_layers if name not in self.data_layers]
         if missing_layers:
             raise ValueError(f"Source layers not found: {missing_layers}")
-
-        # Validate overlay specs
         for i, overlay in enumerate(overlays):
-            if "colormap" not in overlay:
-                raise ValueError(f"Overlay {i} missing required 'colormap' key")
-            if "source_layers" not in overlay:
-                raise ValueError(f"Overlay {i} missing required 'source_layers' key")
-            if "priority" not in overlay:
-                raise ValueError(f"Overlay {i} missing required 'priority' key")
+            for key in ("colormap", "source_layers", "priority"):
+                if key not in overlay:
+                    raise ValueError(f"Overlay {i} missing required '{key}' key")
 
-        # Sort overlays by priority (lower number = higher priority = applied first)
+        # Lower priority number = applied first
         sorted_overlays = sorted(overlays, key=lambda x: x["priority"])
-
-        # Default kwargs
-        if base_color_kwargs is None:
-            base_color_kwargs = {}
-
-        # Store multi-overlay configuration
-        self.color_mapping_mode = "multi_overlay"
-        self.base_colormap = base_colormap
-        self.base_color_sources = list(base_source_layers)
-        self.base_color_kwargs = base_color_kwargs
-        self.overlays = sorted_overlays
+        self._color_spec = MultiOverlayColorMapping(
+            base=ColormapLayer(base_colormap, list(base_source_layers), base_color_kwargs or {}),
+            overlays=sorted_overlays,
+        )
 
         self.logger.info("Multi-overlay color mapping configured:")
         self.logger.info(f"  Base colormap: {base_colormap.__name__} on {base_source_layers}")
         self.logger.info(f"  Number of overlays: {len(overlays)}")
         for i, overlay in enumerate(sorted_overlays):
-            has_mask = "mask" in overlay
-            mask_info = f", has_mask={has_mask}" if has_mask else ""
+            mask_info = ", has_mask=True" if "mask" in overlay else ""
             threshold = overlay.get("threshold", "default")
             self.logger.info(
                 f"    Overlay {i} (priority {overlay['priority']}): "
@@ -351,299 +435,59 @@ class TerrainColorMixin:
         """
         Compute colors using color_func and optionally mask_func.
 
-        Supports three modes:
-        - Standard: Single colormap applied to all vertices
-        - Blended: Two colormaps blended based on proximity mask
-        - Multi-overlay: Multiple overlays with different colormaps and priority
+        Supports three modes (set with set_color_mapping, set_blended_color_mapping or
+        set_multi_color_mapping). Every mode produces the same layout: an (H, W, 4) RGBA
+        grid aligned with the transformed DEM, stored as self.colors. Mesh vertices are
+        colored from it at (y_valid, x_valid).
 
         Args:
             water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
-                For blended mode, water pixels will be colored blue in the final vertex colors.
-                For standard and multi-overlay modes, water detection is handled in create_mesh().
+                Water pixels are recolored with a shoreline-to-deep blue gradient.
 
         Returns:
-            np.ndarray: RGBA color array.
+            np.ndarray: RGBA color grid of shape (H, W, 4).
         """
-        # Check if multi-overlay mode
-        if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "multi_overlay":
-            return self._compute_multi_overlay_colors(water_mask=water_mask)
-
-        # Check if blended mode
-        if hasattr(self, "color_mapping_mode") and self.color_mapping_mode == "blended":
-            return self._compute_blended_colors(water_mask=water_mask)
-
-        # Standard single colormap mode
-        if not hasattr(self, "color_mapping") or not hasattr(self, "color_sources"):
+        spec = getattr(self, "_color_spec", None)
+        if spec is None:
             raise ValueError("Color mapping not set. Call set_color_mapping() first.")
-
-        self.logger.info("Computing colors...")
-
-        # Prepare color data arrays
-        color_arrays = [self._layer_array(layer) for layer in self.color_sources]
-
-        # Compute base colors
-        try:
-            colors = self.color_mapping(*color_arrays, **self.color_kwargs)
-        except Exception as e:
-            self.logger.error(f"Error computing colors: {str(e)}")
-            raise
-
-        colors = np.asarray(colors)
-        if colors.ndim != 3 or colors.shape[-1] not in (3, 4):
-            raise ValueError(
-                "Color mapping must return an (H, W, 3) or (H, W, 4) array; "
-                f"got shape {colors.shape}. Wrap values in a colormap such as "
-                "elevation_colormap()."
-            )
-
-        # Ensure RGBA
-        colors = _as_rgba(colors)
-
-        # Apply mask if provided
-        if self.mask_func:
-            mask_arrays = [self._layer_array(layer) for layer in self.mask_sources]
-
-            try:
-                mask = self.mask_func(*mask_arrays, **self.mask_kwargs)
-            except Exception as e:
-                self.logger.error(f"Error computing mask: {str(e)}")
-                raise
-
-            # Apply threshold if provided
-            if self.mask_threshold is not None:
-                mask = mask >= self.mask_threshold
-
-            # Update alpha channel based on mask
-            colors[..., 3] = np.where(mask, 0.0, 1.0)
-
-        self.colors = colors
-
-        self.logger.info(f"Colors computed successfully with shape {colors.shape}")
-
-        return colors
-
-    def _compute_blended_colors(self, water_mask=None):
-        """
-        Compute colors using blended colormap mode (internal method).
-
-        Computes base colors for entire DEM, overlay colors for overlay zones,
-        and blends them according to overlay_mask at the vertex level.
-
-        Args:
-            water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
-                If provided, water pixels will be colored blue in the final vertex colors.
-
-        Returns:
-            np.ndarray: RGBA color array with blended colors.
-        """
-        self.logger.info("Computing blended colors...")
-        base_grid = _as_rgba(
-            self._apply_colormap(
-                self.base_colormap, self.base_color_sources, self.base_color_kwargs, "base"
-            )
-        )
-        overlay_grid = _as_rgba(
-            self._apply_colormap(
-                self.overlay_colormap,
-                self.overlay_color_sources,
-                self.overlay_color_kwargs,
-                "overlay",
-            )
-        )
-        base_vertex_colors = base_grid[self.y_valid, self.x_valid]
-        overlay_vertex_colors = overlay_grid[self.y_valid, self.x_valid]
-
-        # Masks may be grid-space (H, W) or already vertex-space (N,)
-        grid_mask = self.overlay_mask.ndim == 2
-        overlay_mask = (
-            self.overlay_mask[self.y_valid, self.x_valid] if grid_mask else self.overlay_mask
-        )
-
-        # Boundary (skirt) vertices exist only after create_mesh and don't map to pixels:
-        # give them the mean base color and never the overlay
-        n_surface = len(self.y_valid)
-        n_boundary = (len(self.vertices) if self.vertices is not None else n_surface) - n_surface
-        if n_boundary > 0:
-            self.logger.info(f"  Padding colors for {n_boundary} boundary vertices")
-            fill = np.tile(
-                np.mean(base_vertex_colors, axis=0).astype(base_vertex_colors.dtype),
-                (n_boundary, 1),
-            )
-            base_vertex_colors = np.vstack([base_vertex_colors, fill])
-            overlay_vertex_colors = np.vstack([overlay_vertex_colors, fill])
-            if grid_mask:
-                overlay_mask = np.concatenate([overlay_mask, np.zeros(n_boundary, dtype=bool)])
-
-        colors = np.where(overlay_mask[:, None], overlay_vertex_colors, base_vertex_colors)
-        num_overlay = np.sum(overlay_mask)
-        self.logger.info(
-            f"Blended colors computed: {num_overlay} overlay vertices, "
-            f"{len(overlay_mask) - num_overlay} base vertices"
-        )
-
+        self.logger.info(f"Computing colors ({spec.mode})...")
+        colors = spec.compute(self)
         if water_mask is not None:
-            water_indices, water_colors = shoreline_water_colors(
-                water_mask, self.y_valid, self.x_valid
-            )
-            colors[water_indices, :3] = water_colors
-            self.logger.info(f"Water colored blue ({len(water_indices)} vertices)")
-
+            self._apply_water_gradient(colors, water_mask)
         self.colors = colors
+        self.logger.info(f"Colors computed successfully with shape {colors.shape}")
         return colors
+
+    def _apply_water_gradient(self, colors, water_mask):
+        """Recolor water in a colors grid with a shoreline-to-deep blue gradient (in place).
+
+        Only mesh-vertex pixels are recolored once the mesh exists; before that, every
+        water pixel is.
+        """
+        if water_mask.shape != colors.shape[:2]:
+            # Colors can come from a layer at a different resolution (e.g. a score layer)
+            self.logger.warning(
+                f"Water mask shape {water_mask.shape} does not match colors shape "
+                f"{colors.shape[:2]}. Resampling water mask to match colors."
+            )
+            water_mask = zoom(
+                water_mask.astype(np.float32),
+                zoom=(
+                    colors.shape[0] / water_mask.shape[0],
+                    colors.shape[1] / water_mask.shape[1],
+                ),
+                order=0,  # nearest neighbor keeps it boolean
+                prefilter=False,
+            ).astype(np.bool_)
+
+        ys, xs = getattr(self, "y_valid", None), getattr(self, "x_valid", None)
+        if ys is None or xs is None:
+            ys, xs = np.nonzero(water_mask)
+        indices, water_colors = shoreline_water_colors(water_mask, ys, xs)
+        colors[ys[indices], xs[indices], :3] = water_colors
+        self.logger.info(f"Water colored with depth gradient ({len(indices)} pixels)")
 
     def _layer_array(self, layer):
         """A layer's data after transforms, or its original data if none ran."""
         info = self.data_layers[layer]
         return info["transformed_data"] if info.get("transformed") else info["data"]
-
-    def _apply_colormap(self, colormap, source_layers, kwargs, label):
-        """Run a colormap on the named layers, logging which mapping failed."""
-        try:
-            return colormap(*[self._layer_array(layer) for layer in source_layers], **kwargs)
-        except Exception as e:
-            self.logger.error(f"Error computing {label} colors: {str(e)}")
-            raise
-
-    def _compute_multi_overlay_colors(self, water_mask=None):
-        """
-        Compute colors using multi-overlay mode (internal method).
-
-        Combines base colormap with multiple overlays. For each grid pixel, applies the
-        first overlay (by priority) whose source data is non-zero and non-NaN. Falls back
-        to base colormap if no overlays match.
-
-        Args:
-            water_mask (np.ndarray, optional): Boolean water mask in grid space (height × width).
-                If provided, water pixels will be colored blue in the final vertex colors.
-
-        Returns:
-            np.ndarray: RGBA color array with multi-overlay colors.
-        """
-        self.logger.info("Computing multi-overlay colors...")
-
-        # Get transformed DEM data to determine grid shape (fall back to original if not transformed)
-        dem_layer = self.data_layers["dem"]
-        if "transformed_data" in dem_layer:
-            dem_data = dem_layer["transformed_data"]
-        else:
-            dem_data = dem_layer["data"]
-        height, width = dem_data.shape
-
-        # Compute base colors for all pixels
-        base_arrays = [self._layer_array(layer) for layer in self.base_color_sources]
-
-        try:
-            base_colors_grid = self.base_colormap(*base_arrays, **self.base_color_kwargs)
-        except Exception as e:
-            self.logger.error(f"Error computing base colors: {str(e)}")
-            raise
-
-        # Ensure base colors are RGBA
-        base_colors_grid = _as_rgba(base_colors_grid)
-
-        # Initialize result grid with base colors
-        result_colors_grid = np.copy(base_colors_grid)
-
-        # Apply overlays in priority order
-        for overlay_idx, overlay in enumerate(self.overlays):
-            overlay_colormap = overlay["colormap"]
-            overlay_sources = overlay["source_layers"]
-            overlay_kwargs = overlay.get("colormap_kwargs", {})
-            priority = overlay["priority"]
-
-            # Get overlay source data
-            overlay_arrays = [self._layer_array(layer) for layer in overlay_sources]
-
-            try:
-                overlay_colors_grid = overlay_colormap(*overlay_arrays, **overlay_kwargs)
-            except Exception as e:
-                self.logger.error(f"Error computing overlay {overlay_idx} colors: {str(e)}")
-                raise
-
-            # Ensure overlay colors are RGBA
-            overlay_colors_grid = _as_rgba(overlay_colors_grid)
-
-            # Create mask for where this overlay applies
-            # Option 1: Explicit mask provided (e.g., park_mask for proximity-based overlays)
-            # Option 2: Threshold-based mask from first source layer value
-            explicit_mask = overlay.get("mask", None)
-            use_explicit_mask = False
-
-            if explicit_mask is not None:
-                # Explicit mask provided - can be grid-space or vertex-space
-                explicit_mask = np.asarray(explicit_mask)
-                grid_shape = overlay_arrays[0].shape
-                has_mesh = hasattr(self, "y_valid") and self.y_valid is not None
-
-                if explicit_mask.shape == grid_shape:
-                    # Already grid-space - preferred form
-                    overlay_mask = explicit_mask.astype(bool)
-                    use_explicit_mask = True
-                    self.logger.info(
-                        f"Overlay {overlay_idx}: using grid-space mask directly, "
-                        f"{np.sum(overlay_mask)} grid pixels"
-                    )
-                elif has_mesh and explicit_mask.shape == (len(self.y_valid),):
-                    # Convert vertex mask to grid mask (exact match)
-                    overlay_mask = np.zeros(grid_shape, dtype=bool)
-                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask
-                    use_explicit_mask = True
-                    self.logger.info(
-                        f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
-                        f"{np.sum(overlay_mask)} grid pixels"
-                    )
-                elif (
-                    has_mesh
-                    and len(explicit_mask.shape) == 1
-                    and len(explicit_mask) >= len(self.y_valid)
-                ):
-                    # Vertex-space mask but might include boundary vertices
-                    self.logger.info(
-                        f"Overlay {overlay_idx}: mask has {len(explicit_mask)} entries, "
-                        f"using first {len(self.y_valid)} for surface vertices"
-                    )
-                    overlay_mask = np.zeros(grid_shape, dtype=bool)
-                    overlay_mask[self.y_valid, self.x_valid] = explicit_mask[: len(self.y_valid)]
-                    use_explicit_mask = True
-                    self.logger.info(
-                        f"Overlay {overlay_idx}: converted vertex mask to grid mask, "
-                        f"{np.sum(overlay_mask)} grid pixels"
-                    )
-                else:
-                    self.logger.warning(
-                        f"Overlay {overlay_idx}: mask shape {explicit_mask.shape} doesn't match "
-                        f"grid shape {grid_shape}. Falling back to threshold-based mask."
-                    )
-
-            if not use_explicit_mask:
-                # Use threshold-based mask from source layer values
-                overlay_mask_data = overlay_arrays[0]
-                threshold = overlay.get("threshold", 0.5)
-
-                # Special case: threshold=0.0 should exclude zeros (use > not >=)
-                # This handles sparse layers like stream networks where non-feature pixels are 0
-                if threshold == 0.0:
-                    overlay_mask = (overlay_mask_data > 0.0) & ~np.isnan(overlay_mask_data)
-                else:
-                    overlay_mask = (overlay_mask_data >= threshold) & ~np.isnan(overlay_mask_data)
-
-                self.logger.info(
-                    f"Overlay {overlay_idx}: using threshold={threshold}, "
-                    f"{np.sum(overlay_mask)} grid pixels"
-                )
-
-            # Apply overlay colors where mask is True
-            result_colors_grid[overlay_mask] = overlay_colors_grid[overlay_mask]
-
-            self.logger.debug(
-                f"Overlay {overlay_idx} (priority {priority}): "
-                f"applied to {np.sum(overlay_mask)} grid pixels"
-            )
-
-        # Store grid-level colors (create_mesh will handle vertex mapping and water coloring)
-        # This matches the pattern used by standard mode compute_colors()
-        self.colors = result_colors_grid
-
-        self.logger.info(f"Multi-overlay colors computed: {len(self.overlays)} overlays applied")
-        self.logger.info(f"Colors stored as grid-space array: {result_colors_grid.shape}")
-        return result_colors_grid

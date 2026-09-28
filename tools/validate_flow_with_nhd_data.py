@@ -8,13 +8,13 @@ This script demonstrates using actual lake data instead of synthetic lakes:
 
 Usage:
     # Using NHD (USA only)
-    python examples/validate_flow_with_nhd_data.py --data-source nhd
+    python tools/validate_flow_with_nhd_data.py --data-source nhd
 
     # Using HydroLAKES (global)
-    python examples/validate_flow_with_nhd_data.py --data-source hydrolakes
+    python tools/validate_flow_with_nhd_data.py --data-source hydrolakes
 
     # Specify output directory
-    python examples/validate_flow_with_nhd_data.py --data-source nhd --output my_results/
+    python tools/validate_flow_with_nhd_data.py --data-source nhd --output my_results/
 """
 
 import sys

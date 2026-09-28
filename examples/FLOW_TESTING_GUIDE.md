@@ -8,11 +8,11 @@ The flow accumulation implementation now supports a **spec-compliant backend** b
 
 ```bash
 # Use spec-compliant backend (recommended for most use cases)
-python examples/validate_flow_complete.py --bigness medium --backend spec
+python tools/validate_flow_complete.py --bigness medium --backend spec
 
 # Compare spec vs legacy
-python examples/validate_flow_complete.py --bigness medium --backend legacy --output output/legacy
-python examples/validate_flow_complete.py --bigness medium --backend spec --output output/spec
+python tools/validate_flow_complete.py --bigness medium --backend legacy --output output/legacy
+python tools/validate_flow_complete.py --bigness medium --backend spec --output output/spec
 ```
 
 ### What's Different?
@@ -33,7 +33,7 @@ The spec backend uses a **4-stage pipeline**:
 ### Spec-Compliant Parameters
 
 ```bash
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --backend spec \
     --coastal-elev-threshold 10.0 \      # Max elevation for coastal outlets (m)
     --edge-mode all \                     # Boundary outlet strategy
@@ -76,7 +76,7 @@ Legacy parameters map to spec parameters as follows:
 ### 1. Test with Default Parameters (Baseline)
 
 ```bash
-python examples/validate_flow_complete.py --bigness medium
+python tools/validate_flow_complete.py --bigness medium
 ```
 
 This runs with the original parameters optimized for the San Diego coastal DEM.
@@ -84,7 +84,7 @@ This runs with the original parameters optimized for the San Diego coastal DEM.
 ### 2. Test with High-Resolution Parameters (Recommended for Noisy DEMs)
 
 ```bash
-python examples/validate_flow_complete.py --bigness medium --high-res-params
+python tools/validate_flow_complete.py --bigness medium --high-res-params
 ```
 
 This applies the recommended parameter set for high-resolution noisy DEMs:
@@ -114,11 +114,11 @@ Look for differences in:
 
 ```bash
 # Complete filling (stronger gradients, better for flat terrain)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --fill-method fill
 
 # Breach method (minimal filling, preserves more natural features)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --fill-method breach
 ```
 
@@ -126,15 +126,15 @@ python examples/validate_flow_complete.py --bigness medium \
 
 ```bash
 # Aggressive filling (fill almost everything)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --min-basin-depth 0.5
 
 # Moderate (recommended for noisy high-res DEMs)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --min-basin-depth 2.0
 
 # Conservative (only preserve very deep basins)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --min-basin-depth 100.0
 ```
 
@@ -142,14 +142,14 @@ python examples/validate_flow_complete.py --bigness medium \
 
 ```bash
 # Fill small remaining sinks to reduce fragmentation
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --fill-small-sinks 50
 ```
 
 ### Full Custom Configuration
 
 ```bash
-python examples/validate_flow_complete.py \
+python tools/validate_flow_complete.py \
     --bigness large \
     --fill-method fill \
     --min-basin-depth 2.0 \
@@ -162,19 +162,19 @@ python examples/validate_flow_complete.py \
 
 ```bash
 # Small test (200×200) - Fast iteration
-python examples/validate_flow_complete.py --bigness small --high-res-params
+python tools/validate_flow_complete.py --bigness small --high-res-params
 
 # Medium test (500×500) - Good balance
-python examples/validate_flow_complete.py --bigness medium --high-res-params
+python tools/validate_flow_complete.py --bigness medium --high-res-params
 
 # Large test (1000×1000) - More realistic
-python examples/validate_flow_complete.py --bigness large --high-res-params
+python tools/validate_flow_complete.py --bigness large --high-res-params
 
 # Full DEM at lower resolution (~1000×1000)
-python examples/validate_flow_complete.py --bigness full --high-res-params
+python tools/validate_flow_complete.py --bigness full --high-res-params
 
 # Full DEM at higher resolution (~2000×2000) - Slow but thorough
-python examples/validate_flow_complete.py --bigness full --target-size 2000 --high-res-params
+python tools/validate_flow_complete.py --bigness full --target-size 2000 --high-res-params
 ```
 
 ## Interpreting Results
@@ -201,11 +201,11 @@ python examples/validate_flow_complete.py --bigness full --target-size 2000 --hi
 
 ```bash
 # Test 1: Default (conservative - good for coastal DEMs with real deep basins)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --output examples/output/test1_default
 
 # Test 2: High-res preset (aggressive - good for noisy high-res inland DEMs)
-python examples/validate_flow_complete.py --bigness medium \
+python tools/validate_flow_complete.py --bigness medium \
     --high-res-params \
     --output examples/output/test2_highres
 

@@ -12,8 +12,8 @@ Shows:
 - Drainage area upstream vs downstream of each lake
 
 Usage:
-    python examples/diagnose_lake_connections.py
-    python examples/diagnose_lake_connections.py --output-dir examples/output
+    python tools/diagnose_lake_connections.py
+    python tools/diagnose_lake_connections.py --output-dir examples/output
 """
 
 import sys

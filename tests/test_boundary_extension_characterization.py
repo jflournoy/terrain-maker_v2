@@ -13,11 +13,10 @@ import numpy as np
 import pytest
 from rasterio import Affine
 
-pytest.importorskip("bpy")
 
-from terrain_maker.terrain import mesh_operations  # noqa: E402
-from terrain_maker.terrain.color_mapping import elevation_colormap  # noqa: E402
-from terrain_maker.terrain.core import Terrain  # noqa: E402
+from terrain_maker.terrain import mesh_operations
+from terrain_maker.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain
 
 
 def _dem(irregular=False):
@@ -74,7 +73,7 @@ def _run(name, monkeypatch):
     terrain.apply_transforms()
     terrain.set_color_mapping(elevation_colormap, source_layers=["dem"])
     terrain.compute_colors()
-    terrain.create_mesh(boundary_extension=True, verbose=False, **CONFIGS[name])
+    terrain.build_mesh(boundary_extension=True, verbose=False, **CONFIGS[name])
 
     result = captured["result"]
     vertices, faces = np.asarray(result[0]), np.asarray(result[1], dtype=np.int64)

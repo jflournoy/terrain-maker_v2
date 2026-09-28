@@ -87,6 +87,11 @@ if stream_mask.size > 5_000_000:  # >5M pixels
     # OR: downsample the data first
 ```
 
+**Use the memory guard:** before an allocation-heavy operation, call
+`check_memory(n_cells, bytes_per_cell, "operation name")` from `terrain_maker.terrain._memory`.
+It raises `ArrayTooLargeError` (a `MemoryError`) with advice instead of an OOM kill. The budget
+is half of available RAM, or `TERRAIN_MAKER_MEMORY_LIMIT_GB` if set.
+
 **When implementing new features:**
 1. Always check what resolution your input data is at
 2. For expensive operations, work with flow resolution or mesh resolution data

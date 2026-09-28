@@ -5,7 +5,7 @@ This creates a synthetic DEM with known drainage patterns and checks
 that the flow accumulation produces reasonable results.
 
 Run with:
-    python examples/test_flow_fix.py
+    python tools/test_flow_fix.py
 """
 
 import numpy as np
