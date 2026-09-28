@@ -7,6 +7,8 @@ terrain meshes, materials, and rendering.
 
 import numpy as np
 
+from terrain_maker.terrain.mesh_operations import vertex_colors_rgba
+
 import bpy
 
 
@@ -359,100 +361,19 @@ def create_blender_mesh(
         mesh.from_pydata(vertices.tolist(), [], faces)
         mesh.update(calc_edges=True)
 
-        # Apply colors if provided (surface colors OR boundary colors)
-        has_surface_colors = colors is not None and y_valid is not None and x_valid is not None
-        has_boundary_colors = boundary_colors is not None
-
-        if has_surface_colors or has_boundary_colors:
+        # Colors are computed per vertex (vectorized), then expanded to face loops
+        if (colors is not None and y_valid is not None) or boundary_colors is not None:
             if logger:
-                logger.info("Applying vertex colors with optimized method...")
-
+                logger.info("Applying vertex colors...")
             color_layer = mesh.vertex_colors.new(name="TerrainColors")
-
-            if len(color_layer.data) > 0:
-                # Create color data array (Blender expects normalized 0-1 floats)
-                color_data = np.zeros((len(color_layer.data), 4), dtype=np.float32)
-                # Default to white (in case some vertices don't get colored)
-                color_data[:, :] = [1.0, 1.0, 1.0, 1.0]
-
-                # Normalize surface colors if provided
-                colors_normalized = None
-                n_positions = 0
-                is_vertex_space = False  # Track whether colors are vertex-space or grid-space
-                if has_surface_colors:
-                    colors_normalized = colors.astype(np.float32)
-                    if colors_normalized.max() > 1.0:
-                        colors_normalized = colors_normalized / 255.0
-
-                    # Detect color space: vertex-space (N, 3/4) vs grid-space (H, W, 3/4)
-                    is_vertex_space = colors_normalized.ndim == 2
-                    if logger:
-                        color_shape = f"{colors_normalized.shape}"
-                        color_space = "vertex-space" if is_vertex_space else "grid-space"
-                        logger.debug(f"Color array shape {color_shape} detected as {color_space}")
-
-                    # Ensure colors are RGBA (add alpha channel if needed)
-                    if colors_normalized.shape[-1] == 3:
-                        if is_vertex_space:
-                            # Vertex-space: add alpha as (N, 1)
-                            alpha = np.ones((colors_normalized.shape[0], 1), dtype=np.float32)
-                        else:
-                            # Grid-space: add alpha as (H, W, 1)
-                            alpha = np.ones(
-                                (colors_normalized.shape[0], colors_normalized.shape[1], 1),
-                                dtype=np.float32,
-                            )
-                        colors_normalized = np.concatenate([colors_normalized, alpha], axis=-1)
-
-                    # Get number of original positions (before boundary extension)
-                    n_positions = len(y_valid)
-
-                # Normalize boundary_colors if provided
-                boundary_colors_normalized = None
-                if has_boundary_colors:
-                    boundary_colors_normalized = boundary_colors.astype(np.float32)
-                    if boundary_colors_normalized.max() > 1.0:
-                        boundary_colors_normalized = boundary_colors_normalized / 255.0
-                    # Add alpha channel if needed
-                    if boundary_colors_normalized.shape[-1] == 3:
-                        alpha_boundary = np.ones((boundary_colors_normalized.shape[0], 1), dtype=np.float32)
-                        boundary_colors_normalized = np.concatenate([boundary_colors_normalized, alpha_boundary], axis=-1)
-
-                # For each polygon loop, get vertex and set color
-                for poly in mesh.polygons:
-                    for loop_idx in poly.loop_indices:
-                        vertex_idx = mesh.loops[loop_idx].vertex_index
-
-                        # Apply colors to surface vertices (if available)
-                        if has_surface_colors and vertex_idx < n_positions:
-                            if is_vertex_space:
-                                # Vertex-space colors: direct index lookup
-                                if vertex_idx < len(colors_normalized):
-                                    color_data[loop_idx] = colors_normalized[vertex_idx]
-                            else:
-                                # Grid-space colors: coordinate-based lookup
-                                y, x = y_valid[vertex_idx], x_valid[vertex_idx]
-                                # Check bounds
-                                if (
-                                    0 <= y < colors_normalized.shape[0]
-                                    and 0 <= x < colors_normalized.shape[1]
-                                ):
-                                    color_data[loop_idx] = colors_normalized[y, x]
-                        # Apply boundary colors to boundary vertices (if available)
-                        elif boundary_colors_normalized is not None:
-                            boundary_idx = vertex_idx - n_positions
-                            if 0 <= boundary_idx < len(boundary_colors_normalized):
-                                color_data[loop_idx] = boundary_colors_normalized[boundary_idx]
-
-                # Batch assign all colors at once
-                try:
-                    color_layer.data.foreach_set("color", color_data.flatten())
-                except Exception as e:
-                    if logger:
-                        logger.warning(f"Batch color assignment failed: {e}")
-                    # Fallback to slower per-loop assignment
-                    for i, color in enumerate(color_data):
-                        color_layer.data[i].color = color
+            n_loops = len(color_layer.data)
+            if n_loops > 0:
+                per_vertex = vertex_colors_rgba(
+                    len(vertices), colors, y_valid, x_valid, boundary_colors
+                )
+                loop_vertices = np.zeros(n_loops, dtype=np.int64)
+                mesh.loops.foreach_get("vertex_index", loop_vertices)
+                color_layer.data.foreach_set("color", per_vertex[loop_vertices].ravel())
 
         # Create object and link to scene
         obj = bpy.data.objects.new(name, mesh)

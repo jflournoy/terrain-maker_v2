@@ -14,11 +14,10 @@ import numpy as np
 import pytest
 from rasterio import Affine
 
-pytest.importorskip("bpy")
 
-from terrain_maker.terrain.color_mapping import elevation_colormap  # noqa: E402
-from terrain_maker.terrain.core import Terrain  # noqa: E402
-from terrain_maker.terrain.transforms import reproject_raster  # noqa: E402
+from terrain_maker.terrain.color_mapping import elevation_colormap
+from terrain_maker.terrain.core import Terrain
+from terrain_maker.terrain.transforms import reproject_raster
 
 DEM_TRANSFORM = Affine(0.001, 0, -83.05, 0, -0.001, 42.35)
 
@@ -120,7 +119,7 @@ def _blend(vertex_mask=False, rgb=False, water=False, after_mesh=False):
         ["score"],
         mask,
     )
-    terrain.create_mesh(verbose=False)
+    terrain.build_mesh(verbose=False)
     colors = terrain.colors
     if after_mesh or water:
         water_mask = np.zeros((40, 48), dtype=bool)

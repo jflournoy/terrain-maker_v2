@@ -13,9 +13,8 @@ import numpy as np
 import pytest
 from rasterio import Affine
 
-pytest.importorskip("bpy")
 
-from terrain_maker.terrain.core import Terrain  # noqa: E402
+from terrain_maker.terrain.core import Terrain
 
 # 40 x 50 grid of 30 m UTM 17N pixels near Detroit
 ORIGIN_X, ORIGIN_Y, PIXEL = 320000.0, 4700000.0, 30.0
@@ -70,7 +69,7 @@ def _ring(terrain, inner, cluster):
 
 
 def _mesh(terrain, cluster, wgs84):
-    terrain.create_mesh(boundary_extension=False, verbose=False)
+    terrain.build_mesh(boundary_extension=False, verbose=False)
     xs, ys = _wgs84_points() if wgs84 else _points()
     crs = "EPSG:4326" if wgs84 else UTM
     return terrain.compute_proximity_mask(

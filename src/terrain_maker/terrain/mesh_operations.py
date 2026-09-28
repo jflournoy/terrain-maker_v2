@@ -2286,3 +2286,64 @@ def generate_transform_aware_rectangle_edges_fractional(
             continue
 
     return edge_pixels_fractional
+
+
+def _to_unit_rgba(colors):
+    """Colors as float32 RGBA in 0-1. Integer dtypes are 0-255; floats above 1 are too."""
+    colors = np.asarray(colors)
+    unit = colors.astype(np.float32)
+    if np.issubdtype(colors.dtype, np.integer) or (unit.size and unit.max() > 1.0):
+        unit /= 255.0
+    if unit.shape[-1] == 3:
+        unit = np.concatenate([unit, np.ones(unit.shape[:-1] + (1,), dtype=np.float32)], axis=-1)
+    return unit
+
+
+def vertex_colors_rgba(n_vertices, colors=None, y_valid=None, x_valid=None, boundary_colors=None):
+    """Per-vertex RGBA (0-1 float32) for a terrain mesh; uncolored vertices are white.
+
+    Surface vertices (the first len(y_valid)) take colors[y, x] from an (H, W, C) grid, or
+    colors[i] from an (N, C) per-vertex array. Skirt vertices after them take boundary_colors.
+    """
+    result = np.ones((n_vertices, 4), dtype=np.float32)
+    n_surface = 0
+    if colors is not None and y_valid is not None and x_valid is not None:
+        unit = _to_unit_rgba(colors)
+        n_surface = min(len(y_valid), n_vertices)
+        ys, xs = np.asarray(y_valid[:n_surface]), np.asarray(x_valid[:n_surface])
+        if unit.ndim == 3:
+            inside = (ys >= 0) & (ys < unit.shape[0]) & (xs >= 0) & (xs < unit.shape[1])
+            result[:n_surface][inside] = unit[ys[inside], xs[inside]]
+        else:
+            n = min(n_surface, len(unit))
+            result[:n] = unit[:n]
+    elif y_valid is not None:
+        n_surface = len(y_valid)
+    if boundary_colors is not None:
+        unit = _to_unit_rgba(boundary_colors)
+        n = max(0, min(len(unit), n_vertices - n_surface))
+        result[n_surface : n_surface + n] = unit[:n]
+    return result
+
+
+@dataclass
+class MeshData:
+    """A terrain mesh independent of Blender.
+
+    vertices are (V, 3); the first len(y_valid) are surface vertices at grid cells
+    (y_valid, x_valid), the rest are skirt vertices. colors is the (H, W, 4) color grid
+    and boundary_colors the per-skirt-vertex colors, either may be None.
+    """
+
+    vertices: np.ndarray
+    faces: list
+    y_valid: np.ndarray
+    x_valid: np.ndarray
+    colors: Optional[np.ndarray] = None
+    boundary_colors: Optional[np.ndarray] = None
+
+    def vertex_colors(self):
+        """Per-vertex RGBA in 0-1 (white where uncolored)."""
+        return vertex_colors_rgba(
+            len(self.vertices), self.colors, self.y_valid, self.x_valid, self.boundary_colors
+        )
