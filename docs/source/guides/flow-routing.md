@@ -1214,7 +1214,7 @@ def test_visual_stream_network():
 The following visualizations demonstrate the complete flow routing pipeline applied to a San Diego DEM with HydroLAKES water body data. Run the example with:
 
 ```bash
-python examples/validate_flow_with_water_bodies.py --bigness full --data-source hydrolakes
+python tools/validate_flow_with_water_bodies.py --bigness full --data-source hydrolakes
 ```
 
 ### Pipeline Visualization Outputs

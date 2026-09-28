@@ -10,9 +10,9 @@ Loads the cached SNODAS stats (from xc_skiing_cache/) and plots:
   - Coverage vs consistency side-by-side comparison
 
 Usage:
-    uv run python examples/diagnose_snodas_coverage.py
-    uv run python examples/diagnose_snodas_coverage.py --cache-file path/to/stats.npz
-    uv run python examples/diagnose_snodas_coverage.py --output-dir ./debug_maps
+    uv run python tools/diagnose_snodas_coverage.py
+    uv run python tools/diagnose_snodas_coverage.py --cache-file path/to/stats.npz
+    uv run python tools/diagnose_snodas_coverage.py --output-dir ./debug_maps
 """
 
 import argparse

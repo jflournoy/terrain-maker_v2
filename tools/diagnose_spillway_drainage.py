@@ -9,7 +9,7 @@ Loads cached flow data, then runs two scenarios:
 Shows before/after drainage area and upstream rainfall for both scenarios.
 
 Usage:
-    python examples/diagnose_spillway_drainage.py
+    python tools/diagnose_spillway_drainage.py
 """
 
 import sys

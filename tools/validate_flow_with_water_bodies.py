@@ -13,9 +13,9 @@ Water bodies are detected using synthetic lakes created from low-lying flat area
 for testing purposes. In production, use real NHD or HydroLAKES data.
 
 Usage:
-    python examples/validate_flow_with_water_bodies.py                    # Small subset (200x200)
-    python examples/validate_flow_with_water_bodies.py --bigness medium   # Medium subset (500x500)
-    python examples/validate_flow_with_water_bodies.py --bigness large    # Large subset (1000x1000)
+    python tools/validate_flow_with_water_bodies.py                    # Small subset (200x200)
+    python tools/validate_flow_with_water_bodies.py --bigness medium   # Medium subset (500x500)
+    python tools/validate_flow_with_water_bodies.py --bigness large    # Large subset (1000x1000)
 """
 
 import sys

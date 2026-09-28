@@ -9,7 +9,7 @@ Requirements:
     - Set environment variables EARTHDATA_USERNAME and EARTHDATA_PASSWORD
 
 Usage:
-    python examples/download_san_diego_dem.py
+    python tools/download_san_diego_dem.py
 """
 
 import os

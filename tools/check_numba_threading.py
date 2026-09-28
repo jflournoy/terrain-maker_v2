@@ -114,10 +114,10 @@ if get_num_threads() == 1:
     print("  export NUMBA_THREADING_LAYER=tbb  # or 'omp' or 'workqueue'")
     print()
     print("  # Then run your script:")
-    print("  python examples/validate_flow_complete.py ...")
+    print("  python tools/validate_flow_complete.py ...")
     print()
     print("  # Or inline:")
-    print(f"  NUMBA_NUM_THREADS={os.cpu_count()} python examples/validate_flow_complete.py ...")
+    print(f"  NUMBA_NUM_THREADS={os.cpu_count()} python tools/validate_flow_complete.py ...")
 else:
     print(f"✅ Using {get_num_threads()} threads")
     print("   This should provide good parallel performance.")

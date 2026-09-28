@@ -118,30 +118,30 @@ Text summary with:
 
 ```bash
 # Small subset (200×200)
-python examples/validate_flow_with_water_bodies.py --bigness small
+python tools/validate_flow_with_water_bodies.py --bigness small
 
 # Medium subset (500×500)
-python examples/validate_flow_with_water_bodies.py --bigness medium
+python tools/validate_flow_with_water_bodies.py --bigness medium
 
 # Large subset (1000×1000)
-python examples/validate_flow_with_water_bodies.py --bigness large
+python tools/validate_flow_with_water_bodies.py --bigness large
 
 # Full DEM (downsampled)
-python examples/validate_flow_with_water_bodies.py --bigness full
+python tools/validate_flow_with_water_bodies.py --bigness full
 ```
 
 ### With Custom Parameters
 
 ```bash
 # Custom depression filling
-python examples/validate_flow_with_water_bodies.py \
+python tools/validate_flow_with_water_bodies.py \
   --bigness medium \
   --fill-method fill \
   --min-basin-depth 2.0 \
   --min-basin-size 10000
 
 # Custom output directory
-python examples/validate_flow_with_water_bodies.py \
+python tools/validate_flow_with_water_bodies.py \
   --bigness small \
   --output my_validation_results/
 ```

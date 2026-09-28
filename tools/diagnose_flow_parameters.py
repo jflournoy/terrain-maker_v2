@@ -8,7 +8,7 @@ Tests different combinations of:
 - fill_small_sinks: Whether to fill small remaining sinks
 
 Run with:
-    python examples/diagnose_flow_parameters.py --dem data/your_dem.tif --precip data/your_precip.tif
+    python tools/diagnose_flow_parameters.py --dem data/your_dem.tif --precip data/your_precip.tif
 """
 
 import argparse

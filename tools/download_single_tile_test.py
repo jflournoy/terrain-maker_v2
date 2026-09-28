@@ -6,7 +6,7 @@ Downloads just one tile for downtown San Diego to test credentials.
 Much faster than the full San Diego County download.
 
 Usage:
-    python examples/download_single_tile_test.py
+    python tools/download_single_tile_test.py
 """
 
 import os

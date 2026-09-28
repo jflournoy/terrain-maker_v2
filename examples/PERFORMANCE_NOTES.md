@@ -84,7 +84,7 @@ Instead of thread count, monitor:
 
 Run the diagnostic script to verify parallel execution works:
 ```bash
-uv run python examples/check_numba_threading.py
+uv run python tools/check_numba_threading.py
 ```
 
 Expected output:
