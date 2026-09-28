@@ -9,9 +9,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "549a090a49ac68e3",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -58,9 +58,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "2b1819c5f2b5bc3e",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -107,9 +107,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -156,9 +156,9 @@
     "colors": "31344d2d2e411dcf",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -205,9 +205,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -263,9 +263,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -312,9 +312,9 @@
     "colors": "f57df72ea285fd50",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -361,9 +361,9 @@
     "colors": "e78c317f37cd62dd",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -410,9 +410,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "e5e4e7f57bcb56fb",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -459,9 +459,9 @@
     "colors": "56d2a257fdd99cdc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "2395040880fff4ae",
      "dem": "fecfec07a9ea8488",
-     "sledding": "2395040880fff4ae",
-     "xc_skiing": "2395040880fff4ae"
+     "overlay_scores": "2395040880fff4ae"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -508,9 +508,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -557,9 +557,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "44eceddbb05d5f7b",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -606,9 +606,9 @@
     "colors": "53f708f3e3fe52cf",
     "faces": "85f10583dabf81db",
     "layers": {
+     "base_scores": "016bd15584b48830",
      "dem": "fecfec07a9ea8488",
-     "sledding": "016bd15584b48830",
-     "xc_skiing": "016bd15584b48830"
+     "overlay_scores": "016bd15584b48830"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -655,9 +655,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "126df3f4e0d2616e",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "fecfec07a9ea8488",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
@@ -704,9 +704,9 @@
     "colors": "707eaf8c261cd5fc",
     "faces": "2e47278f21c12185",
     "layers": {
+     "base_scores": "f810ff2e1be36bc3",
      "dem": "a95e59823ed96804",
-     "sledding": "f810ff2e1be36bc3",
-     "xc_skiing": "f810ff2e1be36bc3"
+     "overlay_scores": "f810ff2e1be36bc3"
     },
     "model_params": {
      "base_depth": "-0.2",
