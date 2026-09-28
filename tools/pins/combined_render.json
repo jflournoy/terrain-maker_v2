@@ -694,6 +694,55 @@
    ]
   ]
  },
+ "two_tier_catmull": {
+  "files": {
+   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+  },
+  "meshes": [
+   {
+    "boundary_colors": "0497fdd55f80fb53",
+    "colors": "707eaf8c261cd5fc",
+    "faces": "991c83e218db768b",
+    "layers": {
+     "base_scores": "f810ff2e1be36bc3",
+     "dem": "fecfec07a9ea8488",
+     "overlay_scores": "f810ff2e1be36bc3"
+    },
+    "model_params": {
+     "base_depth": "-0.2",
+     "centered": "True",
+     "edge_base_material": "clay",
+     "edge_blend_colors": "True",
+     "edge_mid_depth": "None",
+     "height_scale": "30.0",
+     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
+     "scale_factor": "100",
+     "two_tier_edge": "True"
+    },
+    "vertices": "1cf24fb9c76b7422"
+   }
+  ],
+  "scene": [
+   [
+    "Camera",
+    "CAMERA",
+    [
+     -0.0011,
+     0.0025,
+     2.095
+    ]
+   ],
+   [
+    "TerrainMesh",
+    "MESH",
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ]
+  ]
+ },
  "wavelet": {
   "files": {
    "histograms/scores_histograms.png": "3cbf5935748cf0c3"

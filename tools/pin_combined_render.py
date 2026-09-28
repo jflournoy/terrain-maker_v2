@@ -38,6 +38,7 @@ VARIANTS = {
     "remove_bumps": ["--remove-bumps", "3"],
     "smooth_scores": ["--smooth-scores"],
     "two_tier": ["--two-tier-edge", "--edge-spacing", "1.0"],
+    "two_tier_catmull": ["--two-tier-edge", "--use-catmull-rom"],
     "hdri_background": ["--hdri-lighting", "--background"],
     "adaptive": ["--adaptive-smooth"],
     "adaptive_bumps": ["--adaptive-smooth", "--remove-bumps", "3"],

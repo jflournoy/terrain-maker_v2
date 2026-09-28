@@ -116,36 +116,39 @@ def fit_catmull_rom_boundary_curve(boundary_points, subdivisions=10, closed_loop
             for pt in smooth_curve
         ]
 
-    # Remove duplicate/very-close points (can occur from curve wrapping or coincidental interpolation)
-    # These create degenerate zero-area faces that cause rendering artifacts
-    # Keep track of unique points by checking distance to all previous points
-    filtered_curve = []
-    for pt in smooth_curve:
-        # Check if this point is too close to any previous point
-        is_duplicate = False
-        for prev_pt in filtered_curve:
-            if np.allclose(pt, prev_pt, atol=1e-6):
-                is_duplicate = True
-                break
+    # Remove duplicate/very-close points (can occur from curve wrapping or coincidental
+    # interpolation): they create degenerate zero-area faces that render dark
+    return _drop_near_duplicates(smooth_curve)
 
-        if not is_duplicate:
-            filtered_curve.append(pt)
 
-    # If we removed points and this is a closed loop, make sure we don't have the first point appearing in the middle
-    # Re-filter to ensure no point appears more than once
-    if len(filtered_curve) > 2:
-        final_curve = [filtered_curve[0]]
-        for i in range(1, len(filtered_curve)):
-            # Check against all previous points, not just the last one
-            is_dup = any(
-                np.allclose(filtered_curve[i], prev_pt, atol=1e-6) for prev_pt in final_curve
-            )
-            if not is_dup:
-                final_curve.append(filtered_curve[i])
+def _drop_near_duplicates(points, atol=1e-6, rtol=1e-5):
+    """Keep the first occurrence of each point, dropping later points that are
+    np.allclose(point, kept, atol=1e-6) to an earlier kept point.
 
-        return final_curve
-
-    return filtered_curve
+    That is |point - kept| <= atol + rtol * |kept| on both axes. Candidates are found
+    through a grid hash whose cells are at least the largest tolerance, so only the
+    3x3 neighboring cells need checking: linear time instead of comparing every pair.
+    """
+    if len(points) == 0:
+        return []
+    coords = np.asarray(points, dtype=float)
+    if not np.all(np.isfinite(coords)):
+        raise ValueError("boundary curve contains non-finite points")
+    cell = atol + rtol * float(np.abs(coords).max())
+    buckets = {}
+    kept = []
+    for point, (y, x) in zip(points, coords):
+        cy, cx = int(np.floor(y / cell)), int(np.floor(x / cell))
+        duplicate = any(
+            abs(y - py) <= atol + rtol * abs(py) and abs(x - px) <= atol + rtol * abs(px)
+            for dy in (-1, 0, 1)
+            for dx in (-1, 0, 1)
+            for py, px in buckets.get((cy + dy, cx + dx), ())
+        )
+        if not duplicate:
+            kept.append(point)
+            buckets.setdefault((cy, cx), []).append((y, x))
+    return kept
 
 
 def smooth_boundary_points(boundary_coords, window_size=3, closed_loop=True):
