@@ -62,6 +62,25 @@ pip install -e .
 
 See [Python Setup Guide](docs/PYTHON_SETUP.md) for detailed instructions.
 
+### Verifying an Update on Your Machine
+
+Cloud sessions can't run everything: they have no real DEM or score data, no Blender GPU
+render, and limited network. After pulling, run the rest locally:
+
+```bash
+scripts/verify-local.sh            # deps, full tests, mock pins, real-data pins
+scripts/verify-local.sh --quick    # deps + full tests only
+scripts/verify-local.sh --render   # also render the saved preset for a visual check
+```
+
+Results land in `verify-output/<date>-<commit>/report.md`, with one log per step, the reasons
+any tests were skipped, and anything that changed. Real-data outputs are compared against a
+baseline in `tools/pins/local/` (recorded on the first run, not committed). Accept intended
+changes with `uv run python tools/pin_combined_render.py record --real`.
+
+`scripts/install-verify-hook.sh` adds a git hook that reminds you after each `git pull`, or
+runs the check automatically if you set `TERRAIN_VERIFY_ON_PULL=quick` or `full`.
+
 ### Claude Code Commands
 
 The `.claude/commands/` directory contains 14+ ready-to-use workflow commands:
