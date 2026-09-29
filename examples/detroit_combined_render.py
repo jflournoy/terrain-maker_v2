@@ -560,7 +560,6 @@ def create_component_panels(
     render_width: int = 640,
     render_height: int = 360,
     main_mesh: "bpy.types.Object" = None,
-    score_colormap=None,
     component_colormaps: list[str] | None = None,
 ) -> list:
     """Create component panel meshes for display to the right of the main mesh.
@@ -2500,7 +2499,6 @@ def add_panels_and_sculpture(
     render_width,
     render_height,
     mesh_combined,
-    base_colormap,
     score_cmap_name,
     timer,
 ):
@@ -2528,7 +2526,6 @@ def add_panels_and_sculpture(
                 render_width=render_width,
                 render_height=render_height,
                 main_mesh=mesh_combined,
-                score_colormap=base_colormap,
                 component_colormaps=args.component_colormaps,
             )
         else:
@@ -2570,16 +2567,7 @@ def add_panels_and_sculpture(
     return component_panel_info, temporal_bg_plane, temporal_mesh
 
 
-def render_outputs(
-    args,
-    timer,
-    render_samples,
-    render_width,
-    render_height,
-    score_cmap_name,
-    terrain_combined,
-    normalization,
-):
+def render_outputs(args, timer, render_samples, render_width, render_height):
     """Render the scene to an image, embed the command and color profile, and write histograms."""
     # Determine output format (defined outside render block for summary)
     output_format = args.format.upper()
@@ -2707,21 +2695,6 @@ def render_outputs(
             lum_histogram_filename = output_path.stem + "_luminance.png"
             lum_histogram_path = output_path.parent / lum_histogram_filename
             generate_luminance_histogram(output_path, lum_histogram_path)
-
-            # Generate score distribution histogram (raw vs transformed with colormap colors)
-            score_hist_path = output_path.parent / (output_path.stem + "_score_distribution.png")
-            raw_scores_for_hist = terrain_combined.data_layers["base_scores"]["data"]
-            generate_score_histogram(
-                raw_scores=raw_scores_for_hist,
-                transformed_scores=normalization.apply(raw_scores_for_hist),
-                output_path=score_hist_path,
-                cmap_name=score_cmap_name,
-                transform_label=normalization.label,
-                rendered_max=normalization.max,
-                rendered_min_nonzero=normalization.min_nonzero,
-                gamma=normalization.gamma,
-                normalize_scores=normalization.stretch,
-            )
 
         # Print actual Blender settings used for this render
         print_render_settings_report(logger)
@@ -3102,7 +3075,6 @@ def configure_colors(
                 base_colormap,
                 source_layers=["base_scores"],
             )
-    return base_colormap
 
 
 def prepare_score_layers(
@@ -3285,25 +3257,36 @@ def prepare_score_layers(
 
     # === Compute scores for histogram output ===
     # Create output directory for histograms
+    # Two views of the base scores, both through the same normalization as the colormap:
+    # before lakes were blanked and near-zero scores floored, and as actually rendered
     viz_dir = args.output_dir / "histograms"
     viz_dir.mkdir(parents=True, exist_ok=True)
-
-    # Use pre-lake-mask scores snapshot (reflects the --base-scores swap)
-    base_scores_before_lake_mask = scores_before_lake_mask["base_scores"]
-
-    generate_score_histogram(
-        raw_scores=base_scores_before_lake_mask,
-        transformed_scores=normalization.apply(base_scores_before_lake_mask),
-        output_path=viz_dir / "scores_histograms.png",
-        cmap_name=score_cmap_name,
-        transform_label=normalization.label,
-        rendered_max=normalization.max,
-        rendered_min_nonzero=normalization.min_nonzero,
-        gamma=normalization.gamma,
-        normalize_scores=normalization.stretch,
-        print_cmap_name="boreal_mako_print" if args.print_colors else None,
-    )
-    logger.info(f"✓ Saved: {viz_dir / 'scores_histograms.png'}")
+    for filename, scores, title in (
+        (
+            "scores_before_masking.png",
+            scores_before_lake_mask["base_scores"],
+            "Base scores before lake masking and score floor",
+        ),
+        (
+            "scores_as_rendered.png",
+            terrain_combined.data_layers["base_scores"]["data"],
+            "Base scores as rendered (lakes removed, floor applied)",
+        ),
+    ):
+        generate_score_histogram(
+            raw_scores=scores,
+            transformed_scores=normalization.apply(scores),
+            output_path=viz_dir / filename,
+            cmap_name=score_cmap_name,
+            transform_label=normalization.label,
+            rendered_max=normalization.max,
+            rendered_min_nonzero=normalization.min_nonzero,
+            gamma=normalization.gamma,
+            normalize_scores=normalization.stretch,
+            print_cmap_name="boreal_mako_print" if args.print_colors else None,
+            title=title,
+        )
+        logger.info(f"✓ Saved: {viz_dir / filename}")
     return normalization
 
 
@@ -3960,7 +3943,7 @@ def main(argv=None):
     # Using grid-space park_mask_grid (computed before mesh creation) eliminates
     # the need for duplicate mesh creation (option 2 - the better fix)
 
-    base_colormap = configure_colors(
+    configure_colors(
         args=args,
         terrain_combined=terrain_combined,
         score_cmap_name=score_cmap_name,
@@ -4002,7 +3985,6 @@ def main(argv=None):
         render_width=render_width,
         render_height=render_height,
         mesh_combined=mesh_combined,
-        base_colormap=base_colormap,
         score_cmap_name=score_cmap_name,
         timer=timer,
     )
@@ -4031,9 +4013,6 @@ def main(argv=None):
         render_samples=render_samples,
         render_width=render_width,
         render_height=render_height,
-        score_cmap_name=score_cmap_name,
-        terrain_combined=terrain_combined,
-        normalization=normalization,
     )
 
     # Print timing report

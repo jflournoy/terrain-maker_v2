@@ -2490,6 +2490,7 @@ def generate_score_histogram(
     gamma: float = 1.0,
     normalize_scores: bool = False,
     print_cmap_name: Optional[str] = None,
+    title: Optional[str] = None,
 ) -> Optional[Path]:
     """
     Generate a side-by-side histogram of raw and transformed scores with colormap-colored bars.
@@ -2511,6 +2512,7 @@ def generate_score_histogram(
         rendered_min_nonzero: Min nonzero score in the rendered region.
         gamma: Gamma value used in the transformation.
         normalize_scores: Whether --normalize-scores stretch was applied.
+        title: Figure title naming what the scores are (default: generic raw vs transformed).
         print_cmap_name: Optional print-safe colormap name. When provided, a third
             panel is added showing the transformed scores with print-safe colors.
 
@@ -2527,7 +2529,7 @@ def generate_score_histogram(
         fig_width = 24 if print_cmap_name else 16
         fig, axes = plt.subplots(1, n_panels, figsize=(fig_width, 7))
         ax_raw, ax_trans = axes[0], axes[1]
-        title = "Score Distribution: Raw vs Transformed"
+        title = title or "Score Distribution: Raw vs Transformed"
         if print_cmap_name:
             title += " vs Print-Safe"
         fig.suptitle(title, fontsize=14, fontweight="bold")
