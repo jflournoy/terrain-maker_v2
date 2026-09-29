@@ -1,7 +1,8 @@
 {
  "adaptive": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -50,7 +51,8 @@
  },
  "adaptive_bumps": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -99,7 +101,8 @@
  },
  "default": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -148,7 +151,8 @@
  },
  "elev_saturation": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -197,7 +201,8 @@
  },
  "hdri_background": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -255,7 +260,8 @@
  },
  "no_water": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -304,7 +310,8 @@
  },
  "normalize_gamma": {
   "files": {
-   "histograms/scores_histograms.png": "50f83f3ef801448c"
+   "histograms/scores_as_rendered.png": "aac13bc5afc3730d",
+   "histograms/scores_before_masking.png": "4ec49a76146a3809"
   },
   "meshes": [
    {
@@ -353,7 +360,8 @@
  },
  "print_colors_no_purple": {
   "files": {
-   "histograms/scores_histograms.png": "4d6c3af87a9e5975"
+   "histograms/scores_as_rendered.png": "f9991df031772007",
+   "histograms/scores_before_masking.png": "fa76fb14e44b32dd"
   },
   "meshes": [
    {
@@ -402,7 +410,8 @@
  },
  "remove_bumps": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -451,7 +460,8 @@
  },
  "score_floor": {
   "files": {
-   "histograms/scores_histograms.png": "d9a2af5efdd7195d"
+   "histograms/scores_as_rendered.png": "e812b5b6fee05c03",
+   "histograms/scores_before_masking.png": "cf46369b9ef0b50f"
   },
   "meshes": [
    {
@@ -500,7 +510,8 @@
  },
  "skiing_base": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -549,7 +560,8 @@
  },
  "smooth_despeckle": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -598,7 +610,8 @@
  },
  "smooth_scores": {
   "files": {
-   "histograms/scores_histograms.png": "afb167e9e5b8a93c"
+   "histograms/scores_as_rendered.png": "c7101d54d2c231cd",
+   "histograms/scores_before_masking.png": "02e486afedf61e94"
   },
   "meshes": [
    {
@@ -647,7 +660,8 @@
  },
  "two_tier": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -696,7 +710,8 @@
  },
  "two_tier_catmull": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {
@@ -745,7 +760,8 @@
  },
  "wavelet": {
   "files": {
-   "histograms/scores_histograms.png": "3cbf5935748cf0c3"
+   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
+   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
   "meshes": [
    {

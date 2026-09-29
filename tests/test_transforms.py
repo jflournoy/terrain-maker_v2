@@ -1239,7 +1239,7 @@ class TestDiagnosticsSlopeComputation:
         gradient_transform = np.sqrt(dx_transform**2 + dy_transform**2)
         slope_transform = np.degrees(np.arctan(gradient_transform))
 
-        # Compute slope the way diagnostics does (copied from plot_adaptive_smooth_diagnostics)
+        # Compute slope with np.gradient scaled by pixel size
         dy_diag = ndimage.sobel(dem, axis=0, mode="reflect") / 8.0
         dx_diag = ndimage.sobel(dem, axis=1, mode="reflect") / 8.0
         dx_diag = dx_diag / pixel_size

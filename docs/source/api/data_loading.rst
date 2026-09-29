@@ -59,6 +59,5 @@ Diagnostics
 
 .. autofunction:: terrain_maker.terrain.diagnostics.generate_luminance_histogram
 
-.. autofunction:: terrain_maker.terrain.diagnostics.plot_wavelet_diagnostics
 
-.. autofunction:: terrain_maker.terrain.diagnostics.generate_upscale_diagnostics
+.. autofunction:: terrain_maker.terrain.diagnostics.generate_score_histogram
