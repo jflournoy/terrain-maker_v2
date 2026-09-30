@@ -60,7 +60,7 @@ from rasterio import Affine
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.terrain.core import (
+from terrain_maker.terrain.core import (
     Terrain,
     load_dem_files,
     scale_elevation,
@@ -72,14 +72,14 @@ from src.terrain.core import (
     setup_render_settings,
     render_scene_to_file,
 )
-from src.terrain.roads import (
+from terrain_maker.terrain.roads import (
     get_roads_tiled,
     add_roads_layer,
     rasterize_roads_to_layer,
 )
-from src.terrain.scene_setup import frame_camera_to_objects, create_background_plane
-from src.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
-from src.terrain.dem_downloader import download_dem_by_bbox
+from terrain_maker.terrain.scene_setup import frame_camera_to_objects, create_background_plane
+from terrain_maker.terrain.water_bodies import download_water_bodies, rasterize_lakes_to_mask
+from terrain_maker.terrain.dem_downloader import download_dem_by_bbox
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +500,7 @@ def _build_panel(dem_data, dem_transform, target_vertices,
         print(f"  [{label}] {len(mesh.data.vertices):,} verts, "
               f"{len(mesh.data.polygons):,} polys")
         # Apply terrain material preset (create_mesh defaults to basic vertex colors)
-        from src.terrain.materials import apply_colormap_material
+        from terrain_maker.terrain.materials import apply_colormap_material
         mat = mesh.data.materials[0]
         apply_colormap_material(mat, terrain_material=terrain_material)
         print(f"  [{label}] material: {terrain_material}")
