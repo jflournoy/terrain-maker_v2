@@ -86,6 +86,40 @@ except (AttributeError, TypeError):
 
 
 # =============================================================================
+# San Diego Terrain Colormap
+# =============================================================================
+# Viridis-spirit (dark→light luminance arc, perceptually uniform) but tuned to
+# San Diego County geography. Water overlay is applied separately, so the low
+# end starts at coastal plain / sea level rather than ocean blue.
+#
+# Pacific coast → beach/coastal plain → coastal sage scrub → chaparral
+# foothills → inland valleys → Cleveland NF / granite outcrops → Cuyamaca peaks
+
+_SAN_DIEGO_COLORS = [
+    # (position, R, G, B) — all values 0–1
+    # Luminance increases monotonically ~0.14 → 0.72 (viridis-spirit)
+    (0.00, 0.102, 0.153, 0.267),  # Deep navy — sea level / Pacific        lum~0.14
+    (0.08, 0.102, 0.310, 0.380),  # Dark teal — bays, lagoons              lum~0.23
+    (0.18, 0.310, 0.330, 0.255),  # Muted sage-green — coastal scrub       lum~0.30
+    (0.32, 0.380, 0.400, 0.255),  # Olive — coastal sage scrub             lum~0.37
+    (0.50, 0.459, 0.420, 0.220),  # Chaparral olive-brown — foothills      lum~0.43
+    (0.65, 0.490, 0.390, 0.235),  # Dry brown — inland valleys             lum~0.50 (warmer)
+    (0.80, 0.530, 0.455, 0.380),  # Rocky gray-brown — granite outcrops    lum~0.47
+    (0.91, 0.620, 0.560, 0.490),  # Upper mountain — weathered granite      lum~0.55
+    (1.00, 0.700, 0.665, 0.630),  # Cuyamaca / Palomar peaks               lum~0.63
+]
+
+san_diego_cmap = LinearSegmentedColormap.from_list(
+    'san_diego', _SAN_DIEGO_COLORS, N=256
+)
+try:
+    import matplotlib
+    matplotlib.colormaps.register(san_diego_cmap, force=True)
+except (AttributeError, TypeError):
+    plt.register_cmap(cmap=san_diego_cmap)
+
+
+# =============================================================================
 # Boreal-Mako Colormap (Perceptually Uniform)
 # =============================================================================
 # Winter forest palette: Great Lakes mixed-forest green → blue → cyan → white
