@@ -1,8 +1,7 @@
 ---
-agent-type: general-purpose
-allowed-tools: [Read, Bash, Grep, Glob]
+name: next-priorities
 description: Analyzes project state to recommend next development priorities and actions
-last-updated: 2025-08-18
+tools: Read, Bash, Grep, Glob
 ---
 
 # Next Priorities Agent
@@ -17,11 +16,12 @@ Use these specific commands to gather information:
 - `gh issue list --label "status:blocked" --state open` - Blocked issues
 - `gh issue list --state closed --limit 10` - Recently closed issues
 - `git status --short` - Current repository state
-- `npm run hygiene --silent` - Project health check
+- `/hygiene` - project health check, if the project provides one
 - `gh run list --limit 5` - Recent CI runs
 
 ## Task Instructions
 
+### Phase 0: Active Workflow Check
 ### Phase 1: Project State Discovery
 1. **Repository Analysis**
    - Check git status (uncommitted changes, unpushed commits)
@@ -206,7 +206,7 @@ Generate structured recommendations in `.claude/agents/reports/next-priorities-[
 Based on current state, these commands will be most helpful:
 
 1. **`/[command]`** - [why this command now]
-2. **`npm run [script]`** - [what this will accomplish]
+2. **`[shell command]`** - [what this will accomplish]
 3. **`gh issue create --title "[title]"`** - [if new work identified]
 4. **Use [agent] agent** - [for complex analysis needs]
 
@@ -244,7 +244,7 @@ Based on current state, these commands will be most helpful:
 - Gracefully handle missing files or tools
 
 ## Integration Points
-- Use `npm run hygiene` for health assessment
+- Use `/hygiene` for health assessment
 - Use `gh issue list` for task context and priorities
 - Use `gh issue view [number]` for detailed task information
 - Leverage git history for activity patterns
