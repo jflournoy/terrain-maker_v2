@@ -48,6 +48,14 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _no_backoff_sleep(monkeypatch):
+    """Overpass retries back off with real sleeps (up to minutes); tests check behavior, not time."""
+    import terrain_maker.terrain.roads as roads_module
+
+    monkeypatch.setattr(roads_module.time, "sleep", lambda seconds: None)
+
+
 @pytest.fixture
 def sample_bbox():
     """Sample bounding box for Detroit area."""
