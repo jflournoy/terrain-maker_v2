@@ -429,7 +429,9 @@ def get_roads_tiled(
         # Small bbox - single fetch
         logger.info("  Small area - single fetch (no tiling needed)")
         result = get_roads(bbox, road_types, force_refresh=force_refresh)
-        return result if result else {"type": "FeatureCollection", "features": []}
+        if result is None:
+            raise RuntimeError(f"Overpass API road fetch failed for {bbox}; try again later")
+        return result
 
     # Large bbox - tile and merge
     lat_tiles = int(math.ceil(lat_span / tile_size))
@@ -495,7 +497,12 @@ def get_roads_tiled(
             time.sleep(retry_delay)
 
         if still_failed:
-            logger.warning(f"  {len(still_failed)} tiles failed after retry: {still_failed}")
+            # Returning the other tiles would render a map with a region silently missing
+            # roads. Tiles that succeeded are cached, so a re-run only fetches these.
+            raise RuntimeError(
+                f"Overpass API road fetch failed for tile(s) {still_failed} of {total_tiles} "
+                "after retry; re-run later (fetched tiles are cached)"
+            )
 
     logger.info(f"  Loaded {len(all_features)} total road segments from {total_tiles} tiles")
     return {"type": "FeatureCollection", "features": all_features}

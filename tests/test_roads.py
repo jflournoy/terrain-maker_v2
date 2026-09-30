@@ -1045,3 +1045,36 @@ class TestOffsetRoadVertices:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestRoadFetchFailuresAreNotEmptyAreas:
+    """A failed fetch must not be mistaken for an area without roads (a map missing roads)."""
+
+    ROAD = {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
+            "properties": {"highway": "primary"}}
+
+    def _tiled(self, per_call, bbox=(40.0, -80.0, 44.0, -76.0)):
+        from terrain_maker.terrain.roads import get_roads_tiled
+
+        calls = iter(per_call)
+        with patch("terrain_maker.terrain.roads.get_roads", side_effect=lambda *a, **k: next(calls)), \
+                patch("terrain_maker.terrain.roads.time.sleep"):
+            return get_roads_tiled(bbox, tile_size=2.0, retry_count=1, retry_delay=0)
+
+    def test_tile_failing_after_retry_raises_naming_it(self):
+        ok = {"type": "FeatureCollection", "features": [self.ROAD]}
+        with pytest.raises(RuntimeError, match="tile"):
+            self._tiled([ok, None, ok, ok, None])  # 4 tiles; tile 2 fails, retry fails
+
+    def test_tile_failing_then_succeeding_on_retry_is_fine(self):
+        ok = {"type": "FeatureCollection", "features": [self.ROAD]}
+        result = self._tiled([ok, None, ok, ok, ok])
+        assert len(result["features"]) == 4
+
+    def test_empty_area_is_not_an_error(self):
+        empty = {"type": "FeatureCollection", "features": []}
+        assert self._tiled([empty] * 4)["features"] == []
+
+    def test_small_area_fetch_failure_raises(self):
+        with pytest.raises(RuntimeError, match="Overpass"):
+            self._tiled([None], bbox=(42.0, -83.5, 42.5, -83.0))
