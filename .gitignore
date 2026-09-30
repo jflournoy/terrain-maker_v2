@@ -151,3 +151,6 @@ venv/
 # - archive/ (archived workflow files)
 # - internal/ (project decisions)
 # - plans/ (project planning)
+# Local verification outputs (scripts/verify-local.sh)
+tools/pins/local/
+verify-output/
