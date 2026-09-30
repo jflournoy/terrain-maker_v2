@@ -91,9 +91,11 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 SAN_DIEGO_BBOX = (32.50, -117.30, 33.10, -116.90)
-# ~41 mi tall × 23 mi wide centered on San Diego / Tijuana
-SAN_DIEGO_INSET_BBOX = (32.50, -117.30, 33.10, -116.82)
-# Inset: same lat span as main, coast east to Ramona (~41 mi tall × 28 mi wide)
+# Used for DEM download trigger only
+SAN_DIEGO_MAIN_BBOX = (32.0, -117.7933, 34.0, -115.2067)
+# Full DEM tiles trimmed 12 mi on each side (~150 mi wide × 138 mi tall)
+SAN_DIEGO_INSET_BBOX = (32.45, -117.30, 33.22, -116.82)
+# Inset: just below US/Mexico border to Oceanside (~53 mi tall × 28 mi wide)
 SAN_DIEGO_DEM_DIR = Path(__file__).parent.parent / "data" / "san_diego_dem"
 HYDRORIVERS_SHP = (
     Path(__file__).parent.parent / "data" / "hydrorivers"
@@ -684,9 +686,13 @@ def main():
         pass
 
     cmap_name = "san_diego"
+    # Crop main DEM to trimmed bbox (12 mi off each side)
+    main_dem, main_tf = _crop_dem(dem_data, dem_transform, SAN_DIEGO_MAIN_BBOX)
+    print(f"  Main DEM crop: {main_dem.shape} ({main_dem.size:,} pixels)")
+
     # Main panel: broad area, moderate vertex density
     _, main_mesh, _ = _build_panel(
-        dem_data, dem_transform, main_target,
+        main_dem, main_tf, main_target,
         roads, railways, rivers, lakes_geojson, height_scale=10,
         road_width=1, rail_width=3, river_width_scale=1.5, label="main",
         cmap_name=cmap_name, elev_range=elev_range,
@@ -701,7 +707,7 @@ def main():
     city_target = WIDTH * HEIGHT
     _, city_mesh, _ = _build_panel(
         city_dem, city_tf, city_target,
-        roads, railways, rivers, lakes_geojson, height_scale=15.0,
+        roads, railways, rivers, lakes_geojson, height_scale=50.0,
         road_width=1, rail_width=1,
         river_width_scale=0.8, river_resolution=30.0,
         cmap_name=cmap_name, elev_range=elev_range, label="city",
