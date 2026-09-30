@@ -1,0 +1,65 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch origin)",
+      "Bash(git fetch origin main)",
+      "Bash(git merge origin/main --no-commit --no-ff)",
+      "Bash(gh pr checks 54 --json name,state,conclusion)",
+      "Bash(git branch -d refactor/47-consolidate-flow-pipelines)",
+      "Bash(/tmp/analysis.txt:*)",
+      "Bash(for f in \"docs/images/combined_render/sledding_with_xc_parks_3d_print_labeled.jpg\" \"docs/images/dual_render/sledding_and_xc_skiing_3d.png\" \"docs/images/detroit_elevation_above.png\" \"docs/images/detroit_elevation_south.png\" \"docs/images/detroit_elevation_north.png\" \"docs/images/detroit_elevation_east.png\" \"docs/images/san_diego_demo.png\" \"docs/images/01_raw/dem.png\" \"docs/images/01_raw/snow_depth.png\" \"docs/images/05_final/sledding_score.png\")",
+      "Bash([ -f \"/home/jflournoy/code/terrain-maker_v2/$f\" ])",
+      "Bash(lsof -ti :8080)",
+      "Bash(ss -tlnp)",
+      "WebFetch(domain:johnflournoy.science)",
+      "Bash(gh workflow run docs.yml --ref main)",
+      "Skill(todo)",
+      "Skill(todo:*)",
+      "Bash(gh label create \"refactor\" --description \"Code restructuring and cleanup\" --color \"FEF2C0\")",
+      "Bash(gh label create \"technical-debt\" --description \"Known technical debt to address\" --color \"E4E669\")",
+      "Bash(uv run python *)",
+      "Read(//def create_mesh/,/^    def [a-z_]/**)",
+      "Read(//def create_mesh\\\\\\(/,/^    def /**)"
+    ],
+    "additionalDirectories": [
+      "/home/jflournoy/code/terrain-maker_v2/.git/filter-repo",
+      "/tmp"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/reviewer-dispatch.cjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/vexp-hint.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/vexp-restore.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

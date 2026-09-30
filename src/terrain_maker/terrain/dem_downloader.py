@@ -46,6 +46,7 @@ Usage - Visualize bbox::
 
 import logging
 import math
+import os
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -62,6 +63,59 @@ except ImportError:
     earthaccess = None
 
 logger = logging.getLogger(__name__)
+
+
+def _load_earthdata_credentials(
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Resolve NASA Earthdata credentials from args, environment, or .env file.
+
+    Checks in order:
+    1. Explicit username/password arguments (if provided)
+    2. EARTHDATA_USERNAME / EARTHDATA_PASSWORD environment variables
+    3. .env file in the current working directory or project root
+
+    Returns:
+        (username, password) tuple, either or both may be None if not found
+    """
+    if username and password:
+        return username, password
+
+    # Check environment variables
+    username = username or os.environ.get("EARTHDATA_USERNAME")
+    password = password or os.environ.get("EARTHDATA_PASSWORD")
+    if username and password:
+        return username, password
+
+    # Try loading from .env file (no dependency required)
+    for env_path in [Path.cwd() / ".env", Path.cwd().parent / ".env"]:
+        if env_path.exists():
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" not in line:
+                            continue
+                        key, _, value = line.partition("=")
+                        key, value = key.strip(), value.strip()
+                        if key == "EARTHDATA_USERNAME" and not username:
+                            username = value
+                        elif key == "EARTHDATA_PASSWORD" and not password:
+                            password = value
+                if username and password:
+                    logger.debug(f"Loaded Earthdata credentials from {env_path}")
+                    # Also set in environment so earthaccess.login(strategy="environment") works
+                    os.environ.setdefault("EARTHDATA_USERNAME", username)
+                    os.environ.setdefault("EARTHDATA_PASSWORD", password)
+                    return username, password
+            except Exception as e:
+                logger.debug(f"Could not read {env_path}: {e}")
+
+    return username, password
 
 
 def get_srtm_tile_name(lat: float, lon: float) -> str:
@@ -172,8 +226,15 @@ def _download_srtm_tile(
         logger.info(f"Tile {tile_name} already exists, skipping download")
         return True
 
+    # Resolve credentials from args → env vars → .env file
+    username, password = _load_earthdata_credentials(username, password)
     if username is None or password is None:
-        logger.warning("No credentials provided - skipping actual download")
+        logger.warning(
+            "No Earthdata credentials found. Provide via:\n"
+            "  - username/password arguments\n"
+            "  - EARTHDATA_USERNAME/EARTHDATA_PASSWORD env vars\n"
+            "  - .env file in project root"
+        )
         return False
 
     logger.info(f"Downloading SRTM tile: {tile_name}")

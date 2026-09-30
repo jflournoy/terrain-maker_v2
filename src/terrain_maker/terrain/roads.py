@@ -205,15 +205,19 @@ def _cache_road_data(
 def _fetch_roads_from_osm(
     bbox: Tuple[float, float, float, float],
     road_types: List[str],
-    timeout: int = 60,
+    timeout: int = 120,
+    retries: int = 3,
 ) -> Optional[Dict[str, Any]]:
     """
     Fetch road data from OpenStreetMap Overpass API.
+
+    Retries on 429 (rate limit) and 504 (gateway timeout) with backoff.
 
     Args:
         bbox: (south, west, north, east) in WGS84
         road_types: List of OSM highway tags
         timeout: Request timeout in seconds
+        retries: Number of retry attempts on 429/504
 
     Returns:
         GeoJSON FeatureCollection or None if fetch fails
@@ -224,26 +228,36 @@ def _fetch_roads_from_osm(
     logger.info(f"  Road types: {', '.join(road_types)}")
 
     query = build_overpass_query(bbox, road_types)
+    overpass_url = "https://overpass-api.de/api/interpreter"
 
-    try:
-        overpass_url = "https://overpass-api.de/api/interpreter"
-        logger.debug(f"  Sending query to {overpass_url} (timeout: {timeout}s)...")
+    data = None
+    for attempt in range(retries):
+        try:
+            response = requests.post(overpass_url, data={"data": query}, timeout=timeout)
 
-        response = requests.post(overpass_url, data={"data": query}, timeout=timeout)
-        response.raise_for_status()
-        data = response.json()
+            if response.status_code in (429, 504):
+                wait = 20 * (attempt + 1)
+                logger.warning(f"  Overpass API {response.status_code}, waiting {wait}s "
+                               f"(attempt {attempt + 1}/{retries})...")
+                time.sleep(wait)
+                continue
 
-    except requests.exceptions.Timeout:
-        logger.error(f"  Overpass API timeout after {timeout}s")
-        return None
-    except requests.exceptions.HTTPError as e:
-        if response.status_code == 429:
-            logger.error("  Overpass API rate limited (429)")
-        else:
-            logger.error(f"  Overpass API error: {response.status_code}")
-        return None
-    except Exception as e:
-        logger.error(f"  Failed to fetch from Overpass API: {e}")
+            response.raise_for_status()
+            data = response.json()
+            break
+
+        except requests.exceptions.Timeout:
+            wait = 20 * (attempt + 1)
+            logger.warning(f"  Overpass API timeout, waiting {wait}s "
+                           f"(attempt {attempt + 1}/{retries})...")
+            time.sleep(wait)
+            continue
+        except Exception as e:
+            logger.error(f"  Failed to fetch from Overpass API: {e}")
+            return None
+
+    if data is None:
+        logger.error(f"  Overpass API failed after {retries} attempts")
         return None
 
     # Parse OSM data into GeoJSON
@@ -349,8 +363,8 @@ def get_roads(
     geojson = _fetch_roads_from_osm(bbox, road_types)
 
     if geojson is None:
-        logger.warning("  Failed to fetch roads from API, returning empty collection")
-        return {"type": "FeatureCollection", "features": []}
+        logger.warning("  Failed to fetch roads from API")
+        return None
 
     elapsed = time.time() - start_time
     logger.info(f"  Fetch completed in {elapsed:.1f}s")
@@ -415,7 +429,9 @@ def get_roads_tiled(
         # Small bbox - single fetch
         logger.info("  Small area - single fetch (no tiling needed)")
         result = get_roads(bbox, road_types, force_refresh=force_refresh)
-        return result if result else {"type": "FeatureCollection", "features": []}
+        if result is None:
+            raise RuntimeError(f"Overpass API road fetch failed for {bbox}; try again later")
+        return result
 
     # Large bbox - tile and merge
     lat_tiles = int(math.ceil(lat_span / tile_size))
@@ -427,7 +443,8 @@ def get_roads_tiled(
     all_features = []
     failed_tiles = []
 
-    # Fetch all tiles
+    # Fetch all tiles with delay to avoid rate limiting
+    fetched_from_api = 0
     for lat_idx in range(lat_tiles):
         for lon_idx in range(lon_tiles):
             tile_south = south + lat_idx * tile_size
@@ -440,34 +457,52 @@ def get_roads_tiled(
 
             logger.info(f"  Tile {tile_num}/{total_tiles}: lat [{tile_south:.2f}, {tile_north:.2f}], lon [{tile_west:.2f}, {tile_east:.2f}]")
 
+            # Pace API requests — delay before non-cached fetches
+            if fetched_from_api > 0:
+                time.sleep(3)
+
             tile_roads = get_roads(tile_bbox, road_types, force_refresh=force_refresh)
-            if tile_roads and tile_roads.get("features"):
+            if tile_roads is None:
+                # API actually failed (returned None) — worth retrying
+                failed_tiles.append((tile_num, tile_bbox))
+                logger.warning(f"    ✗ API fetch failed (timeout or error)")
+            elif tile_roads.get("features"):
                 feature_count = len(tile_roads["features"])
                 all_features.extend(tile_roads["features"])
                 logger.info(f"    ✓ {feature_count} road segments")
             else:
-                failed_tiles.append((tile_num, tile_bbox))
-                logger.warning(f"    ✗ No roads returned (timeout or error)")
+                # API succeeded but area has no roads — not an error
+                logger.info(f"    ○ No roads in this area (not an error)")
+            fetched_from_api += 1
 
-    # Retry failed tiles
+    # Retry only genuinely failed tiles (not empty-but-successful ones)
     if failed_tiles and retry_count > 0:
-        logger.info(f"  Retrying {len(failed_tiles)} failed tiles...")
+        logger.info(f"  Retrying {len(failed_tiles)} failed tiles (waiting {retry_delay}s first)...")
         time.sleep(retry_delay)
 
         still_failed = []
         for tile_num, tile_bbox in failed_tiles:
             logger.info(f"  Retry tile {tile_num}...")
             tile_roads = get_roads(tile_bbox, road_types, force_refresh=True)
-            if tile_roads and tile_roads.get("features"):
+            if tile_roads is not None and tile_roads.get("features"):
                 feature_count = len(tile_roads["features"])
                 all_features.extend(tile_roads["features"])
                 logger.info(f"    ✓ Retry succeeded: {feature_count} segments")
+            elif tile_roads is not None:
+                # Succeeded but empty — don't retry again
+                logger.info(f"    ○ No roads in this area")
             else:
                 still_failed.append(tile_num)
                 logger.warning(f"    ✗ Retry failed")
+            time.sleep(retry_delay)
 
         if still_failed:
-            logger.warning(f"  {len(still_failed)} tiles failed after retry: {still_failed}")
+            # Returning the other tiles would render a map with a region silently missing
+            # roads. Tiles that succeeded are cached, so a re-run only fetches these.
+            raise RuntimeError(
+                f"Overpass API road fetch failed for tile(s) {still_failed} of {total_tiles} "
+                "after retry; re-run later (fetched tiles are cached)"
+            )
 
     logger.info(f"  Loaded {len(all_features)} total road segments from {total_tiles} tiles")
     return {"type": "FeatureCollection", "features": all_features}
