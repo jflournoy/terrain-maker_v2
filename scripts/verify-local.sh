@@ -60,7 +60,7 @@ step() {
 
 step "Sync dependencies" sync.log uv sync
 step "Test suite (incl. real-data, network, Blender tests)" pytest.log \
-  uv run pytest -rs --junitxml="$OUT/pytest.xml"
+  uv run pytest -rfEs --junitxml="$OUT/pytest.xml"
 
 if [ "$QUICK" -eq 0 ]; then
   step "Combined render pins (mock data)" pins-mock.log \
@@ -86,6 +86,14 @@ fi
     grep -v "^Installed\|^Uninstalled" "$OUT/$log" | tail -20
     echo '```'
   done
+  if grep -qE "^(FAILED|ERROR) " "$OUT/pytest.log"; then
+    echo
+    echo "## Failing tests"
+    echo
+    echo '```text'
+    grep -E "^(FAILED|ERROR) " "$OUT/pytest.log"
+    echo '```'
+  fi
   echo
   echo "## Skipped tests"
   echo
