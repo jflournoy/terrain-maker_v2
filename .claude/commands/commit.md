@@ -1,30 +1,26 @@
 ---
-
-allowed-tools: \[Bash]
+allowed-tools: [Bash]
 description: Atomic commits with quality checks - 1-3 files at a time
 approach: hybrid
 token-cost: ~200 (script runs checks, Claude formats message)
 best-for: Small, focused commits with quality validation
---------------------------------------------------------
+---
 
 # Atomic Commit Command
 
 Create small, focused commits with quality validation.
 
 ## Atomic Commit Principles
-
 - ✅ **COMMIT EVERY 1-3 file changes** that create working functionality
 - ✅ **NEVER batch multiple logical changes** into one commit
 - ✅ **If you're unsure, commit** - smaller commits are ALWAYS better
 
 ## Size Guidelines
-
 - **Ideal**: 1-3 files, <200 lines
 - **Acceptable**: <500 lines for complex features
 - **NEVER**: >1000 lines (break into smaller commits)
 
 ## Your Task
-
 Check staged files and create an atomic commit:
 
 ```bash
@@ -49,7 +45,7 @@ git commit -m "${COMMIT_TYPE}: ${MESSAGE}
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-echo "💡 Use 'npm run git:status:summary' to verify"
+echo "💡 Branch: $(git branch --show-current) | Remaining changes: $(git status --porcelain | wc -l | xargs)"
 ```
 
 ## Notes
