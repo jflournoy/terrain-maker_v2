@@ -114,3 +114,9 @@ def test_old_pin_format_is_refused(tmp_path):
     old.write_text('{"default": {}}')
     with pytest.raises(SystemExit, match="format 1"):
         pins._load_pins(old)
+
+
+def test_committed_pins_have_every_reference_array():
+    pinned = pins._load_pins(pins.PINS)["variants"]
+    missing = [sha for sha in pins._array_shas(pinned) if not (pins.ARRAYS / f"{sha}.npz").exists()]
+    assert missing == [], f"{len(missing)} reference arrays missing from {pins.ARRAYS}"
