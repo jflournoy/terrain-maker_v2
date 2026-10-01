@@ -1,811 +1,1950 @@
 {
- "adaptive": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
-  },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "549a090a49ac68e3",
-     "overlay_scores": "f810ff2e1be36bc3"
+ "format": 2,
+ "variants": {
+  "adaptive": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.5984925817988972]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "61062d5760bdd440"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.0951
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "549a090a49ac68e3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.5984925817988972
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "61062d5760bdd440",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.095093011856079
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "adaptive_bumps": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "2b1819c5f2b5bc3e",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "adaptive_bumps": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.5816240242021137]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "1678aaa409ad14ef"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.0951
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "2b1819c5f2b5bc3e",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.5816240242021137
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "1678aaa409ad14ef",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.095093011856079
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "default": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "default": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "elev_saturation": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "31344d2d2e411dcf",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "elev_saturation": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "31344d2d2e411dcf",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "hdri_background": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "hdri_background": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "BackgroundPlane",
-    "MESH",
-    [
-     -0.0011,
-     0.0025,
-     -49.4738
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "Camera",
-    "CAMERA",
+   "scene": [
     [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
-   ],
-   [
-    "TerrainMesh",
-    "MESH",
+     "BackgroundPlane",
+     "MESH",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      -49.473793029785156
+     ]
+    ],
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "no_water": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "no_water": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "normalize_gamma": {
-  "files": {
-   "histograms/scores_as_rendered.png": "aac13bc5afc3730d",
-   "histograms/scores_before_masking.png": "4ec49a76146a3809"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "f57df72ea285fd50",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "normalize_gamma": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "aac13bc5afc3730d",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "4ec49a76146a3809",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "f57df72ea285fd50",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "print_colors_no_purple": {
-  "files": {
-   "histograms/scores_as_rendered.png": "f9991df031772007",
-   "histograms/scores_before_masking.png": "fa76fb14e44b32dd"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "e78c317f37cd62dd",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "print_colors_no_purple": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "f9991df031772007",
+     "shape": [
+      1036,
+      3585,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "fa76fb14e44b32dd",
+     "shape": [
+      1036,
+      3585,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "e78c317f37cd62dd",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "remove_bumps": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "e5e4e7f57bcb56fb",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "remove_bumps": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.5806635861643362]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "c50cbe8fda1ba8f2"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "e5e4e7f57bcb56fb",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.5806635861643362
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "c50cbe8fda1ba8f2",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "score_floor": {
-  "files": {
-   "histograms/scores_as_rendered.png": "e812b5b6fee05c03",
-   "histograms/scores_before_masking.png": "cf46369b9ef0b50f"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "56d2a257fdd99cdc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "2395040880fff4ae",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "2395040880fff4ae"
+  "score_floor": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "e812b5b6fee05c03",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "cf46369b9ef0b50f",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "56d2a257fdd99cdc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "2395040880fff4ae",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "2395040880fff4ae",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "skiing_base": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "skiing_base": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "smooth_despeckle": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "44eceddbb05d5f7b",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "smooth_despeckle": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.5985174565634468]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "0b57c22a1f04e354"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.1322
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "44eceddbb05d5f7b",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.5985174565634468
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "0b57c22a1f04e354",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.132176637649536
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "smooth_scores": {
-  "files": {
-   "histograms/scores_as_rendered.png": "c7101d54d2c231cd",
-   "histograms/scores_before_masking.png": "02e486afedf61e94"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "53f708f3e3fe52cf",
-    "faces": "85f10583dabf81db",
-    "layers": {
-     "base_scores": "016bd15584b48830",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "016bd15584b48830"
+  "smooth_scores": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "c7101d54d2c231cd",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "4ed5b6342bbd311c"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "02e486afedf61e94",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "53f708f3e3fe52cf",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "85f10583dabf81db",
+      "shape": [
+       442462
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float64",
+       "kind": "array",
+       "sha": "016bd15584b48830",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float64",
+       "kind": "array",
+       "sha": "016bd15584b48830",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "4ed5b6342bbd311c",
+      "shape": [
+       111276,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "two_tier": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": "1f436c530eb7b72f",
-    "colors": "707eaf8c261cd5fc",
-    "faces": "126df3f4e0d2616e",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "two_tier": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "True"
-    },
-    "vertices": "41ad969a44f75d57"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "1f436c530eb7b72f",
+      "shape": [
+       2672,
+       3
+      ]
+     },
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "126df3f4e0d2616e",
+      "shape": [
+       447806
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "True"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "41ad969a44f75d57",
+      "shape": [
+       112612,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "two_tier_catmull": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": "0497fdd55f80fb53",
-    "colors": "707eaf8c261cd5fc",
-    "faces": "991c83e218db768b",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "fecfec07a9ea8488",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "two_tier_catmull": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710854102237694, 1.952467072948804, 0.598503158752628]",
-     "scale_factor": "100",
-     "two_tier_edge": "True"
-    },
-    "vertices": "1cf24fb9c76b7422"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0025,
-     2.095
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "0497fdd55f80fb53",
+      "shape": [
+       40080,
+       3
+      ]
+     },
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "991c83e218db768b",
+      "shape": [
+       543998
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "fecfec07a9ea8488",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710854102237694,
+       1.952467072948804,
+       0.598503158752628
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "True"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "1cf24fb9c76b7422",
+      "shape": [
+       150020,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010854005813598633,
+      0.0025328993797302246,
+      2.0950350761413574
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
- },
- "wavelet": {
-  "files": {
-   "histograms/scores_as_rendered.png": "8b61d9db7724bcc3",
-   "histograms/scores_before_masking.png": "b871cc12d0441657"
   },
-  "meshes": [
-   {
-    "boundary_colors": null,
-    "colors": "707eaf8c261cd5fc",
-    "faces": "2e47278f21c12185",
-    "layers": {
-     "base_scores": "f810ff2e1be36bc3",
-     "dem": "a95e59823ed96804",
-     "overlay_scores": "f810ff2e1be36bc3"
+  "wavelet": {
+   "files": {
+    "histograms/scores_as_rendered.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "8b61d9db7724bcc3",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
     },
-    "model_params": {
-     "base_depth": "-0.2",
-     "centered": "True",
-     "edge_base_material": "clay",
-     "edge_blend_colors": "True",
-     "edge_mid_depth": "None",
-     "height_scale": "30.0",
-     "offset": "[1.4710634391106465, 1.9476803228767265, 0.5985582306022225]",
-     "scale_factor": "100",
-     "two_tier_edge": "False"
-    },
-    "vertices": "6265a8b17992f416"
-   }
-  ],
-  "scene": [
-   [
-    "Camera",
-    "CAMERA",
-    [
-     -0.0011,
-     0.0073,
-     2.1174
-    ]
+    "histograms/scores_before_masking.png": {
+     "dtype": "uint8",
+     "kind": "image",
+     "sha": "b871cc12d0441657",
+     "shape": [
+      1036,
+      2385,
+      4
+     ]
+    }
+   },
+   "meshes": [
+    {
+     "boundary_colors": null,
+     "colors": {
+      "dtype": "uint8",
+      "kind": "array",
+      "sha": "707eaf8c261cd5fc",
+      "shape": [
+       392,
+       295,
+       4
+      ]
+     },
+     "faces": {
+      "dtype": "int64",
+      "kind": "array",
+      "sha": "2e47278f21c12185",
+      "shape": [
+       443115
+      ]
+     },
+     "layers": {
+      "base_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "dem": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "a95e59823ed96804",
+       "shape": [
+        392,
+        295
+       ]
+      },
+      "overlay_scores": {
+       "dtype": "float32",
+       "kind": "array",
+       "sha": "f810ff2e1be36bc3",
+       "shape": [
+        392,
+        295
+       ]
+      }
+     },
+     "model_params": {
+      "base_depth": -0.2,
+      "centered": "True",
+      "edge_base_material": "clay",
+      "edge_blend_colors": "True",
+      "edge_mid_depth": "None",
+      "height_scale": 30.0,
+      "offset": [
+       1.4710634391106465,
+       1.9476803228767265,
+       0.5985582306022225
+      ],
+      "scale_factor": 100.0,
+      "two_tier_edge": "False"
+     },
+     "vertices": {
+      "dtype": "float64",
+      "kind": "array",
+      "sha": "6265a8b17992f416",
+      "shape": [
+       111404,
+       3
+      ]
+     }
+    }
    ],
-   [
-    "TerrainMesh",
-    "MESH",
+   "scene": [
     [
-     0.0,
-     0.0,
-     0.0
+     "Camera",
+     "CAMERA",
+     [
+      -0.0010634660720825195,
+      0.00731968879699707,
+      2.117371082305908
+     ]
+    ],
+    [
+     "TerrainMesh",
+     "MESH",
+     [
+      0.0,
+      0.0,
+      0.0
+     ]
     ]
    ]
-  ]
+  }
  }
 }
