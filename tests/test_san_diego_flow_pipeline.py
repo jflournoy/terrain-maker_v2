@@ -73,7 +73,15 @@ def flow_artifacts(demo_output_dir):
     ]
 
     # Run demo
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        # The demo's own error is the useful part; CalledProcessError alone hides it
+        pytest.fail(
+            f"san_diego_flow_demo.py exited {result.returncode}.\n"
+            f"Command: {' '.join(cmd)}\n"
+            f"--- stderr (last 60 lines) ---\n" + "\n".join(result.stderr.splitlines()[-60:]),
+            pytrace=False,
+        )
 
     print("✓ Demo completed successfully")
     print("=" * 60 + "\n")
