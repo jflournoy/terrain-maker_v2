@@ -48,8 +48,13 @@ FORMAT = 2  # bump when the shape of a pin changes; old pin files are refused, n
 # - Floats: last-bit differences grow through smoothing and resampling, but stay near 1e-7
 #   of the array's range in float32. A wrong computation moves values by percent.
 FLOAT_RTOL = 1e-5  # max |new - ref| allowed, as a fraction of max |ref|
-# - 8-bit colors are rounded from floats, so noise can flip a channel by one step, never two.
-UINT8_MAX_STEP = 1
+# - 8-bit colors come from a 256-entry colormap lookup, so a float nudged across a bin edge
+#   jumps a whole entry: up to 2.7 codes in viridis, 24 in boreal_mako's purple band. Noise
+#   can only do that to the rare values sitting within ~1e-7 of an edge (2 of 460k in the
+#   Detroit mock); a change in color logic moves a large share (330k of 460k for a
+#   different smoothing backend). So colors are judged by how many values change, not by how far.
+COLOR_MAX_CHANGED_FRACTION = 1e-4
+UINT8_MAX_STEP = 1  # per-pixel change in a PNG that antialiasing noise can make
 # - Images (histogram PNGs) are drawn from those floats: a value crossing a bin edge moves a
 #   bar by a fraction of a pixel and re-antialiases its edge. Any visible change to the plot
 #   (data, labels, layout) touches far more pixels than that.
@@ -141,9 +146,11 @@ def compare_arrays(ref, new, kind):
                 f"{frac:.2%} of pixels changed by more than {UINT8_MAX_STEP} "
                 f"(allowed {IMAGE_MAX_CHANGED_FRACTION:.2%})"
             )
-        top = int(step.max(initial=0))
-        return top <= UINT8_MAX_STEP, (
-            f"max step {top} in {int(np.sum(step > 0))} values (allowed {UINT8_MAX_STEP})"
+        changed = int(np.sum(step > 0))
+        frac = changed / max(step.size, 1)
+        return frac <= COLOR_MAX_CHANGED_FRACTION, (
+            f"{changed} of {step.size} values changed ({frac:.2g}, allowed "
+            f"{COLOR_MAX_CHANGED_FRACTION:g}), max step {int(step.max(initial=0))}"
         )
     equal = np.array_equal(ref, new)
     return equal, "identical" if equal else f"{int(np.sum(ref != new))} values differ (exact match required)"

@@ -61,13 +61,16 @@ def test_shape_change_fails(tmp_path, floats):
     assert len(failures) == 1
 
 
-def test_uint8_one_step_passes_two_steps_fail(tmp_path):
-    colors = np.full((10, 10, 4), 100, dtype=np.uint8)
-    one, two = colors.copy(), colors.copy()
-    one[2, 2, 0] = 101
-    two[2, 2, 0] = 102
-    assert _compare(tmp_path / "a", colors, one)[0] == []
-    assert len(_compare(tmp_path / "b", colors, two)[0]) == 1
+def test_colors_tolerate_rare_lookup_jumps_not_widespread_change(tmp_path):
+    # A float crossing a colormap bin edge jumps a whole lookup entry (24 codes in
+    # boreal_mako), but only for the rare values sitting on an edge.
+    colors = np.full((200, 100, 4), 100, dtype=np.uint8)  # 80,000 values
+    rare, widespread = colors.copy(), colors.copy()
+    rare[2, 2, 0] = 124
+    rare[50, 7, 1] = 98
+    widespread[:20, :, :3] = 101  # 6,000 values by one step: 7.5%
+    assert _compare(tmp_path / "a", colors, rare)[0] == []
+    assert len(_compare(tmp_path / "b", colors, widespread)[0]) == 1
 
 
 def test_image_tolerates_a_few_pixels_not_a_visible_change(tmp_path):
