@@ -495,35 +495,40 @@ def download_real_prism_annual(
         response = requests.get(base_url, timeout=60)
         response.raise_for_status()
 
-        # Extract ZIP contents
+        # Extract ZIP contents. The archive holds one raster: an ESRI BIL (.bil with its
+        # .hdr sidecar, the current format) or a GeoTIFF.
         with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-            # Find the TIF file (PRISM now uses GeoTIFF format)
-            tif_file = None
-            for name in zf.namelist():
-                if name.endswith('.tif') and not name.endswith('.aux.xml'):
-                    tif_file = name
-                    break
+            names = zf.namelist()
+            rasters = [n for n in names if Path(n).suffix.lower() in (".bil", ".tif")]
+            if len(rasters) != 1:
+                raise ValueError(
+                    f"Expected one raster in the PRISM ZIP, found "
+                    f"{'no .bil or .tif raster' if not rasters else rasters}. Files: {names}"
+                )
+            raster_name = rasters[0]
+            stem = Path(raster_name).stem
 
-            if not tif_file:
-                raise ValueError(f"Could not find TIF file in ZIP. Files: {zf.namelist()}")
-
-            # Extract TIF file to temp directory
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
+            # A BIL raster is unreadable without its sidecars (.hdr, .prj, .stx): extract them too
+            for name in names:
+                if Path(name).stem == stem:
+                    (output_path / Path(name).name).write_bytes(zf.read(name))
+            raster_path = output_path / Path(raster_name).name
 
-            tif_path = output_path / tif_file
+            logger.info(f"✓ Downloaded PRISM data to {raster_path}")
 
-            with open(tif_path, 'wb') as f:
-                f.write(zf.read(tif_file))
-
-            logger.info(f"✓ Downloaded PRISM data to {tif_path}")
-
-            # Read the TIF file using rasterio
-            with rasterio.open(tif_path) as src:
-                # Read full raster
+            with rasterio.open(raster_path) as src:
                 full_data = src.read(1).astype(np.float32)
                 full_transform = src.transform
-                full_crs = src.crs
+                if src.nodata is not None:
+                    full_data[full_data == src.nodata] = np.nan
+                if np.nanmin(full_data) < 0:
+                    raise ValueError(
+                        f"PRISM raster {raster_path} has negative precipitation "
+                        f"(min {np.nanmin(full_data)}) after masking nodata={src.nodata}; "
+                        "its nodata value is missing or unexpected"
+                    )
 
                 # Calculate pixel coordinates for bbox
                 # Transform from geographic to pixel coordinates
