@@ -1112,3 +1112,16 @@ class TestRoadFetchFailureSaysWhy:
         monkeypatch.setattr("terrain_maker.terrain.roads._load_cached_roads", lambda bbox: None)
         with self._post_returning(429), pytest.raises(RuntimeError, match="HTTP 429"):
             get_roads_tiled((40.0, -80.0, 44.0, -76.0), tile_size=2.0, retry_count=1, retry_delay=0)
+
+
+def test_overpass_request_identifies_the_client():
+    """Overpass answers 406 Not Acceptable to requests it won't serve; its usage policy asks
+    clients to identify themselves rather than send the generic python-requests agent."""
+    from terrain_maker.terrain.roads import _fetch_roads_from_osm
+
+    response = Mock(status_code=200)
+    response.json.return_value = {"elements": []}
+    with patch("terrain_maker.terrain.roads.requests.post", return_value=response) as post:
+        _fetch_roads_from_osm((42.0, -83.5, 42.5, -83.0), ["primary"])
+    agent = post.call_args.kwargs["headers"]["User-Agent"]
+    assert agent.startswith("terrain-maker") and "github.com" in agent

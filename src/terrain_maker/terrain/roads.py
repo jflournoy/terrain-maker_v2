@@ -206,6 +206,12 @@ def _cache_road_data(
 # (get_roads keeps returning None on failure; callers rely on that).
 _fetch_failures: Dict[Tuple[float, float, float, float], str] = {}
 
+# Overpass's usage policy asks clients to identify themselves; it refuses some requests
+# that carry only the generic python-requests agent (406 Not Acceptable).
+OVERPASS_HEADERS = {
+    "User-Agent": "terrain-maker (+https://github.com/jflournoy/terrain-maker_v2)",
+}
+
 
 def _fetch_roads_from_osm(
     bbox: Tuple[float, float, float, float],
@@ -239,7 +245,9 @@ def _fetch_roads_from_osm(
     last_problem = None
     for attempt in range(retries):
         try:
-            response = requests.post(overpass_url, data={"data": query}, timeout=timeout)
+            response = requests.post(
+                overpass_url, data={"data": query}, headers=OVERPASS_HEADERS, timeout=timeout
+            )
 
             if response.status_code in (429, 504):
                 last_problem = f"HTTP {response.status_code}"
