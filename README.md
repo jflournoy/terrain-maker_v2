@@ -3,7 +3,7 @@
 **A living reference implementation of professional Claude Code commands and workflows**
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/rmurphey/claude-setup)
-[![Commands](https://img.shields.io/badge/commands-5-green)](.claude/commands/)
+[![Commands](https://img.shields.io/badge/commands-6-green)](.claude/commands/)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
 [![Token Efficiency](https://img.shields.io/badge/token%20savings-87%25-orange)](docs/TOKEN_EFFICIENCY.md)
 [![Agent Audit](https://github.com/rmurphey/claude-setup/workflows/Agent%20Audit%20with%20Claude%20Code/badge.svg)](https://github.com/rmurphey/claude-setup/actions/workflows/agent-audit.yml)
@@ -83,7 +83,7 @@ runs the check automatically if you set `TERRAIN_VERIFY_ON_PULL=quick` or `full`
 
 ### Claude Code Commands
 
-The `.claude/commands/` directory contains 5 workflow commands:
+The `.claude/commands/` directory contains 6 workflow commands:
 
 ```bash
 /hygiene                          # Project health: detects R, Python or Node
@@ -91,6 +91,7 @@ The `.claude/commands/` directory contains 5 workflow commands:
 /next                             # Priorities, via the next-priorities agent
 /push                             # Push, after checking CI is not already red
 /refactor                         # Refactoring analysis for code a human reads
+/refactor-verified                # Refactoring analysis for code nobody reads, where checks replace review
 ```
 
 These commands are **integrated into Claude Code** - just type the slash command in the Claude Code UI.
@@ -127,6 +128,7 @@ This repository demonstrates balanced approaches to Claude Code commands, optimi
 - **`/commit`** - Atomic commits with quality checks ([view command](.claude/commands/commit.md))
 - **`/next`** - AI-recommended next steps ([view command](.claude/commands/next.md))
 - **`/refactor`** - Refactoring analysis ([view command](.claude/commands/refactor.md))
+- **`/refactor-verified`** - Refactoring where checks replace review ([view command](.claude/commands/refactor-verified.md))
 
 ### 🚀 Release & Quality
 
