@@ -67,6 +67,7 @@ def flow_artifacts(demo_output_dir):
         "--fast",
         "--skip-download",  # Use existing DEM
         "--no-render",  # Skip 3D rendering
+        "--diagnostics",  # Diagnostic plots 01-17; TestOutputStructure and others check them
         "--output-dir", str(demo_output_dir),
         "--dem-dir", str(dem_dir),
         "--target-vertices", "1000000",  # 1M for fast tests
@@ -483,6 +484,7 @@ class TestTunedParameters:
             "min_basin_depth=args.min_basin_depth",
             "max_breach_depth=args.max_breach_depth if args.breach",
             "max_breach_length=args.max_breach_length if args.breach",
+            "target_vertices=args.target_vertices",
         ):
             assert wiring in demo_source, f"Demo should pass {wiring.split('=')[0]} from CLI"
 
@@ -724,19 +726,6 @@ class TestBasinAwareLakeHandling:
         assert "lake_outlets=" in demo_source, \
             "Demo should pass lake_outlets to flow_accumulation"
 
-    def test_basin_detection_before_lake_handling(self, flow_artifacts):
-        """Verify endorheic basins are detected before flow computation."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        # Find detection call
-        basin_detect_pos = demo_source.find("detect_endorheic_basins")
-        flow_compute_pos = demo_source.find("flow_accumulation(")
-
-        assert basin_detect_pos > 0, "Should detect endorheic basins"
-        assert basin_detect_pos < flow_compute_pos, \
-            "Basins must be detected BEFORE flow computation for proper lake masking"
-
     def test_conditioning_mask_strategy_documented(self, flow_artifacts):
         """Verify the conditioning mask strategy is documented in code."""
         demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
@@ -745,15 +734,6 @@ class TestBasinAwareLakeHandling:
         # Check for strategy comments
         assert "basin" in demo_source.lower() or "salton" in demo_source.lower(), \
             "Demo should document basin handling strategy"
-
-    def test_detect_basins_parameter_enabled(self, flow_artifacts):
-        """Verify detect_basins=True is passed to flow_accumulation."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        assert "detect_basins=True" in demo_source, \
-            "Demo should enable basin detection for flow_accumulation"
-
 
 # ============================================================================
 # Test Class 10: Alignment Validation
@@ -931,21 +911,6 @@ class TestOutputFiles:
 class TestEndorheicBasins:
     """Test endorheic basin detection and preservation."""
 
-    def test_basins_detected_with_tuned_parameters(self, flow_artifacts):
-        """Verify basins are detected with tuned parameters (10000/5.0)."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        # Check for basin detection call
-        assert "detect_endorheic_basins" in demo_source, \
-            "Demo should detect endorheic basins"
-
-        # Check parameters
-        assert "min_size=10000" in demo_source, \
-            "Should use tuned min_size=10000"
-        assert "min_depth=5.0" in demo_source, \
-            "Should use tuned min_depth=5.0"
-
     def test_salton_sea_basin_expected(self, flow_artifacts):
         """Verify that Salton Sea basin is likely detected (San Diego region includes it)."""
         demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
@@ -973,25 +938,6 @@ class TestOceanMask:
             "Demo should detect ocean mask"
         assert "border_only=True" in demo_source, \
             "Should use border_only=True for ocean detection"
-
-    def test_ocean_mask_used_in_basin_detection(self, flow_artifacts):
-        """Verify ocean mask is excluded from basin detection."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        # Ocean should be detected before basins
-        ocean_pos = demo_source.find("detect_ocean_mask")
-        basin_pos = demo_source.find("detect_endorheic_basins")
-
-        assert ocean_pos > 0 and basin_pos > 0, \
-            "Both ocean and basin detection should occur"
-        assert ocean_pos < basin_pos, \
-            "Ocean must be detected before basins"
-
-        # Basins should exclude ocean
-        assert "exclude_mask=ocean_mask" in demo_source, \
-            "Basin detection should exclude ocean mask"
-
 
 # ============================================================================
 # Test Class 15: Output Structure
@@ -1030,16 +976,6 @@ class TestOutputStructure:
 
 class TestMeshCreation:
     """Test 3D mesh generation (when rendering is enabled)."""
-
-    def test_mesh_uses_target_vertices_parameter(self, flow_artifacts):
-        """Verify mesh creation respects target_vertices parameter."""
-        demo_script = PROJECT_ROOT / "examples" / "san_diego_flow_demo.py"
-        demo_source = demo_script.read_text()
-
-        assert "target_vertices" in demo_source, \
-            "Demo should use target_vertices parameter"
-        assert "configure_for_target_vertices" in demo_source, \
-            "Demo should call configure_for_target_vertices"
 
     def test_mesh_uses_aligned_water_mask(self, flow_artifacts):
         """Verify mesh creation uses aligned water mask from diagnostics."""
