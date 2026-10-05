@@ -22,6 +22,8 @@ import sys
 import os
 from pathlib import Path
 
+import numpy as np
+
 import bpy
 
 # Add project root to path
@@ -48,6 +50,7 @@ from terrain_maker.terrain.core import (
     scale_elevation,
 )
 from terrain_maker.terrain.scene_setup import create_background_plane, setup_hdri_lighting
+from terrain_maker.terrain.transforms import downsample_then_reproject
 from terrain_maker.terrain.materials import apply_colormap_material
 
 
