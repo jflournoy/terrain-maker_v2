@@ -640,7 +640,7 @@ def main():
         # Precipitation upscaling (ESRGAN before ocean masking)
         upscale_precip=True,      # Upscale precipitation to DEM resolution
         upscale_factor=4,         # 4x upscaling
-        upscale_method="auto",    # Try ESRGAN, fall back to bilateral
+        upscale_method="bilinear",  # What "auto" resolved to without ESRGAN installed
         # Water body integration
         lake_mask=lake_mask,
         lake_outlets=lake_outlets,

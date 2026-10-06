@@ -1092,14 +1092,10 @@ def wavelet_denoise_dem(
         """Apply wavelet denoising to DEM."""
         try:
             import pywt
-        except ImportError:
-            logger.warning(
-                "PyWavelets (pywt) not installed. Install with: pip install PyWavelets"
-            )
-            logger.warning("Falling back to median filter despeckle")
-            # Fallback to simple median filter
-            from scipy.ndimage import median_filter
-            return median_filter(raster_data, size=3), transform, None
+        except ImportError as e:
+            raise ImportError(
+                "wavelet_denoise_dem needs PyWavelets (a core dependency): run `uv sync`"
+            ) from e
 
         logger.info(
             f"Wavelet denoising DEM (wavelet={wavelet}, levels={levels}, "
@@ -1614,7 +1610,7 @@ def slope_adaptive_smooth(
 def upscale_scores(
     scores: np.ndarray,
     scale: int = 4,
-    method: str = "auto",
+    method: str = "bilinear",
     nodata_value: float = np.nan,
 ) -> np.ndarray:
     """
@@ -1627,10 +1623,12 @@ def upscale_scores(
         scores: Input score grid (2D numpy array)
         scale: Upscaling factor (default: 4, meaning 4x resolution)
         method: Upscaling method:
-            - "auto": Try Real-ESRGAN, fall back to bilateral
+            - "bilinear" (default): bilinear interpolation
             - "esrgan": Use Real-ESRGAN (requires optional realesrgan package)
             - "bilateral": Use bilateral filter upscaling (no extra dependencies)
             - "bicubic": Simple bicubic interpolation
+            - "nearest": nearest-neighbour
+            A method that is unknown or fails raises; nothing falls back to another method.
         nodata_value: Value treated as no data (default: np.nan)
 
     Returns:
@@ -1645,8 +1643,7 @@ def upscale_scores(
 
             pip install terrain-maker[upscale]
 
-        Without it, "auto" will fall back to "bilateral" which produces
-        good results without ML dependencies.
+        Without it, method="esrgan" raises ImportError.
 
     Example:
         >>> scores_hires = upscale_scores(sledding_scores, scale=4)
@@ -1683,55 +1680,30 @@ def upscale_scores(
     else:
         normalized = np.zeros_like(data)
 
-    # Try methods in order of preference: quality → speed
-    if method == "auto":
-        # ESRGAN (best quality) → bilinear (fast, good quality) → nearest (fastest fallback)
-        methods_to_try = ["esrgan", "bilinear", "nearest"]
-    else:
-        methods_to_try = [method]
-
-    result = None
-    used_method = None
-
-    for m in methods_to_try:
+    # One method, the one requested. Methods differ in output, so a failure is an error,
+    # not a reason to quietly run a different one.
+    methods = {
+        "esrgan": lambda: _upscale_esrgan(normalized, scale),
+        "bilateral": lambda: _upscale_bilateral(normalized, scale),
+        "bicubic": lambda: zoom(normalized, scale, order=3, mode="reflect"),
+        "bilinear": lambda: zoom(normalized, scale, order=1, mode="reflect"),
+        "nearest": lambda: zoom(normalized, scale, order=0, mode="constant"),
+    }
+    if method not in methods:
+        raise ValueError(
+            f"Unknown upscale method {method!r}; choose one of {sorted(methods)}"
+            + (" ('auto' was removed: name the method)" if method == "auto" else "")
+        )
+    if method == "esrgan":
         try:
-            if m == "esrgan":
-                result = _upscale_esrgan(normalized, scale)
-                used_method = "esrgan"
-                break
-            elif m == "bilateral":
-                result = _upscale_bilateral(normalized, scale)
-                used_method = "bilateral"
-                break
-            elif m == "bicubic":
-                result = zoom(normalized, scale, order=3, mode="reflect")
-                used_method = "bicubic"
-                break
-            elif m == "bilinear":
-                # Fast upscaling with bilinear interpolation
-                result = zoom(normalized, scale, order=1, mode="reflect")
-                used_method = "bilinear"
-                break
-            elif m == "nearest":
-                # Fastest upscaling with nearest neighbor
-                result = zoom(normalized, scale, order=0, mode="constant")
-                used_method = "nearest"
-                break
+            import realesrgan  # noqa: F401
         except ImportError as e:
-            # Log at INFO level so user can see why ESRGAN isn't working
-            logger.info(f"Method '{m}' not available: {e}")
-            logger.info(f"  Falling back to next method...")
-            continue
-        except Exception as e:
-            logger.warning(f"Method '{m}' failed: {e}")
-            logger.warning(f"  Falling back to next method...")
-            continue
-
-    if result is None:
-        # Last resort: fastest possible (nearest neighbor)
-        logger.warning("All upscaling methods failed, using fastest fallback (nearest neighbor)")
-        result = zoom(normalized, scale, order=0, mode="constant")
-        used_method = "nearest"
+            raise ImportError(
+                "method='esrgan' needs the realesrgan package; install the upscale extra "
+                "(uv sync --extra upscale) or choose another method"
+            ) from e
+    result = methods[method]()
+    used_method = method
 
     # Denormalize back to original range
     result = result * (data_max - data_min) + data_min

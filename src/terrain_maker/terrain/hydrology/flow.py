@@ -24,6 +24,7 @@ from terrain_maker.terrain.hydrology.accumulation import (
 from terrain_maker.terrain.hydrology.conditioning import (
     condition_dem,
     condition_dem_spec,
+    adaptive_min_basin_size,
     detect_endorheic_basins,
     detect_ocean_mask,
 )
@@ -50,7 +51,7 @@ def compute_flow_with_basins(
     lake_mask: Optional[np.ndarray] = None,
     lake_outlets: Optional[np.ndarray] = None,
     detect_basins: bool = True,
-    min_basin_size: int = 5000,
+    min_basin_size: Optional[int] = None,
     min_basin_depth: float = 1.0,
     backend: str = "spec",
     coastal_elev_threshold: float = 0.0,
@@ -62,7 +63,7 @@ def compute_flow_with_basins(
     ocean_border_only: bool = True,
     upscale_precip: bool = False,
     upscale_factor: int = 4,
-    upscale_method: str = "auto",
+    upscale_method: str = "bilinear",
     verbose: bool = True,
 ) -> Dict[str, any]:
     """
@@ -97,10 +98,9 @@ def compute_flow_with_basins(
         Boolean mask of lake outlet cells
     detect_basins : bool, default=True
         Whether to detect and preserve endorheic basins
-    min_basin_size : int, default=5000
-        Minimum basin size in cells to preserve. When set to the default (5000),
-        uses adaptive scaling (4e-5 × total_cells) to handle different DEM sizes.
-        Set to a specific value to override adaptive scaling.
+    min_basin_size : int or None, default=None
+        Minimum basin size in cells to preserve. None means adaptive: 1/1000 of the
+        grid's cells (adaptive_min_basin_size). Any integer is used as given.
     min_basin_depth : float, default=1.0
         Minimum basin depth in meters to be considered endorheic
     backend : str, default="spec"
@@ -120,12 +120,12 @@ def compute_flow_with_basins(
     ocean_border_only : bool, default=True
         Only detect ocean from border pixels
     upscale_precip : bool, default=False
-        Whether to upscale precipitation data using ESRGAN before accumulation
+        Whether to upscale precipitation data (with upscale_method) before accumulation
         at the integer DEM/precipitation ratio; non-integer ratios use cubic interpolation
     upscale_factor : int, default=4
         Upscaling factor for precipitation (2, 4, or 8)
-    upscale_method : str, default="auto"
-        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan", "bilateral", or "bicubic"
+    upscale_method : str, default="bilinear"
+        Upscaling method: "bilinear", "esrgan", "bilateral", "bicubic" or "nearest" (see upscale_scores)
     verbose : bool, default=True
         Print progress messages
 
@@ -190,10 +190,11 @@ def compute_flow_with_basins(
         if verbose:
             logger.info("\n2. Detecting endorheic basins...")
         total_cells = dem.size
-        adaptive_min_size = int(1e-3 * total_cells)
-        effective_min_size = adaptive_min_size if min_basin_size == 5000 else min_basin_size
+        effective_min_size = (
+            adaptive_min_basin_size(total_cells) if min_basin_size is None else min_basin_size
+        )
 
-        if verbose and effective_min_size != min_basin_size:
+        if verbose and min_basin_size is None:
             logger.info(
                 f"   Adaptive basin size: {effective_min_size:,} cells "
                 f"({100*effective_min_size/total_cells:.4f}% of domain)"
@@ -390,7 +391,7 @@ def _load_aligned_precipitation(
         scale_x = dem_shape[1] / precip_data.shape[1]
         is_upscaling = scale_y > 1.0 and scale_x > 1.0
 
-        # Use ESRGAN upscaling if requested AND actually upscaling
+        # Upscale with the requested method if asked AND actually upscaling
         if upscale_precip and is_upscaling:
             logger.info(
                 f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}..."
@@ -411,7 +412,7 @@ def _load_aligned_precipitation(
                 )
             else:
                 # Non-uniform scaling - Detroit-style approach for GPU acceleration
-                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
+                # Step 1: Over-upscale to next power-of-2 with the requested method
                 # Step 2: Downsample to exact target with rasterio reproject
                 import math
 
@@ -419,23 +420,23 @@ def _load_aligned_precipitation(
                 # Round UP to next power of 2 (e.g., 29.458 → 32)
                 power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
 
-                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
-                    # Use ESRGAN for over-upscaling, then downsample
+                if power_of_2_scale >= 2:
+                    # Over-upscale with the requested method, then downsample to the exact grid
                     logger.info(
-                        f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape..."
+                        f"  Two-step upscaling: {upscale_method} {power_of_2_scale}x + downsample to exact shape..."
                     )
 
                     from terrain_maker.terrain.transforms import upscale_scores
 
-                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    # Step 1: over-upscale to the power-of-2 scale
                     logger.info(
-                        f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)..."
+                        f"    Running {upscale_method} {power_of_2_scale}x upscaling..."
                     )
                     precip_esrgan = upscale_scores(
                         precip_data, scale=power_of_2_scale, method=upscale_method, nodata_value=0.0
                     )
                     logger.info(
-                        f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}"
+                        f"    ✓ {upscale_method} complete: {precip_data.shape} → {precip_esrgan.shape}"
                     )
 
                     # Step 2: Downsample to exact target shape with rasterio reproject
@@ -446,7 +447,7 @@ def _load_aligned_precipitation(
 
                     # Create transforms for intermediate and target shapes
                     if precip_transform is not None and dem_transform is not None:
-                        # Calculate intermediate transform (after ESRGAN upscaling)
+                        # Calculate intermediate transform (after over-upscaling)
                         esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
 
                         reproject(
@@ -475,9 +476,9 @@ def _load_aligned_precipitation(
                         )
 
                     precip_data = precip_final
-                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
+                    logger.info(f"  ✓ Two-step upscaling complete: {precip_final.shape}")
                 else:
-                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
+                    # Scale below 2x: resample directly with rasterio
                     from rasterio.warp import reproject, Resampling
 
                     logger.info(
@@ -780,14 +781,6 @@ def _condition_and_route(
                 "Use epsilon parameter instead (epsilon=0 for fill, epsilon>0 for breach-like).",
                 DeprecationWarning,
             )
-        if min_basin_size != 10000:
-            import warnings
-
-            warnings.warn(
-                "min_basin_size is ignored when backend='spec'. "
-                "Use max_breach_depth/max_breach_length to control basin preservation.",
-                DeprecationWarning,
-            )
 
         # Step 2: Condition DEM using spec-compliant pipeline
         # Use combined conditioning mask (ocean + basins) to preserve topography
@@ -944,6 +937,9 @@ def _build_conditioning_masks(
     # Step 1b: Detect endorheic basins (if enabled and using spec backend)
     basin_mask = None
     if detect_basins and backend == "spec":
+        if min_basin_size is None:
+            min_basin_size = adaptive_min_basin_size(dem_data.size)
+            logger.info(f"Adaptive minimum basin size: {min_basin_size:,} cells (1/1000 of grid)")
         logger.info(
             f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)..."
         )
@@ -1127,7 +1123,7 @@ def flow_accumulation(
     # Precipitation upscaling parameters
     upscale_precip: bool = False,
     upscale_factor: int = 4,
-    upscale_method: str = "auto",
+    upscale_method: str = "bilinear",
     # Caching parameters
     cache: bool = False,
     cache_dir: Optional[str] = None,
@@ -1215,14 +1211,14 @@ def flow_accumulation(
         Minimum basin depth (meters) to be considered endorheic. Only used when
         detect_basins=True. Basins shallower than this threshold are not preserved.
     upscale_precip : bool, default False
-        If True, upscale precipitation data to match DEM resolution using ESRGAN/bilateral
+        If True, upscale precipitation data to match DEM resolution using upscale_method
         upscaling before computing upstream rainfall. This preserves fine-scale precipitation
         patterns and reduces coastal artifacts. Upscaling happens BEFORE ocean masking.
     upscale_factor : int, default 4
         Target upscaling factor for precipitation (2, 4, or 8). Only used if upscale_precip=True.
-    upscale_method : str, default "auto"
-        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan" (Real-ESRGAN
-        neural network), "bilateral" (bilateral filter), or "bicubic" (simple interpolation).
+    upscale_method : str, default "bilinear"
+        Upscaling method passed to upscale_scores: "bilinear", "esrgan" (needs the upscale
+        extra), "bilateral", "bicubic" or "nearest". A method that fails raises.
         Only used if upscale_precip=True.
     cache : bool, default False
         If True, cache computation results and load from cache if valid.

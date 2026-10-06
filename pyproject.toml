@@ -34,6 +34,7 @@ dependencies = [
     "NASADEM", # DEM downloads from NASA Earthdata
     "earthaccess", # NASA Earthdata authentication
     "skan>=0.13.1",
+    "pywavelets",
 ]
 
 [project.optional-dependencies]

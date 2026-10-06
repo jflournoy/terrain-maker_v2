@@ -99,3 +99,51 @@ class TestLoadSnodasStatsConfiguration:
             mock_shape=(40, 40),
         )
         assert isinstance(result, dict)
+
+
+class TestMockFallbackIsLoud:
+    """The fallback stays (user's choice) but announces itself every time it fires."""
+
+    def test_missing_dir_warns(self):
+        from terrain_maker.snow.snodas import MockSnowDataWarning
+
+        with pytest.warns(MockSnowDataWarning, match="SNODAS directory not found"):
+            load_snodas_stats(terrain=MagicMock(), snodas_dir=Path("/definitely/not/a/real/path"),
+                              mock_shape=(10, 10))
+
+    def test_missing_terrain_warns(self):
+        from terrain_maker.snow.snodas import MockSnowDataWarning
+
+        with pytest.warns(MockSnowDataWarning, match="no Terrain"):
+            load_snodas_stats(terrain=None, snodas_dir=Path("/some/path"), mock_shape=(10, 10))
+
+    def test_loader_failure_warns_with_the_error(self, tmp_path, monkeypatch):
+        from terrain_maker.snow.snodas import MockSnowDataWarning
+        import terrain_maker.terrain.gridded_data as gd
+
+        class Broken:
+            def __init__(self, *a, **k):
+                raise OSError("disk on fire")
+
+        monkeypatch.setattr(gd, "GriddedDataLoader", Broken)
+        with pytest.warns(MockSnowDataWarning, match="disk on fire"):
+            load_snodas_stats(terrain=MagicMock(), snodas_dir=tmp_path, mock_shape=(10, 10))
+
+    def test_explicit_mock_request_does_not_warn(self):
+        import warnings
+
+        from terrain_maker.snow.snodas import MockSnowDataWarning
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", MockSnowDataWarning)
+            load_snodas_stats(mock_data=True, mock_shape=(10, 10))
+
+    def test_callers_can_escalate_to_an_error(self):
+        import warnings
+
+        from terrain_maker.snow.snodas import MockSnowDataWarning
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", MockSnowDataWarning)
+            with pytest.raises(MockSnowDataWarning):
+                load_snodas_stats(terrain=None, snodas_dir=None, mock_shape=(10, 10))

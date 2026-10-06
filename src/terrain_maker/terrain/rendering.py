@@ -291,6 +291,11 @@ def _is_gpu_memory_error(error: Exception) -> bool:
     return any(pattern in error_str for pattern in gpu_memory_patterns)
 
 
+def _run_render(bpy):
+    """Run Blender's render operator (a seam: bpy operators cannot be patched in tests)."""
+    bpy.ops.render.render(write_still=True)
+
+
 def render_scene_to_file(
     output_path,
     width=1920,
@@ -326,15 +331,18 @@ def render_scene_to_file(
             Allows GPU memory to be freed by other processes.
 
     Returns:
-        Path: Path to rendered file if successful, None otherwise
+        Path: Path to the rendered file.
+
+    Raises:
+        ImportError: Blender's bpy module is not available.
+        RuntimeError: the render failed (after GPU-memory retries) or wrote no file.
     """
     global _progress_tracker
 
     try:
         import bpy
-    except ImportError:
-        logger.warning("Blender/bpy not available - skipping render")
-        return None
+    except ImportError as e:
+        raise ImportError("render_scene_to_file needs Blender's bpy module (uv sync)") from e
 
     output_path = Path(output_path).resolve()
     logger.info(f"Rendering scene to {output_path}")
@@ -388,7 +396,7 @@ def render_scene_to_file(
                 if attempt > 0:
                     logger.info(f"Render retry attempt {attempt}/{max_retries}")
 
-                bpy.ops.render.render(write_still=True)
+                _run_render(bpy)
 
                 # Verify output
                 if output_path.exists():
@@ -396,8 +404,7 @@ def render_scene_to_file(
                     logger.info(f"Rendered successfully: {file_size_mb:.1f} MB")
                     return output_path
                 else:
-                    logger.error("Render file was not created")
-                    return None
+                    raise RuntimeError(f"Render finished but wrote no file at {output_path}")
 
             except Exception as e:
                 last_error = e
@@ -425,7 +432,7 @@ def render_scene_to_file(
                 )
             else:
                 logger.error(f"Render failed: {last_error}")
-        return None
+            raise RuntimeError(f"Render to {output_path} failed: {last_error}") from last_error
 
     finally:
         # Clean up progress tracker
