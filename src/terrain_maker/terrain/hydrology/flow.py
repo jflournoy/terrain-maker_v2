@@ -24,6 +24,7 @@ from terrain_maker.terrain.hydrology.accumulation import (
 from terrain_maker.terrain.hydrology.conditioning import (
     condition_dem,
     condition_dem_spec,
+    adaptive_min_basin_size,
     detect_endorheic_basins,
     detect_ocean_mask,
 )
@@ -50,7 +51,7 @@ def compute_flow_with_basins(
     lake_mask: Optional[np.ndarray] = None,
     lake_outlets: Optional[np.ndarray] = None,
     detect_basins: bool = True,
-    min_basin_size: int = 5000,
+    min_basin_size: Optional[int] = None,
     min_basin_depth: float = 1.0,
     backend: str = "spec",
     coastal_elev_threshold: float = 0.0,
@@ -97,10 +98,9 @@ def compute_flow_with_basins(
         Boolean mask of lake outlet cells
     detect_basins : bool, default=True
         Whether to detect and preserve endorheic basins
-    min_basin_size : int, default=5000
-        Minimum basin size in cells to preserve. When set to the default (5000),
-        uses adaptive scaling (4e-5 × total_cells) to handle different DEM sizes.
-        Set to a specific value to override adaptive scaling.
+    min_basin_size : int or None, default=None
+        Minimum basin size in cells to preserve. None means adaptive: 1/1000 of the
+        grid's cells (adaptive_min_basin_size). Any integer is used as given.
     min_basin_depth : float, default=1.0
         Minimum basin depth in meters to be considered endorheic
     backend : str, default="spec"
@@ -190,10 +190,11 @@ def compute_flow_with_basins(
         if verbose:
             logger.info("\n2. Detecting endorheic basins...")
         total_cells = dem.size
-        adaptive_min_size = int(1e-3 * total_cells)
-        effective_min_size = adaptive_min_size if min_basin_size == 5000 else min_basin_size
+        effective_min_size = (
+            adaptive_min_basin_size(total_cells) if min_basin_size is None else min_basin_size
+        )
 
-        if verbose and effective_min_size != min_basin_size:
+        if verbose and min_basin_size is None:
             logger.info(
                 f"   Adaptive basin size: {effective_min_size:,} cells "
                 f"({100*effective_min_size/total_cells:.4f}% of domain)"
@@ -780,14 +781,6 @@ def _condition_and_route(
                 "Use epsilon parameter instead (epsilon=0 for fill, epsilon>0 for breach-like).",
                 DeprecationWarning,
             )
-        if min_basin_size != 10000:
-            import warnings
-
-            warnings.warn(
-                "min_basin_size is ignored when backend='spec'. "
-                "Use max_breach_depth/max_breach_length to control basin preservation.",
-                DeprecationWarning,
-            )
 
         # Step 2: Condition DEM using spec-compliant pipeline
         # Use combined conditioning mask (ocean + basins) to preserve topography
@@ -944,6 +937,9 @@ def _build_conditioning_masks(
     # Step 1b: Detect endorheic basins (if enabled and using spec backend)
     basin_mask = None
     if detect_basins and backend == "spec":
+        if min_basin_size is None:
+            min_basin_size = adaptive_min_basin_size(dem_data.size)
+            logger.info(f"Adaptive minimum basin size: {min_basin_size:,} cells (1/1000 of grid)")
         logger.info(
             f"Detecting endorheic basins (min_size={min_basin_size}, min_depth={min_basin_depth:.1f}m)..."
         )
