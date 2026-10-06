@@ -923,6 +923,11 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
         if cache_key is None:
             transform_suffix = "_transformed" if transformed else ""
             cache_key = f"{name}_{source_layer}{transform_suffix}_{compute_func.__name__}"
+        # Whatever the key, tie it to the source data and the function's code and parameters
+        from terrain_maker.terrain._fingerprint import array_fingerprint, callable_fingerprint
+
+        cache_key = (f"{cache_key}_{array_fingerprint(source_data)[:12]}"
+                     f"_{callable_fingerprint(compute_func)[:12]}")
 
         # Try to load from cache
         cached = self.cache.load(cache_key)
@@ -957,6 +962,21 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
 
         return computed_data
 
+    def _transform_cache_key(self, name, layer):
+        """Cache key for a layer under the current transform pipeline, by content."""
+        from terrain_maker.terrain._fingerprint import array_fingerprint, callable_fingerprint
+        import hashlib
+
+        h = hashlib.blake2b(digest_size=12)
+        h.update(array_fingerprint(layer["data"]).encode())
+        h.update(repr(tuple(layer["transform"])).encode())
+        h.update(str(layer["crs"]).encode())
+        for t in self.transforms:
+            h.update(callable_fingerprint(t).encode())
+        readable = "_".join(t.__name__ for t in self.transforms)
+        safe = "".join(c if c.isalnum() or c in "._-" else "-" for c in readable)[:80]
+        return f"{name}_{safe}_{h.hexdigest()}"
+
     def apply_transforms(self, cache=False):
         """
         Apply all transforms to all data layers with optional caching.
@@ -988,9 +1008,11 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
                     pbar.update(1)
                     continue
 
-                # Create target name from transform sequence
-                layer_target = f"{name}_{'_'.join(t.__name__ for t in self.transforms)}"
-                cached_layer = self.cache.load(layer_target)
+                # The key identifies the input and every transform by content (data bytes,
+                # georeferencing, each transform's code and parameters), so a different DEM or
+                # parameter is a miss. The cache is read only when asked for.
+                layer_target = self._transform_cache_key(name, layer)
+                cached_layer = self.cache.load(layer_target) if cache else None
 
                 if cached_layer is None:
                     import time as _time
@@ -1054,6 +1076,9 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
 
                     # Save result with comprehensive metadata
                     metadata = {
+                        "elevation_scale_factor": float(np.prod([
+                            getattr(t, "_elevation_scale_factor", 1.0) for t in self.transforms
+                        ])),
                         "transforms": applied_transforms,
                         "original_shape": layer["data"].shape,
                         "transformed_shape": layer_data.shape,
@@ -1082,6 +1107,11 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
                     )
                 else:
                     self.logger.info(f"Cache hit for {layer_target}")
+                    # A miss multiplies elevation_scale by each transform's factor as it runs;
+                    # a hit skips them, so apply the same product here
+                    for t in self.transforms:
+                        if hasattr(t, "_elevation_scale_factor"):
+                            self.transform_metadata["elevation_scale"] *= t._elevation_scale_factor
                     self.data_layers[name].update(
                         {
                             "transformed_data": cached_layer["data"],
