@@ -1139,8 +1139,10 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
 
         This is called automatically at the end of apply_transforms().
         """
-        from rasterio.warp import reproject, Resampling
+        from rasterio import warp
+        from rasterio.warp import Resampling
 
+        reproject = warp.reproject  # looked up per call so tests can substitute a failure
         layers_to_align = []
         for name, layer in self.data_layers.items():
             target_ref = layer.get("target_layer")
@@ -1154,56 +1156,60 @@ class Terrain(TerrainColorMixin, TerrainMeshMixin, TerrainProximityMixin, Terrai
 
         for name, target_ref in layers_to_align:
             if target_ref not in self.data_layers:
-                self.logger.warning(
-                    f"Target layer '{target_ref}' not found for layer '{name}', skipping alignment"
+                raise ValueError(
+                    f"Layer '{name}' targets layer '{target_ref}', which does not exist "
+                    f"(layers: {list(self.data_layers)})"
                 )
-                continue
 
             layer = self.data_layers[name]
             target = self.data_layers[target_ref]
 
             if not target.get("transformed", False):
-                self.logger.warning(
-                    f"Target layer '{target_ref}' not transformed yet, skipping alignment for '{name}'"
+                raise RuntimeError(
+                    f"Cannot align '{name}': its target '{target_ref}' has not been transformed"
                 )
-                continue
 
-            # Get current and target shapes
-            current_shape = layer["transformed_data"].shape
             target_shape = target["transformed_data"].shape
-
-            if current_shape == target_shape:
-                self.logger.debug(f"Layer '{name}' already matches target shape {target_shape}")
+            same_grid = (
+                layer["transformed_data"].shape == target_shape
+                and layer["transformed_transform"].almost_equals(target["transformed_transform"])
+                and str(layer["transformed_crs"]) == str(target["transformed_crs"])
+            )
+            if same_grid:
+                self.logger.debug(f"Layer '{name}' already on '{target_ref}' grid {target_shape}")
                 continue
 
             self.logger.info(
-                f"Resampling '{name}' from {current_shape} to match '{target_ref}' {target_shape}"
+                f"Resampling '{name}' from {layer['transformed_data'].shape} "
+                f"to match '{target_ref}' {target_shape}"
             )
 
-            # Resample to match target shape
-            aligned_data = np.zeros(target_shape, dtype=layer["transformed_data"].dtype)
+            # Cells the source does not cover are nodata: NaN for float layers. Integer
+            # layers (masks) have no NaN; uncovered cells are 0, i.e. "not in the mask".
+            src = layer["transformed_data"]
+            is_float = np.issubdtype(src.dtype, np.floating)
+            aligned_data = np.full(target_shape, np.nan if is_float else 0, dtype=src.dtype)
 
             try:
                 reproject(
-                    layer["transformed_data"],
+                    src,
                     aligned_data,
                     src_transform=layer["transformed_transform"],
                     src_crs=layer["transformed_crs"],
                     dst_transform=target["transformed_transform"],
                     dst_crs=target["transformed_crs"],
                     resampling=Resampling.bilinear,
+                    src_nodata=np.nan if is_float else None,
+                    dst_nodata=np.nan if is_float else None,
                 )
-
-                # Update layer with aligned data
-                layer["transformed_data"] = aligned_data
-                layer["transformed_transform"] = target["transformed_transform"]
-                layer["transformed_crs"] = target["transformed_crs"]
-
-                self.logger.info(f"✓ Aligned '{name}' to match '{target_ref}'")
-
             except Exception as e:
-                self.logger.error(f"Failed to align '{name}' to '{target_ref}': {str(e)}")
-                # Don't raise - continue with other layers
+                raise RuntimeError(f"Failed to align layer '{name}' to '{target_ref}': {e}") from e
+
+            layer["transformed_data"] = aligned_data
+            layer["transformed_transform"] = target["transformed_transform"]
+            layer["transformed_crs"] = target["transformed_crs"]
+
+            self.logger.info(f"✓ Aligned '{name}' to match '{target_ref}'")
 
     def configure_for_target_vertices(
         self, target_vertices: int, method: str = "average"
