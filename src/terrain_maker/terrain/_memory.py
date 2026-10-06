@@ -5,6 +5,7 @@ on it needs tens of bytes per cell and gets the process killed by the OS with no
 check_memory estimates the peak before the allocation and raises a clear error instead.
 
 The budget is half the currently available RAM, or TERRAIN_MAKER_MEMORY_LIMIT_GB if set.
+Where available RAM cannot be read (e.g. macOS), the variable is required.
 """
 
 import logging
@@ -45,14 +46,21 @@ def _limit_bytes():
     if configured:
         return float(configured) * _GB
     available = available_memory_bytes()
-    return None if available is None else available / 2
+    if available is None:
+        # Without a budget the guard would pass everything, and the OS kills the process
+        # with no message on the allocation it exists to catch
+        raise RuntimeError(
+            "Cannot read available RAM on this system (no /proc/meminfo or "
+            "SC_AVPHYS_PAGES); set TERRAIN_MAKER_MEMORY_LIMIT_GB to the memory budget in GB"
+        )
+    return available / 2
 
 
 def check_memory(n_cells, bytes_per_cell, operation):
     """Raise ArrayTooLargeError if operation on n_cells would exceed the memory budget."""
     needed = n_cells * bytes_per_cell
     limit = _limit_bytes()
-    if limit is not None and needed > limit:
+    if needed > limit:
         raise ArrayTooLargeError(
             f"{operation} on {n_cells:,} cells needs ~{needed / _GB:.1f} GB, over the "
             f"{limit / _GB:.1f} GB budget. Downsample first (work at flow or mesh "

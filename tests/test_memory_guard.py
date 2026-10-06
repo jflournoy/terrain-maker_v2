@@ -60,3 +60,27 @@ def test_shoreline_colors_are_guarded(monkeypatch):
     ys, xs = np.nonzero(water)
     with pytest.raises(ArrayTooLargeError):
         shoreline_water_colors(water, ys, xs)
+
+
+def test_unreadable_ram_without_configured_limit_raises(monkeypatch):
+    """The guard used to switch itself off (limit None) when RAM could not be read."""
+    import pytest
+
+    from terrain_maker.terrain import _memory
+
+    monkeypatch.delenv("TERRAIN_MAKER_MEMORY_LIMIT_GB", raising=False)
+    monkeypatch.setattr(_memory, "available_memory_bytes", lambda: None)
+    with pytest.raises(RuntimeError, match="TERRAIN_MAKER_MEMORY_LIMIT_GB"):
+        _memory.check_memory(10, 8, "tiny op")
+
+
+def test_unreadable_ram_with_configured_limit_uses_it(monkeypatch):
+    import pytest
+
+    from terrain_maker.terrain import _memory
+
+    monkeypatch.setenv("TERRAIN_MAKER_MEMORY_LIMIT_GB", "1")
+    monkeypatch.setattr(_memory, "available_memory_bytes", lambda: None)
+    _memory.check_memory(10, 8, "tiny op")
+    with pytest.raises(_memory.ArrayTooLargeError):
+        _memory.check_memory(10**9, 8, "huge op")
