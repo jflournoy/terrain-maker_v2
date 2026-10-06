@@ -11,6 +11,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
+# seaborn registers its colormaps (rocket, mako, flare, crest, vlag, icefire and
+# their _r variants) with matplotlib as an import side effect. The library and
+# examples ask matplotlib for these by name, so the import is load-bearing even
+# though no seaborn symbol is used. tests/test_colormap_registration.py pins it.
+import seaborn.cm  # noqa: F401
+
 
 # =============================================================================
 # Custom Colormaps

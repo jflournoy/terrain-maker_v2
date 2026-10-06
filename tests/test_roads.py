@@ -19,6 +19,7 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 
 import pytest
+import requests
 import numpy as np
 
 # Import modules to test
@@ -1086,3 +1087,41 @@ class TestRoadFetchFailuresAreNotEmptyAreas:
     def test_small_area_fetch_failure_raises(self):
         with pytest.raises(RuntimeError, match="Overpass"):
             self._tiled([None], bbox=(42.0, -83.5, 42.5, -83.0))
+
+
+class TestRoadFetchFailureSaysWhy:
+    """The final error must carry why Overpass failed: logs are off in batch runs (the pin
+    harness), and 'Overpass is down' (429/504/timeout) needs a different fix than 'our query
+    is rejected' (400)."""
+
+    def _post_returning(self, status):
+        response = Mock(status_code=status)
+        response.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status} Client Error")
+        return patch("terrain_maker.terrain.roads.requests.post", return_value=response)
+
+    def test_rejected_query_reason_reaches_the_error(self, tmp_path, monkeypatch):
+        from terrain_maker.terrain.roads import get_roads_tiled
+
+        monkeypatch.setattr("terrain_maker.terrain.roads._load_cached_roads", lambda bbox: None)
+        with self._post_returning(400), pytest.raises(RuntimeError, match="400 Client Error"):
+            get_roads_tiled((42.0, -83.5, 42.5, -83.0), retry_count=1, retry_delay=0)
+
+    def test_rate_limit_reason_reaches_the_error(self, monkeypatch):
+        from terrain_maker.terrain.roads import get_roads_tiled
+
+        monkeypatch.setattr("terrain_maker.terrain.roads._load_cached_roads", lambda bbox: None)
+        with self._post_returning(429), pytest.raises(RuntimeError, match="HTTP 429"):
+            get_roads_tiled((40.0, -80.0, 44.0, -76.0), tile_size=2.0, retry_count=1, retry_delay=0)
+
+
+def test_overpass_request_identifies_the_client():
+    """Overpass answers 406 Not Acceptable to requests it won't serve; its usage policy asks
+    clients to identify themselves rather than send the generic python-requests agent."""
+    from terrain_maker.terrain.roads import _fetch_roads_from_osm
+
+    response = Mock(status_code=200)
+    response.json.return_value = {"elements": []}
+    with patch("terrain_maker.terrain.roads.requests.post", return_value=response) as post:
+        _fetch_roads_from_osm((42.0, -83.5, 42.5, -83.0), ["primary"])
+    agent = post.call_args.kwargs["headers"]["User-Agent"]
+    assert agent.startswith("terrain-maker") and "github.com" in agent

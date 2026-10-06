@@ -60,6 +60,7 @@ from terrain_maker.terrain.core import (
     scale_elevation,
 )
 from terrain_maker.terrain.scene_setup import create_background_plane, setup_hdri_lighting
+from terrain_maker.terrain.transforms import downsample_then_reproject
 from terrain_maker.terrain.materials import apply_colormap_material
 from terrain_maker.terrain.flow_accumulation import (
     flow_accumulation,

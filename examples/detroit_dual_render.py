@@ -66,6 +66,7 @@ from terrain_maker.terrain.core import (
     scale_elevation,
 )
 from terrain_maker.terrain.blender_integration import apply_vertex_colors
+from terrain_maker.terrain.transforms import downsample_then_reproject
 from terrain_maker.terrain.data_loading import load_dem_files
 from terrain_maker.terrain.gridded_data import MemoryMonitor, TiledDataConfig, MemoryLimitExceeded
 from examples.score_loaders import (

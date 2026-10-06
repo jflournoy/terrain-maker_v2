@@ -202,6 +202,17 @@ def _cache_road_data(
         logger.warning(f"  Error caching road data: {e}")
 
 
+# Why the most recent fetch for a bbox failed, so get_roads_tiled can say so in its error
+# (get_roads keeps returning None on failure; callers rely on that).
+_fetch_failures: Dict[Tuple[float, float, float, float], str] = {}
+
+# Overpass's usage policy asks clients to identify themselves; it refuses some requests
+# that carry only the generic python-requests agent (406 Not Acceptable).
+OVERPASS_HEADERS = {
+    "User-Agent": "terrain-maker (+https://github.com/jflournoy/terrain-maker_v2)",
+}
+
+
 def _fetch_roads_from_osm(
     bbox: Tuple[float, float, float, float],
     road_types: List[str],
@@ -231,11 +242,15 @@ def _fetch_roads_from_osm(
     overpass_url = "https://overpass-api.de/api/interpreter"
 
     data = None
+    last_problem = None
     for attempt in range(retries):
         try:
-            response = requests.post(overpass_url, data={"data": query}, timeout=timeout)
+            response = requests.post(
+                overpass_url, data={"data": query}, headers=OVERPASS_HEADERS, timeout=timeout
+            )
 
             if response.status_code in (429, 504):
+                last_problem = f"HTTP {response.status_code}"
                 wait = 20 * (attempt + 1)
                 logger.warning(f"  Overpass API {response.status_code}, waiting {wait}s "
                                f"(attempt {attempt + 1}/{retries})...")
@@ -247,6 +262,7 @@ def _fetch_roads_from_osm(
             break
 
         except requests.exceptions.Timeout:
+            last_problem = f"timeout after {timeout}s"
             wait = 20 * (attempt + 1)
             logger.warning(f"  Overpass API timeout, waiting {wait}s "
                            f"(attempt {attempt + 1}/{retries})...")
@@ -254,10 +270,12 @@ def _fetch_roads_from_osm(
             continue
         except Exception as e:
             logger.error(f"  Failed to fetch from Overpass API: {e}")
+            _fetch_failures[tuple(bbox)] = f"{type(e).__name__}: {e}"
             return None
 
     if data is None:
         logger.error(f"  Overpass API failed after {retries} attempts")
+        _fetch_failures[tuple(bbox)] = f"{last_problem} on all {retries} attempts"
         return None
 
     # Parse OSM data into GeoJSON
@@ -430,7 +448,10 @@ def get_roads_tiled(
         logger.info("  Small area - single fetch (no tiling needed)")
         result = get_roads(bbox, road_types, force_refresh=force_refresh)
         if result is None:
-            raise RuntimeError(f"Overpass API road fetch failed for {bbox}; try again later")
+            raise RuntimeError(
+            f"Overpass API road fetch failed for {bbox} "
+            f"({_fetch_failures.get(tuple(bbox), 'reason not recorded')}); try again later"
+        )
         return result
 
     # Large bbox - tile and merge
@@ -481,6 +502,7 @@ def get_roads_tiled(
         time.sleep(retry_delay)
 
         still_failed = []
+        reasons = {}
         for tile_num, tile_bbox in failed_tiles:
             logger.info(f"  Retry tile {tile_num}...")
             tile_roads = get_roads(tile_bbox, road_types, force_refresh=True)
@@ -493,7 +515,9 @@ def get_roads_tiled(
                 logger.info(f"    ○ No roads in this area")
             else:
                 still_failed.append(tile_num)
-                logger.warning(f"    ✗ Retry failed")
+                reason = _fetch_failures.get(tuple(tile_bbox), "reason not recorded")
+                reasons.setdefault(reason, []).append(tile_num)
+                logger.warning(f"    ✗ Retry failed ({reason})")
             time.sleep(retry_delay)
 
         if still_failed:
@@ -501,7 +525,8 @@ def get_roads_tiled(
             # roads. Tiles that succeeded are cached, so a re-run only fetches these.
             raise RuntimeError(
                 f"Overpass API road fetch failed for tile(s) {still_failed} of {total_tiles} "
-                "after retry; re-run later (fetched tiles are cached)"
+                "after retry; re-run later (fetched tiles are cached). Reasons: "
+                + "; ".join(f"{why} (tiles {nums})" for why, nums in reasons.items())
             )
 
     logger.info(f"  Loaded {len(all_features)} total road segments from {total_tiles} tiles")

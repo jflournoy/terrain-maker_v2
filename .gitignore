@@ -119,6 +119,7 @@ docs/images/**/*.jpg
 
 # Large data files
 *.npz
+!tools/pins/arrays/*.npz
 *.pkl
 *.hdf5
 *.h5

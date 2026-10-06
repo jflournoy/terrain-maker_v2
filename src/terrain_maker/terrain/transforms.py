@@ -827,23 +827,36 @@ def feature_preserving_smooth(sigma_spatial=3.0, sigma_intensity=None, nodata_va
 
 def _bilateral_filter_2d(data, sigma_spatial, sigma_intensity, mask):
     """
-    Apply bilateral filtering to 2D elevation data.
+    Apply bilateral filtering to 2D data with OpenCV.
 
-    Implementation priority (fastest first):
-    1. OpenCV (~250M pixels/sec) - highly optimized SIMD implementation
-    2. skimage (~0.8M pixels/sec) - good C implementation
-    3. Pure numpy fallback (~1K pixels/sec) - last resort
+    OpenCV is the only backend. skimage's denoise_bilateral is a different algorithm (on
+    Detroit mock scores it differs by ~3% of the range), so falling back to it would make
+    the same command produce different terrain on machines where OpenCV fails to import.
 
     Args:
-        data: 2D numpy array of elevation values
+        data: 2D numpy array
         sigma_spatial: Spatial Gaussian sigma in pixels
-        sigma_intensity: Intensity Gaussian sigma in elevation units
+        sigma_intensity: Intensity Gaussian sigma in data units
         mask: Boolean mask where True = nodata
 
     Returns:
-        Filtered 2D array
+        Filtered 2D float64 array, NaN where mask is True
+
+    Raises:
+        ImportError: if OpenCV cannot be imported
     """
     import time
+
+    try:
+        import cv2
+    except ImportError as e:
+        raise ImportError(
+            f"Bilateral smoothing needs OpenCV, but `import cv2` failed: {e}. "
+            "opencv-python-headless is a core dependency; reinstall it with "
+            "`uv sync --reinstall-package opencv-python-headless`. If the 'upscale' extra "
+            "is installed, its opencv-python (GUI build) shares the cv2 directory and can "
+            "break the import; check with `uv pip list | grep -i opencv`."
+        ) from e
 
     logger = logging.getLogger(__name__)
     height, width = data.shape
@@ -860,175 +873,31 @@ def _bilateral_filter_2d(data, sigma_spatial, sigma_intensity, mask):
         )
         sigma_spatial = MAX_SIGMA_SPATIAL
 
-    logger.info(f"Bilateral filter: {height}×{width} = {n_pixels/1e6:.1f}M pixels")
-
+    logger.info(f"Bilateral filter (OpenCV {cv2.__version__}): {height}×{width} = {n_pixels/1e6:.1f}M pixels")
     start_time = time.time()
 
-    # Fill NaN values temporarily (neither OpenCV nor skimage handle NaN)
+    # Fill NaN values temporarily (OpenCV does not handle NaN)
     data_filled = data.copy().astype(np.float32)
     if np.any(mask):
         valid_median = np.nanmedian(data[~mask])
         data_filled[mask] = valid_median
 
-    # Try OpenCV first (500x faster than skimage)
-    try:
-        import cv2
+    # Explicit diameter for control: d = ceil(6*sigma) | 1 (ensure odd)
+    diameter = int(np.ceil(6 * sigma_spatial)) | 1
+    logger.info(f"  Kernel diameter: {diameter}px")
 
-        logger.info("  Using OpenCV (highly optimized)...")
-
-        # OpenCV bilateral: d=-1 means auto-calculate diameter from sigmaSpace
-        # Use explicit diameter for better control: d = ceil(6*sigma) | 1 (ensure odd)
-        diameter = int(np.ceil(6 * sigma_spatial)) | 1
-        logger.info(f"  Kernel diameter: {diameter}px")
-
-        result = cv2.bilateralFilter(
-            data_filled,
-            d=diameter,
-            sigmaColor=float(sigma_intensity),
-            sigmaSpace=float(sigma_spatial),
-        )
-
-        # Restore NaN values
-        result = result.astype(np.float64)
-        result[mask] = np.nan
-
-        elapsed = time.time() - start_time
-        throughput = n_pixels / elapsed / 1e6
-        logger.info(f"  ✓ Bilateral filter complete in {elapsed:.2f}s ({throughput:.1f}M pixels/sec)")
-
-        return result
-
-    except ImportError:
-        pass  # Fall through to skimage
-    except cv2.error as e:
-        logger.warning(f"  OpenCV bilateral filter failed: {e}")
-        logger.warning("  Falling back to skimage...")
-    except MemoryError:
-        logger.warning("  OpenCV ran out of memory, falling back to skimage...")
-
-    # Try skimage as fallback
-    try:
-        from skimage.restoration import denoise_bilateral
-
-        logger.info("  Using skimage (install opencv-python-headless for 500x speedup)...")
-
-        result = denoise_bilateral(
-            data_filled.astype(np.float64),
-            sigma_color=sigma_intensity,
-            sigma_spatial=sigma_spatial,
-            mode="reflect",
-            channel_axis=None,
-        )
-
-        result[mask] = np.nan
-
-        elapsed = time.time() - start_time
-        throughput = n_pixels / elapsed / 1e6
-        logger.info(f"  ✓ Bilateral filter complete in {elapsed:.1f}s ({throughput:.1f}M pixels/sec)")
-
-        return result
-
-    except ImportError:
-        logger.warning(
-            "  Neither OpenCV nor skimage available, using slow fallback. "
-            "Install opencv-python-headless for 500x speedup."
-        )
-        return _bilateral_filter_2d_fallback(
-            data, sigma_spatial, sigma_intensity, mask, start_time
-        )
-
-
-def _bilateral_filter_2d_fallback(data, sigma_spatial, sigma_intensity, mask, start_time=None):
-    """
-    Pure-numpy bilateral filter fallback (slow but works without dependencies).
-
-    This is O(H * W * K^2) and will be slow for large images.
-    """
-    import time
-
-    logger = logging.getLogger(__name__)
-    height, width = data.shape
-    total_pixels = height * width
-
-    if start_time is None:
-        start_time = time.time()
-
-    # Estimate: ~1000 pixels/sec for fallback
-    estimated_time = total_pixels / 1000
-    logger.warning(
-        f"  ⚠ Slow fallback: {height}×{width} = {total_pixels:,} pixels. "
-        f"Estimated ~{estimated_time/60:.0f} minutes!"
+    result = cv2.bilateralFilter(
+        data_filled,
+        d=diameter,
+        sigmaColor=float(sigma_intensity),
+        sigmaSpace=float(sigma_spatial),
     )
 
-    # Determine kernel size (3 * sigma covers 99.7% of Gaussian)
-    kernel_radius = int(np.ceil(3 * sigma_spatial))
-    kernel_size = 2 * kernel_radius + 1
-
-    # Create spatial weight kernel (constant, compute once)
-    y_offsets, x_offsets = np.ogrid[
-        -kernel_radius : kernel_radius + 1, -kernel_radius : kernel_radius + 1
-    ]
-    spatial_weights = np.exp(-(x_offsets**2 + y_offsets**2) / (2 * sigma_spatial**2))
-
-    # Pad data for boundary handling (reflect mode preserves edge values)
-    padded = np.pad(data, kernel_radius, mode="reflect")
-    padded_mask = np.pad(mask, kernel_radius, mode="constant", constant_values=True)
-
-    # Output array
-    result = np.zeros_like(data)
-
-    # Process with progress logging and ETA
-    log_interval = max(1, height // 10)
-    for i in range(height):
-        if i > 0 and i % log_interval == 0:
-            elapsed = time.time() - start_time
-            rows_per_sec = i / elapsed
-            remaining_rows = height - i
-            eta = remaining_rows / rows_per_sec if rows_per_sec > 0 else 0
-            logger.info(
-                f"  Progress: {i}/{height} rows ({100*i/height:.0f}%) - "
-                f"elapsed {elapsed:.0f}s, ETA {eta:.0f}s"
-            )
-
-        for j in range(width):
-            if mask[i, j]:
-                result[i, j] = np.nan
-                continue
-
-            # Extract neighborhood
-            neighborhood = padded[i : i + kernel_size, j : j + kernel_size]
-            neighborhood_mask = padded_mask[i : i + kernel_size, j : j + kernel_size]
-
-            # Center value
-            center_value = data[i, j]
-
-            # Intensity weights based on difference from center
-            intensity_diff = neighborhood - center_value
-            intensity_weights = np.exp(
-                -(intensity_diff**2) / (2 * sigma_intensity**2)
-            )
-
-            # Combined weights (spatial * intensity)
-            combined_weights = spatial_weights * intensity_weights
-            combined_weights[neighborhood_mask] = 0
-            combined_weights[np.isnan(neighborhood)] = 0
-
-            # Weighted average
-            weight_sum = np.sum(combined_weights)
-            if weight_sum > 0:
-                valid_neighborhood = np.where(
-                    np.isnan(neighborhood), 0, neighborhood
-                )
-                result[i, j] = np.sum(valid_neighborhood * combined_weights) / weight_sum
-            else:
-                result[i, j] = center_value
+    result = result.astype(np.float64)
+    result[mask] = np.nan
 
     elapsed = time.time() - start_time
-    throughput = total_pixels / elapsed
-    logger.info(
-        f"  ✓ Bilateral filter complete in {elapsed:.1f}s "
-        f"({throughput:.0f} pixels/sec)"
-    )
+    logger.info(f"  ✓ Bilateral filter complete in {elapsed:.2f}s ({n_pixels / max(elapsed, 1e-9) / 1e6:.1f}M pixels/sec)")
     return result
 
 

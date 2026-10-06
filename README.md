@@ -3,7 +3,7 @@
 **A living reference implementation of professional Claude Code commands and workflows**
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue)](https://github.com/rmurphey/claude-setup)
-[![Commands](https://img.shields.io/badge/commands-14-green)](.claude/commands/)
+[![Commands](https://img.shields.io/badge/commands-6-green)](.claude/commands/)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
 [![Token Efficiency](https://img.shields.io/badge/token%20savings-87%25-orange)](docs/TOKEN_EFFICIENCY.md)
 [![Agent Audit](https://github.com/rmurphey/claude-setup/workflows/Agent%20Audit%20with%20Claude%20Code/badge.svg)](https://github.com/rmurphey/claude-setup/actions/workflows/agent-audit.yml)
@@ -83,17 +83,15 @@ runs the check automatically if you set `TERRAIN_VERIFY_ON_PULL=quick` or `full`
 
 ### Claude Code Commands
 
-The `.claude/commands/` directory contains 14+ ready-to-use workflow commands:
+The `.claude/commands/` directory contains 6 workflow commands:
 
 ```bash
-/hygiene                          # Check project health
-/tdd start "new feature"          # Start with tests
-/commit feat "add user auth"      # Quality-checked commit
-/learn "TDD clarified the API"    # Capture insights
-/todo                             # Manage tasks
-/next                             # Get next steps
-/docs                             # Update documentation
-/push                             # Push with quality checks
+/hygiene                          # Project health: detects R, Python or Node
+/commit feat "add user auth"      # Atomic commit with quality checks
+/next                             # Priorities, via the next-priorities agent
+/push                             # Push, after checking CI is not already red
+/refactor                         # Refactoring analysis for code a human reads
+/refactor-verified                # Refactoring analysis for code nobody reads, where checks replace review
 ```
 
 These commands are **integrated into Claude Code** - just type the slash command in the Claude Code UI.
@@ -126,20 +124,15 @@ This repository demonstrates balanced approaches to Claude Code commands, optimi
 
 ### 🎯 Core Workflow Commands
 
-- **`/hygiene`** - Comprehensive project health check ([view command](.claude/commands/hygiene.md))
-- **`/todo`** - Task management with GitHub Issues ([view command](.claude/commands/todo.md))
-- **`/commit`** - Quality-checked commits ([view command](.claude/commands/commit.md))
+- **`/hygiene`** - Project health check ([view command](.claude/commands/hygiene.md))
+- **`/commit`** - Atomic commits with quality checks ([view command](.claude/commands/commit.md))
 - **`/next`** - AI-recommended next steps ([view command](.claude/commands/next.md))
-
-### 📚 Documentation & Learning
-
-- **`/docs`** - Documentation generation ([view command](.claude/commands/docs.md))
-- **`/learn`** - Capture insights ([view command](.claude/commands/learn.md))
+- **`/refactor`** - Refactoring analysis ([view command](.claude/commands/refactor.md))
+- **`/refactor-verified`** - Refactoring where checks replace review ([view command](.claude/commands/refactor-verified.md))
 
 ### 🚀 Release & Quality
 
-- **`/push`** - Push with quality checks ([view command](.claude/commands/push.md))
-- **`/tdd`** - Test-driven development workflow ([view command](.claude/commands/tdd.md))
+- **`/push`** - Push after checking CI ([view command](.claude/commands/push.md))
 - **`feature:check`** - Verify new features have tests & docs ([documentation](docs/FEATURE_CHECK.md))
 
 ## 🤖 Claude Code Agents
