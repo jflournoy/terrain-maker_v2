@@ -48,7 +48,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Collection, List, Tuple, Optional
 
 try:
     import requests
@@ -204,18 +204,21 @@ def _download_srtm_tile(
         password: NASA Earthdata password
 
     Returns:
-        True if download successful or file already exists, False otherwise
+        True when the tile's ZIP is present (downloaded now or already on disk).
+
+    Raises:
+        ImportError: the NASADEM library is not installed.
+        RuntimeError: no Earthdata credentials, or the download failed or left no file.
 
     Note:
         NASADEM downloads tiles as ZIP files named like "NASADEM_HGT_N32W117.zip".
         The ZIP contains the HGT file and other metadata.
     """
     if NASADEMConnection is None:
-        logger.error(
-            "NASADEM library not installed. Install with: pip install NASADEM\n"
-            "Or download manually from: https://portal.opentopography.org/"
+        raise ImportError(
+            "NASADEM library not installed (uv sync installs it); or download tiles "
+            "manually from https://portal.opentopography.org/"
         )
-        return False
 
     # NASADEM downloads ZIP files, not raw HGT
     # Format: NASADEM_HGT_N32W117.zip (uppercase tile name)
@@ -229,13 +232,10 @@ def _download_srtm_tile(
     # Resolve credentials from args → env vars → .env file
     username, password = _load_earthdata_credentials(username, password)
     if username is None or password is None:
-        logger.warning(
-            "No Earthdata credentials found. Provide via:\n"
-            "  - username/password arguments\n"
-            "  - EARTHDATA_USERNAME/EARTHDATA_PASSWORD env vars\n"
-            "  - .env file in project root"
+        raise RuntimeError(
+            "No Earthdata credentials found. Provide via username/password arguments, "
+            "EARTHDATA_USERNAME/EARTHDATA_PASSWORD env vars, or a .env file in the project root"
         )
-        return False
 
     logger.info(f"Downloading SRTM tile: {tile_name}")
 
@@ -258,35 +258,41 @@ def _download_srtm_tile(
         # Note: tile_name should be lowercase for NASADEM (e.g., "n32w117")
         granule = nasadem.download_tile(tile_name.lower())
 
-        if output_file.exists():
-            logger.info(f"✓ Downloaded {tile_name} ({output_file.stat().st_size} bytes)")
-            return True
-        else:
-            logger.warning(f"Download completed but file not found: {output_file}")
-            return False
-
     except Exception as e:
-        logger.error(f"Failed to download {tile_name}: {e}")
-        return False
+        raise RuntimeError(f"Failed to download {tile_name}: {type(e).__name__}: {e}") from e
+
+    if not output_file.exists():
+        raise RuntimeError(f"Download of {tile_name} reported success but {output_file} is missing")
+    logger.info(f"✓ Downloaded {tile_name} ({output_file.stat().st_size} bytes)")
+    return True
 
 
 def download_dem_by_bbox(
     bbox: Tuple[float, float, float, float],
     output_dir: str,
     username: Optional[str] = None,
-    password: Optional[str] = None
+    password: Optional[str] = None,
+    expected_missing: Collection[str] = (),
 ) -> List[Path]:
     """
     Download SRTM elevation data for a bounding box area.
+
+    Every tile the bbox needs must arrive, or this raises naming each failed tile and why.
+    NASADEM has no tiles over open ocean; name such tiles in expected_missing to say their
+    absence is known (they are still downloaded if they exist).
 
     Args:
         bbox: Bounding box as (south, west, north, east) in decimal degrees
         output_dir: Directory to save downloaded DEM files
         username: NASA Earthdata username (optional for testing)
         password: NASA Earthdata password (optional for testing)
+        expected_missing: Tile names (e.g. "N32W118") allowed to be unavailable
 
     Returns:
         List of Path objects pointing to downloaded ZIP files
+
+    Raises:
+        RuntimeError: one or more tiles not in expected_missing could not be downloaded.
 
     Note:
         NASADEM downloads tiles as ZIP files (e.g., "NASADEM_HGT_N32W117.zip").
@@ -306,15 +312,28 @@ def download_dem_by_bbox(
     tiles = calculate_required_srtm_tiles(bbox)
     logger.info(f"Need {len(tiles)} SRTM tiles for bbox: {tiles}")
 
-    # Download each tile
+    # Try every tile, then report all failures at once
+    expected = {t.upper() for t in expected_missing}
     downloaded_files = []
+    failures = {}
     for tile_name in tiles:
-        success = _download_srtm_tile(tile_name, output_path, username, password)
-        if success:
-            # NASADEM downloads ZIP files with uppercase tile names
-            tile_file = output_path / f"NASADEM_HGT_{tile_name.upper()}.zip"
-            downloaded_files.append(tile_file)
+        try:
+            _download_srtm_tile(tile_name, output_path, username, password)
+        except Exception as e:
+            if tile_name.upper() in expected:
+                logger.info(f"Tile {tile_name} unavailable, as expected: {e}")
+                continue
+            failures[tile_name] = f"{type(e).__name__}: {e}"
+            continue
+        # NASADEM downloads ZIP files with uppercase tile names
+        downloaded_files.append(output_path / f"NASADEM_HGT_{tile_name.upper()}.zip")
 
+    if failures:
+        detail = "\n".join(f"  {tile}: {why}" for tile, why in failures.items())
+        raise RuntimeError(
+            f"{len(failures)} of {len(tiles)} DEM tiles could not be downloaded:\n{detail}\n"
+            "If a tile is open ocean (no NASADEM data), pass it in expected_missing."
+        )
     return downloaded_files
 
 
@@ -328,11 +347,10 @@ def _geocode_place_name(place_name: str) -> Tuple[float, float, float, float]:
     Returns:
         Bounding box as (south, west, north, east)
     """
-    # Minimal implementation - would use geocoding API
-    logger.info(f"Would geocode place name: {place_name}")
-
-    # Return a dummy bbox for now
-    return (42.0, -83.5, 42.5, -83.0)
+    raise NotImplementedError(
+        f"Geocoding is not implemented, so {place_name!r} cannot be turned into a bbox "
+        "(it used to return Detroit's bbox for every name). Use download_dem_by_bbox."
+    )
 
 
 def download_dem_by_place_name(
