@@ -44,6 +44,7 @@ def _extract_dem_from_zips(directory: Path, pattern: str = "*.hgt") -> int:
     logger.info(f"No {pattern} files found, extracting from {len(zip_files)} ZIP archives...")
 
     extracted_count = 0
+    bad_zips = {}
     for zip_path in zip_files:
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
@@ -61,10 +62,14 @@ def _extract_dem_from_zips(directory: Path, pattern: str = "*.hgt") -> int:
                     extracted_count += 1
                     logger.debug(f"  Extracted {member} from {zip_path.name}")
 
-        except zipfile.BadZipFile:
-            logger.warning(f"Skipping invalid ZIP file: {zip_path.name}")
         except Exception as e:
-            logger.warning(f"Failed to extract from {zip_path.name}: {e}")
+            bad_zips[zip_path.name] = f"{type(e).__name__}: {e}"
+
+    if bad_zips:
+        detail = "\n".join(f"  {name}: {why}" for name, why in bad_zips.items())
+        raise ValueError(
+            f"{len(bad_zips)} DEM ZIP archive(s) could not be extracted (re-download them):\n{detail}"
+        )
 
     if extracted_count > 0:
         logger.info(f"Extracted {extracted_count} files from ZIP archives")
@@ -119,32 +124,32 @@ def load_dem_files(
             raise ValueError(f"No files matching '{pattern}' found in {directory}")
 
         # Validate and open files
+        # Every tile must open and look like elevation; merging the rest would leave holes
         dem_datasets = []
+        bad_files = {}
         with tqdm(dem_files, desc="Opening DEM files") as pbar:
             for file in pbar:
                 try:
                     ds = rasterio.open(file)
-
-                    # Basic validation
-                    if ds.count == 0:
-                        logger.warning(f"No raster bands found in {file}")
-                        ds.close()
-                        continue
-
-                    if ds.dtypes[0] not in ("int16", "int32", "float32", "float64"):
-                        logger.warning(f"Unexpected data type in {file}: {ds.dtypes[0]}")
-                        ds.close()
-                        continue
-
-                    dem_datasets.append(ds)
-                    pbar.set_postfix({"opened": len(dem_datasets)})
-
-                except rasterio.errors.RasterioIOError as e:
-                    logger.warning(f"Failed to open {file}: {str(e)}")
-                    continue
                 except Exception as e:
-                    logger.error(f"Unexpected error with {file}: {str(e)}")
+                    bad_files[Path(file).name] = f"cannot open ({type(e).__name__}: {e})"
                     continue
+                if ds.count == 0:
+                    bad_files[Path(file).name] = "no raster bands"
+                    ds.close()
+                    continue
+                if ds.dtypes[0] not in ("int16", "int32", "float32", "float64"):
+                    bad_files[Path(file).name] = f"unexpected data type {ds.dtypes[0]}"
+                    ds.close()
+                    continue
+                dem_datasets.append(ds)
+                pbar.set_postfix({"opened": len(dem_datasets)})
+
+        if bad_files:
+            for ds in dem_datasets:
+                ds.close()
+            detail = "\n".join(f"  {name}: {why}" for name, why in bad_files.items())
+            raise ValueError(f"{len(bad_files)} DEM file(s) unusable:\n{detail}")
 
         if not dem_datasets:
             raise ValueError("No valid DEM files could be opened")
@@ -487,13 +492,16 @@ def load_filtered_hgt_files(
         raise ValueError(f"No files matching '{pattern}' found in {dem_dir}")
 
     # Filter by lat/lon if specified
+    unparseable = [f.name for f in all_files if None in parse_hgt_filename(f)]
+    if unparseable:
+        raise ValueError(
+            f"Cannot read tile coordinates from file name(s) {unparseable} in {dem_dir}; "
+            "expected SRTM names like N42W083.hgt (rename or move them)"
+        )
+
     filtered_files = []
     for f in all_files:
         lat, lon = parse_hgt_filename(f)
-
-        # Skip files that couldn't be parsed
-        if lat is None or lon is None:
-            continue
 
         # Apply filters
         if min_latitude is not None and lat < min_latitude:
@@ -516,14 +524,23 @@ def load_filtered_hgt_files(
 
     # Load the filtered files directly using rasterio
     dem_datasets = []
+    bad_files = {}
     for file in filtered_files:
         try:
             ds = rasterio.open(file)
-            if ds.count > 0:
-                dem_datasets.append(ds)
-        except rasterio.errors.RasterioIOError as e:
-            logger.warning(f"Failed to open {file}: {str(e)}")
+        except Exception as e:
+            bad_files[file.name] = f"cannot open ({type(e).__name__}: {e})"
             continue
+        if ds.count == 0:
+            bad_files[file.name] = "no raster bands"
+            ds.close()
+            continue
+        dem_datasets.append(ds)
+    if bad_files:
+        for ds in dem_datasets:
+            ds.close()
+        detail = "\n".join(f"  {name}: {why}" for name, why in bad_files.items())
+        raise ValueError(f"{len(bad_files)} HGT file(s) unusable:\n{detail}")
 
     if not dem_datasets:
         raise ValueError("No valid HGT files could be opened after filtering")
@@ -614,7 +631,7 @@ def load_geotiff_cropped_to_dem(
                 return data, transform, src_crs
 
             except Exception as e:
-                logger.warning(f"  Windowed read failed ({e}), falling back to full read")
+                raise RuntimeError(f"Windowed read of {geotiff_path} failed: {e}") from e
 
         # Fallback: load full file
         logger.info(f"  Loading full file ({src.shape})")
