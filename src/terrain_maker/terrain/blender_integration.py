@@ -44,9 +44,7 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, n_s
 
     n_loops = len(color_layer.data)
     if n_loops == 0:
-        if logger:
-            logger.warning("Mesh has no color data")
-        return
+        raise ValueError("Cannot apply vertex colors to a mesh with no faces (no loops)")
 
     # Check if colors are grid-space (3D) or vertex-space (2D)
     if vertex_colors.ndim == 3 and y_valid is not None and x_valid is not None:
@@ -75,36 +73,32 @@ def apply_vertex_colors(mesh_obj, vertex_colors, y_valid=None, x_valid=None, n_s
     loop_vertex_indices = np.zeros(n_loops, dtype=np.int32)
     mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
 
-    # If n_surface_vertices is specified, preserve boundary vertex colors
-    if n_surface_vertices is not None:
-        # Get existing colors from the mesh (must use flat array first)
-        color_data_flat = np.zeros(n_loops * 4, dtype=np.float32)
-        mesh.vertex_colors[0].data.foreach_get("color", color_data_flat)
-        color_data = color_data_flat.reshape((n_loops, 4))
+    # Colors cover the surface vertices (the first n of the mesh); vertices after them
+    # (boundary skirt) keep the color they already have. Clamping their indices onto the
+    # last surface vertex used to paint the whole skirt that one color.
+    n_vertices = len(mesh.vertices)
+    n_surface = n_surface_vertices if n_surface_vertices is not None else len(colors_normalized)
+    if len(colors_normalized) > n_vertices:
+        raise ValueError(
+            f"{len(colors_normalized)} colors for a mesh with {n_vertices} vertices"
+        )
+    if n_surface > len(colors_normalized):
+        raise ValueError(
+            f"n_surface_vertices={n_surface} but only {len(colors_normalized)} colors were given"
+        )
 
-        # Only apply colors to surface vertices
-        surface_mask = loop_vertex_indices < n_surface_vertices
-        clamped_indices = np.clip(loop_vertex_indices[surface_mask], 0, len(colors_normalized) - 1)
-        color_data[surface_mask] = colors_normalized[clamped_indices]
+    color_data_flat = np.zeros(n_loops * 4, dtype=np.float32)
+    color_layer.data.foreach_get("color", color_data_flat)
+    color_data = color_data_flat.reshape((n_loops, 4))
 
-        # Apply colors
-        color_layer.data.foreach_set("color", color_data.flatten())
-        if logger:
-            logger.debug(f"✓ Applied colors to {np.sum(surface_mask)} surface loops, preserved {np.sum(~surface_mask)} boundary loops")
-    else:
-        # Apply to all vertices (original behavior)
-        # Clamp indices to valid range
-        max_color_idx = len(colors_normalized) - 1
-        loop_vertex_indices = np.clip(loop_vertex_indices, 0, max_color_idx)
-
-        # Build flat color array for all loops (RGBA per loop)
-        loop_colors = colors_normalized[loop_vertex_indices].flatten()
-
-        # Apply all colors at once
-        color_layer.data.foreach_set("color", loop_colors)
-
-        if logger:
-            logger.debug(f"✓ Applied colors to {n_loops} loops (vectorized)")
+    surface_mask = loop_vertex_indices < n_surface
+    color_data[surface_mask] = colors_normalized[loop_vertex_indices[surface_mask]]
+    color_layer.data.foreach_set("color", color_data.flatten())
+    if logger:
+        logger.debug(
+            f"✓ Applied colors to {int(np.sum(surface_mask))} surface loops, "
+            f"kept {int(np.sum(~surface_mask))} boundary loops"
+        )
 
 
 def apply_ring_colors(mesh_obj, ring_mask, y_valid, x_valid, ring_color=(0.15, 0.15, 0.15), logger=None):
@@ -204,18 +198,14 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
 
     # Create road mask layer using vertex_colors API for ShaderNodeVertexColor compatibility
     # This matches how TerrainColors is created for consistent shader access
+    if len(mesh.loops) == 0:
+        raise ValueError("Cannot apply a road mask to a mesh with no faces (no loops)")
     try:
         road_layer = mesh.vertex_colors.new(name="RoadMask")
     except Exception as e:
-        if logger:
-            logger.warning(f"Failed to create road mask layer: {e}")
-        return
+        raise RuntimeError(f"Could not create the RoadMask color layer: {e}") from e
 
     n_loops = len(road_layer.data)
-    if n_loops == 0:
-        if logger:
-            logger.warning("Mesh has no color data for road mask")
-        return
 
     # Debug: check road mask statistics
     if logger:
@@ -233,22 +223,24 @@ def apply_road_mask(mesh_obj, road_mask, y_valid, x_valid, logger=None):
     # First, create vertex-level road mask by sampling grid at valid positions
     vertex_road_values = np.zeros(n_positions, dtype=np.float32)
 
-    # Vectorized bounds check and road mask lookup
-    y_in_bounds = (y_valid >= 0) & (y_valid < road_mask.shape[0])
-    x_in_bounds = (x_valid >= 0) & (x_valid < road_mask.shape[1])
-    in_bounds = y_in_bounds & x_in_bounds
-
-    # Sample road mask for in-bounds vertices
-    vertex_road_values[in_bounds] = road_mask[y_valid[in_bounds], x_valid[in_bounds]]
+    # Every surface vertex must fall inside the mask; one that does not means the mask is
+    # not on the mesh's grid, and reading it as "no road" would hide that
+    in_bounds = ((y_valid >= 0) & (y_valid < road_mask.shape[0])
+                 & (x_valid >= 0) & (x_valid < road_mask.shape[1]))
+    if not np.all(in_bounds):
+        raise ValueError(
+            f"{int(np.sum(~in_bounds))} mesh vertices fall outside the road mask "
+            f"(mask shape {road_mask.shape}); align the mask to the mesh grid first"
+        )
+    vertex_road_values[:] = road_mask[y_valid, x_valid]
 
     # Convert to binary (>0.5 = road)
     vertex_is_road = (vertex_road_values > 0.5).astype(np.float32)
 
-    # Clamp loop indices to valid vertex range
-    loop_vertex_indices = np.clip(loop_vertex_indices, 0, n_positions - 1)
-
-    # Map vertex road values to loops
-    loop_road_values = vertex_is_road[loop_vertex_indices]
+    # Vertices past the surface grid (boundary skirt) are never road
+    loop_road_values = np.zeros(n_loops, dtype=np.float32)
+    on_surface = loop_vertex_indices < n_positions
+    loop_road_values[on_surface] = vertex_is_road[loop_vertex_indices[on_surface]]
 
     # Build RGBA color array: road = (1,0,0,1), non-road = (0,0,0,1)
     loop_colors = np.zeros((n_loops, 4), dtype=np.float32)
