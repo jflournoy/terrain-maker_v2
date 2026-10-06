@@ -762,9 +762,20 @@ class GriddedDataLoader:
             return self._average_statistics(tile_outputs)
         elif strategy == "weighted_mean":
             return self._weighted_average_statistics(tile_outputs, tile_specs)
-        else:
-            logger.warning(f"Unknown aggregation strategy '{strategy}', using first tile")
+        elif strategy == "first":
+            # Only meaningful with one tile; with more, returning tile 0 drops the others
+            if len(tile_outputs) != 1:
+                raise ValueError(
+                    f"Cannot combine non-array outputs from {len(tile_outputs)} tiles "
+                    f"(type {type(tile_outputs[0]).__name__}); return arrays, or set "
+                    "aggregation_strategy explicitly"
+                )
             return tile_outputs[0]
+        else:
+            raise ValueError(
+                f"Unknown aggregation strategy {strategy!r}; "
+                "use 'concatenate', 'mean', 'weighted_mean' or 'auto'"
+            )
 
     def _determine_aggregation(self, tile_outputs: List[Any]) -> str:
         """
@@ -819,12 +830,21 @@ class GriddedDataLoader:
         first_output = tile_outputs[0]
 
         if isinstance(first_output, dict):
-            # Merge each key separately
+            # Merge each key separately. Arrays are placed by tile; every tile must have them
+            # (a missing one would shift the remaining tiles onto the wrong slices). Lists are
+            # joined across tiles; any other value is kept as a per-tile list.
             result = {}
             for key in first_output.keys():
-                arrays = [output[key] for output in tile_outputs if isinstance(output.get(key), np.ndarray)]
-                if arrays:
-                    result[key] = self._assemble_grid(arrays, tile_specs, target_shape)
+                values = [output.get(key) for output in tile_outputs]
+                if isinstance(first_output[key], np.ndarray):
+                    missing = [i for i, v in enumerate(values) if not isinstance(v, np.ndarray)]
+                    if missing:
+                        raise ValueError(f"Array output {key!r} missing from tile(s) {missing}")
+                    result[key] = self._assemble_grid(values, tile_specs, target_shape)
+                elif all(isinstance(v, list) for v in values):
+                    result[key] = [item for v in values for item in v]
+                else:
+                    result[key] = values
             return result
         else:
             return self._assemble_grid(tile_outputs, tile_specs, target_shape)
