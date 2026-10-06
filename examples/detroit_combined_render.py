@@ -1552,10 +1552,10 @@ Examples:
     parser.add_argument(
         "--upscale-method",
         type=str,
-        default="auto",
-        choices=["auto", "esrgan", "bilateral", "bicubic"],
-        help="Upscaling method: auto (try ESRGAN then bilateral), esrgan (AI), "
-             "bilateral (edge-preserving), bicubic (simple). Default: auto",
+        default="bilinear",
+        choices=["bilinear", "esrgan", "bilateral", "bicubic", "nearest"],
+        help="Upscaling method: bilinear (default), esrgan (AI; needs the upscale extra), "
+             "bilateral (edge-preserving), bicubic, nearest. A method that fails raises.",
     )
 
     # DEM despeckle (uniform noise removal for elevation)

@@ -62,7 +62,7 @@ def compute_flow_with_basins(
     ocean_border_only: bool = True,
     upscale_precip: bool = False,
     upscale_factor: int = 4,
-    upscale_method: str = "auto",
+    upscale_method: str = "bilinear",
     verbose: bool = True,
 ) -> Dict[str, any]:
     """
@@ -120,12 +120,12 @@ def compute_flow_with_basins(
     ocean_border_only : bool, default=True
         Only detect ocean from border pixels
     upscale_precip : bool, default=False
-        Whether to upscale precipitation data using ESRGAN before accumulation
+        Whether to upscale precipitation data (with upscale_method) before accumulation
         at the integer DEM/precipitation ratio; non-integer ratios use cubic interpolation
     upscale_factor : int, default=4
         Upscaling factor for precipitation (2, 4, or 8)
-    upscale_method : str, default="auto"
-        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan", "bilateral", or "bicubic"
+    upscale_method : str, default="bilinear"
+        Upscaling method: "bilinear", "esrgan", "bilateral", "bicubic" or "nearest" (see upscale_scores)
     verbose : bool, default=True
         Print progress messages
 
@@ -390,7 +390,7 @@ def _load_aligned_precipitation(
         scale_x = dem_shape[1] / precip_data.shape[1]
         is_upscaling = scale_y > 1.0 and scale_x > 1.0
 
-        # Use ESRGAN upscaling if requested AND actually upscaling
+        # Upscale with the requested method if asked AND actually upscaling
         if upscale_precip and is_upscaling:
             logger.info(
                 f"  Upscaling precipitation from {precip_data.shape} to {dem_shape} using {upscale_method}..."
@@ -411,7 +411,7 @@ def _load_aligned_precipitation(
                 )
             else:
                 # Non-uniform scaling - Detroit-style approach for GPU acceleration
-                # Step 1: Over-upscale to next power-of-2 with ESRGAN (GPU)
+                # Step 1: Over-upscale to next power-of-2 with the requested method
                 # Step 2: Downsample to exact target with rasterio reproject
                 import math
 
@@ -419,23 +419,23 @@ def _load_aligned_precipitation(
                 # Round UP to next power of 2 (e.g., 29.458 → 32)
                 power_of_2_scale = 2 ** math.ceil(math.log2(avg_scale))
 
-                if power_of_2_scale >= 2 and upscale_method in ("auto", "esrgan"):
-                    # Use ESRGAN for over-upscaling, then downsample
+                if power_of_2_scale >= 2:
+                    # Over-upscale with the requested method, then downsample to the exact grid
                     logger.info(
-                        f"  Detroit-style upscaling: ESRGAN {power_of_2_scale}x + downsample to exact shape..."
+                        f"  Two-step upscaling: {upscale_method} {power_of_2_scale}x + downsample to exact shape..."
                     )
 
                     from terrain_maker.terrain.transforms import upscale_scores
 
-                    # Step 1: ESRGAN over-upscaling to power-of-2 scale (GPU-accelerated)
+                    # Step 1: over-upscale to the power-of-2 scale
                     logger.info(
-                        f"    Running ESRGAN {power_of_2_scale}x upscaling (this may take 10-60s)..."
+                        f"    Running {upscale_method} {power_of_2_scale}x upscaling..."
                     )
                     precip_esrgan = upscale_scores(
                         precip_data, scale=power_of_2_scale, method=upscale_method, nodata_value=0.0
                     )
                     logger.info(
-                        f"    ✓ ESRGAN complete: {precip_data.shape} → {precip_esrgan.shape}"
+                        f"    ✓ {upscale_method} complete: {precip_data.shape} → {precip_esrgan.shape}"
                     )
 
                     # Step 2: Downsample to exact target shape with rasterio reproject
@@ -446,7 +446,7 @@ def _load_aligned_precipitation(
 
                     # Create transforms for intermediate and target shapes
                     if precip_transform is not None and dem_transform is not None:
-                        # Calculate intermediate transform (after ESRGAN upscaling)
+                        # Calculate intermediate transform (after over-upscaling)
                         esrgan_transform = precip_transform * Affine.scale(1.0 / power_of_2_scale)
 
                         reproject(
@@ -475,9 +475,9 @@ def _load_aligned_precipitation(
                         )
 
                     precip_data = precip_final
-                    logger.info(f"  ✓ Detroit-style upscaling complete: {precip_final.shape}")
+                    logger.info(f"  ✓ Two-step upscaling complete: {precip_final.shape}")
                 else:
-                    # Fall back to basic bicubic for small scales or non-ESRGAN methods
+                    # Scale below 2x: resample directly with rasterio
                     from rasterio.warp import reproject, Resampling
 
                     logger.info(
@@ -1127,7 +1127,7 @@ def flow_accumulation(
     # Precipitation upscaling parameters
     upscale_precip: bool = False,
     upscale_factor: int = 4,
-    upscale_method: str = "auto",
+    upscale_method: str = "bilinear",
     # Caching parameters
     cache: bool = False,
     cache_dir: Optional[str] = None,
@@ -1215,14 +1215,14 @@ def flow_accumulation(
         Minimum basin depth (meters) to be considered endorheic. Only used when
         detect_basins=True. Basins shallower than this threshold are not preserved.
     upscale_precip : bool, default False
-        If True, upscale precipitation data to match DEM resolution using ESRGAN/bilateral
+        If True, upscale precipitation data to match DEM resolution using upscale_method
         upscaling before computing upstream rainfall. This preserves fine-scale precipitation
         patterns and reduces coastal artifacts. Upscaling happens BEFORE ocean masking.
     upscale_factor : int, default 4
         Target upscaling factor for precipitation (2, 4, or 8). Only used if upscale_precip=True.
-    upscale_method : str, default "auto"
-        Upscaling method: "auto" (try ESRGAN, fall back to bilateral), "esrgan" (Real-ESRGAN
-        neural network), "bilateral" (bilateral filter), or "bicubic" (simple interpolation).
+    upscale_method : str, default "bilinear"
+        Upscaling method passed to upscale_scores: "bilinear", "esrgan" (needs the upscale
+        extra), "bilateral", "bicubic" or "nearest". A method that fails raises.
         Only used if upscale_precip=True.
     cache : bool, default False
         If True, cache computation results and load from cache if valid.
