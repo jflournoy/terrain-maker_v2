@@ -1092,14 +1092,10 @@ def wavelet_denoise_dem(
         """Apply wavelet denoising to DEM."""
         try:
             import pywt
-        except ImportError:
-            logger.warning(
-                "PyWavelets (pywt) not installed. Install with: pip install PyWavelets"
-            )
-            logger.warning("Falling back to median filter despeckle")
-            # Fallback to simple median filter
-            from scipy.ndimage import median_filter
-            return median_filter(raster_data, size=3), transform, None
+        except ImportError as e:
+            raise ImportError(
+                "wavelet_denoise_dem needs PyWavelets (a core dependency): run `uv sync`"
+            ) from e
 
         logger.info(
             f"Wavelet denoising DEM (wavelet={wavelet}, levels={levels}, "
