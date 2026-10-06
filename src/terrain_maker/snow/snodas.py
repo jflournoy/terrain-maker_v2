@@ -617,6 +617,32 @@ def calculate_snow_statistics(
     return final_stats
 
 
+class MockSnowDataWarning(UserWarning):
+    """Real SNODAS data could not be loaded and random mock snow was returned instead."""
+
+
+def _fall_back_to_mock_snow(reason: str, mock_shape: tuple):
+    """Return mock snow data, saying so loudly every time.
+
+    Kept at the user's request (fallback over raising). Scores computed from this data are
+    not real; the warning goes to the log and through warnings.warn so a caller or test can
+    escalate it with warnings.simplefilter("error", MockSnowDataWarning).
+    """
+    import warnings
+
+    from terrain_maker.terrain.gridded_data import create_mock_snow_data
+
+    message = (
+        f"USING RANDOM MOCK SNOW DATA, NOT SNODAS: {reason}. "
+        "Snow statistics and every score computed from them are synthetic."
+    )
+    logger.warning("=" * 72)
+    logger.warning(message)
+    logger.warning("=" * 72)
+    warnings.warn(message, MockSnowDataWarning, stacklevel=3)
+    return create_mock_snow_data(mock_shape)
+
+
 def load_snodas_stats(
     terrain=None,
     snodas_dir: Optional[Path] = None,
@@ -634,7 +660,8 @@ def load_snodas_stats(
     2. calculate_snow_statistics (aggregate seasonal stats)
 
     Uses GriddedDataLoader for memory-safe tiled processing. Falls back to
-    mock data when real data is unavailable or loading fails.
+    mock data when real data is unavailable or loading fails, and then emits
+    MockSnowDataWarning (and a log warning) every time.
 
     Args:
         terrain: Terrain object providing extent and resolution context.
@@ -664,20 +691,15 @@ def load_snodas_stats(
         return create_mock_snow_data(mock_shape)
 
     # Validate prerequisites for real data
-    can_load = True
+    problems = []
     if not snodas_dir:
-        logger.warning("No SNODAS directory specified")
-        can_load = False
+        problems.append("no SNODAS directory specified")
     elif not Path(snodas_dir).exists():
-        logger.warning("SNODAS directory not found: %s", snodas_dir)
-        can_load = False
+        problems.append(f"SNODAS directory not found: {snodas_dir}")
     if not terrain:
-        logger.warning("Terrain object not available for SNODAS processing")
-        can_load = False
-
-    if not can_load:
-        logger.info("Falling back to mock data")
-        return create_mock_snow_data(mock_shape)
+        problems.append("no Terrain object for SNODAS processing")
+    if problems:
+        return _fall_back_to_mock_snow("; ".join(problems), mock_shape)
 
     try:
         logger.info("Loading real SNODAS data from: %s", snodas_dir)
@@ -710,6 +732,4 @@ def load_snodas_stats(
         return snow_stats
 
     except Exception as e:
-        logger.warning("Failed to load SNODAS data: %s", e)
-        logger.info("Falling back to mock data")
-        return create_mock_snow_data(mock_shape)
+        return _fall_back_to_mock_snow(f"SNODAS loading failed ({type(e).__name__}: {e})", mock_shape)
