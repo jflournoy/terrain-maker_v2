@@ -212,18 +212,34 @@ class TestRenderSceneToFile:
             # Check compression was set
             assert bpy.context.scene.render.image_settings.compression == compression
 
-    def test_render_scene_to_file_returns_path_or_none(self):
-        """Test that function returns Path or None."""
+    def test_render_scene_to_file_without_bpy_raises(self, monkeypatch, tmp_path):
+        """No Blender is an error, not a skipped render (it used to return None)."""
+        import sys
         from terrain_maker.terrain.rendering import render_scene_to_file
-        import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "test_render.png"
+        monkeypatch.setitem(sys.modules, "bpy", None)
+        with pytest.raises(ImportError, match="bpy"):
+            render_scene_to_file(tmp_path / "x.png", save_blend_file=False)
 
-            result = render_scene_to_file(output_path, save_blend_file=False)
+    def test_render_scene_to_file_failed_render_raises(self, monkeypatch, tmp_path):
+        """A failing render raises with its cause (examples used to exit 0 with no image)."""
+        import terrain_maker.terrain.rendering as rendering
+        from terrain_maker.terrain.rendering import render_scene_to_file
 
-            # Should return None or Path
-            assert result is None or isinstance(result, Path)
+        def broken(bpy):
+            raise RuntimeError("Cycles fell over")
+
+        monkeypatch.setattr(rendering, "_run_render", broken)
+        with pytest.raises(RuntimeError, match="Cycles fell over"):
+            render_scene_to_file(tmp_path / "x.png", save_blend_file=False, max_retries=0)
+
+    def test_render_that_writes_no_file_raises(self, monkeypatch, tmp_path):
+        import terrain_maker.terrain.rendering as rendering
+        from terrain_maker.terrain.rendering import render_scene_to_file
+
+        monkeypatch.setattr(rendering, "_run_render", lambda bpy: None)
+        with pytest.raises(RuntimeError, match="wrote no file"):
+            render_scene_to_file(tmp_path / "x.png", save_blend_file=False, max_retries=0)
 
 
 class TestSetupRenderSettingsMemory:
@@ -412,31 +428,45 @@ class TestGPUMemoryErrorDetection:
 class TestRenderRetryParameters:
     """Tests for render retry parameters."""
 
-    def test_render_scene_to_file_accepts_max_retries(self):
+    def test_render_scene_to_file_accepts_max_retries(self, monkeypatch):
         """Test that max_retries parameter is accepted."""
         from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
         from pathlib import Path
 
+        import terrain_maker.terrain.rendering as rendering
+
+        # An empty scene cannot render (no camera); simulate a render that writes its file
+        def fake_render(bpy):
+            Path(bpy.context.scene.render.filepath).write_bytes(b"png")
+
+        monkeypatch.setattr(rendering, "_run_render", fake_render)
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test.png"
             # Should not raise error when max_retries is passed
             result = render_scene_to_file(output_path, max_retries=0, save_blend_file=False)
-            assert result is None or isinstance(result, Path)
+            assert isinstance(result, Path)
 
-    def test_render_scene_to_file_accepts_retry_delay(self):
+    def test_render_scene_to_file_accepts_retry_delay(self, monkeypatch):
         """Test that retry_delay parameter is accepted."""
         from terrain_maker.terrain.rendering import render_scene_to_file
         import tempfile
         from pathlib import Path
 
+        import terrain_maker.terrain.rendering as rendering
+
+        # An empty scene cannot render (no camera); simulate a render that writes its file
+        def fake_render(bpy):
+            Path(bpy.context.scene.render.filepath).write_bytes(b"png")
+
+        monkeypatch.setattr(rendering, "_run_render", fake_render)
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "test.png"
             # Should not raise error when retry_delay is passed
             result = render_scene_to_file(
                 output_path, retry_delay=1.0, max_retries=0, save_blend_file=False
             )
-            assert result is None or isinstance(result, Path)
+            assert isinstance(result, Path)
 
     def test_render_scene_to_file_default_max_retries(self):
         """Test that default max_retries is 3."""
