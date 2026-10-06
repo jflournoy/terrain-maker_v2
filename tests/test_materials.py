@@ -772,3 +772,25 @@ class TestCreateBackgroundPlane:
 
         with pytest.raises(ValueError):
             create_background_plane(None)
+
+
+class TestUnknownMaterialNamesRaise:
+    """Unknown preset names used to fall back to satin / obsidian / gray with a warning."""
+
+    def test_unknown_terrain_material_raises(self):
+        import bpy
+        from terrain_maker.terrain.materials import apply_colormap_material
+
+        mat = bpy.data.materials.new("unknown_terrain_material_test")
+        with pytest.raises(ValueError, match="glittery"):
+            apply_colormap_material(mat, terrain_material="glittery")
+
+    def test_unknown_style_raises(self):
+        import bpy
+        from terrain_maker.terrain.materials import _configure_principled_for_style
+
+        mat = bpy.data.materials.new("unknown_style_test")
+        mat.use_nodes = True
+        node = mat.node_tree.nodes.new("ShaderNodeBsdfPrincipled")
+        with pytest.raises(ValueError, match="sparkly"):
+            _configure_principled_for_style(node, "sparkly")
