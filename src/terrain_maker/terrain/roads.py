@@ -202,9 +202,13 @@ def _cache_road_data(
         logger.warning(f"  Error caching road data: {e}")
 
 
-# Why the most recent fetch for a bbox failed, so get_roads_tiled can say so in its error
-# (get_roads keeps returning None on failure; callers rely on that).
-_fetch_failures: Dict[Tuple[float, float, float, float], str] = {}
+class RoadFetchError(RuntimeError):
+    """The Overpass API did not deliver roads for a bbox; .reason says why."""
+
+    def __init__(self, bbox, reason):
+        self.bbox = tuple(bbox)
+        self.reason = reason
+        super().__init__(f"Overpass API road fetch failed for {self.bbox}: {reason}")
 
 # Overpass's usage policy asks clients to identify themselves; it refuses some requests
 # that carry only the generic python-requests agent (406 Not Acceptable).
@@ -231,7 +235,10 @@ def _fetch_roads_from_osm(
         retries: Number of retry attempts on 429/504
 
     Returns:
-        GeoJSON FeatureCollection or None if fetch fails
+        GeoJSON FeatureCollection (possibly with no features: the area has no roads)
+
+    Raises:
+        RoadFetchError: the request failed or kept being refused (reason attached)
     """
     south, west, north, east = bbox
     logger.info("Fetching road data from OpenStreetMap Overpass API...")
@@ -269,14 +276,10 @@ def _fetch_roads_from_osm(
             time.sleep(wait)
             continue
         except Exception as e:
-            logger.error(f"  Failed to fetch from Overpass API: {e}")
-            _fetch_failures[tuple(bbox)] = f"{type(e).__name__}: {e}"
-            return None
+            raise RoadFetchError(bbox, f"{type(e).__name__}: {e}") from e
 
     if data is None:
-        logger.error(f"  Overpass API failed after {retries} attempts")
-        _fetch_failures[tuple(bbox)] = f"{last_problem} on all {retries} attempts"
-        return None
+        raise RoadFetchError(bbox, f"{last_problem} on all {retries} attempts")
 
     # Parse OSM data into GeoJSON
     features = []
@@ -356,7 +359,10 @@ def get_roads(
         force_refresh: Force fresh fetch, skip cache
 
     Returns:
-        GeoJSON FeatureCollection with road LineStrings, or None if fetch fails
+        GeoJSON FeatureCollection with road LineStrings
+
+    Raises:
+        RoadFetchError: the Overpass API could not deliver roads (reason attached)
 
     Example:
         >>> from terrain_maker.terrain.roads import get_roads
@@ -379,10 +385,6 @@ def get_roads(
     # Fetch from API
     start_time = time.time()
     geojson = _fetch_roads_from_osm(bbox, road_types)
-
-    if geojson is None:
-        logger.warning("  Failed to fetch roads from API")
-        return None
 
     elapsed = time.time() - start_time
     logger.info(f"  Fetch completed in {elapsed:.1f}s")
@@ -446,13 +448,7 @@ def get_roads_tiled(
     if lat_span <= tile_size and lon_span <= tile_size:
         # Small bbox - single fetch
         logger.info("  Small area - single fetch (no tiling needed)")
-        result = get_roads(bbox, road_types, force_refresh=force_refresh)
-        if result is None:
-            raise RuntimeError(
-            f"Overpass API road fetch failed for {bbox} "
-            f"({_fetch_failures.get(tuple(bbox), 'reason not recorded')}); try again later"
-        )
-        return result
+        return get_roads(bbox, road_types, force_refresh=force_refresh)
 
     # Large bbox - tile and merge
     lat_tiles = int(math.ceil(lat_span / tile_size))
@@ -482,12 +478,15 @@ def get_roads_tiled(
             if fetched_from_api > 0:
                 time.sleep(3)
 
-            tile_roads = get_roads(tile_bbox, road_types, force_refresh=force_refresh)
-            if tile_roads is None:
-                # API actually failed (returned None) — worth retrying
+            try:
+                tile_roads = get_roads(tile_bbox, road_types, force_refresh=force_refresh)
+            except RoadFetchError as e:
+                # A failed fetch is not an empty area: retry it, and fail if it stays failed
                 failed_tiles.append((tile_num, tile_bbox))
-                logger.warning(f"    ✗ API fetch failed (timeout or error)")
-            elif tile_roads.get("features"):
+                logger.warning(f"    ✗ API fetch failed ({e.reason})")
+                fetched_from_api += 1
+                continue
+            if tile_roads.get("features"):
                 feature_count = len(tile_roads["features"])
                 all_features.extend(tile_roads["features"])
                 logger.info(f"    ✓ {feature_count} road segments")
@@ -505,19 +504,21 @@ def get_roads_tiled(
         reasons = {}
         for tile_num, tile_bbox in failed_tiles:
             logger.info(f"  Retry tile {tile_num}...")
-            tile_roads = get_roads(tile_bbox, road_types, force_refresh=True)
-            if tile_roads is not None and tile_roads.get("features"):
+            try:
+                tile_roads = get_roads(tile_bbox, road_types, force_refresh=True)
+            except RoadFetchError as e:
+                still_failed.append(tile_num)
+                reasons.setdefault(e.reason, []).append(tile_num)
+                logger.warning(f"    ✗ Retry failed ({e.reason})")
+                time.sleep(retry_delay)
+                continue
+            if tile_roads.get("features"):
                 feature_count = len(tile_roads["features"])
                 all_features.extend(tile_roads["features"])
                 logger.info(f"    ✓ Retry succeeded: {feature_count} segments")
-            elif tile_roads is not None:
+            else:
                 # Succeeded but empty — don't retry again
                 logger.info(f"    ○ No roads in this area")
-            else:
-                still_failed.append(tile_num)
-                reason = _fetch_failures.get(tuple(tile_bbox), "reason not recorded")
-                reasons.setdefault(reason, []).append(tile_num)
-                logger.warning(f"    ✗ Retry failed ({reason})")
             time.sleep(retry_delay)
 
         if still_failed:

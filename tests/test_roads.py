@@ -470,36 +470,42 @@ class TestMockDataFallback:
 class TestAPIIntegration:
     """Tests for OSM API integration (with mocked responses)."""
 
-    def test_fetch_handles_timeout(self, sample_bbox):
-        """Test that timeout errors are handled gracefully."""
+    def test_fetch_timeout_raises(self, sample_bbox):
+        """Timeouts on every attempt raise (they used to return None, read as 'no roads')."""
+        from terrain_maker.terrain.roads import RoadFetchError
+
         with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             import requests
             mock_post.side_effect = requests.exceptions.Timeout()
 
-            result = fetch_roads_from_osm(sample_bbox, ["motorway"], timeout=5)
-            assert result is None
+            with pytest.raises(RoadFetchError, match="timeout"):
+                fetch_roads_from_osm(sample_bbox, ["motorway"], timeout=5)
 
-    def test_fetch_handles_http_error(self, sample_bbox):
-        """Test that HTTP errors are handled gracefully."""
+    def test_fetch_http_error_raises(self, sample_bbox):
+        """An HTTP error raises with its reason."""
+        from terrain_maker.terrain.roads import RoadFetchError
+
         with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.status_code = 500
             mock_response.raise_for_status.side_effect = Exception("500 Server Error")
             mock_post.return_value = mock_response
 
-            result = fetch_roads_from_osm(sample_bbox, ["motorway"])
-            assert result is None
+            with pytest.raises(RoadFetchError, match="500 Server Error"):
+                fetch_roads_from_osm(sample_bbox, ["motorway"])
 
-    def test_fetch_handles_rate_limit(self, sample_bbox):
-        """Test that rate limiting (429) is handled."""
+    def test_fetch_rate_limit_raises_after_retries(self, sample_bbox):
+        """429 on every attempt raises after the retries."""
+        from terrain_maker.terrain.roads import RoadFetchError
+
         with patch('terrain_maker.terrain.roads.requests.post') as mock_post:
             mock_response = Mock()
             mock_response.status_code = 429
             mock_response.raise_for_status.side_effect = Exception("429 Too Many Requests")
             mock_post.return_value = mock_response
 
-            result = fetch_roads_from_osm(sample_bbox, ["motorway"])
-            assert result is None
+            with pytest.raises(RoadFetchError, match="HTTP 429"):
+                fetch_roads_from_osm(sample_bbox, ["motorway"])
 
     def test_fetch_handles_empty_result(self, sample_bbox):
         """Test handling of empty API response."""
@@ -1065,8 +1071,17 @@ class TestRoadFetchFailuresAreNotEmptyAreas:
     def _tiled(self, per_call, bbox=(40.0, -80.0, 44.0, -76.0)):
         from terrain_maker.terrain.roads import get_roads_tiled
 
+        from terrain_maker.terrain.roads import RoadFetchError
+
         calls = iter(per_call)
-        with patch("terrain_maker.terrain.roads.get_roads", side_effect=lambda *a, **k: next(calls)), \
+
+        def fake_get_roads(bbox, *a, **k):  # None in per_call stands for a failed fetch
+            result = next(calls)
+            if result is None:
+                raise RoadFetchError(bbox, "simulated failure")
+            return result
+
+        with patch("terrain_maker.terrain.roads.get_roads", side_effect=fake_get_roads), \
                 patch("terrain_maker.terrain.roads.time.sleep"):
             return get_roads_tiled(bbox, tile_size=2.0, retry_count=1, retry_delay=0)
 
