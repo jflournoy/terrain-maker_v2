@@ -400,6 +400,12 @@ def generate_rectangle_edge_vertices(
     return boundary_vertices, boundary_faces
 
 
+def _require_finite(x, y, y_orig, x_orig):
+    """pyproj reports a failed transform as inf rather than raising; refuse it."""
+    if not (np.isfinite(x) and np.isfinite(y)):
+        raise ValueError(f"transform produced non-finite coordinates ({x}, {y})")
+
+
 def generate_transform_aware_rectangle_edges(
     terrain,
     coord_to_index,
@@ -455,7 +461,9 @@ def generate_transform_aware_rectangle_edges(
         raise ValueError("Terrain DEM lacks 'transformed_transform' - cannot map coordinates")
 
     # Get CRS information for reprojection
-    original_crs = dem_layer.get("crs", "EPSG:4326")
+    if not dem_layer.get("crs"):
+        raise ValueError("Terrain DEM layer has no 'crs'; cannot map edge pixels")
+    original_crs = dem_layer["crs"]
     transformed_crs = dem_layer.get("transformed_crs", original_crs)
 
     # Create coordinate transformer if CRS changed
@@ -465,7 +473,6 @@ def generate_transform_aware_rectangle_edges(
 
     # 3. Map each edge pixel: original → geographic → reprojected → final
     edge_pixels_final = []
-    transform_errors = 0
     out_of_bounds = 0
     not_in_coord_index = 0
 
@@ -483,6 +490,7 @@ def generate_transform_aware_rectangle_edges(
             # Geographic coords (in transformed CRS) → final pixel coords
             # Inverse transform: (x_px, y_px) = ~transform * (x_geo, y_geo)
             x_final, y_final = ~transformed_transform * (x_geo, y_geo)
+            _require_finite(x_final, y_final, y_orig, x_orig)
 
             # Round to integer pixel coordinates
             y_int, x_int = int(round(y_final)), int(round(x_final))
@@ -505,9 +513,10 @@ def generate_transform_aware_rectangle_edges(
                 not_in_coord_index += 1
 
         except Exception as e:
-            # Track transformation errors for debugging
-            transform_errors += 1
-            continue
+            raise ValueError(
+                f"Edge pixel (row {y_orig}, col {x_orig}) could not be mapped from "
+                f"{original_crs} to {transformed_crs}: {e}"
+            ) from e
 
     return edge_pixels_final
 
@@ -567,7 +576,9 @@ def generate_transform_aware_rectangle_edges_fractional(
         raise ValueError("Terrain DEM lacks 'transformed_transform' - cannot map coordinates")
 
     # Get CRS information for reprojection
-    original_crs = dem_layer.get("crs", "EPSG:4326")
+    if not dem_layer.get("crs"):
+        raise ValueError("Terrain DEM layer has no 'crs'; cannot map edge pixels")
+    original_crs = dem_layer["crs"]
     transformed_crs = dem_layer.get("transformed_crs", original_crs)
 
     # Create coordinate transformer if CRS changed
@@ -577,7 +588,6 @@ def generate_transform_aware_rectangle_edges_fractional(
 
     # 3. Map each edge pixel: original → geographic → reprojected → final (FRACTIONAL)
     edge_pixels_fractional = []
-    transform_errors = 0
 
     for y_orig, x_orig in edge_pixels_orig:
         try:
@@ -591,11 +601,14 @@ def generate_transform_aware_rectangle_edges_fractional(
             # Geographic coords (in transformed CRS) → final pixel coords
             # KEEP FRACTIONAL - do NOT round to integer!
             x_final, y_final = ~transformed_transform * (x_geo, y_geo)
+            _require_finite(x_final, y_final, y_orig, x_orig)
 
             edge_pixels_fractional.append((y_final, x_final))
 
-        except Exception:
-            transform_errors += 1
-            continue
+        except Exception as e:
+            raise ValueError(
+                f"Edge pixel (row {y_orig}, col {x_orig}) could not be mapped from "
+                f"{original_crs} to {transformed_crs}: {e}"
+            ) from e
 
     return edge_pixels_fractional
