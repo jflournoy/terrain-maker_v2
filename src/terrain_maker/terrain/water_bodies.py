@@ -71,11 +71,14 @@ def rasterize_lakes_to_mask(
             continue
         try:
             geom = shape(geom_dict)
-            if geom.is_empty:
-                continue
-            shapes.append((geom, idx))
-        except Exception:
+        except Exception as e:
+            raise ValueError(
+                f"Lake feature {idx} has an invalid geometry ({type(e).__name__}: {e}); "
+                "it would be missing from the lake mask"
+            ) from e
+        if geom.is_empty:
             continue
+        shapes.append((geom, idx))
 
     if not shapes:
         mask = np.zeros((n_rows, n_cols), dtype=np.uint16)
@@ -659,12 +662,12 @@ def download_hydrolakes(
             break
 
     if hydrolakes_path is None:
-        # Return empty with instructions
-        logger.info("HydroLAKES shapefile not found")
-        logger.info("Expected at: data/hydrolakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp")
-        logger.info("Or download from: https://www.hydrosheds.org/products/hydrolakes")
-        logger.info("Extract HydroLAKES_polys_v10.shp to data/hydrolakes/HydroLAKES_polys_v10_shp/")
-        return {"type": "FeatureCollection", "features": []}
+        raise FileNotFoundError(
+            "HydroLAKES shapefile not found at any of "
+            f"{[str(p) for p in hydrolakes_paths]}. Download it from "
+            "https://www.hydrosheds.org/products/hydrolakes and extract "
+            "HydroLAKES_polys_v10.shp to data/hydrolakes/HydroLAKES_polys_v10_shp/"
+        )
 
     # Filter shapefile to bbox using geopandas
     try:
@@ -718,9 +721,8 @@ def download_hydrolakes(
 
         return geojson
 
-    except ImportError:
-        logger.info("geopandas required for HydroLAKES filtering")
-        return {"type": "FeatureCollection", "features": []}
+    except ImportError as e:
+        raise ImportError(f"HydroLAKES filtering needs geopandas and its I/O backend: {e}") from e
 
 
 def identify_lake_outlets_from_nhd(
