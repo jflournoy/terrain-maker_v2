@@ -619,28 +619,33 @@ class TerrainPipeline:
         logger.info(f"Rendering {len(views)} views (mesh built once, reused for all)")
         logger.info("=" * 70 + "\n")
 
+        # Render every view even if one fails (each is slow), then fail naming the ones
+        # that did not render: a dict silently missing views reads as success
         results = {}
+        failures = {}
         for i, view in enumerate(views, 1):
             logger.info(f"\n[{i}/{len(views)}] Rendering {view} view...")
             self._log("\n[%d/%d] Rendering %s view...", i, len(views), view)
             try:
                 output = self.render_view(view=view)
-                if output:
-                    results[view] = output
-                    logger.info(f"      ✓ Added {view} to results: {output}")
-                    self._log("      ✓ Added %s to results", view)
-                else:
-                    logger.warning(f"      ✗ render_view returned None for {view}")
-                    self._log("      ✗ render_view returned None for %s", view, "warn")
-            except (OSError, IOError, ValueError, RuntimeError) as e:
-                logger.error(f"[✗] Failed to render {view}: {e}")
-                self._log("[✗] Failed to render %s: %s", view, e, "warn")
             except Exception as e:
-                logger.error(f"[✗] Unexpected error rendering {view}: {e}")
-                self._log("[✗] Unexpected error rendering %s: %s", view, e, "error")
-                import traceback
-                traceback.print_exc()
+                failures[view] = f"{type(e).__name__}: {e}"
+                logger.error(f"[✗] Failed to render {view}: {e}")
+                continue
+            if not output:
+                failures[view] = "render_view returned no output path"
+                logger.error(f"[✗] {view}: render_view returned no output path")
+                continue
+            results[view] = output
+            logger.info(f"      ✓ Added {view} to results: {output}")
+            self._log("      ✓ Added %s to results", view)
 
+        if failures:
+            detail = "\n".join(f"  {view}: {why}" for view, why in failures.items())
+            raise RuntimeError(
+                f"{len(failures)} of {len(views)} views failed to render "
+                f"(rendered: {sorted(results)}):\n{detail}"
+            )
         return results
 
     def cache_stats(self) -> Dict:
