@@ -328,12 +328,7 @@ def apply_colormap_material(
     """
     # Get material parameters from preset
     preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
-    try:
-        params = get_terrain_material_params(preset_name)
-    except ValueError:
-        logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
-        params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
-        preset_name = DEFAULT_TERRAIN_MATERIAL
+    params = get_terrain_material_params(preset_name)  # unknown name raises
 
     logger.info(f"Setting up {preset_name} material nodes for {material.name}")
 
@@ -407,12 +402,7 @@ def apply_water_shader(
     """
     # Get material parameters from preset
     preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
-    try:
-        params = get_terrain_material_params(preset_name)
-    except ValueError:
-        logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
-        params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
-        preset_name = DEFAULT_TERRAIN_MATERIAL
+    params = get_terrain_material_params(preset_name)  # unknown name raises
 
     logger.info(f"Setting up water shader ({preset_name} terrain) for {material.name}")
 
@@ -652,9 +642,10 @@ def apply_terrain_with_obsidian_roads(
             road_rgb = ALL_COLORS[road_color.lower()]
             road_color_name = road_color.lower()
         else:
-            logger.warning(f"Unknown color preset '{road_color}', using obsidian")
-            road_rgb = ALL_COLORS["obsidian"]
-            road_color_name = "obsidian"
+            raise ValueError(
+                f"Unknown color preset '{road_color}'; choose one of {sorted(ALL_COLORS)} "
+                "or pass an RGB tuple"
+            )
     else:
         road_rgb = road_color
         road_color_name = f"RGB{road_color}"
@@ -725,12 +716,7 @@ def apply_terrain_with_obsidian_roads(
 
             # Get terrain material parameters from preset
             preset_name = terrain_material or DEFAULT_TERRAIN_MATERIAL
-            try:
-                params = get_terrain_material_params(preset_name)
-            except ValueError:
-                logger.warning(f"Unknown terrain material '{terrain_material}', using {DEFAULT_TERRAIN_MATERIAL}")
-                params = get_terrain_material_params(DEFAULT_TERRAIN_MATERIAL)
-                preset_name = DEFAULT_TERRAIN_MATERIAL
+            params = get_terrain_material_params(preset_name)  # unknown name raises
 
             # Principled BSDF with terrain material preset
             terrain_principled = nodes.new("ShaderNodeBsdfPrincipled")
@@ -834,9 +820,7 @@ def _configure_principled_for_style(shader_node, style: str) -> None:
         shader_node.inputs["IOR"].default_value = 1.55        # Mineral-like
         shader_node.inputs["Specular IOR Level"].default_value = 0.5
     else:
-        # Unknown style - default to gray
-        shader_node.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1.0)
-        shader_node.inputs["Roughness"].default_value = 0.5
+        raise ValueError(f"Unknown material style {style!r}; choose a color from {sorted(ALL_COLORS)}")
 
 
 # Keep for backwards compatibility
